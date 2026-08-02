@@ -1,0 +1,18 @@
+/* Ce fichier est le résidu du template Vite par défaut.
+   Ses anciennes règles (:root{font:18px...}, #root{width:1126px}, h1/h2, p{margin:0})
+   entraient en conflit avec le design réel du site défini dans assets/styles/style.css
+   (spécificité de :root > html, breakpoints différents à 1024px), ce qui cassait
+   la mise à l'échelle typographique et les marges sur mobile/tablette.
+   On ne garde ici que ce qui est réellement nécessaire et sans conflit. */
+
+body {
+  margin: 0;
+}
+
+#root {
+  width: 100%;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
