@@ -1,16 +1,5 @@
-/**
- * Page "Abonnements" — Présente la grille des abonnements forfaitaires de
- * présence par type d'acteur (§7.11, Dispositif A du cahier des charges),
- * ainsi que le module publicité annonceurs tiers (Dispositif B).
- *
- * La navbar et le footer sont fournis par le layout partagé de l'app.
- *
- * Prérequis globaux (déjà chargés au niveau de l'app) :
- *  - Bootstrap 5.3 CSS
- *  - Font Awesome 6.5 (icônes fa-solid)
- *  - Polices Manrope / Inter / IBM Plex Mono
- *  - ../assets/styles/style.css (feuille de style maison APS)
- */
+// Page "Abonnements" — grille tarifaire par type d'acteur (médecins,
+// cliniques, pharmacies, assurances) et espace annonceurs.
 
 import { useState } from "react";
 import { clientTypes, getClientType } from "../data/subscriptionPlans";
@@ -80,11 +69,10 @@ export default function Abonnement() {
           <div className="banner-institutionnel">
             <i className="fa-solid fa-circle-info" />
             <span>
-              Tarifs indicatifs. La grille réelle est pilotée dynamiquement
-              depuis la console d'administration, pays par pays. Pendant la
-              phase d'amorçage, tous les abonnements des professionnels de
-              santé (médecins, cliniques, hôpitaux, laboratoires,
-              pharmacies) sont offerts.
+              Tarifs donnés à titre indicatif et pouvant varier selon votre
+              pays. Bonne nouvelle : pour le lancement, l'abonnement est
+              offert à tous les professionnels de santé — médecins,
+              cliniques, hôpitaux, laboratoires et pharmacies.
             </span>
           </div>
 
@@ -153,17 +141,18 @@ export default function Abonnement() {
         </div>
       </section>
 
-      {/* ============================ DISPOSITIFS COMPLEMENTAIRES ============================ */}
+      {/* ============================ POUR ALLER PLUS LOIN ============================ */}
       <section className="section-alt" style={{ marginTop: "2.5rem" }}>
         <div className="container-aps">
           <div className="section-head">
             <span className="eyebrow">Pour aller plus loin</span>
             <h2 style={{ fontSize: "1.4rem" }}>
-              Trois dispositifs de visibilité, trois logiques distinctes
+              Une visibilité claire, jamais au détriment de la confiance
             </h2>
             <p>
-              Le module Présence &amp; publicité distingue strictement
-              l'enrichissement informationnel du contenu commercial.
+              Chez APS, mettre en valeur votre fiche ne se fait jamais au
+              détriment de l'objectivité de l'annuaire ni de la confiance
+              des patients.
             </p>
           </div>
 
@@ -171,33 +160,37 @@ export default function Abonnement() {
             <div className="col-md-4">
               <div className="step-card">
                 <div className="step-num">A</div>
-                <h3>Abonnement forfaitaire de présence</h3>
+                <h3>Une fiche plus riche et plus visible</h3>
                 <p>
-                  Ouvert à tous les acteurs, y compris ceux soumis à la
-                  déontologie de non-publicité. Enrichit la fiche sans
-                  jamais influencer le classement.
+                  Photos, description détaillée, contact direct : votre
+                  abonnement enrichit votre présence sur APS, y compris pour
+                  les professions soumises à des règles strictes en matière
+                  de communication. Il n'influence jamais votre classement
+                  dans les résultats.
                 </p>
               </div>
             </div>
             <div className="col-md-4">
               <div className="step-card">
                 <div className="step-num">B</div>
-                <h3>Publicité d'annonceurs tiers</h3>
+                <h3>Un espace pour les marques partenaires</h3>
                 <p>
-                  Réservée aux entreprises hors professions de santé
-                  réglementées. Affichage de logos dans un cadre dédié,
-                  ciblage contextuel obligatoire.
+                  Réservé aux entreprises et marques hors professions de
+                  santé réglementées. Leurs visuels apparaissent dans des
+                  espaces dédiés, toujours choisis en fonction du contenu
+                  de la page.
                 </p>
               </div>
             </div>
             <div className="col-md-4">
               <div className="step-card">
                 <div className="step-num">C</div>
-                <h3>Boost commercial promotionnel</h3>
+                <h3>Une mise en avant assumée</h3>
                 <p>
-                  Mise en avant payante réservée aux acteurs autorisés à la
-                  publicité (assureurs, courtiers, ambulances...). Badge «
-                  Sponsorisé » visible et modération a priori obligatoire.
+                  Pour les acteurs autorisés à communiquer (assureurs,
+                  courtiers, ambulances...), une option de mise en avant
+                  existe, toujours identifiée clairement par un badge «
+                  Sponsorisé » et vérifiée avant publication.
                 </p>
               </div>
             </div>
@@ -206,10 +199,11 @@ export default function Abonnement() {
           <div className="banner-institutionnel" style={{ marginTop: "1.5rem" }}>
             <i className="fa-solid fa-shield-halved" />
             <span>
-              Aucun dispositif ne peut masquer, retarder ou reléguer une
-              information de garde, d'urgence ou de santé publique. Le
-              module Urgences et la vue des pharmacies de garde restent
-              intégralement exempts de tout affichage commercial.
+              Une règle que nous ne franchissons jamais : rien ne peut
+              masquer, retarder ou faire passer au second plan une
+              information d'urgence ou de garde. Les pages Urgences et
+              Pharmacies de garde restent, en toutes circonstances, à
+              l'abri de toute publicité.
             </span>
           </div>
         </div>

@@ -1,12 +1,5 @@
-/**
- * Données des compagnies d'assurance & courtiers — source unique
- * partagée entre l'annuaire (pages/Assurance.jsx) et la fiche détail
- * (pages/FicheAssurance.jsx).
- *
- * À remplacer par l'appel API réel (ex. GET /assureurs, GET /assureurs/:id).
- * Le champ `abonnementActif` pilote l'affichage enrichi vs minimal
- * conformément à EF-ASS-06 du cahier des charges.
- */
+// Données des compagnies d'assurance et courtiers présentés dans
+// l'annuaire et sur leurs fiches détaillées.
 
 export const insurers = [
   {

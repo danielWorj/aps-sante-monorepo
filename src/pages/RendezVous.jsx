@@ -3,10 +3,6 @@ import { Link } from 'react-router-dom';
 
 import med1 from '../assets/img/med1.jpg';
 
-/* ============================================================
-   RendezVous.jsx — ex pages/rendez_vous.html
-   ============================================================ */
-
 const COMMISSION_APS = 1000;
 
 function formatFCFA(montant) {

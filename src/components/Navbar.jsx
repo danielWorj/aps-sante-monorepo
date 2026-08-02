@@ -1,4 +1,3 @@
-// components/Navbar.jsx
 import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 
@@ -17,8 +16,9 @@ export default function Navbar() {
         </Link>
         <nav className={open ? 'is-open' : ''}>
           <ul className={`aps-nav-links ${open ? 'is-open' : ''}`}>
-            <li><NavLink to="/home" className={navLinkClass} onClick={() => setOpen(false)}> <i className="fa-solid fa-home" /> Acceuil</NavLink></li>
+            <li><NavLink to="/home" className={navLinkClass} onClick={() => setOpen(false)}> <i className="fa-solid fa-home" /> Accueil</NavLink></li>
             <li><NavLink to="/medecin" className={navLinkClass} onClick={() => setOpen(false)}> <i className="fa-solid fa-user-md" /> Médecins</NavLink></li>
+            <li><NavLink to="/structure-sante" className={navLinkClass} onClick={() => setOpen(false)}> <i className="fa-solid fa-hospital" /> Structures de Santé</NavLink></li>
             <li><NavLink to="/pharmacie" className={navLinkClass} onClick={() => setOpen(false)}> <i className="fa-solid fa-prescription-bottle" /> Pharmacies</NavLink></li>
             <li><NavLink to="/urgences" className={navLinkClass} onClick={() => setOpen(false)}> <i className="fa-solid fa-truck-medical" /> Urgences</NavLink></li>
             <li><NavLink to="/assurance" className={navLinkClass} onClick={() => setOpen(false)}> <i className="fa-solid fa-shield-heart" /> Assurance</NavLink></li>

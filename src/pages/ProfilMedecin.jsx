@@ -7,12 +7,6 @@ import med3 from '../assets/img/med3.jpg';
 import med4 from '../assets/img/med4.jpg';
 import med5 from '../assets/img/med5.jpg';
 
-/* ============================================================
-   ProfilMedecin.jsx — ex pages/profil_medecin.html
-   Dans une vraie app, les données de la fiche viendraient d'un
-   fetch basé sur useParams().id (route "/profil/:id").
-   ============================================================ */
-
 const TABS = [
   { id: 'presentation', label: 'Présentation' },
   { id: 'horaires', label: 'Horaires & localisation' },

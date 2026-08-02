@@ -1,20 +1,4 @@
-/**
- * Page "Assurances" — Annuaire des compagnies d'assurance & courtiers santé.
- * Adapté depuis APS-site-corrige/APS/pages/assurance.html
- *
- * La navbar et le footer sont fournis par un layout partagé au niveau de
- * l'app — ce composant ne contient que le contenu propre à la page.
- *
- * Prérequis globaux (déjà chargés au niveau de l'app, comme dans index.html) :
- *  - Bootstrap 5.3 CSS (+ JS bundle si des composants Bootstrap JS sont utilisés ailleurs)
- *  - Font Awesome 6.5 (icônes fa-solid / fa-brands)
- *  - Polices Google Fonts : Manrope / Inter / IBM Plex Mono
- *  - ../css/style.css (feuille de style maison APS — classes .insurer-card, .filter-bar, etc.)
- *
- * Chaque fiche assureur mène vers /assurances/:id (pages/FicheAssurance.jsx)
- * via react-router. La route correspondante doit être déclarée dans router.jsx :
- *   { path: "/assurances/:id", element: <FicheAssurance /> }
- */
+// Page "Assurances" — annuaire des compagnies d'assurance et courtiers santé.
 
 import { Link } from "react-router-dom";
 import { insurers } from "../data/insurers";

@@ -1,22 +1,8 @@
 import { useState } from "react";
 import pub2 from "../assets/img/ads/pub2.jpg";
 
-/**
- * Page "Urgences" — accès en un geste.
- * Adapté depuis APS-site-corrige/APS/pages/urgences.html
- *
- * La navbar et le footer sont fournis par un layout partagé au niveau de
- * l'app — ce composant ne contient que le contenu propre à la page.
- *
- * Prérequis globaux (déjà chargés au niveau de l'app, comme dans index.html) :
- *  - Bootstrap 5.3 CSS
- *  - Font Awesome 6.5 (icônes fa-solid / fa-brands)
- *  - Polices Google Fonts : Manrope / Inter / IBM Plex Mono
- *  - ../css/style.css (feuille de style maison APS — classes .urgence-hero, .type-card, etc.)
- *
- * Comportement JS d'origine (js/script.js) réimplémenté en state React :
- *  - sélection du type d'urgence (.type-card.active)
- */
+// Page "Urgences" — accès à l'aide en un geste : numéros officiels,
+// pharmacies de garde, ambulances et structures ouvertes à proximité.
 
 const emergencyTypes = [
   { id: "medicale", icon: "fa-kit-medical", label: "Médicale" },

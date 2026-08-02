@@ -852,6 +852,56 @@ table{max-width:100%; display:block; overflow-x:auto;}
 .pharmacy-status.is-garde{background:var(--violet-tint); color:var(--violet);}
 .pharmacy-status.is-closed{background:var(--surface-sunk); color:var(--ink-soft);}
 
+/* ---------------------------- ANNUAIRE STRUCTURES DE SANTÉ (structure_sante.html) ---------------------------- */
+.structure-card{
+  display:flex; align-items:center; gap:1.3rem;
+  padding:1.4rem;
+  border:1px solid var(--line);
+  border-radius:var(--radius-lg);
+  background:var(--surface);
+  margin-bottom:1rem;
+  flex-wrap:wrap;
+  transition:box-shadow .2s ease, border-color .2s ease, transform .2s ease;
+}
+.structure-card:hover{box-shadow:var(--shadow-sm); transform:translateY(-2px); border-color:var(--line-strong);}
+.structure-card > div:nth-child(2){flex:1; min-width:240px;}
+.structure-card h3{font-size:1rem; margin:.4rem 0 .5rem; line-height:1.35;}
+
+.structure-photo{
+  width:110px; height:82px; min-width:110px;
+  border-radius:var(--radius-md);
+  background:var(--surface-sunk);
+  color:var(--primary);
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden;
+}
+.structure-photo img{
+  width:100%; height:100%;
+  object-fit:cover;
+  border-radius:inherit;
+  display:block;
+}
+
+.structure-card-top{
+  display:flex; align-items:center; flex-wrap:wrap; gap:.5rem;
+}
+.structure-type{
+  display:inline-flex; align-items:center; gap:.35rem;
+  font-size:.74rem; font-weight:700;
+  padding:.22rem .6rem;
+  border-radius:var(--radius-pill);
+  background:var(--surface-sunk); color:var(--ink-soft);
+}
+.structure-type i{font-size:.7rem;}
+.structure-type.is-chu{background:var(--violet-tint); color:var(--violet);}
+.structure-type.is-general{background:var(--primary-tint); color:var(--primary-dark);}
+.structure-type.is-regional{background:var(--teal-tint); color:var(--teal-dark);}
+.structure-type.is-district{background:var(--gold-tint); color:#8A6115;}
+.structure-type.is-clinique{background:var(--surface-sunk); color:var(--ink-soft);}
+.structure-type.is-centre{background:var(--primary-tint); color:var(--primary-dark);}
+
+.structure-services{display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.55rem;}
+
 .pagination{gap:.35rem;}
 .page-link{
   border:1px solid var(--line-strong);

@@ -2,37 +2,9 @@ import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getInsurerById } from "../data/insurers";
 
-/**
- * Fiche assurance (page de détail d'une compagnie / d'un courtier).
- * Conforme au cahier des charges APS — section 7.10 "Module Annuaire
- * assurances" et exigences EF-ASS-01 à EF-ASS-06 / UC-11.
- *
- * La navbar et le footer sont fournis par un layout partagé au niveau de
- * l'app — ce composant ne contient que le contenu propre à la page.
- *
- * Règles métier respectées :
- *  - EF-ASS-01/02 : annuaire enrichi uniquement — aucune souscription,
- *    aucune comparaison de produits, aucune gestion de sinistre ni de
- *    réclamation.
- *  - EF-ASS-03 : fiche structurée en trois volets — Siège / Activités /
- *    Filiales et agences.
- *  - EF-ASS-04 : chaque agence porte une adresse complète et des
- *    coordonnées GPS, recherchable par proximité et par découpage
- *    administratif (région/ville).
- *  - EF-ASS-05 : le formulaire de mise en relation est adressé à
- *    l'agence sélectionnée, avec copie systématique au siège ;
- *    la demande est horodatée et son statut est suivi (accusé de
- *    réception affiché après envoi).
- *  - EF-ASS-06 : sans abonnement actif, seules les informations
- *    minimales (dénomination, activité principale, localisation du
- *    siège) sont exposées — pas de volets enrichis, pas de formulaire.
- *
- * Prérequis globaux (déjà chargés au niveau de l'app, comme dans index.html) :
- *  - Bootstrap 5.3 CSS
- *  - Font Awesome 6.5 (icônes fa-solid)
- *  - Polices Google Fonts : Manrope / Inter / IBM Plex Mono
- *  - ../css/style.css (classes .profile-header, .aps-tabs, .info-card, etc.)
- */
+// Fiche assurance — page de détail d'une compagnie d'assurance ou d'un
+// courtier, avec ses agences et son formulaire de mise en relation.
+// Sans abonnement actif, seule une présence minimale est affichée.
 
 /* Distance à vol d'oiseau (formule de Haversine), en kilomètres. */
 function distanceKm(a, b) {
@@ -461,7 +433,7 @@ function ContactSidebar({ insurer, agences, selectedAgencyId, onSelectAgency }) 
   );
 }
 
-/* ============================ PRÉSENCE MINIMALE (EF-ASS-06) ============================ */
+/* ============================ PRÉSENCE MINIMALE ============================ */
 function FicheMinimale({ insurer }) {
   return (
     <section style={{ padding: "2.5rem 0" }}>
@@ -530,7 +502,7 @@ export default function FicheAssurance({ insurer: insurerProp }) {
     return <FicheIntrouvable />;
   }
 
-  // EF-ASS-06 : sans abonnement actif, seule la présence minimale est exposée.
+  // Sans abonnement actif, seule la présence minimale est affichée.
   if (!insurer.abonnementActif) {
     return <FicheMinimale insurer={insurer} />;
   }
@@ -615,7 +587,7 @@ export default function FicheAssurance({ insurer: insurerProp }) {
       <section style={{ paddingTop: "1.5rem" }}>
         <div className="container-aps">
           <div className="row g-4">
-            {/* Colonne principale — trois volets (EF-ASS-03) */}
+            {/* Colonne principale — trois volets */}
             <div className="col-lg-8">
               <Tabs active={activeTab} onChange={setActiveTab} tabs={tabs} />
 
@@ -630,7 +602,7 @@ export default function FicheAssurance({ insurer: insurerProp }) {
               )}
             </div>
 
-            {/* Colonne latérale — mise en relation (EF-ASS-05 / UC-11) */}
+            {/* Colonne latérale — mise en relation */}
             <div className="col-lg-4" id="mise-en-relation">
               <ContactSidebar
                 insurer={insurer}

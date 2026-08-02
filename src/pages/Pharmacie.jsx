@@ -6,26 +6,7 @@ import pharma3 from "../assets/img/pharma3.jpg";
 import pharma4 from "../assets/img/pharma4.jpg";
 import pub5 from "../assets/img/ads/pub5.jpg";
 
-/**
- * Pharmacie.jsx — Annuaire des pharmacies.
- *
- * Layout à 3 colonnes (desktop) sur la ligne de résultats :
- *   col-md-3  Filtres
- *   col-md-6  Liste des pharmacies
- *   col-md-3  Publicité (emplacement commercial)
- *
- * Nota : le module "Urgences" et le planning officiel des "pharmacies de
- * garde" restent des espaces neutres sans publicité (cf. cahier des
- * charges). Cette page est l'ANNUAIRE général des pharmacies : la
- * colonne publicité y est donc autorisée, conformément à la matrice
- * d'éligibilité annonceur × type de page.
- *
- * Prérequis globaux (déjà chargés au niveau de l'app) :
- *  - Bootstrap 5.3 CSS (grille col-md-3 / col-md-6 / col-md-3)
- *  - Font Awesome 6.5
- *  - ../assets/styles/style.css — classes .filter-bar, .pharmacy-card,
- *    .pharmacy-status, .ad-card, .ad-slot-empty, etc.
- */
+// Page "Pharmacies" — annuaire des pharmacies ouvertes, de garde ou 24h/24.
 
 const PHARMACIES = [
   {

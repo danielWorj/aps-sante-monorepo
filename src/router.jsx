@@ -3,6 +3,7 @@ import App from './App';
 import Home from './pages/Home';
 import Medecin from './pages/Medecin';
 import Pharmacie from './pages/Pharmacie';
+import StructureSante from './pages/StructureSante';
 import ProfilMedecin from './pages/ProfilMedecin';
 import RendezVous from './pages/RendezVous';
 import Urgences from './pages/Urgence';
@@ -18,6 +19,7 @@ export const router = createBrowserRouter([
       { path: '/home', element: <Home /> },
       { path: '/medecin', element: <Medecin /> },
       { path: '/pharmacie', element: <Pharmacie /> },
+      { path: '/structure-sante', element: <StructureSante /> },
       { path: '/profil/:id', element: <ProfilMedecin /> },
       { path: '/rendez-vous/:id', element: <RendezVous /> },
       { path: '/urgences', element: <Urgences /> },

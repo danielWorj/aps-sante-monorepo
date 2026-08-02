@@ -1,26 +1,7 @@
-/**
- * data/subscriptionPlans.js
- *
- * Grille des abonnements forfaitaires de présence (Dispositif A du §7.11 du
- * cahier des charges) déclinée par type d'acteur, ainsi que le module
- * publicité annonceurs tiers (Dispositif B) pour les entreprises hors
- * professions de santé réglementées.
- *
- * Important — cohérence avec le cahier des charges :
- *  - Les tarifs ci-dessous sont indicatifs. La grille réelle est pilotée
- *    dynamiquement depuis la console d'administration (§7.14 / §14.2), pays
- *    par pays, sans intervention technique.
- *  - Phase d'amorçage : tous les abonnements des professionnels de santé
- *    (médecins, cliniques, hôpitaux, laboratoires, pharmacies) sont gratuits
- *    tant que la bascule vers le payant n'a pas été activée par pays (§H10,
- *    §14.2, §1013).
- *  - Le palier gratuit ("Présence de base") est permanent et garantit
- *    l'exhaustivité de l'annuaire (§1012) : il n'est jamais supprimé, même
- *    après bascule vers le payant.
- *  - Aucun abonnement, quel que soit le palier, n'accorde de mise en avant
- *    promotionnelle ni de badge « Sponsorisé » pour les professionnels de
- *    santé soumis à la déontologie de non-publicité (§7.11, Dispositif A).
- */
+// Grille des abonnements par type d'acteur (médecins, cliniques,
+// pharmacies, assurances) et offre pour les annonceurs partenaires.
+// Le palier "Présence de base" reste gratuit en permanence pour tous
+// les professionnels de santé.
 
 export const clientTypes = [
   {
@@ -87,8 +68,8 @@ export const clientTypes = [
       },
     ],
     notes: [
-      "Aucune mise en avant promotionnelle ni badge « Sponsorisé » : l'abonnement enrichit uniquement la fiche, dans le respect de la déontologie de non-publicité.",
-      "Le classement des fiches reste fondé sur la pertinence, la distance et la note, jamais sur le niveau d'abonnement.",
+      "Pas de badge « Sponsorisé » ni de mise en avant payante : votre abonnement enrichit votre fiche, dans le respect des règles de votre profession.",
+      "Votre position dans les résultats dépend uniquement de la pertinence, de la distance et de votre note — jamais de votre abonnement.",
     ],
   },
   {
@@ -154,8 +135,8 @@ export const clientTypes = [
       },
     ],
     notes: [
-      "Aucun avantage de classement promotionnel : l'abonnement forfaitaire enrichit uniquement la fiche (§UC-08).",
-      "Facturation hors escrow, avec génération automatique de facture depuis la console d'administration.",
+      "Votre abonnement enrichit votre fiche, jamais votre classement : la position dans les résultats reste basée sur la pertinence, la distance et les avis.",
+      "Une facture est automatiquement générée et vous est transmise à chaque paiement.",
     ],
   },
   {
@@ -230,7 +211,7 @@ export const clientTypes = [
     shortLabel: "Assurances",
     icon: "fa-shield-heart",
     tagline:
-      "Compagnies d'assurance santé et courtiers, annuaire uniquement — aucune souscription en ligne en V1.",
+      "Compagnies d'assurance santé et courtiers : un annuaire clair pour vous faire connaître. La souscription se fait toujours directement avec l'assureur.",
     freemium: false,
     dispositif: "A",
     baseTier: {
@@ -295,7 +276,7 @@ export const clientTypes = [
     shortLabel: "Annonceurs",
     icon: "fa-rectangle-ad",
     tagline:
-      "Opérateurs télécoms, banques, marques de produits de santé en vente libre — campagnes publicitaires par emplacement (Dispositif B).",
+      "Opérateurs télécoms, banques, marques de produits de santé en vente libre : faites connaître votre marque auprès de nos patients et professionnels de santé.",
     freemium: false,
     dispositif: "B",
     baseTier: null,
@@ -343,9 +324,9 @@ export const clientTypes = [
       },
     ],
     notes: [
-      "Format V1 : affichage de logos uniquement, dans un cadre dédié — pas de visuels illustrés ni de vidéos.",
-      "Facturation hors ligne pour les montants élevés : facture générée depuis la console d'administration, campagne activée après encaissement constaté.",
-      "Le module Urgences et la vue des pharmacies de garde restent intégralement exempts de tout affichage commercial.",
+      "Votre logo est mis en avant dans un espace dédié, pensé pour rester lisible et discret.",
+      "Votre campagne démarre dès la confirmation du paiement, et une facture vous est transmise.",
+      "Les pages Urgences et Pharmacies de garde restent, elles, entièrement sans publicité — pour ne jamais ralentir l'accès aux soins.",
     ],
   },
 ];

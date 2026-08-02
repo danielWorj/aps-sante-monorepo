@@ -8,10 +8,6 @@ import med4 from '../assets/img/med4.jpg';
 import med5 from '../assets/img/med5.jpg';
 import pub4 from '../assets/img/ads/pub4.jpg';
 
-/* ============================================================
-   Medecin.jsx — ex pages/medecin.html
-   ============================================================ */
-
 const PRACTITIONERS = [
   {
     id: 'aicha-ngo',

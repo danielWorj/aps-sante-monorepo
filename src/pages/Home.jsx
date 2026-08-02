@@ -1,11 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import heroBg from '../assets/img/med7.jpg';
-import pub1 from '../assets/img/ads/pub1.jpg';
-
-/* ============================================================
-   Home.jsx — ex index.html
-   ============================================================ */
 
 /* ---------------------------- Petits composants réutilisables ---------------------------- */
 
@@ -804,9 +799,14 @@ export default function Home() {
       <section id="urgences">
         <div className="container-aps">
           <div className="section-head">
-            <span className="eyebrow">Accès prioritaire</span>
-            <h2>Aucune publicité ici. Juste l&apos;essentiel.</h2>
-            <p>Les urgences et les pharmacies de garde restent des espaces neutres, sans emplacement publicitaire, pour ne jamais ralentir l&apos;accès aux soins.</p>
+            <span className="eyebrow">À propos d&apos;APS</span>
+            <h2>Toute votre santé, réunie sur une seule plateforme</h2>
+            <p>
+              APS met en relation patients et professionnels de santé partout où vous êtes.
+              Médecins, pharmacies, cliniques, ambulances et assureurs vérifiés sont réunis
+              au même endroit, pour que vous trouviez la bonne réponse sans perdre de temps —
+              y compris dans les situations qui ne peuvent pas attendre.
+            </p>
           </div>
 
           <div className="access-cards">
@@ -857,16 +857,6 @@ export default function Home() {
               <p>Payez en toute sécurité : les fonds restent sous séquestre jusqu&apos;à la réalisation de la consultation.</p>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* ============================ PUBLICITÉ — au-dessus de l'annuaire ============================ */}
-      <section style={{ paddingBottom: 0 }}>
-        <div className="container-aps">
-          <a href="#" className="ad-slot ad-banner-top">
-            <span className="ad-tag">Publicité</span>
-            <img src={pub1} alt="Publicité — Super Gym" />
-          </a>
         </div>
       </section>
 
