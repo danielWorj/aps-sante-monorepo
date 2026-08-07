@@ -4,12 +4,14 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client-js"
-  output   = "../generated/prisma"
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [postgis, pgcrypto]
 }
 
 // =====================================================================
@@ -55,6 +57,22 @@ enum MotifRevocation {
   admin
 }
 
+// v6 : porté par structure_sante elle-même (auparavant hébergé par le
+// supertype "service", supprimé). Même patron que sur medecin.
+enum StatutVerificationStructure {
+  non_publie
+  en_cours
+  publie
+}
+
+enum TypeStructure {
+  clinique
+  hopital
+  centre_medical
+  dispensaire
+  laboratoire
+}
+
 // -----------------------------------------------------------------
 // Référentiel géographique
 // -----------------------------------------------------------------
@@ -94,9 +112,10 @@ model Pays {
   devise Devise @relation(fields: [devise_id], references: [devise_id])
   langue Langue @relation(fields: [langue_id], references: [langue_id])
 
-  villes           Ville[]
-  utilisateurs     Utilisateur[]
+  villes            Ville[]
+  utilisateurs      Utilisateur[]
   medecins_exercice Medecin[]
+  structures_sante  StructureSante[]
 
   @@index([devise_id])
   @@index([langue_id])
@@ -116,6 +135,7 @@ model Ville {
   pays Pays @relation(fields: [pays_id], references: [pays_id])
 
   medecins_exercice Medecin[]
+  structures_sante  StructureSante[]
 
   @@index([pays_id])
   @@map("ville")
@@ -348,12 +368,33 @@ model AgentAmbulance {
 //   - service_ambulance → diagramme 07_services_connexes
 // -----------------------------------------------------------------
 
-/// @ref module 02_annuaire_recherche — définition complète à fusionner
+// -----------------------------------------------------------------
+// Annuaire — structure_sante (diagramme 02_annuaire_recherche)
+//
+// "geolocalisation" est un GEOGRAPHY(POINT,4326) PostGIS. Prisma
+// Client ne sait pas lire/écrire ce type nativement (introspection en
+// Unsupported(...)) : le contrôleur passe par $queryRaw / $executeRaw
+// pour cette seule colonne, le reste des opérations utilise le client
+// Prisma standard.
+// -----------------------------------------------------------------
 model StructureSante {
   structure_id String @id @default(uuid()) @db.Uuid
 
+  nom                 String                      @db.VarChar(200)
+  pays_id             String                      @db.Uuid
+  ville_id            String                      @db.Uuid
+  geolocalisation     Unsupported("geography(Point, 4326)")?
+  telephone           String                      @db.VarChar(20)
+  statut_verification StatutVerificationStructure
+  type_structure      TypeStructure
+
+  pays  Pays  @relation(fields: [pays_id], references: [pays_id])
+  ville Ville @relation(fields: [ville_id], references: [ville_id])
+
   agents AgentStructureSante[]
 
+  @@index([pays_id])
+  @@index([ville_id])
   @@map("structure_sante")
 }
 

@@ -473,11 +473,13 @@ export async function obtenirVille(req, res, next) {
  */
 export async function creerVille(req, res, next) {
   try {
-    const { pays_id, nom, code_postal } = req.body;
+    const { pays_id, nom, code_postal } = req.body; //recuperation des valeurs
 
+    // s'il y'a pas de id du pays 
     if (!pays_id || !nom) {
       return res.status(400).json({ message: "Champs requis manquants : pays_id, nom." });
     }
+
 
     const pays = await prisma.pays.findUnique({ where: { pays_id } });
     if (!pays) {

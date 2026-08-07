@@ -6,6 +6,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import authentificationRoutes from "./src/routes/authentification.routes.js";
 import referentielsRoutes from "./src/routes/referentiels.routes.js";
+import centreSanteRoutes from "./src/routes/centreSante.routes.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -64,6 +65,7 @@ app.get("/", (_req, res) => {
 // ─── Routes ───────────────────────────────────────────────────
 app.use("/api/auth", authentificationRoutes);
 app.use("/api/referentiels", referentielsRoutes);
+app.use("/api", centreSanteRoutes);
 
 // ─── Gestion d'erreurs centralisée ─────────────────────────────
 app.use((err, _req, res, _next) => {
