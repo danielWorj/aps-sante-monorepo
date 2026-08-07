@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>APS · Console d'amorçage — Super administrateur</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ink:#0b1220;
+    --panel:#0f1b2d;
+    --panel-2:#132540;
+    --line: rgba(148,178,214,0.16);
+    --line-strong: rgba(148,178,214,0.32);
+    --text:#e7edf6;
+    --text-dim:#93a4bd;
+    --accent:#2fd4c4;      /* clinical teal — signal / verified */
+    --accent-dim:#1a8f84;
+    --danger:#ff6b6b;
+    --danger-dim:#3a1418;
+    --warn:#f5b942;
+    --radius:14px;
+    --mono:'JetBrains Mono', ui-monospace, monospace;
+    --sans:'Inter', system-ui, sans-serif;
+  }
+
+  *{box-sizing:border-box;}
+
+  body{
+    background:
+      radial-gradient(1100px 520px at 12% -10%, rgba(47,212,196,0.08), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(80,120,220,0.10), transparent 55%),
+      var(--ink);
+    color:var(--text);
+    font-family:var(--sans);
+    min-height:100vh;
+    background-attachment:fixed;
+  }
+
+  /* faint grid — signals "systems console" without shouting it */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:42px 42px;
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, black 0%, transparent 70%);
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, black 0%, transparent 70%);
+    pointer-events:none;
+    z-index:0;
+  }
+
+  .shell{ position:relative; z-index:1; max-width:640px; margin:0 auto; padding: 56px 20px 80px; }
+
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:.72rem;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--accent);
+    display:flex; align-items:center; gap:.55rem;
+    margin-bottom:14px;
+  }
+  .eyebrow .dot{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 0 0 4px rgba(47,212,196,0.14);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{ opacity:1; transform:scale(1); }
+    50%{ opacity:.55; transform:scale(0.85); }
+  }
+
+  h1{
+    font-family:var(--sans);
+    font-weight:800;
+    font-size:clamp(1.7rem, 3vw, 2.15rem);
+    letter-spacing:-0.02em;
+    margin-bottom:10px;
+    color:#fff;
+  }
+  h1 .accent{ color:var(--accent); }
+
+  .lede{
+    color:var(--text-dim);
+    font-size:.98rem;
+    line-height:1.55;
+    max-width:54ch;
+    margin-bottom:28px;
+  }
+
+  .warning-strip{
+    display:flex; gap:12px; align-items:flex-start;
+    background:linear-gradient(180deg, rgba(245,185,66,0.10), rgba(245,185,66,0.04));
+    border:1px solid rgba(245,185,66,0.28);
+    border-radius:10px;
+    padding:13px 15px;
+    margin-bottom:30px;
+    font-size:.85rem;
+    color:#f3d69a;
+    line-height:1.5;
+  }
+  .warning-strip svg{ flex:none; margin-top:2px; color:var(--warn); }
+  .warning-strip strong{ color:#fff; font-weight:600; }
+
+  .card-console{
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding: 30px 28px 26px;
+    box-shadow: 0 30px 60px -30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+
+  .field-label{
+    font-family:var(--mono);
+    font-size:.72rem;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin-bottom:6px;
+    display:flex;
+    justify-content:space-between;
+  }
+  .field-label .req{ color:var(--accent); }
+  .field-label .opt{ color:#5b6d87; text-transform:none; letter-spacing:0; }
+
+  .form-control, .form-select{
+    background:#0a1421;
+    border:1px solid var(--line-strong);
+    color:var(--text);
+    font-family:var(--sans);
+    padding:.62rem .8rem;
+    border-radius:9px;
+    font-size:.95rem;
+  }
+  .form-control::placeholder{ color:#4c5c76; }
+  .form-control:focus, .form-select:focus{
+    background:#0a1421;
+    border-color:var(--accent);
+    box-shadow:0 0 0 3px rgba(47,212,196,0.16);
+    color:var(--text);
+  }
+  .form-control:disabled{ opacity:.5; }
+
+  .row-tight{ --bs-gutter-x: 14px; }
+  .mb-field{ margin-bottom:18px; }
+
+  .input-wrap{ position:relative; }
+  .input-wrap .toggle-visibility{
+    position:absolute; right:8px; top:50%; transform:translateY(-50%);
+    background:none; border:none; color:var(--text-dim);
+    font-family:var(--mono); font-size:.7rem; letter-spacing:.05em;
+    text-transform:uppercase; cursor:pointer; padding:4px 8px;
+    border-radius:6px;
+  }
+  .input-wrap .toggle-visibility:hover{ color:var(--accent); background:rgba(47,212,196,0.08); }
+  #pays_id{ padding-right:38px; }
+
+  .strength{
+    height:3px; border-radius:3px; background:#1c2b41; margin-top:8px; overflow:hidden;
+  }
+  .strength > div{ height:100%; width:0%; background:var(--danger); transition:width .25s ease, background .25s ease; }
+  .strength-label{ font-family:var(--mono); font-size:.68rem; color:var(--text-dim); margin-top:5px; }
+
+  .hint{ font-size:.78rem; color:#5b6d87; margin-top:6px; line-height:1.4; }
+
+  .divider-label{
+    display:flex; align-items:center; gap:10px;
+    color:#4c5c76; font-family:var(--mono); font-size:.68rem;
+    letter-spacing:.1em; text-transform:uppercase;
+    margin: 24px 0 18px;
+  }
+  .divider-label::before, .divider-label::after{
+    content:""; flex:1; height:1px; background:var(--line);
+  }
+
+  .role-chip{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:var(--mono); font-size:.78rem;
+    background:rgba(47,212,196,0.08);
+    border:1px solid rgba(47,212,196,0.35);
+    color:var(--accent);
+    padding:6px 12px; border-radius:99px;
+  }
+  .role-chip svg{ width:13px; height:13px; }
+
+  .btn-submit{
+    width:100%;
+    background:var(--accent);
+    border:none;
+    color:#04211d;
+    font-weight:700;
+    font-size:.95rem;
+    padding:.78rem 1rem;
+    border-radius:10px;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    transition: transform .12s ease, background .15s ease, box-shadow .15s ease;
+    margin-top: 22px;
+  }
+  .btn-submit:hover:not(:disabled){ background:#3fe6d5; box-shadow:0 10px 24px -10px rgba(47,212,196,0.55); }
+  .btn-submit:active:not(:disabled){ transform:scale(0.99); }
+  .btn-submit:disabled{ opacity:.55; cursor:not-allowed; }
+
+  .spinner-ring{
+    width:15px; height:15px; border-radius:50%;
+    border:2px solid rgba(4,33,29,0.35); border-top-color:#04211d;
+    animation: spin .7s linear infinite; display:none;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .result{
+    margin-top:18px;
+    border-radius:10px;
+    padding:14px 16px;
+    font-size:.87rem;
+    line-height:1.5;
+    display:none;
+  }
+  .result.show{ display:block; animation: rise .25s ease; }
+  @keyframes rise{ from{ opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+  .result.ok{ background:rgba(47,212,196,0.08); border:1px solid rgba(47,212,196,0.35); color:#a9f3ea; }
+  .result.err{ background:var(--danger-dim); border:1px solid rgba(255,107,107,0.4); color:#ffb3b3; }
+  .result .id-line{
+    font-family:var(--mono); font-size:.8rem; margin-top:8px; word-break:break-all;
+    color:var(--text-dim);
+  }
+  .result strong{ color:#fff; }
+
+  footer.note{
+    text-align:center; color:#3d4e69; font-family:var(--mono);
+    font-size:.72rem; letter-spacing:.04em; margin-top:26px;
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <div class="eyebrow"><span class="dot"></span> APS · Amorçage IAM</div>
+  <h1>Créer le <span class="accent">super&nbsp;administrateur</span></h1>
+  <p class="lede">
+    Ce formulaire appelle <code style="color:#8fb7ac;">POST /api/auth/bootstrap-superadmin</code>,
+    une route dédiée et verrouillée par un jeton secret (<code style="color:#8fb7ac;">SETUP_TOKEN</code>,
+    envoyé via l'en-tête <code style="color:#8fb7ac;">X-Setup-Token</code>). Elle refuse
+    systématiquement dès qu'un superadmin existe déjà en base, quel que soit le jeton fourni.
+    <strong>Le rôle est une donnée en base (table <code style="color:#8fb7ac;">role</code>)</strong> —
+    <code style="color:#8fb7ac;">POST /api/auth/register</code>, lui, ne permet plus de créer que des
+    comptes "patient" et n'accepte plus aucun autre rôle.
+  </p>
+
+  <div class="warning-strip">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <div><strong>Page sensible.</strong> Ce compte aura tous les droits. Une fois le superadmin créé, retirez ou changez <code style="color:#8fb7ac;">SETUP_TOKEN</code> côté serveur : la route se désactive alors définitivement, mais retirez tout de même cette page de tout déploiement public.</div>
+  </div>
+
+  <div class="card-console">
+    <form id="form-super-admin" novalidate>
+
+      <div class="mb-field">
+        <div class="field-label">Endpoint API <span class="opt">(optionnel — base URL)</span></div>
+        <input type="text" class="form-control" id="api-base" placeholder="https://api.mon-domaine.com  (laisser vide = /api)" autocomplete="off">
+        <div class="hint">Le formulaire appellera <span id="endpoint-preview" style="font-family:var(--mono);">/api/auth/register</span>.</div>
+      </div>
+
+      <div class="mb-field">
+        <div class="field-label">Jeton d'amorçage (SETUP_TOKEN) <span class="req">*</span></div>
+        <div class="input-wrap">
+          <input type="password" class="form-control" id="setup_token" required autocomplete="off">
+          <button type="button" class="toggle-visibility" data-target="setup_token">Afficher</button>
+        </div>
+        <div class="hint">Valeur de <span style="font-family:var(--mono);">SETUP_TOKEN</span> configurée côté serveur. Envoyé via l'en-tête <span style="font-family:var(--mono);">X-Setup-Token</span>, jamais dans le body.</div>
+      </div>
+
+      <div class="divider-label">Identité</div>
+
+      <div class="row row-tight">
+        <div class="col-6 mb-field">
+          <div class="field-label">Prénom <span class="req">*</span></div>
+          <input type="text" class="form-control" id="prenom" required autocomplete="given-name">
+        </div>
+        <div class="col-6 mb-field">
+          <div class="field-label">Nom <span class="req">*</span></div>
+          <input type="text" class="form-control" id="nom" required autocomplete="family-name">
+        </div>
+      </div>
+
+      <div class="mb-field">
+        <div class="field-label">Email <span class="req">*</span></div>
+        <input type="email" class="form-control" id="email" placeholder="admin@aps-sante.com" required autocomplete="email">
+      </div>
+
+      <div class="mb-field">
+        <div class="field-label">Téléphone <span class="opt">(optionnel)</span></div>
+        <input type="tel" class="form-control" id="telephone" placeholder="+237 6 xx xx xx xx" autocomplete="tel">
+      </div>
+
+      <div class="mb-field">
+        <div class="field-label">
+          <span>Pays <span class="req">*</span></span>
+        </div>
+        <div class="input-wrap">
+          <select class="form-control" id="pays_id" required disabled>
+            <option value="">Chargement des pays…</option>
+          </select>
+          <button type="button" class="toggle-visibility" id="btn-reload-pays" title="Recharger la liste des pays">↻</button>
+        </div>
+        <div class="hint" id="pays-hint">
+          Liste chargée depuis <span style="font-family:var(--mono);">GET /api/referentiels/pays</span> (lecture publique).
+        </div>
+      </div>
+
+      <div class="mb-field">
+        <div class="field-label">
+          <span>Rôle</span>
+        </div>
+        <input type="text" class="form-control" value="superadmin" disabled>
+        <div class="hint">Fixé à <span style="font-family:var(--mono);">superadmin</span> — cette page ne sert qu'à amorcer le tout premier compte super administrateur.</div>
+      </div>
+
+      <div class="divider-label">Identifiants</div>
+
+      <div class="mb-field">
+        <div class="field-label">Mot de passe <span class="req">*</span></div>
+        <div class="input-wrap">
+          <input type="password" class="form-control" id="mot_de_passe" required minlength="8" autocomplete="new-password">
+          <button type="button" class="toggle-visibility" data-target="mot_de_passe">Afficher</button>
+        </div>
+        <div class="strength"><div id="strength-bar"></div></div>
+        <div class="strength-label" id="strength-label">12+ caractères recommandés, avec majuscule, chiffre et symbole.</div>
+      </div>
+
+      <div class="mb-field">
+        <div class="field-label">Confirmation <span class="req">*</span></div>
+        <div class="input-wrap">
+          <input type="password" class="form-control" id="mot_de_passe_confirm" required autocomplete="new-password">
+          <button type="button" class="toggle-visibility" data-target="mot_de_passe_confirm">Afficher</button>
+        </div>
+        <div class="hint" id="confirm-hint"></div>
+      </div>
+
+      <button type="submit" class="btn-submit" id="submit-btn">
+        <span class="spinner-ring" id="spinner"></span>
+        <span id="submit-label">Créer le super administrateur</span>
+      </button>
+
+      <div class="result" id="result-box"></div>
+    </form>
+  </div>
+
+  <footer class="note">POST /api/auth/bootstrap-superadmin · verrouillé par X-Setup-Token</footer>
+</div>
+
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+
+  const apiBase = $('api-base');
+  apiBase.value = 'http://localhost:3000';
+  const endpointPreview = $('endpoint-preview');
+  function updatePreview(){
+    const base = apiBase.value.trim().replace(/\/+$/,'');
+    endpointPreview.textContent = (base || '') + '/api/auth/bootstrap-superadmin';
+  }
+  apiBase.addEventListener('input', updatePreview);
+  updatePreview();
+
+  // ─── Chargement dynamique de la liste des pays ─────────────
+  // GET /api/referentiels/pays est une lecture publique (pas
+  // d'authentification requise) : on peut donc peupler ce select avant
+  // même d'avoir un compte. S'il n'y a AUCUN pays en base (tout premier
+  // déploiement), il faut d'abord en créer un — via un script de seed
+  // Prisma, ou via POST /api/referentiels/pays une fois qu'un premier
+  // compte admin/superadmin existe. Cette page ne peut pas créer de pays
+  // elle-même : ce n'est pas son rôle.
+  const paysSelect = $('pays_id');
+  const paysHint = $('pays-hint');
+  const btnReloadPays = $('btn-reload-pays');
+  const submitBtnRef = $('submit-btn');
+
+  async function chargerPays(){
+    paysSelect.disabled = true;
+    paysSelect.innerHTML = '<option value="">Chargement des pays…</option>';
+    paysHint.textContent = 'Chargement…';
+    paysHint.style.color = '';
+
+    const base = apiBase.value.trim().replace(/\/+$/,'');
+    const url = (base || '') + '/api/referentiels/pays';
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const liste = (data && data.pays) || [];
+
+      if (liste.length === 0){
+        paysSelect.innerHTML = '<option value="">— Aucun pays en base —</option>';
+        paysSelect.disabled = true;
+        paysHint.innerHTML = 'Aucun pays trouvé. Créez-en un via un script de seed Prisma ' +
+          '(table <span style="font-family:var(--mono);">pays</span>, avec une devise et une langue existantes) ' +
+          'avant de pouvoir amorcer le superadmin.';
+        paysHint.style.color = '#f5b942';
+        return;
+      }
+
+      liste.sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+      paysSelect.innerHTML = liste.map(p =>
+        '<option value="' + p.pays_id + '">' + (p.nom || '?') + ' (' + (p.code_iso2 || '') + ')</option>'
+      ).join('');
+      paysSelect.disabled = false;
+      paysHint.textContent = liste.length + ' pays chargé(s) depuis GET /api/referentiels/pays.';
+      paysHint.style.color = '';
+    } catch (err) {
+      paysSelect.innerHTML = '<option value="">— Erreur de chargement —</option>';
+      paysSelect.disabled = true;
+      paysHint.textContent = 'Impossible de charger la liste des pays (' + err.message + '). Vérifiez l\'endpoint API ci-dessus, puis cliquez sur ↻.';
+      paysHint.style.color = '#ff6b6b';
+    }
+  }
+
+  btnReloadPays.addEventListener('click', chargerPays);
+  // Recharge automatiquement si l'endpoint API est modifié (avec un
+  // léger debounce pour ne pas spammer pendant la frappe).
+  let debouncePays;
+  apiBase.addEventListener('input', () => {
+    clearTimeout(debouncePays);
+    debouncePays = setTimeout(chargerPays, 600);
+  });
+  chargerPays();
+
+  // Show/hide password
+  document.querySelectorAll('.toggle-visibility').forEach(btn => {
+    if (!btn.dataset.target) return; // ex: le bouton de rechargement des pays
+    btn.addEventListener('click', () => {
+      const target = $(btn.dataset.target);
+      const showing = target.type === 'text';
+      target.type = showing ? 'password' : 'text';
+      btn.textContent = showing ? 'Afficher' : 'Masquer';
+    });
+  });
+
+  // Password strength (rough heuristic, purely visual guidance)
+  const pwd = $('mot_de_passe');
+  const bar = $('strength-bar');
+  const label = $('strength-label');
+  pwd.addEventListener('input', () => {
+    const v = pwd.value;
+    let score = 0;
+    if (v.length >= 8) score++;
+    if (v.length >= 12) score++;
+    if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score++;
+    if (/[0-9]/.test(v)) score++;
+    if (/[^A-Za-z0-9]/.test(v)) score++;
+    const pct = Math.min(100, (score / 5) * 100);
+    const colors = ['#ff6b6b','#ff6b6b','#f5b942','#f5b942','#2fd4c4','#2fd4c4'];
+    bar.style.width = pct + '%';
+    bar.style.background = colors[score];
+    const labels = ['Trop court','Faible','Moyen','Correct','Solide','Solide'];
+    label.textContent = v ? labels[score] : '12+ caractères recommandés, avec majuscule, chiffre et symbole.';
+  });
+
+  const confirm = $('mot_de_passe_confirm');
+  const confirmHint = $('confirm-hint');
+  function checkMatch(){
+    if (!confirm.value){ confirmHint.textContent = ''; return true; }
+    const match = confirm.value === pwd.value;
+    confirmHint.textContent = match ? '✓ Les mots de passe correspondent.' : 'Les mots de passe ne correspondent pas.';
+    confirmHint.style.color = match ? '#2fd4c4' : '#ff6b6b';
+    return match;
+  }
+  confirm.addEventListener('input', checkMatch);
+  pwd.addEventListener('input', checkMatch);
+
+  const form = $('form-super-admin');
+  const submitBtn = $('submit-btn');
+  const submitLabel = $('submit-label');
+  const spinner = $('spinner');
+  const resultBox = $('result-box');
+
+  function setLoading(loading){
+    submitBtn.disabled = loading;
+    spinner.style.display = loading ? 'inline-block' : 'none';
+    submitLabel.textContent = loading ? 'Création en cours…' : 'Créer le super administrateur';
+  }
+
+  function showResult(kind, html){
+    resultBox.className = 'result show ' + kind;
+    resultBox.innerHTML = html;
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    resultBox.className = 'result';
+
+    const nom = $('nom').value.trim();
+    const prenom = $('prenom').value.trim();
+    const email = $('email').value.trim();
+    const telephone = $('telephone').value.trim();
+    const pays_id = $('pays_id').value.trim();
+    const mot_de_passe = pwd.value;
+    const setupToken = $('setup_token').value;
+
+    if (!nom || !prenom || !email || !pays_id || !mot_de_passe || !setupToken){
+      showResult('err', '<strong>Champs manquants.</strong> Renseignez tous les champs obligatoires (*), y compris le jeton d\'amorçage.');
+      return;
+    }
+    if (mot_de_passe.length < 8){
+      showResult('err', '<strong>Mot de passe trop court.</strong> 8 caractères minimum.');
+      return;
+    }
+    if (!checkMatch()){
+      showResult('err', '<strong>Les mots de passe ne correspondent pas.</strong>');
+      return;
+    }
+    if (paysSelect.disabled || !pays_id){
+      showResult('err', '<strong>Aucun pays sélectionnable.</strong> ' + (paysHint.textContent || 'Rechargez la liste des pays (↻).'));
+      return;
+    }
+
+    const base = apiBase.value.trim().replace(/\/+$/,'');
+    const url = (base || '') + '/api/auth/bootstrap-superadmin';
+
+    const payload = {
+      nom, prenom, email, mot_de_passe, pays_id,
+    };
+    if (telephone) payload.telephone = telephone;
+
+    setLoading(true);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Setup-Token': setupToken,
+        },
+        body: JSON.stringify(payload),
+      });
+      let data = null;
+      try { data = await res.json(); } catch (_) {}
+
+      if (res.ok){
+        const u = data && data.utilisateur ? data.utilisateur : null;
+        showResult('ok',
+          '<strong>Super administrateur créé.</strong> ' + (data && data.message ? data.message : '') +
+          (u ? '<div class="id-line">utilisateur_id: ' + (u.utilisateur_id || '—') + '<br>email: ' + (u.email || '—') + '</div>' : '')
+        );
+        form.reset();
+        updatePreview();
+        bar.style.width = '0%';
+        label.textContent = '12+ caractères recommandés, avec majuscule, chiffre et symbole.';
+        confirmHint.textContent = '';
+      } else {
+        const msg = (data && data.message) ? data.message : ('Échec de la requête (HTTP ' + res.status + ').');
+        showResult('err', '<strong>Erreur :</strong> ' + msg);
+      }
+    } catch (err) {
+      showResult('err', '<strong>Impossible de joindre l\'API.</strong> ' + (err && err.message ? err.message : 'Vérifiez l\'URL et le réseau.'));
+    } finally {
+      setLoading(false);
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

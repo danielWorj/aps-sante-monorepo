@@ -1,0 +1,394 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =====================================================================
+// APS — Phase 2 : Socle technique — Référentiel pays/ville & IAM
+//
+// Le référentiel pays/ville et l'IAM portent l'identité unique et le
+// paramétrage géographique utilisés par tous les modules métier. Tant
+// qu'ils ne sont pas stables, aucun module de la Phase 3 ne peut être
+// branché sans risque de refonte.
+// =====================================================================
+
+// -----------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------
+
+enum StatutActivationPays {
+  pilote
+  actif
+  inactif
+}
+
+enum StatutCompte {
+  actif
+  suspendu
+}
+
+enum StatutVerificationMedecin {
+  non_publie
+  en_cours
+  publie
+}
+
+enum StatutRefreshToken {
+  actif
+  revoque
+  expire
+}
+
+enum MotifRevocation {
+  deconnexion
+  changement_mdp
+  compromission
+  admin
+}
+
+// -----------------------------------------------------------------
+// Référentiel géographique
+// -----------------------------------------------------------------
+
+model Langue {
+  langue_id String @id @default(uuid()) @db.Uuid
+
+  nom String @db.VarChar(50)
+
+  pays Pays[]
+
+  @@map("langue")
+}
+
+model Devise {
+  devise_id String @id @default(uuid()) @db.Uuid
+
+  libelle String @db.VarChar(50)
+
+  pays Pays[]
+
+  @@map("devise")
+}
+
+// v7 : "devise_reference" et "langue_defaut" (VARCHAR libres) sont
+// remplacés par des FK vers des référentiels dédiés langue / devise,
+// réutilisables et normalisés.
+model Pays {
+  pays_id String @id @default(uuid()) @db.Uuid
+
+  code_iso2         String               @unique @db.Char(2)
+  nom               String               @db.VarChar(100)
+  devise_id         String               @db.Uuid
+  langue_id         String               @db.Uuid
+  statut_activation StatutActivationPays
+
+  devise Devise @relation(fields: [devise_id], references: [devise_id])
+  langue Langue @relation(fields: [langue_id], references: [langue_id])
+
+  villes           Ville[]
+  utilisateurs     Utilisateur[]
+  medecins_exercice Medecin[]
+
+  @@index([devise_id])
+  @@index([langue_id])
+  @@map("pays")
+}
+
+// v6 : remplace "division_administrative" (region/departement/commune/
+// ville/quartier + FK réflexive). Un seul niveau administratif sous
+// le pays : la ville.
+model Ville {
+  ville_id String @id @default(uuid()) @db.Uuid
+
+  pays_id     String  @db.Uuid
+  nom         String  @db.VarChar(150)
+  code_postal String? @db.VarChar(20)
+
+  pays Pays @relation(fields: [pays_id], references: [pays_id])
+
+  medecins_exercice Medecin[]
+
+  @@index([pays_id])
+  @@map("ville")
+}
+
+// -----------------------------------------------------------------
+// IAM — Identité & authentification
+// -----------------------------------------------------------------
+
+// Remplace l'ancien enum RoleUtilisateur : le rôle devient une donnée
+// (table de référence) plutôt qu'une valeur figée dans le schéma.
+// Permet d'ajouter/renommer un rôle sans migration de type enum.
+model Role {
+  role_id String @id @default(uuid()) @db.Uuid
+
+  libelle     String  @unique @db.VarChar(50)
+  description String? @db.VarChar(255)
+
+  utilisateurs Utilisateur[]
+
+  @@map("role")
+}
+
+// v6 : la valeur de rôle "agent_service" devient "agent" (générique).
+// Le type précis d'agent (structure de santé, pharmacie, ambulance,
+// pompes funèbres, assurance) se déduit de la table agent_xxx dans
+// laquelle une ligne existe pour cet utilisateur_id — voir plus bas.
+// v7 : "nom" et "prenom" remontent au niveau utilisateur (identité
+// unique). Ils sont retirés de patient et medecin, qui n'ont plus à
+// les dupliquer.
+model Utilisateur {
+  utilisateur_id String @id @default(uuid()) @db.Uuid
+
+  nom                String       @db.VarChar(100)
+  prenom             String       @db.VarChar(100)
+  email              String       @unique @db.VarChar(255)
+  telephone          String?      @db.VarChar(20)
+  mot_de_passe_hash  String       @db.VarChar(255)
+  role_id            String       @db.Uuid
+  pays_id            String       @db.Uuid
+  statut_compte      StatutCompte
+
+  role Role @relation(fields: [role_id], references: [role_id])
+  pays Pays @relation(fields: [pays_id], references: [pays_id])
+
+  medecin                 Medecin?
+  patient                 Patient?
+  refresh_tokens          RefreshToken[]
+  jetons_revoques         JetonRevoque[]
+  agent_structure_sante   AgentStructureSante?
+  agent_pompes_funebres   AgentPompesFunebres?
+  agent_assurance         AgentAssurance?
+  agent_pharmacie         AgentPharmacie?
+  agent_ambulance         AgentAmbulance?
+
+  @@index([pays_id])
+  @@index([role_id])
+  @@map("utilisateur")
+}
+
+model Medecin {
+  medecin_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id            String                    @unique @db.Uuid
+  specialite                String                    @db.VarChar(150)
+  numero_ordre               String                    @db.VarChar(100)
+  statut_verification        StatutVerificationMedecin
+  pays_exercice_id           String                    @db.Uuid
+  ville_exercice_id          String                    @db.Uuid
+  teleconsultation_activee   Boolean
+  tarif_indicatif             Decimal                   @db.Decimal(12, 2)
+
+  utilisateur    Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
+  pays_exercice  Pays        @relation(fields: [pays_exercice_id], references: [pays_id])
+  ville_exercice Ville       @relation(fields: [ville_exercice_id], references: [ville_id])
+
+  @@index([pays_exercice_id])
+  @@index([ville_exercice_id])
+  @@map("medecin")
+}
+
+model Patient {
+  patient_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id String   @unique @db.Uuid
+  date_naissance DateTime @db.Date
+
+  utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
+
+  @@map("patient")
+}
+
+// Le refresh token est stocké côté serveur (sous forme de hash, jamais
+// en clair) afin de pouvoir être invalidé (logout, rotation,
+// compromission). L'access token JWT, lui, reste stateless et n'est
+// pas persisté : il n'est vérifié qu'à l'aide de sa signature et de
+// sa date d'expiration (claim "exp").
+model RefreshToken {
+  refresh_token_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id   String             @db.Uuid
+  token_hash       String             @unique @db.VarChar(255)
+  date_creation    DateTime           @default(now())
+  date_expiration  DateTime
+  date_revocation  DateTime?
+  user_agent       String?            @db.VarChar(255)
+  ip_creation      String?            @db.VarChar(45)
+  statut           StatutRefreshToken
+
+  utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
+
+  @@index([utilisateur_id])
+  @@map("refresh_token")
+}
+
+// Liste de révocation ("denylist") des access tokens JWT non encore
+// expirés. Chaque JWT émis porte un identifiant unique (claim "jti").
+// Une entrée ici avant "date_expiration_initiale" invalide le token
+// malgré une signature valide (ex : déconnexion forcée, changement de
+// mot de passe). Les lignes peuvent être purgées une fois
+// "date_expiration_initiale" dépassée.
+model JetonRevoque {
+  jti String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id            String          @db.Uuid
+  date_revocation           DateTime        @default(now())
+  date_expiration_initiale  DateTime
+  motif                     MotifRevocation
+
+  utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
+
+  @@index([utilisateur_id])
+  @@map("jeton_revoque")
+}
+
+// -----------------------------------------------------------------
+// Agents — profils métier rattachés à un utilisateur de rôle "agent"
+//
+// Limite structurelle acceptée (v6) : la contrainte UK sur
+// utilisateur_id est posée table par table. Elle garantit qu'un
+// utilisateur a au plus 1 ligne d'agent PAR type de service, mais ne
+// peut pas empêcher nativement qu'un même utilisateur soit agent dans
+// deux tables différentes (ex : agent_pharmacie ET agent_ambulance).
+// À défaut de supertype "service", ce contrôle transverse devra être
+// fait en application (ou via un trigger/contrainte applicative
+// dédiée).
+// -----------------------------------------------------------------
+
+model AgentStructureSante {
+  agent_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id String @unique @db.Uuid
+  structure_id   String @db.Uuid
+  fonction       String @db.VarChar(100)
+
+  utilisateur Utilisateur     @relation(fields: [utilisateur_id], references: [utilisateur_id])
+  structure   StructureSante  @relation(fields: [structure_id], references: [structure_id])
+
+  @@index([structure_id])
+  @@map("agent_structure_sante")
+}
+
+model AgentPompesFunebres {
+  agent_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id      String @unique @db.Uuid
+  pompes_funebres_id  String @db.Uuid
+  fonction            String @db.VarChar(100)
+
+  utilisateur     Utilisateur    @relation(fields: [utilisateur_id], references: [utilisateur_id])
+  pompes_funebres PompesFunebres @relation(fields: [pompes_funebres_id], references: [pompes_funebres_id])
+
+  @@index([pompes_funebres_id])
+  @@map("agent_pompes_funebres")
+}
+
+model AgentAssurance {
+  agent_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id       String @unique @db.Uuid
+  service_assurance_id String @db.Uuid
+  fonction             String @db.VarChar(100)
+
+  utilisateur       Utilisateur      @relation(fields: [utilisateur_id], references: [utilisateur_id])
+  service_assurance ServiceAssurance @relation(fields: [service_assurance_id], references: [service_assurance_id])
+
+  @@index([service_assurance_id])
+  @@map("agent_assurance")
+}
+
+model AgentPharmacie {
+  agent_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id String @unique @db.Uuid
+  pharmacie_id   String @db.Uuid
+  fonction       String @db.VarChar(100)
+
+  utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
+  pharmacie   Pharmacie   @relation(fields: [pharmacie_id], references: [pharmacie_id])
+
+  @@index([pharmacie_id])
+  @@map("agent_pharmacie")
+}
+
+model AgentAmbulance {
+  agent_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id        String @unique @db.Uuid
+  service_ambulance_id  String @db.Uuid
+  fonction              String @db.VarChar(100)
+
+  utilisateur       Utilisateur      @relation(fields: [utilisateur_id], references: [utilisateur_id])
+  service_ambulance ServiceAmbulance @relation(fields: [service_ambulance_id], references: [service_ambulance_id])
+
+  @@index([service_ambulance_id])
+  @@map("agent_ambulance")
+}
+
+// -----------------------------------------------------------------
+// «ref» — Tables détenues par d'autres modules du diagramme APS.
+// Elles sont déclarées ici en stub (PK seule) uniquement pour que les
+// FK des tables agent_xxx ci-dessus soient valides et que ce schéma
+// compile isolément. Leurs définitions complètes (colonnes, index,
+// relations propres) vivent dans les fichiers de module dédiés et
+// devront être fusionnées / remplacées lors de l'intégration :
+//   - structure_sante   → diagramme 02_annuaire_recherche
+//   - pompes_funebres   → diagramme 07_services_connexes
+//   - service_assurance → diagramme 08_annuaire_assurances
+//   - pharmacie         → diagramme 03_pharmacie_gardes
+//   - service_ambulance → diagramme 07_services_connexes
+// -----------------------------------------------------------------
+
+/// @ref module 02_annuaire_recherche — définition complète à fusionner
+model StructureSante {
+  structure_id String @id @default(uuid()) @db.Uuid
+
+  agents AgentStructureSante[]
+
+  @@map("structure_sante")
+}
+
+/// @ref module 07_services_connexes — définition complète à fusionner
+model PompesFunebres {
+  pompes_funebres_id String @id @default(uuid()) @db.Uuid
+
+  agents AgentPompesFunebres[]
+
+  @@map("pompes_funebres")
+}
+
+/// @ref module 08_annuaire_assurances — définition complète à fusionner
+model ServiceAssurance {
+  service_assurance_id String @id @default(uuid()) @db.Uuid
+
+  agents AgentAssurance[]
+
+  @@map("service_assurance")
+}
+
+/// @ref module 03_pharmacie_gardes — définition complète à fusionner
+model Pharmacie {
+  pharmacie_id String @id @default(uuid()) @db.Uuid
+
+  agents AgentPharmacie[]
+
+  @@map("pharmacie")
+}
+
+/// @ref module 07_services_connexes — définition complète à fusionner
+model ServiceAmbulance {
+  service_ambulance_id String @id @default(uuid()) @db.Uuid
+
+  agents AgentAmbulance[]
+
+  @@map("service_ambulance")
+}
