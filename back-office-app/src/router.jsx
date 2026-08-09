@@ -20,6 +20,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Referentiel from './pages/Referentiel';
 import Utilisateurs from './pages/Utilisateurs';
+import StructureSante from './pages/StructureSante';
 // import Medecin from './pages/Medecin';
 // import StructureSante from './pages/StructureSante';
 // import Pharmacie from './pages/Pharmacie';
@@ -46,6 +47,7 @@ export const router = createBrowserRouter([
           { path: '/dashboard', element: <Dashboard /> },
           { path: '/referentiel', element: <Referentiel /> },
           { path: '/utilisateurs', element: <Utilisateurs /> },
+          { path: '/structure-sante', element: <StructureSante /> },
           //   { path: '/medecin', element: <Medecin /> },
           //   { path: '/pharmacie', element: <Pharmacie /> },
           //   { path: '/structure-sante', element: <StructureSante /> },

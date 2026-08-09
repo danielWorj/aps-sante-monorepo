@@ -71,16 +71,25 @@ export async function tenterRefresh() {
  * pas OK, pour un traitement simple par les appelants (try/catch).
  */
 export async function apiFetch(path, { body, headers, skipAuthRetry = false, ...options } = {}) {
+  // Un FormData (upload multipart, ex. création/modification de centre
+  // de santé avec fichiers) ne doit JAMAIS être passé à JSON.stringify
+  // (il n'a pas de propriétés énumérables : on obtiendrait "{}", donc
+  // tous les champs perdus) ni accompagné d'un Content-Type manuel — le
+  // navigateur doit poser lui-même "multipart/form-data; boundary=...".
+  // Pour tout le reste (objets JS classiques), on garde le comportement
+  // JSON existant.
+  const estFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+
   const doFetch = (token) =>
     fetch(`${API_BASE_URL}${path}`, {
       ...options,
       credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
+        ...(estFormData ? {} : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...headers,
       },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : estFormData ? body : JSON.stringify(body),
     });
 
   let res = await doFetch(accessToken);

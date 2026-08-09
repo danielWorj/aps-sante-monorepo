@@ -27,7 +27,7 @@ const APS_MENU = [
     group: "Annuaire & Utilisateurs",
     items: [
       { key: "professionnels", label: "Professionnels de santé", icon: "fa-solid fa-user-doctor", to: "/professionnels" },
-      { key: "structures", label: "Structures & hôpitaux", icon: "fa-solid fa-hospital", to: "/structures" },
+      { key: "structure-sante", label: "Structures & hôpitaux", icon: "fa-solid fa-hospital", to: "/structure-sante" },
       { key: "pharmacies", label: "Pharmacies", icon: "fa-solid fa-mortar-pestle", to: "/pharmacies" },
       { key: "assureurs", label: "Assureurs & courtiers", icon: "fa-solid fa-shield-heart", to: "/assureurs" },
       { key: "services-connexes", label: "Services connexes", icon: "fa-solid fa-truck-medical", to: "/services-connexes" },
