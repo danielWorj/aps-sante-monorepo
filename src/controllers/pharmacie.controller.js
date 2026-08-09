@@ -1,18 +1,19 @@
-// src/controllers/centreSante.controller.js
-// Composant "annuaire — centre de santé" : gère la table structure_sante
-// (cliniques, hôpitaux, centres médicaux, dispensaires, laboratoires).
+// src/controllers/pharmacie.controller.js
+// Composant "annuaire — pharmacie" : gère la table pharmacie.
 //
-// Lecture : PUBLIQUE, sans authentification. L'Annuaire doit être
-// consultable avant la création d'un compte ou une prise de RDV — même
-// raisonnement que le référentiel géographique (voir referentiels.controller.js).
+// Lecture : PUBLIQUE, sans authentification. L'Annuaire Pharmacie doit
+// être consultable avant la création d'un compte ou une recherche de
+// garde — même raisonnement que Centre de santé
+// (voir centreSante.controller.js).
 // Création : tout utilisateur authentifié (patient inclus) peut ajouter
-// un centre de santé à l'annuaire, en fournissant 3 pièces justificatives
-// (voir creerCentreSante). Le même formulaire crée AUSSI, dans la même
+// une pharmacie à l'annuaire, en fournissant 3 pièces justificatives
+// (voir creerPharmacie). Le même formulaire crée AUSSI, dans la même
 // transaction :
-//   - un nouveau COMPTE UTILISATEUR pour l'agent qui aura la charge du
-//     centre (nom, prénom, email, téléphone) — PAS forcément la personne
-//     connectée qui soumet le formulaire (ex. un admin peut créer la
-//     fiche pour un professionnel qui n'a pas encore de compte) ;
+//   - un nouveau COMPTE UTILISATEUR pour l'agent qui aura la charge de
+//     la pharmacie (nom, prénom, email, téléphone) — PAS forcément la
+//     personne connectée qui soumet le formulaire (ex. un admin peut
+//     créer la fiche pour un professionnel qui n'a pas encore de
+//     compte) ;
 //   - un mot de passe temporaire généré côté serveur pour ce compte,
 //     renvoyé UNE SEULE FOIS dans la réponse (à communiquer à l'agent —
 //     aucun service d'email n'étant fourni dans ce dépôt, voir le
@@ -21,14 +22,14 @@
 //     effectif de l'accès après ce délai est à implémenter dans le
 //     contrôleur de login, non fourni ici — voir schema.prisma,
 //     champs mot_de_passe_temporaire / mot_de_passe_expire_le) ;
-//   - la fiche "agent_structure_sante" qui rattache ce nouveau compte
-//     au centre — voir le bloc "Agent" plus bas.
+//   - la fiche "agent_pharmacie" qui rattache ce nouveau compte à la
+//     pharmacie — voir le bloc "Agent" plus bas.
 // Modification : tout utilisateur authentifié (même logique que la
-// création — voir modifierCentreSante pour la règle de statut). La
+// création — voir modifierPharmacie pour la règle de statut). La
 // modification ne touche jamais au compte agent (déjà créé une fois
-// pour toutes à la création du centre).
-// Suppression : réservée à superadmin (impact transverse : agents rattachés,
-// avis, futurs modules pharmacie/RDV/urgences qui exposent la fiche).
+// pour toutes à la création de la pharmacie).
+// Suppression : réservée à superadmin (impact transverse : agents
+// rattachés, futur module Gardes qui expose la fiche).
 
 import prisma from "../lib/prisma.js";
 import { televerserFichier, supprimerFichier, construireUrl } from "../lib/cloudinaryService.js";
@@ -37,31 +38,29 @@ import bcrypt from "bcrypt"; // même bibliothèque que authentification.control
 
 const SALT_ROUNDS = 10; // valeur identique à authentification.controller.js
 
-const STATUTS_VERIFICATION_STRUCTURE = ["non_publie", "en_cours", "publie"];
-const TYPES_STRUCTURE = ["clinique", "hopital", "centre_medical", "dispensaire", "laboratoire"];
+const STATUTS_VERIFICATION_PHARMACIE = ["non_publie", "en_cours", "publie"];
 
-// Rôle générique appliqué au compte créé pour l'agent d'un centre de
-// santé (voir schema.prisma, commentaire "v6" sur le modèle
-// Utilisateur : le type précis d'agent — ici "structure de santé" — se
-// déduit de la présence d'une ligne dans agent_structure_sante, pas du
-// libellé du rôle lui-même).
-const LIBELLE_ROLE_AGENT = "agent_structure_sante";
+// Rôle générique appliqué au compte créé pour l'agent d'une pharmacie
+// (voir schema.prisma, commentaire "v6" sur le modèle Utilisateur : le
+// type précis d'agent — ici "pharmacie" — se déduit de la présence
+// d'une ligne dans agent_pharmacie, pas du libellé du rôle lui-même).
+const LIBELLE_ROLE_AGENT = "agent_pharmacie";
 
 const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /* ===================================================================
- * Agent rattaché au centre de santé (nouveau compte)
+ * Agent rattaché à la pharmacie (nouveau compte)
  *
- * Le formulaire front est unique : créer un centre de santé crée dans
- * la foulée le COMPTE de l'agent qui en a la charge (pas nécessairement
+ * Le formulaire front est unique : créer une pharmacie crée dans la
+ * foulée le COMPTE de l'agent qui en a la charge (pas nécessairement
  * la personne connectée qui soumet le formulaire) — puis le rattache
- * via agent_structure_sante. Règles :
+ * via agent_pharmacie. Règles :
  *   - l'email de l'agent doit être unique en base (contrainte
  *     Utilisateur.email) — un agent = un compte dédié, jamais partagé ;
  *   - un mot de passe temporaire est généré, haché, stocké, et
  *     retourné UNE SEULE FOIS en clair dans la réponse HTTP (voir
- *     creerCentreSante) — libre au frontend de l'afficher à l'auteur
- *     de la soumission pour qu'il le transmette à l'agent ;
+ *     creerPharmacie) — libre au frontend de l'afficher à l'auteur de
+ *     la soumission pour qu'il le transmette à l'agent ;
  *   - mot_de_passe_temporaire = true tant que l'agent n'a pas changé
  *     ce mot de passe (à faire basculer à false par le contrôleur de
  *     changement de mot de passe, non fourni ici).
@@ -87,11 +86,11 @@ async function verifierEmailAgentDisponible(email) {
 }
 
 /**
- * Crée le compte utilisateur de l'agent PUIS la fiche
- * agent_structure_sante qui le rattache à la structure donnée.
+ * Crée le compte utilisateur de l'agent PUIS la fiche agent_pharmacie
+ * qui le rattache à la pharmacie donnée.
  * Doit être appelée à l'intérieur d'une transaction Prisma (`tx`).
  */
-async function creerCompteAgentPourStructure(tx, { structureId, fonction, nom, prenom, email, telephone, paysId }) {
+async function creerCompteAgentPourPharmacie(tx, { pharmacieId, fonction, nom, prenom, email, telephone, paysId }) {
   const roleAgent = await tx.role.findUnique({ where: { libelle: LIBELLE_ROLE_AGENT } });
   if (!roleAgent) {
     throw new Error(
@@ -116,10 +115,10 @@ async function creerCompteAgentPourStructure(tx, { structureId, fonction, nom, p
     },
   });
 
-  const agent = await tx.agentStructureSante.create({
+  const agent = await tx.agentPharmacie.create({
     data: {
       utilisateur_id: utilisateur.utilisateur_id,
-      structure_id: structureId,
+      pharmacie_id: pharmacieId,
       fonction,
     },
   });
@@ -135,12 +134,12 @@ async function creerCompteAgentPourStructure(tx, { structureId, fonction, nom, p
  * isolées ici pour ne pas polluer le reste des contrôleurs.
  * =================================================================== */
 
-async function recupererGeolocalisation(structureId) {
+async function recupererGeolocalisation(pharmacieId) {
   const resultat = await prisma.$queryRaw`
     SELECT ST_Y(geolocalisation::geometry) AS latitude,
            ST_X(geolocalisation::geometry) AS longitude
-    FROM structure_sante
-    WHERE structure_id = ${structureId}::uuid
+    FROM pharmacie
+    WHERE pharmacie_id = ${pharmacieId}::uuid
       AND geolocalisation IS NOT NULL
   `;
 
@@ -150,19 +149,19 @@ async function recupererGeolocalisation(structureId) {
   return latitude !== null && longitude !== null ? { latitude, longitude } : null;
 }
 
-async function definirGeolocalisation(structureId, latitude, longitude) {
+async function definirGeolocalisation(pharmacieId, latitude, longitude) {
   await prisma.$executeRaw`
-    UPDATE structure_sante
+    UPDATE pharmacie
     SET geolocalisation = ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)
-    WHERE structure_id = ${structureId}::uuid
+    WHERE pharmacie_id = ${pharmacieId}::uuid
   `;
 }
 
-async function effacerGeolocalisation(structureId) {
+async function effacerGeolocalisation(pharmacieId) {
   await prisma.$executeRaw`
-    UPDATE structure_sante
+    UPDATE pharmacie
     SET geolocalisation = NULL
-    WHERE structure_id = ${structureId}::uuid
+    WHERE pharmacie_id = ${pharmacieId}::uuid
   `;
 }
 
@@ -173,7 +172,7 @@ async function effacerGeolocalisation(structureId) {
  *   - absentes du corps de requête -> ne touche pas au champ
  * Retourne un message d'erreur (string) en cas de valeurs invalides, sinon null.
  */
-async function appliquerGeolocalisation(structureId, latitude, longitude) {
+async function appliquerGeolocalisation(pharmacieId, latitude, longitude) {
   const latFournie = latitude !== undefined;
   const lngFournie = longitude !== undefined;
 
@@ -184,7 +183,7 @@ async function appliquerGeolocalisation(structureId, latitude, longitude) {
   }
 
   if (latitude === null && longitude === null) {
-    await effacerGeolocalisation(structureId);
+    await effacerGeolocalisation(pharmacieId);
     return null;
   }
 
@@ -198,13 +197,13 @@ async function appliquerGeolocalisation(structureId, latitude, longitude) {
     return "longitude invalide (doit être comprise entre -180 et 180).";
   }
 
-  await definirGeolocalisation(structureId, latitude, longitude);
+  await definirGeolocalisation(pharmacieId, latitude, longitude);
   return null;
 }
 
-async function avecGeolocalisation(structure) {
-  const geolocalisation = await recupererGeolocalisation(structure.structure_id);
-  return { ...structure, geolocalisation };
+async function avecGeolocalisation(pharmacie) {
+  const geolocalisation = await recupererGeolocalisation(pharmacie.pharmacie_id);
+  return { ...pharmacie, geolocalisation };
 }
 
 /**
@@ -213,107 +212,101 @@ async function avecGeolocalisation(structure) {
  * sur la ligne. Le frontend n'a ainsi jamais besoin de connaître la
  * logique Cloudinary : il consomme directement image_url / etc.
  */
-function avecUrlsFichiers(structure) {
+function avecUrlsFichiers(pharmacie) {
   return {
-    ...structure,
-    image_url: construireUrl(structure.image_nom),
-    piece_identite_url: construireUrl(structure.piece_identite_nom),
-    document_agrement_url: construireUrl(structure.document_agrement_nom),
+    ...pharmacie,
+    image_url: construireUrl(pharmacie.image_nom),
+    piece_identite_url: construireUrl(pharmacie.piece_identite_nom),
+    document_agrement_url: construireUrl(pharmacie.document_agrement_nom),
   };
 }
 
-async function enrichirCentreSante(structure) {
-  const avecGeo = await avecGeolocalisation(structure);
+async function enrichirPharmacie(pharmacie) {
+  const avecGeo = await avecGeolocalisation(pharmacie);
   return avecUrlsFichiers(avecGeo);
 }
 
 /* ===================================================================
- * Centres de santé
+ * Pharmacies
  * =================================================================== */
 
 /**
- * GET /api/centres-sante
- * Filtres optionnels : ?pays_id=...&ville_id=...&type_structure=...
+ * GET /api/pharmacies
+ * Filtres optionnels : ?pays_id=...&ville_id=...
  *                      &statut_verification=...&recherche=...(nom, insensible à la casse)
  */
-export async function listerCentresSante(req, res, next) {
+export async function listerPharmacies(req, res, next) {
   try {
-    const { pays_id, ville_id, type_structure, statut_verification, recherche } = req.query;
+    const { pays_id, ville_id, statut_verification, recherche } = req.query;
 
-    if (type_structure && !TYPES_STRUCTURE.includes(type_structure)) {
+    if (statut_verification && !STATUTS_VERIFICATION_PHARMACIE.includes(statut_verification)) {
       return res.status(400).json({
-        message: `type_structure invalide. Valeurs acceptées : ${TYPES_STRUCTURE.join(", ")}.`,
-      });
-    }
-    if (statut_verification && !STATUTS_VERIFICATION_STRUCTURE.includes(statut_verification)) {
-      return res.status(400).json({
-        message: `statut_verification invalide. Valeurs acceptées : ${STATUTS_VERIFICATION_STRUCTURE.join(", ")}.`,
+        message: `statut_verification invalide. Valeurs acceptées : ${STATUTS_VERIFICATION_PHARMACIE.join(", ")}.`,
       });
     }
 
     const where = {};
     if (pays_id) where.pays_id = pays_id;
     if (ville_id) where.ville_id = ville_id;
-    if (type_structure) where.type_structure = type_structure;
     if (statut_verification) where.statut_verification = statut_verification;
     if (recherche) where.nom = { contains: recherche, mode: "insensitive" };
 
-    const structures = await prisma.structureSante.findMany({
+    const pharmacies = await prisma.pharmacie.findMany({
       where,
       include: { pays: true, ville: true },
       orderBy: { nom: "asc" },
     });
 
-    const centresSante = await Promise.all(structures.map(enrichirCentreSante));
+    const resultat = await Promise.all(pharmacies.map(enrichirPharmacie));
 
-    return res.status(200).json({ centresSante });
+    return res.status(200).json({ pharmacies: resultat });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * GET /api/centres-sante/:id
+ * GET /api/pharmacies/:id
  */
-export async function obtenirCentreSante(req, res, next) {
+export async function obtenirPharmacie(req, res, next) {
   try {
-    const structure = await prisma.structureSante.findUnique({
-      where: { structure_id: req.params.id },
+    const pharmacie = await prisma.pharmacie.findUnique({
+      where: { pharmacie_id: req.params.id },
       include: { pays: true, ville: true },
     });
-    if (!structure) {
-      return res.status(404).json({ message: "Centre de santé introuvable." });
+    if (!pharmacie) {
+      return res.status(404).json({ message: "Pharmacie introuvable." });
     }
 
-    const centreSante = await enrichirCentreSante(structure);
-    return res.status(200).json({ centreSante });
+    const resultat = await enrichirPharmacie(pharmacie);
+    return res.status(200).json({ pharmacie: resultat });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * POST /api/centres-sante
- * multipart/form-data — champs texte identiques à avant, plus 3 fichiers
- * obligatoires (voir upload.middleware.js) :
- *   - image_structure   : photo du centre de santé
- *   - piece_identite     : pièce d'identité du professionnel qui soumet la fiche
+ * POST /api/pharmacies
+ * multipart/form-data — champs texte, plus 3 fichiers obligatoires
+ * (voir upload.middleware.js) :
+ *   - image_pharmacie   : photo de la pharmacie
+ *   - piece_identite     : pièce d'identité du titulaire/responsable
  *   - document_agrement  : agrément officiel autorisant l'exercice
  * Champs latitude / longitude optionnels (voir appliquerGeolocalisation).
  *
  * Champs supplémentaires requis — création du COMPTE AGENT en même
- * temps que le centre (voir creerCompteAgentPourStructure) :
- *   - fonction     : intitulé du poste de l'agent au sein du centre
- *                    (ex. "Gérant", "Directeur médical")
+ * temps que la pharmacie (voir creerCompteAgentPourPharmacie) :
+ *   - fonction     : intitulé du poste de l'agent au sein de la
+ *                    pharmacie (ex. "Titulaire", "Pharmacien assistant")
  *   - agent_nom, agent_prenom, agent_email : identité du titulaire du
  *     nouveau compte (PAS forcément la personne connectée qui soumet
  *     ce formulaire)
  *   - agent_telephone : optionnel
- * Le pays du compte agent (Utilisateur.pays_id, obligatoire) est
- * repris directement de celui du centre créé (pays_id) — décision
+ * Le pays du compte agent (Utilisateur.pays_id, obligatoire) est repris
+ * directement de celui de la pharmacie créée (pays_id) — décision
  * produit : pas de champ dédié dans le formulaire.
  */
-export async function creerCentreSante(req, res, next) {
+export async function creerPharmacie(req, res, next) {
   try {
     const {
       nom,
@@ -321,7 +314,7 @@ export async function creerCentreSante(req, res, next) {
       ville_id,
       telephone,
       statut_verification,
-      type_structure,
+      numero_ordre_titulaire,
       latitude,
       longitude,
       fonction,
@@ -331,17 +324,25 @@ export async function creerCentreSante(req, res, next) {
       agent_telephone,
     } = req.body;
 
-    if (!nom || !pays_id || !ville_id || !telephone || !statut_verification || !type_structure) {
+    if (
+      !nom ||
+      !pays_id ||
+      !ville_id ||
+      !telephone ||
+      !statut_verification ||
+      !numero_ordre_titulaire ||
+      !numero_ordre_titulaire.trim()
+    ) {
       return res.status(400).json({
         message:
-          "Champs requis manquants : nom, pays_id, ville_id, telephone, statut_verification, type_structure.",
+          "Champs requis manquants : nom, pays_id, ville_id, telephone, statut_verification, numero_ordre_titulaire.",
       });
     }
     if (!fonction || !fonction.trim() || !agent_nom || !agent_nom.trim() ||
         !agent_prenom || !agent_prenom.trim() || !agent_email || !agent_email.trim()) {
       return res.status(400).json({
         message:
-          "Champs requis manquants pour l'agent du centre : fonction, agent_nom, agent_prenom, agent_email.",
+          "Champs requis manquants pour l'agent de la pharmacie : fonction, agent_nom, agent_prenom, agent_email.",
       });
     }
     if (!REGEX_EMAIL.test(agent_email.trim())) {
@@ -349,19 +350,13 @@ export async function creerCentreSante(req, res, next) {
     }
 
     // 3 pièces justificatives obligatoires à la création.
-    const fichierImage = req.files?.image_structure?.[0];
+    const fichierImage = req.files?.image_pharmacie?.[0];
     const fichierPieceIdentite = req.files?.piece_identite?.[0];
     const fichierAgrement = req.files?.document_agrement?.[0];
     if (!fichierImage || !fichierPieceIdentite || !fichierAgrement) {
       return res.status(400).json({
         message:
-          "3 fichiers sont requis : image_structure (photo du centre), piece_identite (pièce d'identité) et document_agrement (agrément officiel).",
-      });
-    }
-
-    if (!TYPES_STRUCTURE.includes(type_structure)) {
-      return res.status(400).json({
-        message: `type_structure invalide. Valeurs acceptées : ${TYPES_STRUCTURE.join(", ")}.`,
+          "3 fichiers sont requis : image_pharmacie (photo de la pharmacie), piece_identite (pièce d'identité du titulaire/responsable) et document_agrement (agrément officiel).",
       });
     }
 
@@ -391,7 +386,7 @@ export async function creerCentreSante(req, res, next) {
     }
 
     // La création est ouverte à tout utilisateur authentifié (voir
-    // centreSante.routes.js), pas seulement admin/superadmin. Pour
+    // pharmacie.routes.js), pas seulement admin/superadmin. Pour
     // préserver le circuit de modération (badge "en_cours" -> bouton
     // "Examiner" côté admin dans le front), un utilisateur non
     // admin/superadmin ne peut pas publier directement : son statut
@@ -401,9 +396,9 @@ export async function creerCentreSante(req, res, next) {
     // toute façon écrasée pour les autres profils.
     const estAdmin = req.utilisateur?.role === "admin" || req.utilisateur?.role === "superadmin";
 
-    if (estAdmin && !STATUTS_VERIFICATION_STRUCTURE.includes(statut_verification)) {
+    if (estAdmin && !STATUTS_VERIFICATION_PHARMACIE.includes(statut_verification)) {
       return res.status(400).json({
-        message: `statut_verification invalide. Valeurs acceptées : ${STATUTS_VERIFICATION_STRUCTURE.join(", ")}.`,
+        message: `statut_verification invalide. Valeurs acceptées : ${STATUTS_VERIFICATION_PHARMACIE.join(", ")}.`,
       });
     }
     const statutApplique = estAdmin ? statut_verification : "en_cours";
@@ -416,25 +411,25 @@ export async function creerCentreSante(req, res, next) {
       televerserFichier(fichierAgrement.buffer, "agrements"),
     ]);
 
-    // Structure, compte agent et rattachement sont créés dans une seule
-    // transaction : on ne veut jamais d'un centre de santé sans agent
-    // responsable (ni d'un compte agent sans centre). La géolocalisation
-    // (requêtes SQL brutes hors Prisma Client) est appliquée juste
-    // après, une fois la structure garantie persistée.
-    let structure;
+    // Pharmacie, compte agent et rattachement sont créés dans une seule
+    // transaction : on ne veut jamais d'une pharmacie sans agent
+    // responsable (ni d'un compte agent sans pharmacie). La
+    // géolocalisation (requêtes SQL brutes hors Prisma Client) est
+    // appliquée juste après, une fois la pharmacie garantie persistée.
+    let pharmacieCreee;
     let agent;
     let utilisateurAgent;
     let motDePasseTemporaire;
     try {
-      ({ structure, agent, utilisateurAgent, motDePasseTemporaire } = await prisma.$transaction(async (tx) => {
-        const structureCreee = await tx.structureSante.create({
+      ({ pharmacieCreee, agent, utilisateurAgent, motDePasseTemporaire } = await prisma.$transaction(async (tx) => {
+        const pharmacie = await tx.pharmacie.create({
           data: {
             nom,
             pays_id,
             ville_id,
             telephone,
             statut_verification: statutApplique,
-            type_structure,
+            numero_ordre_titulaire: numero_ordre_titulaire.trim(),
             image_nom: uploadImage.nom,
             piece_identite_nom: uploadPieceIdentite.nom,
             document_agrement_nom: uploadAgrement.nom,
@@ -443,8 +438,8 @@ export async function creerCentreSante(req, res, next) {
         });
 
         const { utilisateur, agent: agentCree, motDePasseTemporaire: mdp } =
-          await creerCompteAgentPourStructure(tx, {
-            structureId: structureCreee.structure_id,
+          await creerCompteAgentPourPharmacie(tx, {
+            pharmacieId: pharmacie.pharmacie_id,
             fonction: fonction.trim(),
             nom: agent_nom.trim(),
             prenom: agent_prenom.trim(),
@@ -454,7 +449,7 @@ export async function creerCentreSante(req, res, next) {
           });
 
         return {
-          structure: structureCreee,
+          pharmacieCreee: pharmacie,
           agent: agentCree,
           utilisateurAgent: utilisateur,
           motDePasseTemporaire: mdp,
@@ -473,9 +468,10 @@ export async function creerCentreSante(req, res, next) {
       throw errTransaction;
     }
 
-    const erreurGeo = await appliquerGeolocalisation(structure.structure_id, latitude, longitude);
+    const erreurGeo = await appliquerGeolocalisation(pharmacieCreee.pharmacie_id, latitude, longitude);
 
-    const centreSante = await enrichirCentreSante(structure);
+    const pharmacie = await enrichirPharmacie(pharmacieCreee);
+
     // ⚠️ Le mot de passe temporaire n'est renvoyé QU'ICI, en clair, et
     // une seule fois — aucun service d'email n'étant fourni dans ce
     // dépôt pour le transmettre automatiquement à l'agent. Le frontend
@@ -496,19 +492,19 @@ export async function creerCentreSante(req, res, next) {
     };
 
     if (erreurGeo) {
-      // La structure (et le compte agent) sont créés mais la
+      // La pharmacie (et le compte agent) sont créés mais la
       // géolocalisation fournie est invalide : on informe le client
       // sans annuler la création.
       return res.status(201).json({
-        message: `Centre de santé créé avec succès. Avertissement : ${erreurGeo}`,
-        centreSante,
+        message: `Pharmacie créée avec succès. Avertissement : ${erreurGeo}`,
+        pharmacie,
         agent: reponseAgent,
       });
     }
 
     return res.status(201).json({
-      message: "Centre de santé créé avec succès. Compte agent créé — communiquez-lui le mot de passe temporaire.",
-      centreSante,
+      message: "Pharmacie créée avec succès. Compte agent créé — communiquez-lui le mot de passe temporaire.",
+      pharmacie,
       agent: reponseAgent,
     });
   } catch (err) {
@@ -517,13 +513,13 @@ export async function creerCentreSante(req, res, next) {
 }
 
 /**
- * PUT /api/centres-sante/:id
- * Ouvert à tout utilisateur authentifié (voir centreSante.routes.js).
+ * PUT /api/pharmacies/:id
+ * Ouvert à tout utilisateur authentifié (voir pharmacie.routes.js).
  * Les 3 fichiers sont optionnels ici : seuls ceux effectivement
  * envoyés sont remplacés (l'ancien fichier Cloudinary correspondant
  * est alors supprimé après succès du nouvel upload).
  */
-export async function modifierCentreSante(req, res, next) {
+export async function modifierPharmacie(req, res, next) {
   try {
     const {
       nom,
@@ -531,22 +527,16 @@ export async function modifierCentreSante(req, res, next) {
       ville_id,
       telephone,
       statut_verification,
-      type_structure,
+      numero_ordre_titulaire,
       latitude,
       longitude,
     } = req.body;
 
-    const existante = await prisma.structureSante.findUnique({
-      where: { structure_id: req.params.id },
+    const existante = await prisma.pharmacie.findUnique({
+      where: { pharmacie_id: req.params.id },
     });
     if (!existante) {
-      return res.status(404).json({ message: "Centre de santé introuvable." });
-    }
-
-    if (type_structure && !TYPES_STRUCTURE.includes(type_structure)) {
-      return res.status(400).json({
-        message: `type_structure invalide. Valeurs acceptées : ${TYPES_STRUCTURE.join(", ")}.`,
-      });
+      return res.status(404).json({ message: "Pharmacie introuvable." });
     }
 
     const paysCibleId = pays_id || existante.pays_id;
@@ -579,9 +569,9 @@ export async function modifierCentreSante(req, res, next) {
     // que sur la création.
     const estAdmin = req.utilisateur?.role === "admin" || req.utilisateur?.role === "superadmin";
 
-    if (estAdmin && statut_verification && !STATUTS_VERIFICATION_STRUCTURE.includes(statut_verification)) {
+    if (estAdmin && statut_verification && !STATUTS_VERIFICATION_PHARMACIE.includes(statut_verification)) {
       return res.status(400).json({
-        message: `statut_verification invalide. Valeurs acceptées : ${STATUTS_VERIFICATION_STRUCTURE.join(", ")}.`,
+        message: `statut_verification invalide. Valeurs acceptées : ${STATUTS_VERIFICATION_PHARMACIE.join(", ")}.`,
       });
     }
     const statutApplique = estAdmin
@@ -591,7 +581,7 @@ export async function modifierCentreSante(req, res, next) {
     // Remplacement optionnel des fichiers : upload du nouveau fichier
     // AVANT suppression de l'ancien, pour ne jamais laisser la fiche
     // sans fichier valide en cas d'échec d'upload.
-    const fichierImage = req.files?.image_structure?.[0];
+    const fichierImage = req.files?.image_pharmacie?.[0];
     const fichierPieceIdentite = req.files?.piece_identite?.[0];
     const fichierAgrement = req.files?.document_agrement?.[0];
 
@@ -613,65 +603,67 @@ export async function modifierCentreSante(req, res, next) {
       donneesFichiers.document_agrement_nom = upload.nom;
     }
 
-    const structure = await prisma.structureSante.update({
-      where: { structure_id: req.params.id },
+    const pharmacie = await prisma.pharmacie.update({
+      where: { pharmacie_id: req.params.id },
       data: {
         ...(nom && { nom }),
         ...(pays_id && { pays_id }),
         ...(ville_id && { ville_id }),
         ...(telephone && { telephone }),
         statut_verification: statutApplique,
-        ...(type_structure && { type_structure }),
+        ...(numero_ordre_titulaire && numero_ordre_titulaire.trim() && {
+          numero_ordre_titulaire: numero_ordre_titulaire.trim(),
+        }),
         ...donneesFichiers,
       },
       include: { pays: true, ville: true },
     });
 
-    const erreurGeo = await appliquerGeolocalisation(structure.structure_id, latitude, longitude);
+    const erreurGeo = await appliquerGeolocalisation(pharmacie.pharmacie_id, latitude, longitude);
     if (erreurGeo) {
       return res.status(400).json({ message: erreurGeo });
     }
 
-    const centreSante = await enrichirCentreSante(structure);
-    return res.status(200).json({ message: "Centre de santé mis à jour.", centreSante });
+    const resultat = await enrichirPharmacie(pharmacie);
+    return res.status(200).json({ message: "Pharmacie mise à jour.", pharmacie: resultat });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * DELETE /api/centres-sante/:id
+ * DELETE /api/pharmacies/:id
  */
-export async function supprimerCentreSante(req, res, next) {
+export async function supprimerPharmacie(req, res, next) {
   try {
-    const structure = await prisma.structureSante.findUnique({
-      where: { structure_id: req.params.id },
+    const pharmacie = await prisma.pharmacie.findUnique({
+      where: { pharmacie_id: req.params.id },
     });
-    if (!structure) {
-      return res.status(404).json({ message: "Centre de santé introuvable." });
+    if (!pharmacie) {
+      return res.status(404).json({ message: "Pharmacie introuvable." });
     }
 
-    const nbAgents = await prisma.agentStructureSante.count({
-      where: { structure_id: req.params.id },
+    const nbAgents = await prisma.agentPharmacie.count({
+      where: { pharmacie_id: req.params.id },
     });
     if (nbAgents > 0) {
       return res.status(409).json({
-        message: `Impossible de supprimer : ${nbAgents} agent(s) sont encore rattaché(s) à ce centre de santé.`,
+        message: `Impossible de supprimer : ${nbAgents} agent(s) sont encore rattaché(s) à cette pharmacie.`,
       });
     }
 
-    await prisma.structureSante.delete({ where: { structure_id: req.params.id } });
+    await prisma.pharmacie.delete({ where: { pharmacie_id: req.params.id } });
 
     // Nettoyage Cloudinary après suppression réussie en base (best
     // effort — voir supprimerFichier). On ne bloque jamais la
     // suppression DB pour un souci Cloudinary.
     await Promise.all([
-      supprimerFichier(structure.image_nom),
-      supprimerFichier(structure.piece_identite_nom),
-      supprimerFichier(structure.document_agrement_nom),
+      supprimerFichier(pharmacie.image_nom),
+      supprimerFichier(pharmacie.piece_identite_nom),
+      supprimerFichier(pharmacie.document_agrement_nom),
     ]);
 
-    return res.status(200).json({ message: "Centre de santé supprimé." });
+    return res.status(200).json({ message: "Pharmacie supprimée." });
   } catch (err) {
     next(err);
   }

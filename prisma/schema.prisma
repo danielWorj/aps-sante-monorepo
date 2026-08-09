@@ -73,6 +73,14 @@ enum TypeStructure {
   laboratoire
 }
 
+// Même patron que StatutVerificationStructure / StatutVerificationMedecin —
+// voir pharmacie.controller.js.
+enum StatutVerificationPharmacie {
+  non_publie
+  en_cours
+  publie
+}
+
 // -----------------------------------------------------------------
 // Référentiel géographique
 // -----------------------------------------------------------------
@@ -116,6 +124,7 @@ model Pays {
   utilisateurs      Utilisateur[]
   medecins_exercice Medecin[]
   structures_sante  StructureSante[]
+  pharmacies        Pharmacie[]
 
   @@index([devise_id])
   @@index([langue_id])
@@ -136,6 +145,7 @@ model Ville {
 
   medecins_exercice Medecin[]
   structures_sante  StructureSante[]
+  pharmacies        Pharmacie[]
 
   @@index([pays_id])
   @@map("ville")
@@ -177,6 +187,20 @@ model Utilisateur {
   role_id            String       @db.Uuid
   pays_id            String       @db.Uuid
   statut_compte      StatutCompte
+
+  // Comptes créés POUR un tiers (ex. agent d'un centre de santé créé
+  // en même temps que la fiche structure_sante, avec un mot de passe
+  // généré côté serveur — voir centreSante.controller.js) : le
+  // titulaire doit changer ce mot de passe temporaire dès sa première
+  // connexion.
+  //   - mot_de_passe_temporaire : true tant que le mot de passe généré
+  //     n'a pas été remplacé par le titulaire.
+  //   - mot_de_passe_expire_le  : à poser par le contrôleur de login
+  //     (non fourni ici) lors de la toute première connexion — deadline
+  //     "maintenant + 24h" avant laquelle le changement est obligatoire.
+  //     Reste `null` tant qu'aucune première connexion n'a eu lieu.
+  mot_de_passe_temporaire Boolean   @default(false)
+  mot_de_passe_expire_le  DateTime?
 
   role Role @relation(fields: [role_id], references: [role_id])
   pays Pays @relation(fields: [pays_id], references: [pays_id])
@@ -388,6 +412,17 @@ model StructureSante {
   statut_verification StatutVerificationStructure
   type_structure      TypeStructure
 
+  // Pièces justificatives (Cloudinary) — voir lib/cloudinaryService.js.
+  // Seul le "nom" (public_id Cloudinary) est stocké ; l'URL publique
+  // est reconstruite à la volée, jamais persistée. Requises à la
+  // création (3 fichiers obligatoires — voir centreSante.controller.js) :
+  //   - image_nom             : photo du centre de santé
+  //   - piece_identite_nom    : pièce d'identité du professionnel
+  //   - document_agrement_nom : agrément officiel d'exercice
+  image_nom             String @db.VarChar(255)
+  piece_identite_nom    String @db.VarChar(255)
+  document_agrement_nom String @db.VarChar(255)
+
   pays  Pays  @relation(fields: [pays_id], references: [pays_id])
   ville Ville @relation(fields: [ville_id], references: [ville_id])
 
@@ -416,12 +451,50 @@ model ServiceAssurance {
   @@map("service_assurance")
 }
 
-/// @ref module 03_pharmacie_gardes — définition complète à fusionner
+// -----------------------------------------------------------------
+// Pharmacie (diagramme 03_pharmacie_gardes)
+//
+// Même patron que structure_sante : "geolocalisation" est un
+// GEOGRAPHY(POINT,4326) PostGIS non supporté nativement par Prisma
+// Client (Unsupported(...)) — lecture/écriture passent par
+// $queryRaw / $executeRaw (voir pharmacie.controller.js).
+//
+// planning_garde / garde_pharmacie (système de garde) ne sont pas
+// modélisés ici : ce sont des tables distinctes qui référencent
+// pharmacie_id une fois cette fiche existante (voir diagramme
+// 03_pharmacie_gardes) — hors périmètre du composant CRUD de base.
+// -----------------------------------------------------------------
 model Pharmacie {
   pharmacie_id String @id @default(uuid()) @db.Uuid
 
+  nom                    String                      @db.VarChar(200)
+  pays_id                String                      @db.Uuid
+  ville_id               String                      @db.Uuid
+  geolocalisation        Unsupported("geography(Point, 4326)")?
+  telephone              String                      @db.VarChar(20)
+  statut_verification    StatutVerificationPharmacie
+  // Numéro d'ordre du titulaire (pharmacien responsable) — atteste
+  // qu'il est habilité par l'ordre des pharmaciens à exercer.
+  numero_ordre_titulaire String                      @db.VarChar(100)
+
+  // Pièces justificatives (Cloudinary) — voir lib/cloudinaryService.js.
+  // Seul le "nom" (public_id Cloudinary) est stocké ; l'URL publique
+  // est reconstruite à la volée, jamais persistée. Requises à la
+  // création (3 fichiers obligatoires — voir pharmacie.controller.js) :
+  //   - image_nom             : photo de la pharmacie
+  //   - piece_identite_nom    : pièce d'identité du titulaire/responsable
+  //   - document_agrement_nom : agrément officiel d'exercice
+  image_nom              String @db.VarChar(255)
+  piece_identite_nom     String @db.VarChar(255)
+  document_agrement_nom  String @db.VarChar(255)
+
+  pays  Pays  @relation(fields: [pays_id], references: [pays_id])
+  ville Ville @relation(fields: [ville_id], references: [ville_id])
+
   agents AgentPharmacie[]
 
+  @@index([pays_id])
+  @@index([ville_id])
   @@map("pharmacie")
 }
 
