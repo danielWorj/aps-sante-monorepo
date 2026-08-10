@@ -24,7 +24,11 @@ import Pharmacie from './pages/Pharmacie';
 import Publicite from './pages/Publicite';
 import EmplacementForfaire from './pages/EmplacementForfaire';
 import ForfaitPublicitaire from './pages/ForfaitPublicitaire';
-//
+// ASSURANCES 
+import Assurances from './pages/Assurances';
+
+
+
 import AvisPharmacie from './pages/avisPharmacie';
 import Utilisateurs from './pages/Utilisateurs';
 import StructureSante from './pages/StructureSante';
@@ -61,6 +65,9 @@ export const router = createBrowserRouter([
           { path: '/publicite', element: <Publicite /> },
           { path: '/emplacement-publicitaire', element: <EmplacementForfaire /> },
           { path: '/forfait-publicitaire', element: <ForfaitPublicitaire /> },
+
+          // ASSURANCES 
+          { path: '/assurances', element: <Assurances /> },
 
 
           //   { path: '/pharmacie', element: <Pharmacie /> },

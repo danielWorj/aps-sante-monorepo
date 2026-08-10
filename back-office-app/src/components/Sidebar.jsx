@@ -35,6 +35,7 @@ const APS_MENU = [
       { key: "dashboard", label: "Tableau de bord", icon: "fa-solid fa-gauge-high", to: "/" }
     ]
   },
+ 
   {
     group: "Annuaire & Utilisateurs",
     entities: [
@@ -92,6 +93,17 @@ const APS_MENU = [
     ],
     items: [
       { key: "utilisateurs", label: "Utilisateurs", icon: "fa-solid fa-users", to: "/utilisateurs" }
+    ]
+  },
+   {
+    group: "Assurances & Services",
+    entities: [
+      {
+        key: "assurances",
+        label: "Assurances",
+        icon: "fa-solid fa-shield-alt",
+        to: "/assurances"
+      }
     ]
   },
   {
