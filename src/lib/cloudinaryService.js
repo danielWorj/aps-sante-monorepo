@@ -51,11 +51,42 @@ export function televerserFichier(buffer, sousDossier) {
       },
       (erreur, resultat) => {
         if (erreur) return reject(erreur);
-        resolve({ nom: resultat.public_id, url: resultat.secure_url });
+        // Cloudinary ne renvoie jamais l'extension dans `public_id` — or
+        // elle est indispensable pour reconstruire ensuite une URL de
+        // livraison valide (voir construireUrl ci-dessous), en particulier
+        // pour les PDF : sans extension dans l'URL, Cloudinary ne sait pas
+        // s'il doit servir le PDF brut ou le convertir en image, et
+        // l'aperçu échoue côté client. Les images "marchaient" jusqu'ici
+        // un peu par tolérance de Cloudinary, mais pas les PDF.
+        // On embarque donc le format réel (`resultat.format`, ex. "jpg",
+        // "pdf") directement dans le "nom" stocké en base, sous la forme
+        // "dossier/identifiant.ext" — Cloudinary interprète nativement un
+        // identifiant contenant un point de cette façon pour déterminer le
+        // format de livraison.
+        const nom = resultat.format
+          ? `${resultat.public_id}.${resultat.format}`
+          : resultat.public_id;
+        resolve({ nom, url: resultat.secure_url });
       }
     );
     flux.end(buffer);
   });
+}
+
+/**
+ * Sépare un "nom" stocké en base ("dossier/identifiant.ext") en son
+ * public_id Cloudinary "nu" et son extension. Nécessaire pour
+ * supprimerFichier() : l'API de suppression Cloudinary identifie une
+ * ressource par son public_id SANS extension (contrairement à
+ * construireUrl(), qui a justement besoin de l'extension pour livrer le
+ * fichier avec le bon format). Reste compatible avec les anciens "nom"
+ * déjà en base sans extension (uploadés avant ce correctif) : dans ce
+ * cas `format` vaut simplement `null`.
+ */
+function decomposerNom(nom) {
+  const indexPoint = nom.lastIndexOf(".");
+  if (indexPoint === -1) return { publicId: nom, format: null };
+  return { publicId: nom.slice(0, indexPoint), format: nom.slice(indexPoint + 1) };
 }
 
 /**
@@ -70,8 +101,9 @@ export function televerserFichier(buffer, sousDossier) {
  */
 export async function supprimerFichier(nom) {
   if (!nom) return;
+  const { publicId } = decomposerNom(nom);
   try {
-    await cloudinary.uploader.destroy(nom, { resource_type: RESOURCE_TYPE });
+    await cloudinary.uploader.destroy(publicId, { resource_type: RESOURCE_TYPE });
   } catch (erreur) {
     console.error(`[cloudinaryService] Échec de suppression de "${nom}" :`, erreur.message);
   }

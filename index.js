@@ -7,6 +7,10 @@ import rateLimit from "express-rate-limit";
 import authentificationRoutes from "./src/routes/authentification.routes.js";
 import referentielsRoutes from "./src/routes/referentiels.routes.js";
 import centreSanteRoutes from "./src/routes/centreSante.routes.js";
+import pharmacieRoutes from "./src/routes/pharmacie.routes.js";
+import avisRoutes from "./src/routes/avis.routes.js";
+import abonnementRoutes from "./src/routes/abonnement.routes.js";
+import publiciteRoutes from "./src/routes/publicite.routes.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -66,6 +70,10 @@ app.get("/", (_req, res) => {
 app.use("/api/auth", authentificationRoutes);
 app.use("/api/referentiels", referentielsRoutes);
 app.use("/api", centreSanteRoutes);
+app.use("/api", pharmacieRoutes);
+app.use("/api", avisRoutes);
+app.use("/api", abonnementRoutes);
+app.use("/api", publiciteRoutes);
 
 // ─── Gestion d'erreurs centralisée ─────────────────────────────
 app.use((err, _req, res, _next) => {

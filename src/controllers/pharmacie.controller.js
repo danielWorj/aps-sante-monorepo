@@ -1,6 +1,10 @@
 // src/controllers/pharmacie.controller.js
-// Composant "annuaire — pharmacie" : gère la table pharmacie.
+// Composant "annuaire — pharmacie" : gère la table pharmacie, ET le
+// sous-module "Gardes officielles" (planning_garde / garde_pharmacie),
+// regroupé ici car il expose et référence directement la fiche
+// pharmacie (voir bloc "Gardes officielles" plus bas dans ce fichier).
 //
+// ─── Pharmacies ─────────────────────────────────────────────────
 // Lecture : PUBLIQUE, sans authentification. L'Annuaire Pharmacie doit
 // être consultable avant la création d'un compte ou une recherche de
 // garde — même raisonnement que Centre de santé
@@ -29,7 +33,12 @@
 // modification ne touche jamais au compte agent (déjà créé une fois
 // pour toutes à la création de la pharmacie).
 // Suppression : réservée à superadmin (impact transverse : agents
-// rattachés, futur module Gardes qui expose la fiche).
+// rattachés, module Gardes qui expose la fiche — voir plus bas).
+//
+// ─── Gardes officielles ─────────────────────────────────────────
+// Voir l'en-tête du bloc "Gardes officielles" plus loin dans ce
+// fichier pour le détail des règles d'autorisation (lecture publique,
+// écriture admin/superadmin).
 
 import prisma from "../lib/prisma.js";
 import { televerserFichier, supprimerFichier, construireUrl } from "../lib/cloudinaryService.js";
@@ -664,6 +673,380 @@ export async function supprimerPharmacie(req, res, next) {
     ]);
 
     return res.status(200).json({ message: "Pharmacie supprimée." });
+  } catch (err) {
+    next(err);
+  }
+}
+/* ===================================================================
+ * Gardes officielles — planning_garde (calendrier pays) et
+ * garde_pharmacie (affectation d'une pharmacie précise à une plage
+ * horaire de ce calendrier, dans une ville donnée — v6 :
+ * "zone_division_id" devient ville_id).
+ *
+ * Lecture : PUBLIQUE, sans authentification — cas d'usage principal
+ * ("quelle pharmacie est de garde ce soir près de chez moi ?"), au
+ * même titre que l'Annuaire ci-dessus.
+ * Écriture (POST/PUT) : admin ou superadmin uniquement — contrairement
+ * à l'Annuaire, les gardes officielles sont une donnée réglementaire
+ * planifiée centralement, jamais soumise par les pharmacies
+ * elles-mêmes.
+ * Suppression : admin ou superadmin.
+ *
+ * Rappel diagramme (contrainte forte) : appel_urgence (module
+ * 05_urgences) consomme garde_pharmacie pour rediriger vers la garde
+ * la plus proche, mais UNIQUEMENT par relation fonctionnelle — aucune
+ * FK, ni ici ni côté schema.prisma.
+ * =================================================================== */
+
+const STATUTS_PLANNING_GARDE = ["brouillon", "publie", "expire", "annule"];
+
+/* ───────────────────────────────────────────────────────────────
+ * Planning de garde
+ * ─────────────────────────────────────────────────────────────── */
+
+/**
+ * GET /api/plannings-garde
+ * Filtres optionnels : ?pays_id=...&statut=...
+ */
+export async function listerPlanningsGarde(req, res, next) {
+  try {
+    const { pays_id, statut } = req.query;
+
+    if (statut && !STATUTS_PLANNING_GARDE.includes(statut)) {
+      return res.status(400).json({
+        message: `statut invalide. Valeurs acceptées : ${STATUTS_PLANNING_GARDE.join(", ")}.`,
+      });
+    }
+
+    const where = {};
+    if (pays_id) where.pays_id = pays_id;
+    if (statut) where.statut = statut;
+
+    const plannings = await prisma.planningGarde.findMany({
+      where,
+      orderBy: { periode_debut: "desc" },
+    });
+
+    return res.status(200).json({ plannings });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/plannings-garde/:id
+ */
+export async function obtenirPlanningGarde(req, res, next) {
+  try {
+    const planning = await prisma.planningGarde.findUnique({
+      where: { planning_garde_id: req.params.id },
+      include: { gardes: true },
+    });
+    if (!planning) {
+      return res.status(404).json({ message: "Planning de garde introuvable." });
+    }
+
+    return res.status(200).json({ planning });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/plannings-garde
+ */
+export async function creerPlanningGarde(req, res, next) {
+  try {
+    const estAdminCourant = req.utilisateur?.role === "admin" || req.utilisateur?.role === "superadmin";
+    if (!estAdminCourant) {
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
+    }
+
+    const { pays_id, statut, periode_debut, periode_fin } = req.body;
+
+    if (!pays_id || !statut || !periode_debut || !periode_fin) {
+      return res.status(400).json({
+        message: "Champs requis manquants : pays_id, statut, periode_debut, periode_fin.",
+      });
+    }
+    if (!STATUTS_PLANNING_GARDE.includes(statut)) {
+      return res.status(400).json({
+        message: `statut invalide. Valeurs acceptées : ${STATUTS_PLANNING_GARDE.join(", ")}.`,
+      });
+    }
+
+    const pays = await prisma.pays.findUnique({ where: { pays_id } });
+    if (!pays) {
+      return res.status(400).json({ message: "pays_id introuvable." });
+    }
+
+    const planning = await prisma.planningGarde.create({
+      data: {
+        pays_id,
+        statut,
+        periode_debut: new Date(periode_debut),
+        periode_fin: new Date(periode_fin),
+      },
+    });
+
+    return res.status(201).json({ message: "Planning de garde créé avec succès.", planning });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PUT /api/plannings-garde/:id
+ */
+export async function modifierPlanningGarde(req, res, next) {
+  try {
+    const estAdminCourant = req.utilisateur?.role === "admin" || req.utilisateur?.role === "superadmin";
+    if (!estAdminCourant) {
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
+    }
+
+    const { statut, periode_debut, periode_fin } = req.body;
+
+    const existant = await prisma.planningGarde.findUnique({
+      where: { planning_garde_id: req.params.id },
+    });
+    if (!existant) {
+      return res.status(404).json({ message: "Planning de garde introuvable." });
+    }
+
+    if (statut && !STATUTS_PLANNING_GARDE.includes(statut)) {
+      return res.status(400).json({
+        message: `statut invalide. Valeurs acceptées : ${STATUTS_PLANNING_GARDE.join(", ")}.`,
+      });
+    }
+
+    const planning = await prisma.planningGarde.update({
+      where: { planning_garde_id: req.params.id },
+      data: {
+        ...(statut && { statut }),
+        ...(periode_debut && { periode_debut: new Date(periode_debut) }),
+        ...(periode_fin && { periode_fin: new Date(periode_fin) }),
+      },
+    });
+
+    return res.status(200).json({ message: "Planning de garde mis à jour.", planning });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /api/plannings-garde/:id
+ */
+export async function supprimerPlanningGarde(req, res, next) {
+  try {
+    const estAdminCourant = req.utilisateur?.role === "admin" || req.utilisateur?.role === "superadmin";
+    if (!estAdminCourant) {
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
+    }
+
+    const planning = await prisma.planningGarde.findUnique({
+      where: { planning_garde_id: req.params.id },
+    });
+    if (!planning) {
+      return res.status(404).json({ message: "Planning de garde introuvable." });
+    }
+
+    const nbGardes = await prisma.gardePharmacie.count({
+      where: { planning_garde_id: req.params.id },
+    });
+    if (nbGardes > 0) {
+      return res.status(409).json({
+        message: `Impossible de supprimer : ${nbGardes} garde(s) sont encore rattachée(s) à ce planning.`,
+      });
+    }
+
+    await prisma.planningGarde.delete({ where: { planning_garde_id: req.params.id } });
+    return res.status(200).json({ message: "Planning de garde supprimé." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────
+ * Gardes (affectation pharmacie <-> créneau)
+ * ─────────────────────────────────────────────────────────────── */
+
+/**
+ * GET /api/gardes-pharmacie
+ * Filtres optionnels : ?ville_id=...&planning_garde_id=...
+ *                      &pharmacie_id=...&date=... (ISO — retourne les
+ *                      gardes actives à cet instant : date_debut <=
+ *                      date <= date_fin, cas d'usage "pharmacie de
+ *                      garde maintenant").
+ */
+export async function listerGardesPharmacie(req, res, next) {
+  try {
+    const { ville_id, planning_garde_id, pharmacie_id, date } = req.query;
+
+    const where = {};
+    if (ville_id) where.ville_id = ville_id;
+    if (planning_garde_id) where.planning_garde_id = planning_garde_id;
+    if (pharmacie_id) where.pharmacie_id = pharmacie_id;
+    if (date) {
+      const instant = new Date(date);
+      if (Number.isNaN(instant.getTime())) {
+        return res.status(400).json({ message: "date invalide (format ISO attendu)." });
+      }
+      where.date_debut = { lte: instant };
+      where.date_fin = { gte: instant };
+    }
+
+    const gardes = await prisma.gardePharmacie.findMany({
+      where,
+      include: { pharmacie: true },
+      orderBy: { date_debut: "asc" },
+    });
+
+    return res.status(200).json({ gardes });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/gardes-pharmacie/:id
+ */
+export async function obtenirGardePharmacie(req, res, next) {
+  try {
+    const garde = await prisma.gardePharmacie.findUnique({
+      where: { garde_id: req.params.id },
+      include: { pharmacie: true },
+    });
+    if (!garde) {
+      return res.status(404).json({ message: "Garde introuvable." });
+    }
+
+    return res.status(200).json({ garde });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/gardes-pharmacie
+ */
+export async function creerGardePharmacie(req, res, next) {
+  try {
+    const estAdminCourant = req.utilisateur?.role === "admin" || req.utilisateur?.role === "superadmin";
+    if (!estAdminCourant) {
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
+    }
+
+    const { planning_garde_id, pharmacie_id, ville_id, date_debut, date_fin } = req.body;
+
+    if (!planning_garde_id || !pharmacie_id || !ville_id || !date_debut || !date_fin) {
+      return res.status(400).json({
+        message:
+          "Champs requis manquants : planning_garde_id, pharmacie_id, ville_id, date_debut, date_fin.",
+      });
+    }
+
+    const debut = new Date(date_debut);
+    const fin = new Date(date_fin);
+    if (Number.isNaN(debut.getTime()) || Number.isNaN(fin.getTime()) || debut >= fin) {
+      return res.status(400).json({ message: "date_debut doit être antérieure à date_fin." });
+    }
+
+    const [planning, pharmacie, ville] = await Promise.all([
+      prisma.planningGarde.findUnique({ where: { planning_garde_id } }),
+      prisma.pharmacie.findUnique({ where: { pharmacie_id } }),
+      prisma.ville.findUnique({ where: { ville_id } }),
+    ]);
+    if (!planning) return res.status(400).json({ message: "planning_garde_id introuvable." });
+    if (!pharmacie) return res.status(400).json({ message: "pharmacie_id introuvable." });
+    if (!ville) return res.status(400).json({ message: "ville_id introuvable." });
+
+    const garde = await prisma.gardePharmacie.create({
+      data: {
+        planning_garde_id,
+        pharmacie_id,
+        ville_id,
+        date_debut: debut,
+        date_fin: fin,
+      },
+      include: { pharmacie: true },
+    });
+
+    return res.status(201).json({ message: "Garde créée avec succès.", garde });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PUT /api/gardes-pharmacie/:id
+ */
+export async function modifierGardePharmacie(req, res, next) {
+  try {
+    const estAdminCourant = req.utilisateur?.role === "admin" || req.utilisateur?.role === "superadmin";
+    if (!estAdminCourant) {
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
+    }
+
+    const existante = await prisma.gardePharmacie.findUnique({
+      where: { garde_id: req.params.id },
+    });
+    if (!existante) {
+      return res.status(404).json({ message: "Garde introuvable." });
+    }
+
+    const { pharmacie_id, ville_id, date_debut, date_fin } = req.body;
+
+    if (pharmacie_id) {
+      const pharmacie = await prisma.pharmacie.findUnique({ where: { pharmacie_id } });
+      if (!pharmacie) return res.status(400).json({ message: "pharmacie_id introuvable." });
+    }
+    if (ville_id) {
+      const ville = await prisma.ville.findUnique({ where: { ville_id } });
+      if (!ville) return res.status(400).json({ message: "ville_id introuvable." });
+    }
+
+    const debut = date_debut ? new Date(date_debut) : existante.date_debut;
+    const fin = date_fin ? new Date(date_fin) : existante.date_fin;
+    if (debut >= fin) {
+      return res.status(400).json({ message: "date_debut doit être antérieure à date_fin." });
+    }
+
+    const garde = await prisma.gardePharmacie.update({
+      where: { garde_id: req.params.id },
+      data: {
+        ...(pharmacie_id && { pharmacie_id }),
+        ...(ville_id && { ville_id }),
+        ...(date_debut && { date_debut: debut }),
+        ...(date_fin && { date_fin: fin }),
+      },
+      include: { pharmacie: true },
+    });
+
+    return res.status(200).json({ message: "Garde mise à jour.", garde });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /api/gardes-pharmacie/:id
+ */
+export async function supprimerGardePharmacie(req, res, next) {
+  try {
+    const estAdminCourant = req.utilisateur?.role === "admin" || req.utilisateur?.role === "superadmin";
+    if (!estAdminCourant) {
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
+    }
+
+    const garde = await prisma.gardePharmacie.findUnique({ where: { garde_id: req.params.id } });
+    if (!garde) {
+      return res.status(404).json({ message: "Garde introuvable." });
+    }
+
+    await prisma.gardePharmacie.delete({ where: { garde_id: req.params.id } });
+    return res.status(200).json({ message: "Garde supprimée." });
   } catch (err) {
     next(err);
   }

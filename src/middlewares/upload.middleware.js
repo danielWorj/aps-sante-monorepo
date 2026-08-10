@@ -89,3 +89,69 @@ export function gererTeleversementPharmacie(req, res, next) {
     next();
   });
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Publicité (pharmacie) — un seul fichier, le visuel de l'encart à
+// diffuser (voir publicite.controller.js) :
+//   - visuel : image de la publicité
+// Contrairement à Centre de santé / Pharmacie ci-dessus (pièces
+// justificatives), le PDF n'a pas de sens ici : un encart publicitaire
+// est toujours une image, jamais un document — filtre dédié, plus
+// restrictif que TYPES_AUTORISES.
+// ─────────────────────────────────────────────────────────────────
+const TYPES_AUTORISES_VISUEL = ["image/jpeg", "image/png", "image/webp"];
+
+function filtreFichierVisuel(_req, file, cb) {
+  if (!TYPES_AUTORISES_VISUEL.includes(file.mimetype)) {
+    return cb(
+      new Error(
+        `Type de fichier non autorisé pour "${file.fieldname}" (${file.mimetype}). Formats acceptés : JPEG, PNG, WEBP.`
+      )
+    );
+  }
+  cb(null, true);
+}
+
+const televersementPublicite = multer({
+  storage: stockage,
+  limits: { fileSize: TAILLE_MAX_OCTETS },
+  fileFilter: filtreFichierVisuel,
+}).fields([{ name: "visuel", maxCount: 1 }]);
+
+export function gererTeleversementPublicite(req, res, next) {
+  televersementPublicite(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        message: err.message || "Erreur lors du téléversement du visuel.",
+      });
+    }
+    next();
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Assurance — un seul fichier requis à la création (optionnel en
+// modification, voir assurance.controller.js) :
+//   - image_assurance : photo/logo de la compagnie ou du courtier
+// Comme pour Publicité (et contrairement à Centre de santé / Pharmacie
+// qui exigent aussi une pièce d'identité + un agrément), le diagramme
+// "Annuaire assurances" (v8) ne modélise qu'UNE seule pièce, une image
+// (schema.prisma, ServiceAssurance.file_url) : le PDF n'a donc pas de
+// sens ici, filtre restreint aux images comme pour Publicité.
+// ─────────────────────────────────────────────────────────────────
+const televersementAssurance = multer({
+  storage: stockage,
+  limits: { fileSize: TAILLE_MAX_OCTETS },
+  fileFilter: filtreFichierVisuel,
+}).fields([{ name: "image_assurance", maxCount: 1 }]);
+
+export function gererTeleversementAssurance(req, res, next) {
+  televersementAssurance(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        message: err.message || "Erreur lors du téléversement de l'image.",
+      });
+    }
+    next();
+  });
+}

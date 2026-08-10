@@ -1,6 +1,10 @@
 // src/routes/pharmacie.routes.js
-// Composant "annuaire — pharmacie" : table pharmacie.
+// Composant "annuaire — pharmacie" : table pharmacie, ET le
+// sous-module "Gardes officielles" (planning_garde / garde_pharmacie),
+// regroupé ici car il expose et référence directement la fiche
+// pharmacie (voir pharmacie.controller.js).
 //
+// ─── Pharmacies ─────────────────────────────────────────────────
 // Lecture (GET) : PUBLIQUE, sans authentification. Même logique que
 // Centre de santé (voir centreSante.routes.js) : l'Annuaire Pharmacie
 // doit être consultable avant inscription (ex : recherche d'une
@@ -31,8 +35,16 @@
 // re-vérification (voir le contrôleur).
 //
 // Suppression (DELETE) : superadmin uniquement (des agents peuvent être
-// rattachés à la pharmacie ; le futur module Gardes s'appuie sur cette
-// fiche).
+// rattachés à la pharmacie ; le module Gardes ci-dessous s'appuie sur
+// cette fiche).
+//
+// ─── Gardes officielles ─────────────────────────────────────────
+// Lecture (GET) : PUBLIQUE, sans authentification — cas d'usage
+// principal : "quelle pharmacie est de garde ce soir ?" (même
+// raisonnement que l'Annuaire ci-dessus).
+// Écriture (POST/PUT) et Suppression (DELETE) : admin ou superadmin
+// uniquement — planification réglementaire centralisée, jamais
+// soumise par les pharmacies elles-mêmes (voir pharmacie.controller.js).
 import { Router } from "express";
 import {
   listerPharmacies,
@@ -40,6 +52,16 @@ import {
   creerPharmacie,
   modifierPharmacie,
   supprimerPharmacie,
+  listerPlanningsGarde,
+  obtenirPlanningGarde,
+  creerPlanningGarde,
+  modifierPlanningGarde,
+  supprimerPlanningGarde,
+  listerGardesPharmacie,
+  obtenirGardePharmacie,
+  creerGardePharmacie,
+  modifierGardePharmacie,
+  supprimerGardePharmacie,
 } from "../controllers/pharmacie.controller.js";
 import { authentifier } from "../middlewares/auth.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
@@ -73,5 +95,19 @@ router.delete(
   autoriser("superadmin"),
   supprimerPharmacie
 );
+
+// ─── Plannings de garde ────────────────────────────────────────
+router.get("/plannings-garde", listerPlanningsGarde);
+router.get("/plannings-garde/:id", obtenirPlanningGarde);
+router.post("/plannings-garde", authentifier, autoriser("admin", "superadmin"), creerPlanningGarde);
+router.put("/plannings-garde/:id", authentifier, autoriser("admin", "superadmin"), modifierPlanningGarde);
+router.delete("/plannings-garde/:id", authentifier, autoriser("admin", "superadmin"), supprimerPlanningGarde);
+
+// ─── Gardes (pharmacie <-> créneau) ────────────────────────────
+router.get("/gardes-pharmacie", listerGardesPharmacie);
+router.get("/gardes-pharmacie/:id", obtenirGardePharmacie);
+router.post("/gardes-pharmacie", authentifier, autoriser("admin", "superadmin"), creerGardePharmacie);
+router.put("/gardes-pharmacie/:id", authentifier, autoriser("admin", "superadmin"), modifierGardePharmacie);
+router.delete("/gardes-pharmacie/:id", authentifier, autoriser("admin", "superadmin"), supprimerGardePharmacie);
 
 export default router;

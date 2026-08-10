@@ -82,6 +82,68 @@ enum StatutVerificationPharmacie {
 }
 
 // -----------------------------------------------------------------
+// Enums — sous-modules Pharmacie (diagramme 03_pharmacie_gardes)
+// -----------------------------------------------------------------
+
+// Même patron de modération que StatutVerificationPharmacie : un avis
+// déposé n'est jamais visible publiquement avant validation par un
+// admin/superadmin — voir avisPharmacie.controller.js.
+enum StatutModerationAvis {
+  en_attente
+  publie
+  rejete
+}
+
+enum StatutAbonnementPharmacie {
+  actif
+  expire
+  annule
+}
+
+// Même patron que StatutModerationAvis : une publicité soumise reste
+// "en_attente" tant qu'un admin/superadmin ne l'a pas validée — voir
+// publicite.controller.js.
+//
+// v8 : ces deux enums appartiennent désormais au module autonome
+// "Présence, publicité & boost commercial" (diagramme
+// 09_presence_publicite_boost). Ce module n'a plus AUCUNE dépendance
+// vers Pharmacie (ni vers aucun autre module métier) : une publicité
+// est portée directement par un utilisateur et un pays, jamais par une
+// fiche annuaire — voir publicite.controller.js.
+enum StatutModerationPublicite {
+  en_attente
+  validee
+  rejetee
+}
+
+enum StatutPlanningGarde {
+  brouillon
+  publie
+  expire
+  annule
+}
+
+// -----------------------------------------------------------------
+// Enums — Annuaire assurances (diagramme 08_annuaire_assurances, v8)
+// -----------------------------------------------------------------
+
+// Même patron que StatutVerificationStructure / StatutVerificationMedecin
+// / StatutVerificationPharmacie : une fiche assurance nouvellement créée
+// n'est publique qu'après validation par un admin/superadmin.
+enum StatutVerificationAssurance {
+  non_publie
+  en_cours
+  publie
+}
+
+// Distingue une compagnie d'assurance d'un courtier (intermédiaire),
+// cf. maquette "Annuaire assurances (v8)".
+enum TypeActeurAssurance {
+  compagnie
+  courtier
+}
+
+// -----------------------------------------------------------------
 // Référentiel géographique
 // -----------------------------------------------------------------
 
@@ -125,6 +187,12 @@ model Pays {
   medecins_exercice Medecin[]
   structures_sante  StructureSante[]
   pharmacies        Pharmacie[]
+  plannings_garde       PlanningGarde[]
+  // v8 : Publicite (module autonome, plus PublicitePharmacie) — voir
+  // plus bas.
+  publicites            Publicite[]
+  // v8 : Annuaire assurances (diagramme 08_annuaire_assurances).
+  services_assurance    ServiceAssurance[]
 
   @@index([devise_id])
   @@index([langue_id])
@@ -146,6 +214,9 @@ model Ville {
   medecins_exercice Medecin[]
   structures_sante  StructureSante[]
   pharmacies        Pharmacie[]
+  gardes_pharmacie  GardePharmacie[]
+  // v8 : Annuaire assurances (diagramme 08_annuaire_assurances).
+  services_assurance ServiceAssurance[]
 
   @@index([pays_id])
   @@map("ville")
@@ -214,6 +285,17 @@ model Utilisateur {
   agent_assurance         AgentAssurance?
   agent_pharmacie         AgentPharmacie?
   agent_ambulance         AgentAmbulance?
+  avis_pharmacie          AvisPharmacie[]
+  // v8 : module autonome "Présence, publicité & boost commercial" —
+  // une publicité est déposée directement par un utilisateur, quel
+  // que soit son rôle, sans passer par un profil agent_xxx.
+  publicites              Publicite[]
+  // v8 : Annuaire assurances — remplace l'ancien
+  // "contact_prospect_assurance" (patient -> assurance, 1-N) par cette
+  // relation N-N utilisateur <-> assurance (n'importe quel utilisateur
+  // peut contacter 1-N assurances, une assurance peut être contactée
+  // par 1-N utilisateurs) — voir table de jointure MiseEnRelation.
+  mises_en_relation       MiseEnRelation[]
 
   @@index([pays_id])
   @@index([role_id])
@@ -387,9 +469,10 @@ model AgentAmbulance {
 // devront être fusionnées / remplacées lors de l'intégration :
 //   - structure_sante   → diagramme 02_annuaire_recherche
 //   - pompes_funebres   → diagramme 07_services_connexes
-//   - service_assurance → diagramme 08_annuaire_assurances
 //   - pharmacie         → diagramme 03_pharmacie_gardes
 //   - service_ambulance → diagramme 07_services_connexes
+// v8 : service_assurance n'est plus un stub — voir plus bas le module
+// complet "Annuaire assurances" (diagramme 08_annuaire_assurances).
 // -----------------------------------------------------------------
 
 // -----------------------------------------------------------------
@@ -442,13 +525,133 @@ model PompesFunebres {
   @@map("pompes_funebres")
 }
 
-/// @ref module 08_annuaire_assurances — définition complète à fusionner
+// -----------------------------------------------------------------
+// Annuaire assurances (diagramme 08_annuaire_assurances, v8)
+//
+// Module secondaire qui enrichit la plateforme sans entrer dans le
+// parcours critique de soin/urgence.
+//
+// service_assurance est le supertype de la fiche annuaire (compagnie
+// ou courtier, cf. type_acteur) — même patron que structure_sante /
+// pharmacie plus haut : "geolocalisation" est un GEOGRAPHY(POINT,4326)
+// PostGIS non supporté nativement par Prisma Client (Unsupported(...)),
+// lecture/écriture passent par $queryRaw / $executeRaw.
+//
+// v8 : ajout du catalogue activite / option_activite (une assurance
+// possède N activités ; chaque activité porte ses propres options,
+// comme sur la maquette), ajout de agence (une assurance possède N
+// agences), et ajout des champs email / agrement / description sur la
+// fiche elle-même. remplacement de contact_prospect_assurance
+// (patient -> assurance, 1-N) par mise_en_relation (utilisateur <->
+// assurance, N-N) — voir Utilisateur plus haut.
+// -----------------------------------------------------------------
 model ServiceAssurance {
   service_assurance_id String @id @default(uuid()) @db.Uuid
 
-  agents AgentAssurance[]
+  nom                 String                      @db.VarChar(200)
+  pays_id             String                      @db.Uuid
+  ville_id            String                      @db.Uuid
+  geolocalisation     Unsupported("geography(Point, 4326)")?
+  telephone           String                      @db.VarChar(20)
+  // Pièce justificative (Cloudinary) — voir lib/cloudinaryService.js.
+  // Seul le "nom" (public_id Cloudinary) est stocké ; l'URL publique
+  // est reconstruite à la volée, jamais persistée.
+  file_url            String                      @db.Text
+  email               String                      @db.VarChar(255)
+  // Numéro ou texte d'agrément réglementaire de la compagnie/du
+  // courtier.
+  agrement            String                      @db.VarChar(100)
+  // Présentation libre de l'assurance, cf. onglet "Siège" de la
+  // maquette.
+  description         String?                     @db.Text
+  statut_verification StatutVerificationAssurance
+  type_acteur         TypeActeurAssurance
 
+  pays  Pays  @relation(fields: [pays_id], references: [pays_id])
+  ville Ville @relation(fields: [ville_id], references: [ville_id])
+
+  agents            AgentAssurance[]
+  mises_en_relation MiseEnRelation[]
+  activites         Activite[]
+  agences           Agence[]
+
+  @@index([pays_id])
+  @@index([ville_id])
   @@map("service_assurance")
+}
+
+// Table de jointure N-N utilisateur <-> assurance. Remplace l'ancien
+// "contact_prospect_assurance" (qui référençait patient) : c'est
+// désormais un utilisateur quelconque qui contacte une assurance —
+// voir Utilisateur.mises_en_relation plus haut.
+model MiseEnRelation {
+  mise_en_relation_id String @id @default(uuid()) @db.Uuid
+
+  service_assurance_id String   @db.Uuid
+  utilisateur_id        String   @db.Uuid
+  message                String   @db.Text
+  date_creation          DateTime @default(now())
+
+  service_assurance ServiceAssurance @relation(fields: [service_assurance_id], references: [service_assurance_id])
+  utilisateur       Utilisateur      @relation(fields: [utilisateur_id], references: [utilisateur_id])
+
+  @@index([service_assurance_id])
+  @@index([utilisateur_id])
+  @@map("mise_en_relation")
+}
+
+// Catalogue des activités (produits) d'une assurance — ex. "Activa
+// Santé Individuelle" / public_cible "Particuliers et familles". Une
+// assurance possède N activités ; une activité appartient à une seule
+// assurance.
+model Activite {
+  activite_id String @id @default(uuid()) @db.Uuid
+
+  service_assurance_id String  @db.Uuid
+  titre                 String  @db.VarChar(200)
+  public_cible           String  @db.VarChar(200)
+  description             String? @db.Text
+
+  service_assurance ServiceAssurance @relation(fields: [service_assurance_id], references: [service_assurance_id])
+
+  options OptionActivite[]
+
+  @@index([service_assurance_id])
+  @@map("activite")
+}
+
+// Options rattachées à une activité (et non directement à l'assurance)
+// — ex. "Hospitalisation", "Consultations & pharmacie", "Maternité" :
+// chaque produit porte ses propres options, comme sur la maquette.
+model OptionActivite {
+  option_activite_id String @id @default(uuid()) @db.Uuid
+
+  activite_id  String  @db.Uuid
+  libelle      String  @db.VarChar(150)
+  description  String? @db.Text
+
+  activite Activite @relation(fields: [activite_id], references: [activite_id])
+
+  @@index([activite_id])
+  @@map("option_activite")
+}
+
+// Agences physiques d'une assurance — ex. "Agence Douala — Akwa
+// (Siège)". Une assurance possède N agences ; une agence appartient à
+// une seule assurance.
+model Agence {
+  agence_id String @id @default(uuid()) @db.Uuid
+
+  service_assurance_id String                                 @db.Uuid
+  libelle                String                                 @db.VarChar(150)
+  localisation           String                                 @db.VarChar(255)
+  gps                    Unsupported("geography(Point, 4326)")?
+  contact                String                                 @db.VarChar(20)
+
+  service_assurance ServiceAssurance @relation(fields: [service_assurance_id], references: [service_assurance_id])
+
+  @@index([service_assurance_id])
+  @@map("agence")
 }
 
 // -----------------------------------------------------------------
@@ -491,11 +694,262 @@ model Pharmacie {
   pays  Pays  @relation(fields: [pays_id], references: [pays_id])
   ville Ville @relation(fields: [ville_id], references: [ville_id])
 
-  agents AgentPharmacie[]
+  agents      AgentPharmacie[]
+  avis        AvisPharmacie[]
+  abonnements AbonnementPharmacie[]
+  gardes      GardePharmacie[]
 
   @@index([pays_id])
   @@index([ville_id])
   @@map("pharmacie")
+}
+
+// -----------------------------------------------------------------
+// Pharmacie — Avis (diagramme 03_pharmacie_gardes)
+//
+// Modération manuelle : un avis nouvellement déposé est toujours
+// "en_attente" et n'est visible publiquement qu'une fois "publie" par
+// un admin/superadmin (voir avisPharmacie.controller.js). La note est
+// bornée 1-5 en application (pas de CHECK en base — même choix que le
+// reste du schéma).
+//
+// Limite structurelle acceptée : rien n'empêche nativement un même
+// utilisateur de déposer plusieurs avis sur la même pharmacie (pas de
+// contrainte unique [utilisateur_id, pharmacie_id]) — à arbitrer côté
+// produit si "un seul avis par utilisateur" devient une règle requise.
+// -----------------------------------------------------------------
+model AvisPharmacie {
+  avis_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id    String               @db.Uuid
+  pharmacie_id      String               @db.Uuid
+  note              Int                  @db.SmallInt
+  commentaire       String?              @db.Text
+  statut_moderation StatutModerationAvis @default(en_attente)
+  date_creation     DateTime             @default(now())
+
+  utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
+  pharmacie   Pharmacie   @relation(fields: [pharmacie_id], references: [pharmacie_id])
+
+  @@index([utilisateur_id])
+  @@index([pharmacie_id])
+  @@map("avis_pharmacie")
+}
+
+// -----------------------------------------------------------------
+// Pharmacie — Abonnement (diagramme 03_pharmacie_gardes)
+//
+// Un abonnement est toujours adossé à une transaction_paiement déjà
+// réglée (module 06_paiement_escrow, table «ref» stubée plus bas) :
+// le contrôleur ne crée jamais un abonnement sans transaction_id
+// valide. ligne_abonnement_pharmacie détaille les avantages inclus
+// (contenu éditorial, affiché tel quel côté front).
+// -----------------------------------------------------------------
+model AbonnementPharmacie {
+  abonnement_id String @id @default(uuid()) @db.Uuid
+
+  pharmacie_id   String                    @db.Uuid
+  libelle        String                    @db.VarChar(100)
+  montant        Decimal                   @db.Decimal(12, 2)
+  duree_jours    Int
+  date_debut     DateTime                  @db.Date
+  date_fin       DateTime                  @db.Date
+  transaction_id String                    @db.Uuid
+  statut         StatutAbonnementPharmacie
+
+  pharmacie   Pharmacie           @relation(fields: [pharmacie_id], references: [pharmacie_id])
+  transaction TransactionPaiement @relation(fields: [transaction_id], references: [transaction_id])
+
+  lignes LigneAbonnementPharmacie[]
+
+  @@index([pharmacie_id])
+  @@index([transaction_id])
+  @@map("abonnement_pharmacie")
+}
+
+model LigneAbonnementPharmacie {
+  ligne_id String @id @default(uuid()) @db.Uuid
+
+  abonnement_id    String  @db.Uuid
+  libelle_avantage String  @db.VarChar(150)
+  description      String? @db.Text
+  ordre_affichage  Int     @db.SmallInt
+
+  abonnement AbonnementPharmacie @relation(fields: [abonnement_id], references: [abonnement_id])
+
+  @@index([abonnement_id])
+  @@map("ligne_abonnement_pharmacie")
+}
+
+// -----------------------------------------------------------------
+// Présence, publicité & boost commercial (diagramme
+// 09_presence_publicite_boost) — MODULE AUTONOME.
+//
+// v8 : ce module a été isolé de Pharmacie. Il ne référence plus
+// aucune fiche annuaire (pharmacie, structure_sante, ...) : une
+// publicité est portée directement par l'utilisateur qui la dépose et
+// le pays où elle est diffusée. Seules deux tables «ref» externes
+// restent utilisées, communes à toute la plateforme : Utilisateur et
+// Pays (voir plus haut). PageWebsite et PublicitePharmacie
+// (précédemment détenues par le module Pharmacie) sont retirées : le
+// module Pharmacie n'a donc plus AUCUN lien, fonctionnel ou de
+// données, avec la publicité — voir pharmacie.controller.js.
+//
+// emplacement_publicitaire décrit le TYPE d'espace publicitaire du
+// site (ex. "accueil", "résultats de recherche", "fiche pharmacie"...)
+// — table de référence pure (mêmes patron que Langue/Devise/Pays/Ville,
+// voir plus haut), pas un enum : les zones possibles sont des LIGNES de
+// cette table (via code/libelle), pas des valeurs figées dans le
+// schéma. forfait_publicitaire packages un emplacement avec une
+// durée/un prix ; publicite est l'encart effectivement soumis par un
+// utilisateur pour diffusion et référence désormais DIRECTEMENT
+// l'emplacement choisi (emplacement_publicitaire_id), en plus du
+// forfait_publicitaire_id qui en fixe le prix/la durée.
+// -----------------------------------------------------------------
+model EmplacementPublicitaire {
+  emplacement_publicitaire_id String @id @default(uuid()) @db.Uuid
+
+  code        String  @unique @db.VarChar(50)
+  libelle     String  @db.VarChar(150)
+  description String? @db.Text
+
+  forfaits   ForfaitPublicitaire[]
+  publicites Publicite[]
+
+  @@map("emplacement_publicitaire")
+}
+
+model ForfaitPublicitaire {
+  forfait_publicitaire_id String @id @default(uuid()) @db.Uuid
+
+  emplacement_publicitaire_id String  @db.Uuid
+  libelle                     String  @db.VarChar(100)
+  prix                        Decimal @db.Decimal(12, 2)
+  duree_jours                 Int
+
+  emplacement_publicitaire EmplacementPublicitaire @relation(fields: [emplacement_publicitaire_id], references: [emplacement_publicitaire_id])
+
+  lignes     LigneForfaitPublicitaire[]
+  publicites Publicite[]
+
+  @@index([emplacement_publicitaire_id])
+  @@map("forfait_publicitaire")
+}
+
+model LigneForfaitPublicitaire {
+  ligne_id String @id @default(uuid()) @db.Uuid
+
+  forfait_publicitaire_id String  @db.Uuid
+  libelle_avantage        String  @db.VarChar(150)
+  description             String? @db.Text
+  ordre_affichage         Int     @db.SmallInt
+
+  forfait_publicitaire ForfaitPublicitaire @relation(fields: [forfait_publicitaire_id], references: [forfait_publicitaire_id])
+
+  @@index([forfait_publicitaire_id])
+  @@map("ligne_forfait_publicitaire")
+}
+
+// Contrainte forte (chronogramme) conservée de l'ancien modèle :
+// AUCUNE relation, ni fonctionnelle ni de données, ne doit exister
+// entre publicite et les modules Urgences / gardes officielles /
+// Pharmacie. Ce modèle ne référence donc jamais pharmacie,
+// garde_pharmacie ni appel_urgence — voir publicite.controller.js.
+model Publicite {
+  publicite_id String @id @default(uuid()) @db.Uuid
+
+  forfait_publicitaire_id     String @db.Uuid
+  emplacement_publicitaire_id String @db.Uuid
+  utilisateur_id              String @db.Uuid
+  pays_id                     String @db.Uuid
+  titre                       String @db.VarChar(150)
+  // Le visuel est téléversé sur Cloudinary (voir lib/cloudinaryService.js,
+  // fonction televerserFichier) : ce champ ne contient PAS une URL saisie
+  // librement mais le "nom" (public_id) renvoyé par Cloudinary à
+  // l'upload — le nom du champ est conservé tel quel (visuel_url) pour
+  // ne pas casser le schéma existant, mais sa valeur est désormais
+  // toujours produite par le serveur, jamais par le client. Voir
+  // publicite.controller.js (creerPublicite/modifierPublicite).
+  visuel_url        String                    @db.Text
+  date_debut         DateTime                  @db.Date
+  date_fin           DateTime                  @db.Date
+  statut_moderation  StatutModerationPublicite @default(en_attente)
+
+  forfait_publicitaire     ForfaitPublicitaire     @relation(fields: [forfait_publicitaire_id], references: [forfait_publicitaire_id])
+  emplacement_publicitaire EmplacementPublicitaire @relation(fields: [emplacement_publicitaire_id], references: [emplacement_publicitaire_id])
+  utilisateur              Utilisateur             @relation(fields: [utilisateur_id], references: [utilisateur_id])
+  pays                     Pays                    @relation(fields: [pays_id], references: [pays_id])
+
+  @@index([forfait_publicitaire_id])
+  @@index([emplacement_publicitaire_id])
+  @@index([utilisateur_id])
+  @@index([pays_id])
+  @@map("publicite")
+}
+
+// -----------------------------------------------------------------
+// Pharmacie — Gardes officielles (diagramme 03_pharmacie_gardes)
+//
+// planning_garde porte un CALENDRIER pays (ex. "gardes janvier 2027 —
+// Cameroun") ; garde_pharmacie affecte une pharmacie précise à une
+// plage horaire au sein de ce planning, dans une ville donnée (v6 :
+// "zone_division_id" du schéma initial devient simplement ville_id).
+// appel_urgence (module 05_urgences) consomme cette table pour
+// rediriger vers la garde la plus proche, mais UNIQUEMENT par relation
+// fonctionnelle — pas de FK, voir la note du diagramme.
+// -----------------------------------------------------------------
+model PlanningGarde {
+  planning_garde_id String @id @default(uuid()) @db.Uuid
+
+  pays_id       String              @db.Uuid
+  statut        StatutPlanningGarde
+  periode_debut DateTime            @db.Date
+  periode_fin   DateTime            @db.Date
+
+  pays   Pays             @relation(fields: [pays_id], references: [pays_id])
+  gardes GardePharmacie[]
+
+  @@index([pays_id])
+  @@map("planning_garde")
+}
+
+model GardePharmacie {
+  garde_id String @id @default(uuid()) @db.Uuid
+
+  planning_garde_id String   @db.Uuid
+  pharmacie_id      String   @db.Uuid
+  ville_id          String   @db.Uuid
+  date_debut        DateTime
+  date_fin          DateTime
+
+  planning_garde PlanningGarde @relation(fields: [planning_garde_id], references: [planning_garde_id])
+  pharmacie      Pharmacie     @relation(fields: [pharmacie_id], references: [pharmacie_id])
+  ville          Ville         @relation(fields: [ville_id], references: [ville_id])
+
+  @@index([planning_garde_id])
+  @@index([pharmacie_id])
+  @@index([ville_id])
+  @@map("garde_pharmacie")
+}
+
+// -----------------------------------------------------------------
+// «ref» — Tables détenues par d'autres modules du diagramme APS,
+// stubées ici (PK seule) pour que les FK ci-dessus soient valides —
+// même patron que PompesFunebres / ServiceAssurance plus haut :
+//   - transaction_paiement  → diagramme 06_paiement_escrow
+// v8 : formule_publicitaire a été retirée de cette liste — le module
+// "Présence, publicité & boost commercial" est désormais autonome et
+// possède sa propre table pleinement définie, ForfaitPublicitaire
+// (voir plus haut), qui n'a plus besoin d'être stubée ici.
+// -----------------------------------------------------------------
+
+/// @ref module 06_paiement_escrow — définition complète à fusionner
+model TransactionPaiement {
+  transaction_id String @id @default(uuid()) @db.Uuid
+
+  abonnements_pharmacie AbonnementPharmacie[]
+
+  @@map("transaction_paiement")
 }
 
 /// @ref module 07_services_connexes — définition complète à fusionner
