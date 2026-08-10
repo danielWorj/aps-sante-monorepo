@@ -19,6 +19,13 @@ import RequireAuth from './routes/RequireAuth';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Referentiel from './pages/Referentiel';
+import Pharmacie from './pages/Pharmacie';
+// PUBLICTE 
+import Publicite from './pages/Publicite';
+import EmplacementForfaire from './pages/EmplacementForfaire';
+import ForfaitPublicitaire from './pages/ForfaitPublicitaire';
+//
+import AvisPharmacie from './pages/avisPharmacie';
 import Utilisateurs from './pages/Utilisateurs';
 import StructureSante from './pages/StructureSante';
 // import Medecin from './pages/Medecin';
@@ -46,9 +53,16 @@ export const router = createBrowserRouter([
           { path: '/', element: <Dashboard /> },
           { path: '/dashboard', element: <Dashboard /> },
           { path: '/referentiel', element: <Referentiel /> },
+          { path: '/pharmacie', element: <Pharmacie /> },
+          { path: '/avis-pharmacie', element: <AvisPharmacie /> },
           { path: '/utilisateurs', element: <Utilisateurs /> },
           { path: '/structure-sante', element: <StructureSante /> },
-          //   { path: '/medecin', element: <Medecin /> },
+          // //   PUBLICITE,
+          { path: '/publicite', element: <Publicite /> },
+          { path: '/emplacement-publicitaire', element: <EmplacementForfaire /> },
+          { path: '/forfait-publicitaire', element: <ForfaitPublicitaire /> },
+
+
           //   { path: '/pharmacie', element: <Pharmacie /> },
           //   { path: '/structure-sante', element: <StructureSante /> },
           //   { path: '/profil/:id', element: <ProfilMedecin /> },
