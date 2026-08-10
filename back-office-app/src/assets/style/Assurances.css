@@ -261,31 +261,49 @@ textarea.aps-assur-input {
 /* ---------------------------- Grille de cartes ---------------------------- */
 
 .aps-assur-grille {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 20px;
+  --assur-accent-defaut: #94a3b8;
+  --assur-accent-non_publie: #9ca3af;
+  --assur-accent-en_cours: #d97706;
+  --assur-accent-publie: #16a34a;
 }
 
 .aps-assur-carte {
+  position: relative;
   display: flex;
   flex-direction: column;
+  height: 100%;
   background-color: var(--assur-fond-carte);
   border: 1px solid var(--assur-bordure);
-  border-radius: var(--assur-rayon);
+  border-radius: 14px;
   overflow: hidden;
   box-shadow: var(--assur-ombre);
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
 }
+
+.aps-assur-carte::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: var(--assur-accent, var(--assur-accent-defaut));
+  z-index: 1;
+}
+
+.aps-assur-carte-statut-non_publie { --assur-accent: var(--assur-accent-non_publie); }
+.aps-assur-carte-statut-en_cours { --assur-accent: var(--assur-accent-en_cours); }
+.aps-assur-carte-statut-publie { --assur-accent: var(--assur-accent-publie); }
 
 .aps-assur-carte:hover {
   box-shadow: var(--assur-ombre-hover);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  border-color: rgba(37, 99, 235, 0.25);
 }
 
 .aps-assur-carte-image {
   position: relative;
-  aspect-ratio: 16 / 10;
-  background-color: var(--assur-fond);
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(135deg, #eef2ff, var(--assur-fond));
+  overflow: hidden;
 }
 
 .aps-assur-carte-image img {
@@ -293,6 +311,11 @@ textarea.aps-assur-input {
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform 0.35s ease;
+}
+
+.aps-assur-carte:hover .aps-assur-carte-image img {
+  transform: scale(1.05);
 }
 
 .aps-assur-carte-image-vide {
@@ -301,37 +324,98 @@ textarea.aps-assur-input {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.2rem;
+  font-size: 2.6rem;
   color: var(--assur-texte-att);
+  opacity: 0.6;
+}
+
+.aps-assur-carte-image-degrade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0) 45%, rgba(15, 23, 42, 0.55) 100%);
+  pointer-events: none;
 }
 
 .aps-assur-carte-badge-statut {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+}
+
+.aps-assur-carte-badge-statut .aps-assur-badge {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+.aps-assur-carte-logo {
+  position: absolute;
+  left: 16px;
+  bottom: -22px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background-color: #fff;
+  border: 3px solid #fff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  z-index: 2;
 }
 
 .aps-assur-carte-corps {
-  padding: 14px 16px;
+  padding: 32px 18px 12px;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.aps-assur-carte-entete {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.aps-assur-carte-nom {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--assur-texte);
+  line-height: 1.3;
+}
+
+.aps-assur-carte-infos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.aps-assur-carte-nom {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
-}
-
 .aps-assur-carte-meta {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.86rem;
   color: var(--assur-texte-att);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+}
+
+.aps-assur-carte-icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background-color: var(--assur-fond);
+  font-size: 0.85rem;
+  flex-shrink: 0;
 }
 
 .aps-assur-carte-actions {
@@ -339,7 +423,12 @@ textarea.aps-assur-input {
   gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid var(--assur-bordure);
+  background-color: var(--assur-fond);
   flex-wrap: wrap;
+}
+
+.aps-assur-carte-actions .aps-assur-btn-primary {
+  margin-right: auto;
 }
 
 /* ---------------------------- Badges ---------------------------- */
@@ -621,6 +710,132 @@ textarea.aps-assur-input {
   margin-top: 2px;
 }
 
+/* ---------------------------- Configuration (activités / options / agences) ---------------------------- */
+
+.aps-assur-onglets {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--assur-bordure);
+  margin-bottom: 18px;
+}
+
+.aps-assur-onglet {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--assur-texte-att);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.aps-assur-onglet:hover {
+  color: var(--assur-texte);
+}
+
+.aps-assur-onglet-actif {
+  color: var(--assur-primaire);
+  border-bottom-color: var(--assur-primaire);
+}
+
+.aps-assur-config-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.aps-assur-config-entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.aps-assur-config-entete p {
+  margin: 0;
+}
+
+.aps-assur-config-entete h5 {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--assur-texte);
+}
+
+.aps-assur-config-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.aps-assur-config-item {
+  background-color: var(--assur-fond-carte);
+  border: 1px solid var(--assur-bordure);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.aps-assur-config-item-sm {
+  padding: 10px 12px;
+  background-color: var(--assur-fond);
+}
+
+.aps-assur-config-item-entete {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.aps-assur-config-item strong {
+  font-size: 0.94rem;
+  color: var(--assur-texte);
+}
+
+.aps-assur-config-meta {
+  font-size: 0.82rem;
+  color: var(--assur-texte-att);
+}
+
+.aps-assur-config-desc {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: var(--assur-texte-att);
+}
+
+.aps-assur-config-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.aps-assur-config-sous-liste {
+  margin-top: 12px;
+  padding: 12px;
+  border-top: 1px dashed var(--assur-bordure);
+  border-radius: 0 0 8px 8px;
+  background-color: var(--assur-fond);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.aps-assur-config-sous-liste .aps-assur-config-liste {
+  padding-left: 4px;
+  border-left: 2px solid var(--assur-bordure);
+}
+
+.aps-assur-config-sous-liste .aps-assur-config-item {
+  margin-left: 8px;
+}
+
 /* ---------------------------- Responsive ---------------------------- */
 
 @media (max-width: 640px) {
@@ -649,5 +864,23 @@ textarea.aps-assur-input {
 
   .aps-assur-mise-item {
     flex-direction: column;
+  }
+
+  .aps-assur-onglets {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .aps-assur-config-entete {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .aps-assur-config-item-entete {
+    flex-direction: column;
+  }
+
+  .aps-assur-config-sous-liste .aps-assur-config-item {
+    margin-left: 0;
   }
 }

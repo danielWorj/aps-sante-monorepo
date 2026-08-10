@@ -1,0 +1,153 @@
+/* src/components/Urgences.css
+ *
+ * Styles scoping propres au module "Urgences", préfixés "aps-urg-"
+ * pour ne pas entrer en collision avec admin.css — même esprit que les
+ * styles inline de PublicitePharmacie.jsx (STYLE_FICHE_DETAIL), mais
+ * externalisés ici dans un fichier dédié, importé directement dans
+ * Urgences.jsx via `import "./Urgences.css";`.
+ *
+ * Hypothèse : les variables CSS --aps-primary, --aps-primary-100,
+ * --aps-text-500, --aps-border sont déjà définies globalement par
+ * admin.css (comme dans PublicitePharmacie.jsx) ; des valeurs de repli
+ * sont fournies avec chaque var() au cas où.
+ */
+
+/* ─── Onglets (Urgences / Types d'urgence) ────────────────────────── */
+.aps-urg-tabs {
+  border-bottom-color: var(--aps-border, #E7EAF0);
+}
+
+.aps-urg-tabs .nav-link {
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--aps-text-500, #6B7280);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 4px;
+  margin-right: 24px;
+  background: transparent;
+}
+
+.aps-urg-tabs .nav-link:hover {
+  color: var(--aps-primary, #1C8FE0);
+}
+
+.aps-urg-tabs .nav-link.active {
+  color: var(--aps-primary, #1C8FE0);
+  border-bottom-color: var(--aps-primary, #1C8FE0);
+}
+
+/* ─── Badge "type d'urgence" (couleur cyclique par type) ──────────── */
+.aps-urg-type-badge {
+  --aps-urg-couleur: var(--aps-primary, #1C8FE0);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--aps-urg-couleur);
+  background: color-mix(in srgb, var(--aps-urg-couleur) 12%, white);
+  white-space: nowrap;
+}
+
+.aps-urg-type-badge i {
+  font-size: 11px;
+}
+
+/* ─── Colonne "téléphone" du tableau ───────────────────────────────── */
+.aps-urg-telephone {
+  font-weight: 600;
+  color: var(--aps-text-900, #1F2937);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.aps-urg-telephone:hover {
+  color: var(--aps-primary, #1C8FE0);
+  text-decoration: underline;
+}
+
+/* ─── Description tronquée dans le tableau des urgences ───────────── */
+.aps-urg-desc-tronquee {
+  font-size: 12.5px;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Fiche détail (modale "Voir") ─────────────────────────────────── */
+.aps-urg-fiche .modal-header {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aps-urg-fiche .modal-header .btn-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.aps-urg-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  margin-bottom: 18px;
+}
+
+.aps-urg-info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.aps-urg-info-item > i {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--aps-primary-100, #EAF4FD);
+  color: var(--aps-primary, #1C8FE0);
+  font-size: 13px;
+  margin-top: 1px;
+}
+
+.aps-urg-info-label {
+  font-size: 11.5px;
+  color: var(--aps-text-500, #6B7280);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.aps-urg-info-valeur {
+  font-size: 14px;
+  font-weight: 500;
+  color: inherit;
+  text-decoration: none;
+  display: block;
+}
+
+a.aps-urg-info-valeur:hover {
+  color: var(--aps-primary, #1C8FE0);
+  text-decoration: underline;
+}
+
+.aps-urg-section-titre {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--aps-text-500, #6B7280);
+  margin-bottom: 8px;
+}
+
+/* ─── Responsive : grille détail sur une colonne en mobile ─────────── */
+@media (max-width: 576px) {
+  .aps-urg-info-grid {
+    grid-template-columns: 1fr;
+  }
+}

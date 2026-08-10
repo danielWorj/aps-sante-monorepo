@@ -26,6 +26,8 @@ import EmplacementForfaire from './pages/EmplacementForfaire';
 import ForfaitPublicitaire from './pages/ForfaitPublicitaire';
 // ASSURANCES 
 import Assurances from './pages/Assurances';
+//URGENCES
+import Urgences from './pages/Urgences';
 
 
 
@@ -69,6 +71,8 @@ export const router = createBrowserRouter([
           // ASSURANCES 
           { path: '/assurances', element: <Assurances /> },
 
+          // URGENCES
+          { path: '/urgences', element: <Urgences /> },
 
           //   { path: '/pharmacie', element: <Pharmacie /> },
           //   { path: '/structure-sante', element: <StructureSante /> },

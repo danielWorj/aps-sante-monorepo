@@ -27,6 +27,18 @@ import {
   listerMisesEnRelationAssurance,
   creerMiseEnRelationAssurance,
   supprimerMiseEnRelationAssurance,
+  listerActivites,
+  creerActivite,
+  modifierActivite,
+  supprimerActivite,
+  listerOptionsActivite,
+  creerOptionActivite,
+  modifierOptionActivite,
+  supprimerOptionActivite,
+  listerAgences,
+  creerAgence,
+  modifierAgence,
+  supprimerAgence,
   listerPays,
   listerVilles,
   STATUTS_VERIFICATION_ASSURANCE,
@@ -174,9 +186,9 @@ function Badge({ type, valeur }) {
   return <span className="aps-assur-badge aps-assur-badge-type">{LIBELLES_TYPE[valeur] || valeur}</span>;
 }
 
-function CarteService({ service, peutModifier, peutSupprimer, onVoir, onModifier, onSupprimer }) {
+function CarteService({ service, peutModifier, peutSupprimer, onVoir, onModifier, onSupprimer, onConfigurer }) {
   return (
-    <article className="aps-assur-carte">
+    <article className={`aps-assur-carte aps-assur-carte-statut-${service.statut_verification || 'defaut'}`}>
       <div className="aps-assur-carte-image">
         {service.image_url ? (
           <img src={service.image_url} alt={service.nom} loading="lazy" />
@@ -185,27 +197,52 @@ function CarteService({ service, peutModifier, peutSupprimer, onVoir, onModifier
             🛡️
           </div>
         )}
+        <div className="aps-assur-carte-image-degrade" aria-hidden="true"></div>
         <div className="aps-assur-carte-badge-statut">
           <Badge type="statut" valeur={service.statut_verification} />
         </div>
+        <div className="aps-assur-carte-logo" aria-hidden="true">
+          🛡️
+        </div>
       </div>
       <div className="aps-assur-carte-corps">
-        <h3 className="aps-assur-carte-nom">{service.nom}</h3>
-        <Badge type="acteur" valeur={service.type_acteur} />
-        <p className="aps-assur-carte-meta">
-          <span aria-hidden="true">📍</span> {service.ville?.nom || '—'}, {service.pays?.nom || '—'}
-        </p>
-        <p className="aps-assur-carte-meta">
-          <span aria-hidden="true">📞</span> {service.telephone || '—'}
-        </p>
+        <div className="aps-assur-carte-entete">
+          <h3 className="aps-assur-carte-nom">{service.nom}</h3>
+          <Badge type="acteur" valeur={service.type_acteur} />
+        </div>
+        <ul className="aps-assur-carte-infos">
+          <li className="aps-assur-carte-meta">
+            <span className="aps-assur-carte-icone" aria-hidden="true">📍</span>
+            <span>
+              {service.ville?.nom || '—'}, {service.pays?.nom || '—'}
+            </span>
+          </li>
+          <li className="aps-assur-carte-meta">
+            <span className="aps-assur-carte-icone" aria-hidden="true">📞</span>
+            <span>{service.telephone || '—'}</span>
+          </li>
+        </ul>
       </div>
       <div className="aps-assur-carte-actions">
-        <button type="button" className="aps-assur-btn aps-assur-btn-secondary aps-assur-btn-sm" onClick={onVoir}>
+        <button
+          type="button"
+          className="aps-assur-btn aps-assur-btn-primary aps-assur-btn-sm"
+          onClick={onVoir}
+        >
           Voir la fiche
         </button>
         {peutModifier && (
           <button type="button" className="aps-assur-btn aps-assur-btn-ghost aps-assur-btn-sm" onClick={onModifier}>
             Modifier
+          </button>
+        )}
+        {peutModifier && (
+          <button
+            type="button"
+            className="aps-assur-btn aps-assur-btn-secondary aps-assur-btn-sm"
+            onClick={onConfigurer}
+          >
+            ⚙️ Configurer
           </button>
         )}
         {peutSupprimer && (
@@ -215,6 +252,754 @@ function CarteService({ service, peutModifier, peutSupprimer, onVoir, onModifier
         )}
       </div>
     </article>
+  );
+}
+
+/* ===================================================================
+ * Configuration d'un service : activités, options d'activité, agences
+ *
+ * Popup ouverte depuis le bouton "Configurer" de la carte. Consomme
+ * listerActivites / creerActivite / modifierActivite / supprimerActivite,
+ * listerOptionsActivite / creerOptionActivite / modifierOptionActivite /
+ * supprimerOptionActivite et listerAgences / creerAgence / modifierAgence
+ * / supprimerAgence (assuranceService.js), toujours scopés au
+ * service_assurance_id de la carte d'origine.
+ * =================================================================== */
+
+function ConfigurationModale({ service, onFermer }) {
+  const serviceId = service.service_assurance_id;
+  const [onglet, setOnglet] = useState('activites'); // 'activites' | 'agences'
+
+  /* ---------------------------- Activités ---------------------------- */
+  const [activites, setActivites] = useState([]);
+  const [chargementActivites, setChargementActivites] = useState(true);
+  const [erreurActivites, setErreurActivites] = useState(null);
+  const [rechargerActivites, setRechargerActivites] = useState(0);
+
+  const [activiteEnEdition, setActiviteEnEdition] = useState(null); // {} = création, {activite_id,...} = édition
+  const [formActivite, setFormActivite] = useState({ titre: '', public_cible: '', description: '' });
+  const [envoiActivite, setEnvoiActivite] = useState(false);
+  const [erreurFormActivite, setErreurFormActivite] = useState(null);
+
+  // Options d'activité, chargées à la demande par activité (accordéon)
+  const [activiteOuverte, setActiviteOuverte] = useState(null);
+  const [optionsParActivite, setOptionsParActivite] = useState({});
+  const [chargementOptions, setChargementOptions] = useState({});
+  const [erreurOptions, setErreurOptions] = useState({});
+
+  const [optionEnEdition, setOptionEnEdition] = useState(null); // { activite_id, option_activite_id? }
+  const [formOption, setFormOption] = useState({ libelle: '', description: '' });
+  const [envoiOption, setEnvoiOption] = useState(false);
+  const [erreurFormOption, setErreurFormOption] = useState(null);
+
+  /* ---------------------------- Agences ---------------------------- */
+  const [agences, setAgences] = useState([]);
+  const [chargementAgences, setChargementAgences] = useState(true);
+  const [erreurAgences, setErreurAgences] = useState(null);
+  const [rechargerAgences, setRechargerAgences] = useState(0);
+
+  const [agenceEnEdition, setAgenceEnEdition] = useState(null); // {} = création, {agence_id,...} = édition
+  const [formAgence, setFormAgence] = useState({
+    libelle: '',
+    localisation: '',
+    contact: '',
+    latitude: '',
+    longitude: '',
+  });
+  const [envoiAgence, setEnvoiAgence] = useState(false);
+  const [erreurFormAgence, setErreurFormAgence] = useState(null);
+
+  /* ---------------------------- Chargements ---------------------------- */
+
+  useEffect(() => {
+    let annule = false;
+    setChargementActivites(true);
+    setErreurActivites(null);
+    listerActivites(serviceId)
+      .then((liste) => {
+        if (!annule) setActivites(liste);
+      })
+      .catch((err) => {
+        if (!annule) setErreurActivites(messageErreur(err, 'Erreur lors du chargement des activités.'));
+      })
+      .finally(() => {
+        if (!annule) setChargementActivites(false);
+      });
+    return () => {
+      annule = true;
+    };
+  }, [serviceId, rechargerActivites]);
+
+  useEffect(() => {
+    let annule = false;
+    setChargementAgences(true);
+    setErreurAgences(null);
+    listerAgences(serviceId)
+      .then((liste) => {
+        if (!annule) setAgences(liste);
+      })
+      .catch((err) => {
+        if (!annule) setErreurAgences(messageErreur(err, 'Erreur lors du chargement des agences.'));
+      })
+      .finally(() => {
+        if (!annule) setChargementAgences(false);
+      });
+    return () => {
+      annule = true;
+    };
+  }, [serviceId, rechargerAgences]);
+
+  /* ---------------------------- Activités : CRUD ---------------------------- */
+
+  function ouvrirCreationActivite() {
+    setActiviteEnEdition({});
+    setFormActivite({ titre: '', public_cible: '', description: '' });
+    setErreurFormActivite(null);
+  }
+
+  function ouvrirEditionActivite(a) {
+    setActiviteEnEdition(a);
+    setFormActivite({
+      titre: a.titre || '',
+      public_cible: a.public_cible || '',
+      description: a.description || '',
+    });
+    setErreurFormActivite(null);
+  }
+
+  function fermerFormActivite() {
+    if (envoiActivite) return;
+    setActiviteEnEdition(null);
+    setErreurFormActivite(null);
+  }
+
+  function handleFormActiviteChange(e) {
+    const { name, value } = e.target;
+    setFormActivite((f) => ({ ...f, [name]: value }));
+  }
+
+  async function soumettreActivite(e) {
+    e.preventDefault();
+    setEnvoiActivite(true);
+    setErreurFormActivite(null);
+    try {
+      if (activiteEnEdition?.activite_id) {
+        await modifierActivite(activiteEnEdition.activite_id, formActivite);
+      } else {
+        await creerActivite({ ...formActivite, service_assurance_id: serviceId });
+      }
+      setActiviteEnEdition(null);
+      setRechargerActivites((n) => n + 1);
+    } catch (err) {
+      setErreurFormActivite(messageErreur(err, "Erreur lors de l'enregistrement de l'activité."));
+    } finally {
+      setEnvoiActivite(false);
+    }
+  }
+
+  async function supprimerActiviteHandler(a) {
+    if (!window.confirm(`Supprimer l'activité « ${a.titre} » ?`)) return;
+    try {
+      await supprimerActivite(a.activite_id);
+      setRechargerActivites((n) => n + 1);
+      if (activiteOuverte === a.activite_id) setActiviteOuverte(null);
+    } catch (err) {
+      window.alert(
+        messageErreur(
+          err,
+          "Impossible de supprimer cette activité : vérifiez qu'aucune option n'y est encore rattachée."
+        )
+      );
+    }
+  }
+
+  /* ---------------------------- Options d'activité : CRUD ---------------------------- */
+
+  function rechargerOptionsActivite(activiteId) {
+    listerOptionsActivite(activiteId)
+      .then((liste) => setOptionsParActivite((o) => ({ ...o, [activiteId]: liste })))
+      .catch((err) => {
+        setErreurOptions((e) => ({
+          ...e,
+          [activiteId]: messageErreur(err, 'Erreur lors du chargement des options.'),
+        }));
+      });
+  }
+
+  function basculerOptions(activiteId) {
+    if (activiteOuverte === activiteId) {
+      setActiviteOuverte(null);
+      return;
+    }
+    setActiviteOuverte(activiteId);
+    if (optionsParActivite[activiteId]) return;
+    setChargementOptions((c) => ({ ...c, [activiteId]: true }));
+    setErreurOptions((e) => ({ ...e, [activiteId]: null }));
+    listerOptionsActivite(activiteId)
+      .then((liste) => setOptionsParActivite((o) => ({ ...o, [activiteId]: liste })))
+      .catch((err) => {
+        setErreurOptions((e) => ({
+          ...e,
+          [activiteId]: messageErreur(err, 'Erreur lors du chargement des options.'),
+        }));
+      })
+      .finally(() => {
+        setChargementOptions((c) => ({ ...c, [activiteId]: false }));
+      });
+  }
+
+  function ouvrirCreationOption(activiteId) {
+    setOptionEnEdition({ activite_id: activiteId });
+    setFormOption({ libelle: '', description: '' });
+    setErreurFormOption(null);
+  }
+
+  function ouvrirEditionOption(activiteId, o) {
+    setOptionEnEdition({ activite_id: activiteId, option_activite_id: o.option_activite_id });
+    setFormOption({ libelle: o.libelle || '', description: o.description || '' });
+    setErreurFormOption(null);
+  }
+
+  function fermerFormOption() {
+    if (envoiOption) return;
+    setOptionEnEdition(null);
+    setErreurFormOption(null);
+  }
+
+  function handleFormOptionChange(e) {
+    const { name, value } = e.target;
+    setFormOption((f) => ({ ...f, [name]: value }));
+  }
+
+  async function soumettreOption(e) {
+    e.preventDefault();
+    setEnvoiOption(true);
+    setErreurFormOption(null);
+    try {
+      if (optionEnEdition.option_activite_id) {
+        await modifierOptionActivite(optionEnEdition.option_activite_id, formOption);
+      } else {
+        await creerOptionActivite({ ...formOption, activite_id: optionEnEdition.activite_id });
+      }
+      const activiteId = optionEnEdition.activite_id;
+      setOptionEnEdition(null);
+      rechargerOptionsActivite(activiteId);
+    } catch (err) {
+      setErreurFormOption(messageErreur(err, "Erreur lors de l'enregistrement de l'option."));
+    } finally {
+      setEnvoiOption(false);
+    }
+  }
+
+  async function supprimerOptionHandler(activiteId, o) {
+    if (!window.confirm(`Supprimer l'option « ${o.libelle} » ?`)) return;
+    try {
+      await supprimerOptionActivite(o.option_activite_id);
+      rechargerOptionsActivite(activiteId);
+    } catch (err) {
+      window.alert(messageErreur(err, "Erreur lors de la suppression de l'option."));
+    }
+  }
+
+  /* ---------------------------- Agences : CRUD ---------------------------- */
+
+  function ouvrirCreationAgence() {
+    setAgenceEnEdition({});
+    setFormAgence({ libelle: '', localisation: '', contact: '', latitude: '', longitude: '' });
+    setErreurFormAgence(null);
+  }
+
+  function ouvrirEditionAgence(a) {
+    setAgenceEnEdition(a);
+    setFormAgence({
+      libelle: a.libelle || '',
+      localisation: a.localisation || '',
+      contact: a.contact || '',
+      latitude: a.latitude ?? a.gps?.latitude ?? '',
+      longitude: a.longitude ?? a.gps?.longitude ?? '',
+    });
+    setErreurFormAgence(null);
+  }
+
+  function fermerFormAgence() {
+    if (envoiAgence) return;
+    setAgenceEnEdition(null);
+    setErreurFormAgence(null);
+  }
+
+  function handleFormAgenceChange(e) {
+    const { name, value } = e.target;
+    setFormAgence((f) => ({ ...f, [name]: value }));
+  }
+
+  async function soumettreAgence(e) {
+    e.preventDefault();
+    setEnvoiAgence(true);
+    setErreurFormAgence(null);
+    try {
+      if (agenceEnEdition?.agence_id) {
+        await modifierAgence(agenceEnEdition.agence_id, formAgence);
+      } else {
+        await creerAgence({ ...formAgence, service_assurance_id: serviceId });
+      }
+      setAgenceEnEdition(null);
+      setRechargerAgences((n) => n + 1);
+    } catch (err) {
+      setErreurFormAgence(messageErreur(err, "Erreur lors de l'enregistrement de l'agence."));
+    } finally {
+      setEnvoiAgence(false);
+    }
+  }
+
+  async function supprimerAgenceHandler(a) {
+    if (!window.confirm(`Supprimer l'agence « ${a.libelle} » ?`)) return;
+    try {
+      await supprimerAgence(a.agence_id);
+      setRechargerAgences((n) => n + 1);
+    } catch (err) {
+      window.alert(messageErreur(err, "Erreur lors de la suppression de l'agence."));
+    }
+  }
+
+  /* ---------------------------- Rendu ---------------------------- */
+
+  return (
+    <Modale titre={`Configurer « ${service.nom} »`} taille="grande" onFermer={onFermer}>
+      <div className="aps-assur-onglets">
+        <button
+          type="button"
+          className={`aps-assur-onglet${onglet === 'activites' ? ' aps-assur-onglet-actif' : ''}`}
+          onClick={() => setOnglet('activites')}
+        >
+          Activités{activites.length ? ` (${activites.length})` : ''}
+        </button>
+        <button
+          type="button"
+          className={`aps-assur-onglet${onglet === 'agences' ? ' aps-assur-onglet-actif' : ''}`}
+          onClick={() => setOnglet('agences')}
+        >
+          Agences{agences.length ? ` (${agences.length})` : ''}
+        </button>
+      </div>
+
+      {/* ---------------------------- Onglet Activités ---------------------------- */}
+      {onglet === 'activites' && (
+        <div className="aps-assur-config-panneau">
+          <div className="aps-assur-config-entete">
+            <p className="aps-assur-info">Catalogue des activités proposées par ce service et de leurs options.</p>
+            <button
+              type="button"
+              className="aps-assur-btn aps-assur-btn-primary aps-assur-btn-sm"
+              onClick={ouvrirCreationActivite}
+            >
+              + Nouvelle activité
+            </button>
+          </div>
+
+          {chargementActivites && <EtatChargement texte="Chargement des activités..." />}
+
+          {!chargementActivites && erreurActivites && (
+            <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
+              <p>{erreurActivites}</p>
+            </div>
+          )}
+
+          {!chargementActivites && !erreurActivites && activites.length === 0 && (
+            <div className="aps-assur-etat-vide">Aucune activité pour le moment.</div>
+          )}
+
+          {!chargementActivites && !erreurActivites && activites.length > 0 && (
+            <ul className="aps-assur-config-liste">
+              {activites.map((a) => (
+                <li key={a.activite_id} className="aps-assur-config-item">
+                  <div className="aps-assur-config-item-entete">
+                    <div>
+                      <strong>{a.titre}</strong>
+                      {a.public_cible && <span className="aps-assur-config-meta"> — {a.public_cible}</span>}
+                      {a.description && <p className="aps-assur-config-desc">{a.description}</p>}
+                    </div>
+                    <div className="aps-assur-config-actions">
+                      <button
+                        type="button"
+                        className="aps-assur-btn aps-assur-btn-ghost aps-assur-btn-sm"
+                        onClick={() => basculerOptions(a.activite_id)}
+                      >
+                        {activiteOuverte === a.activite_id ? 'Masquer les options' : 'Options'}
+                      </button>
+                      <button
+                        type="button"
+                        className="aps-assur-btn aps-assur-btn-ghost aps-assur-btn-sm"
+                        onClick={() => ouvrirEditionActivite(a)}
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        type="button"
+                        className="aps-assur-btn aps-assur-btn-danger aps-assur-btn-sm"
+                        onClick={() => supprimerActiviteHandler(a)}
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                  </div>
+
+                  {activiteOuverte === a.activite_id && (
+                    <div className="aps-assur-config-sous-liste">
+                      <div className="aps-assur-config-entete">
+                        <h5 className="aps-assur-section-titre">Options de l'activité</h5>
+                        <button
+                          type="button"
+                          className="aps-assur-btn aps-assur-btn-secondary aps-assur-btn-sm"
+                          onClick={() => ouvrirCreationOption(a.activite_id)}
+                        >
+                          + Option
+                        </button>
+                      </div>
+
+                      {chargementOptions[a.activite_id] && <EtatChargement texte="Chargement des options..." />}
+
+                      {erreurOptions[a.activite_id] && (
+                        <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
+                          <p>{erreurOptions[a.activite_id]}</p>
+                        </div>
+                      )}
+
+                      {!chargementOptions[a.activite_id] &&
+                        !erreurOptions[a.activite_id] &&
+                        (optionsParActivite[a.activite_id]?.length ?? 0) === 0 && (
+                          <p className="aps-assur-etat-vide">Aucune option pour cette activité.</p>
+                        )}
+
+                      {(optionsParActivite[a.activite_id]?.length ?? 0) > 0 && (
+                        <ul className="aps-assur-config-liste">
+                          {optionsParActivite[a.activite_id].map((o) => (
+                            <li key={o.option_activite_id} className="aps-assur-config-item aps-assur-config-item-sm">
+                              <div>
+                                <strong>{o.libelle}</strong>
+                                {o.description && <p className="aps-assur-config-desc">{o.description}</p>}
+                              </div>
+                              <div className="aps-assur-config-actions">
+                                <button
+                                  type="button"
+                                  className="aps-assur-btn aps-assur-btn-ghost aps-assur-btn-sm"
+                                  onClick={() => ouvrirEditionOption(a.activite_id, o)}
+                                >
+                                  Modifier
+                                </button>
+                                <button
+                                  type="button"
+                                  className="aps-assur-btn aps-assur-btn-danger aps-assur-btn-sm"
+                                  onClick={() => supprimerOptionHandler(a.activite_id, o)}
+                                >
+                                  Supprimer
+                                </button>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* ---------------------------- Onglet Agences ---------------------------- */}
+      {onglet === 'agences' && (
+        <div className="aps-assur-config-panneau">
+          <div className="aps-assur-config-entete">
+            <p className="aps-assur-info">Agences (implantations physiques) rattachées à ce service.</p>
+            <button
+              type="button"
+              className="aps-assur-btn aps-assur-btn-primary aps-assur-btn-sm"
+              onClick={ouvrirCreationAgence}
+            >
+              + Nouvelle agence
+            </button>
+          </div>
+
+          {chargementAgences && <EtatChargement texte="Chargement des agences..." />}
+
+          {!chargementAgences && erreurAgences && (
+            <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
+              <p>{erreurAgences}</p>
+            </div>
+          )}
+
+          {!chargementAgences && !erreurAgences && agences.length === 0 && (
+            <div className="aps-assur-etat-vide">Aucune agence pour le moment.</div>
+          )}
+
+          {!chargementAgences && !erreurAgences && agences.length > 0 && (
+            <ul className="aps-assur-config-liste">
+              {agences.map((a) => (
+                <li key={a.agence_id} className="aps-assur-config-item">
+                  <div>
+                    <strong>{a.libelle}</strong>
+                    <p className="aps-assur-config-desc">{a.localisation}</p>
+                    {a.contact && <p className="aps-assur-config-meta">📞 {a.contact}</p>}
+                    {(a.latitude ?? a.gps?.latitude) != null && (
+                      <p className="aps-assur-config-meta">
+                        📍 {a.latitude ?? a.gps?.latitude}, {a.longitude ?? a.gps?.longitude}
+                      </p>
+                    )}
+                  </div>
+                  <div className="aps-assur-config-actions">
+                    <button
+                      type="button"
+                      className="aps-assur-btn aps-assur-btn-ghost aps-assur-btn-sm"
+                      onClick={() => ouvrirEditionAgence(a)}
+                    >
+                      Modifier
+                    </button>
+                    <button
+                      type="button"
+                      className="aps-assur-btn aps-assur-btn-danger aps-assur-btn-sm"
+                      onClick={() => supprimerAgenceHandler(a)}
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* ---------------------------- Sous-modale : formulaire activité ---------------------------- */}
+      {activiteEnEdition && (
+        <Modale
+          titre={activiteEnEdition.activite_id ? "Modifier l'activité" : 'Nouvelle activité'}
+          taille="petite"
+          onFermer={fermerFormActivite}
+        >
+          <form className="aps-assur-form" onSubmit={soumettreActivite}>
+            {erreurFormActivite && (
+              <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
+                <p>{erreurFormActivite}</p>
+              </div>
+            )}
+            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
+              <label className="aps-assur-label" htmlFor="fa-titre">
+                Titre *
+              </label>
+              <input
+                id="fa-titre"
+                className="aps-assur-input"
+                type="text"
+                name="titre"
+                value={formActivite.titre}
+                onChange={handleFormActiviteChange}
+                required
+              />
+            </div>
+            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
+              <label className="aps-assur-label" htmlFor="fa-public">
+                Public cible
+              </label>
+              <input
+                id="fa-public"
+                className="aps-assur-input"
+                type="text"
+                name="public_cible"
+                value={formActivite.public_cible}
+                onChange={handleFormActiviteChange}
+                placeholder="Optionnel"
+              />
+            </div>
+            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
+              <label className="aps-assur-label" htmlFor="fa-description">
+                Description
+              </label>
+              <textarea
+                id="fa-description"
+                className="aps-assur-input"
+                name="description"
+                rows="3"
+                value={formActivite.description}
+                onChange={handleFormActiviteChange}
+                placeholder="Optionnel"
+              ></textarea>
+            </div>
+            <div className="aps-assur-modale-actions">
+              <button
+                type="button"
+                className="aps-assur-btn aps-assur-btn-ghost"
+                onClick={fermerFormActivite}
+                disabled={envoiActivite}
+              >
+                Annuler
+              </button>
+              <button type="submit" className="aps-assur-btn aps-assur-btn-primary" disabled={envoiActivite}>
+                {envoiActivite ? 'Enregistrement...' : activiteEnEdition.activite_id ? 'Enregistrer' : 'Créer'}
+              </button>
+            </div>
+          </form>
+        </Modale>
+      )}
+
+      {/* ---------------------------- Sous-modale : formulaire option ---------------------------- */}
+      {optionEnEdition && (
+        <Modale
+          titre={optionEnEdition.option_activite_id ? "Modifier l'option" : 'Nouvelle option'}
+          taille="petite"
+          onFermer={fermerFormOption}
+        >
+          <form className="aps-assur-form" onSubmit={soumettreOption}>
+            {erreurFormOption && (
+              <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
+                <p>{erreurFormOption}</p>
+              </div>
+            )}
+            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
+              <label className="aps-assur-label" htmlFor="fo-libelle">
+                Libellé *
+              </label>
+              <input
+                id="fo-libelle"
+                className="aps-assur-input"
+                type="text"
+                name="libelle"
+                value={formOption.libelle}
+                onChange={handleFormOptionChange}
+                required
+              />
+            </div>
+            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
+              <label className="aps-assur-label" htmlFor="fo-description">
+                Description
+              </label>
+              <textarea
+                id="fo-description"
+                className="aps-assur-input"
+                name="description"
+                rows="3"
+                value={formOption.description}
+                onChange={handleFormOptionChange}
+                placeholder="Optionnel"
+              ></textarea>
+            </div>
+            <div className="aps-assur-modale-actions">
+              <button
+                type="button"
+                className="aps-assur-btn aps-assur-btn-ghost"
+                onClick={fermerFormOption}
+                disabled={envoiOption}
+              >
+                Annuler
+              </button>
+              <button type="submit" className="aps-assur-btn aps-assur-btn-primary" disabled={envoiOption}>
+                {envoiOption ? 'Enregistrement...' : optionEnEdition.option_activite_id ? 'Enregistrer' : 'Créer'}
+              </button>
+            </div>
+          </form>
+        </Modale>
+      )}
+
+      {/* ---------------------------- Sous-modale : formulaire agence ---------------------------- */}
+      {agenceEnEdition && (
+        <Modale
+          titre={agenceEnEdition.agence_id ? "Modifier l'agence" : 'Nouvelle agence'}
+          taille="petite"
+          onFermer={fermerFormAgence}
+        >
+          <form className="aps-assur-form" onSubmit={soumettreAgence}>
+            {erreurFormAgence && (
+              <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
+                <p>{erreurFormAgence}</p>
+              </div>
+            )}
+            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
+              <label className="aps-assur-label" htmlFor="fg-libelle">
+                Libellé *
+              </label>
+              <input
+                id="fg-libelle"
+                className="aps-assur-input"
+                type="text"
+                name="libelle"
+                value={formAgence.libelle}
+                onChange={handleFormAgenceChange}
+                required
+              />
+            </div>
+            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
+              <label className="aps-assur-label" htmlFor="fg-localisation">
+                Localisation *
+              </label>
+              <input
+                id="fg-localisation"
+                className="aps-assur-input"
+                type="text"
+                name="localisation"
+                value={formAgence.localisation}
+                onChange={handleFormAgenceChange}
+                required
+              />
+            </div>
+            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
+              <label className="aps-assur-label" htmlFor="fg-contact">
+                Contact *
+              </label>
+              <input
+                id="fg-contact"
+                className="aps-assur-input"
+                type="text"
+                name="contact"
+                value={formAgence.contact}
+                onChange={handleFormAgenceChange}
+                required
+              />
+            </div>
+            <div className="aps-assur-form-groupe">
+              <label className="aps-assur-label" htmlFor="fg-latitude">
+                Latitude
+              </label>
+              <input
+                id="fg-latitude"
+                className="aps-assur-input"
+                type="text"
+                name="latitude"
+                value={formAgence.latitude}
+                onChange={handleFormAgenceChange}
+                placeholder="Optionnel"
+              />
+            </div>
+            <div className="aps-assur-form-groupe">
+              <label className="aps-assur-label" htmlFor="fg-longitude">
+                Longitude
+              </label>
+              <input
+                id="fg-longitude"
+                className="aps-assur-input"
+                type="text"
+                name="longitude"
+                value={formAgence.longitude}
+                onChange={handleFormAgenceChange}
+                placeholder="Optionnel"
+              />
+            </div>
+            <div className="aps-assur-modale-actions">
+              <button
+                type="button"
+                className="aps-assur-btn aps-assur-btn-ghost"
+                onClick={fermerFormAgence}
+                disabled={envoiAgence}
+              >
+                Annuler
+              </button>
+              <button type="submit" className="aps-assur-btn aps-assur-btn-primary" disabled={envoiAgence}>
+                {envoiAgence ? 'Enregistrement...' : agenceEnEdition.agence_id ? 'Enregistrer' : 'Créer'}
+              </button>
+            </div>
+          </form>
+        </Modale>
+      )}
+    </Modale>
   );
 }
 
@@ -276,6 +1061,9 @@ export default function Assurances() {
   // Compte agent créé (mot de passe temporaire affiché une seule fois)
   const [agentCree, setAgentCree] = useState(null);
   const [motDePasseCopie, setMotDePasseCopie] = useState(false);
+
+  // Configuration (activités / options / agences) d'un service
+  const [configurationCible, setConfigurationCible] = useState(null);
 
   // Mises en relation (panneau dans la fiche détail)
   const [misesEnRelation, setMisesEnRelation] = useState([]);
@@ -488,6 +1276,16 @@ export default function Assurances() {
     } finally {
       setFormEnvoi(false);
     }
+  }
+
+  /* ---------------------------- Configuration ---------------------------- */
+
+  function ouvrirConfiguration(service) {
+    setConfigurationCible(service);
+  }
+
+  function fermerConfiguration() {
+    setConfigurationCible(null);
   }
 
   /* ---------------------------- Suppression ---------------------------- */
@@ -725,17 +1523,19 @@ export default function Assurances() {
         )}
 
         {!chargementListe && !erreurListe && services.length > 0 && (
-          <div className="aps-assur-grille">
+          <div className="row g-4 aps-assur-grille">
             {services.map((service) => (
-              <CarteService
-                key={service.service_assurance_id}
-                service={service}
-                peutModifier={estConnecte}
-                peutSupprimer={estSuperadmin}
-                onVoir={() => ouvrirDetail(service.service_assurance_id)}
-                onModifier={() => ouvrirEdition(service)}
-                onSupprimer={() => demanderSuppression(service)}
-              />
+              <div className="col-md-4" key={service.service_assurance_id}>
+                <CarteService
+                  service={service}
+                  peutModifier={estConnecte}
+                  peutSupprimer={estSuperadmin}
+                  onVoir={() => ouvrirDetail(service.service_assurance_id)}
+                  onModifier={() => ouvrirEdition(service)}
+                  onSupprimer={() => demanderSuppression(service)}
+                  onConfigurer={() => ouvrirConfiguration(service)}
+                />
+              </div>
             ))}
           </div>
         )}
@@ -817,6 +1617,13 @@ export default function Assurances() {
                   onClick={() => ouvrirEdition(serviceDetail)}
                 >
                   Modifier
+                </button>
+                <button
+                  type="button"
+                  className="aps-assur-btn aps-assur-btn-secondary"
+                  onClick={() => ouvrirConfiguration(serviceDetail)}
+                >
+                  ⚙️ Configurer
                 </button>
                 {estSuperadmin && (
                   <button
@@ -1261,6 +2068,11 @@ export default function Assurances() {
             </button>
           </div>
         </Modale>
+      )}
+
+      {/* ---------------------------- Configuration (activités / options / agences) ---------------------------- */}
+      {configurationCible && (
+        <ConfigurationModale service={configurationCible} onFermer={fermerConfiguration} />
       )}
 
       {/* ---------------------------- Compte agent créé ---------------------------- */}

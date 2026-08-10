@@ -215,6 +215,178 @@ export function supprimerMiseEnRelationAssurance(id) {
 }
 
 /* ===================================================================
+ * Activités (catalogue produits d'un service d'assurance)
+ *
+ * Lecture publique (même logique que service_assurance), écriture
+ * réservée à l'agent du service_assurance concerné (déduit du
+ * service_assurance_id fourni) ou à admin/superadmin — vérifié côté
+ * serveur, repris ici uniquement pour l'UX.
+ * =================================================================== */
+
+/**
+ * GET /api/activites?service_assurance_id=...
+ * PUBLIQUE. Sans filtre, retourne l'ensemble du catalogue.
+ * @param {string} [serviceAssuranceId] - filtre optionnel
+ * @returns {Promise<Array>} liste des activités (chacune avec ses options incluses)
+ */
+export function listerActivites(serviceAssuranceId) {
+  const suffixe = construireParametres({ service_assurance_id: serviceAssuranceId });
+  return apiFetch(`/activites${suffixe}`).then((d) => d.activites ?? []);
+}
+
+/**
+ * GET /api/activites/:id
+ * PUBLIQUE.
+ * @returns {Promise<Object>} l'activité (avec ses options incluses)
+ */
+export function obtenirActivite(id) {
+  return apiFetch(`/activites/${id}`).then((d) => d.activite);
+}
+
+/**
+ * POST /api/activites  (agent du service_assurance concerné, ou admin/superadmin)
+ * @param {Object} donnees - { service_assurance_id, titre, public_cible, description? }
+ * @returns {Promise<Object>} l'activité créée
+ */
+export function creerActivite(donnees) {
+  return apiFetch('/activites', { method: 'POST', body: donnees }).then((d) => d.activite);
+}
+
+/**
+ * PUT /api/activites/:id  (agent du service d'assurance propriétaire, ou admin/superadmin)
+ * @param {Object} donnees - champs partiels : { titre?, public_cible?, description? }
+ *   (service_assurance_id n'est pas modifiable ici)
+ * @returns {Promise<Object>} l'activité mise à jour
+ */
+export function modifierActivite(id, donnees) {
+  return apiFetch(`/activites/${id}`, { method: 'PUT', body: donnees }).then((d) => d.activite);
+}
+
+/**
+ * DELETE /api/activites/:id  (agent du service d'assurance propriétaire, ou admin/superadmin)
+ * 409 si des options d'activité sont encore rattachées.
+ */
+export function supprimerActivite(id) {
+  return apiFetch(`/activites/${id}`, { method: 'DELETE' });
+}
+
+/* ===================================================================
+ * Options d'activité
+ *
+ * Rattachées à une activité (pas directement à l'assurance). Même
+ * logique d'autorisation qu'Activité, déduite indirectement du
+ * service_assurance propriétaire de l'activité parente.
+ * =================================================================== */
+
+/**
+ * GET /api/options-activite?activite_id=...
+ * PUBLIQUE. Toujours scopée à une activité — pas de liste globale
+ * sans filtre côté serveur.
+ * @param {string} activiteId - requis
+ * @returns {Promise<Array>} liste des options de l'activité
+ */
+export function listerOptionsActivite(activiteId) {
+  const suffixe = construireParametres({ activite_id: activiteId });
+  return apiFetch(`/options-activite${suffixe}`).then((d) => d.options_activite ?? []);
+}
+
+/**
+ * GET /api/options-activite/:id
+ * PUBLIQUE.
+ * @returns {Promise<Object>} l'option d'activité
+ */
+export function obtenirOptionActivite(id) {
+  return apiFetch(`/options-activite/${id}`).then((d) => d.option_activite);
+}
+
+/**
+ * POST /api/options-activite  (agent du service d'assurance propriétaire
+ * de l'activité parente, ou admin/superadmin)
+ * @param {Object} donnees - { activite_id, libelle, description? }
+ * @returns {Promise<Object>} l'option créée
+ */
+export function creerOptionActivite(donnees) {
+  return apiFetch('/options-activite', { method: 'POST', body: donnees }).then((d) => d.option_activite);
+}
+
+/**
+ * PUT /api/options-activite/:id  (agent du service d'assurance
+ * propriétaire via l'activité parente, ou admin/superadmin)
+ * @param {Object} donnees - champs partiels : { libelle?, description? }
+ *   (activite_id n'est pas modifiable ici)
+ * @returns {Promise<Object>} l'option mise à jour
+ */
+export function modifierOptionActivite(id, donnees) {
+  return apiFetch(`/options-activite/${id}`, { method: 'PUT', body: donnees }).then((d) => d.option_activite);
+}
+
+/**
+ * DELETE /api/options-activite/:id  (agent du service d'assurance
+ * propriétaire via l'activité parente, ou admin/superadmin)
+ */
+export function supprimerOptionActivite(id) {
+  return apiFetch(`/options-activite/${id}`, { method: 'DELETE' });
+}
+
+/* ===================================================================
+ * Agences (implantations physiques d'un service d'assurance)
+ *
+ * Lecture publique ; écriture réservée à l'agent du service_assurance
+ * concerné ou à admin/superadmin. `gps` est un objet { latitude,
+ * longitude } | null, calqué sur le champ `geolocalisation` de
+ * service_assurance (même contrat : les deux valeurs fournies ensemble
+ * pour définir/déplacer, les deux à null pour effacer, absentes pour
+ * ne pas y toucher).
+ * =================================================================== */
+
+/**
+ * GET /api/agences?service_assurance_id=...
+ * PUBLIQUE. Sans filtre, retourne l'ensemble des agences.
+ * @param {string} [serviceAssuranceId] - filtre optionnel
+ * @returns {Promise<Array>} liste des agences (avec `gps` enrichi)
+ */
+export function listerAgences(serviceAssuranceId) {
+  const suffixe = construireParametres({ service_assurance_id: serviceAssuranceId });
+  return apiFetch(`/agences${suffixe}`).then((d) => d.agences ?? []);
+}
+
+/**
+ * GET /api/agences/:id
+ * PUBLIQUE.
+ * @returns {Promise<Object>} l'agence (avec `gps` enrichi)
+ */
+export function obtenirAgence(id) {
+  return apiFetch(`/agences/${id}`).then((d) => d.agence);
+}
+
+/**
+ * POST /api/agences  (agent du service_assurance concerné, ou admin/superadmin)
+ * @param {Object} donnees - { service_assurance_id, libelle, localisation, contact,
+ *   latitude?, longitude? }
+ * @returns {Promise<Object>} l'agence créée
+ */
+export function creerAgence(donnees) {
+  return apiFetch('/agences', { method: 'POST', body: donnees }).then((d) => d.agence);
+}
+
+/**
+ * PUT /api/agences/:id  (agent du service d'assurance propriétaire, ou admin/superadmin)
+ * @param {Object} donnees - champs partiels : { libelle?, localisation?, contact?,
+ *   latitude?, longitude? } (service_assurance_id n'est pas modifiable ici)
+ * @returns {Promise<Object>} l'agence mise à jour
+ */
+export function modifierAgence(id, donnees) {
+  return apiFetch(`/agences/${id}`, { method: 'PUT', body: donnees }).then((d) => d.agence);
+}
+
+/**
+ * DELETE /api/agences/:id  (agent du service d'assurance propriétaire, ou admin/superadmin)
+ */
+export function supprimerAgence(id) {
+  return apiFetch(`/agences/${id}`, { method: 'DELETE' });
+}
+
+/* ===================================================================
  * Référentiels géographiques (pour peupler le formulaire pays / ville)
  * Ré-exportés depuis referentielService.js plutôt que dupliqués ici,
  * pour éviter que les deux implémentations divergent avec le temps.
@@ -246,6 +418,21 @@ const AssuranceService = {
   listerMisesEnRelationAssurance,
   creerMiseEnRelationAssurance,
   supprimerMiseEnRelationAssurance,
+  listerActivites,
+  obtenirActivite,
+  creerActivite,
+  modifierActivite,
+  supprimerActivite,
+  listerOptionsActivite,
+  obtenirOptionActivite,
+  creerOptionActivite,
+  modifierOptionActivite,
+  supprimerOptionActivite,
+  listerAgences,
+  obtenirAgence,
+  creerAgence,
+  modifierAgence,
+  supprimerAgence,
   listerPays,
   listerVilles,
 };

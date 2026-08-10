@@ -117,6 +117,17 @@ const APS_MENU = [
     ]
   },
   {
+    group: "Urgences",
+    entities: [
+      {
+        key: "urgences",
+        label: "Urgences",
+        icon: "fa-solid fa-ambulance",
+        to: "/urgences"
+      }
+    ]
+  },
+  {
     group: "Configuration",
     items: [
       { key: "referentiel-pays", label: "Référentiel pays", icon: "fa-solid fa-earth-africa", to: "/referentiel" }
