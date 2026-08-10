@@ -144,6 +144,38 @@ enum TypeActeurAssurance {
 }
 
 // -----------------------------------------------------------------
+// Enums — Module transverse : Gestion des médecins
+// (diagramme APS — Module transverse : Gestion des médecins)
+// -----------------------------------------------------------------
+
+// Même patron que StatutAbonnementPharmacie : abonnement de présence
+// forfaitaire du médecin dans l'annuaire (seul produit publicitaire
+// qui lui est ouvert — voir note du diagramme).
+enum StatutAbonnementMedecin {
+  actif
+  expire
+  annule
+}
+
+enum TypeRdv {
+  physique
+  teleconsultation
+}
+
+// Cycle de vie du rendez-vous, du dépôt initial jusqu'à l'issue de la
+// consultation (honoré / non honoré) ou à une contestation par l'une
+// des parties.
+enum StatutRendezVous {
+  cree
+  confirme
+  en_attente_presence
+  honore
+  non_honore
+  annule
+  conteste
+}
+
+// -----------------------------------------------------------------
 // Référentiel géographique
 // -----------------------------------------------------------------
 
@@ -193,6 +225,12 @@ model Pays {
   publicites            Publicite[]
   // v8 : Annuaire assurances (diagramme 08_annuaire_assurances).
   services_assurance    ServiceAssurance[]
+  // Module Urgences (diagramme APS — Module : Urgences).
+  urgences              Urgence[]
+  // Module transverse Gestion des médecins — pays d'émission d'une
+  // ordonnance (peut différer du pays d'exercice du médecin en
+  // téléconsultation transfrontalière).
+  ordonnances_emises    Ordonnance[]
 
   @@index([devise_id])
   @@index([langue_id])
@@ -286,6 +324,8 @@ model Utilisateur {
   agent_pharmacie         AgentPharmacie?
   agent_ambulance         AgentAmbulance?
   avis_pharmacie          AvisPharmacie[]
+  // Module transverse Gestion des médecins — voir plus bas dans ce fichier.
+  avis_medecin            AvisMedecin[]
   // v8 : module autonome "Présence, publicité & boost commercial" —
   // une publicité est déposée directement par un utilisateur, quel
   // que soit son rôle, sans passer par un profil agent_xxx.
@@ -314,9 +354,28 @@ model Medecin {
   teleconsultation_activee   Boolean
   tarif_indicatif             Decimal                   @db.Decimal(12, 2)
 
+  // Pièces justificatives (Cloudinary) — voir lib/cloudinaryService.js.
+  // Seul le "nom" (public_id Cloudinary, avec extension) est stocké,
+  // jamais l'URL complète — même règle que StructureSante.image_nom /
+  // piece_identite_nom / document_agrement_nom plus bas dans ce fichier.
+  // Les deux sont requises à la création du médecin (admin/superadmin,
+  // via POST /comptes — voir authentification.controller.js,
+  // creerCompteAdministre) :
+  //   - cni_url         : carte nationale d'identité du médecin
+  //   - attestation_url : attestation d'inscription à l'Ordre
+  cni_url         String @db.VarChar(255)
+  attestation_url String @db.VarChar(255)
+
   utilisateur    Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
   pays_exercice  Pays        @relation(fields: [pays_exercice_id], references: [pays_id])
   ville_exercice Ville       @relation(fields: [ville_exercice_id], references: [ville_id])
+
+  // Module transverse Gestion des médecins (diagramme APS — Module
+  // transverse : Gestion des médecins) — voir plus bas dans ce fichier.
+  avis        AvisMedecin[]
+  abonnements AbonnementMedecin[]
+  rendez_vous RendezVous[]
+  ordonnances Ordonnance[]
 
   @@index([pays_exercice_id])
   @@index([ville_exercice_id])
@@ -330,6 +389,10 @@ model Patient {
   date_naissance DateTime @db.Date
 
   utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
+
+  // Module transverse Gestion des médecins — voir plus bas dans ce fichier.
+  rendez_vous RendezVous[]
+  ordonnances Ordonnance[]
 
   @@map("patient")
 }
@@ -510,6 +573,11 @@ model StructureSante {
   ville Ville @relation(fields: [ville_id], references: [ville_id])
 
   agents AgentStructureSante[]
+
+  // Module transverse Gestion des médecins — un rendez-vous "physique"
+  // peut être rattaché à une structure de santé (nullable : cabinet
+  // libéral du médecin sinon) — voir plus bas dans ce fichier.
+  rendez_vous RendezVous[]
 
   @@index([pays_id])
   @@index([ville_id])
@@ -948,8 +1016,26 @@ model TransactionPaiement {
   transaction_id String @id @default(uuid()) @db.Uuid
 
   abonnements_pharmacie AbonnementPharmacie[]
+  // Module transverse Gestion des médecins — un abonnement_medecin est
+  // lui aussi toujours adossé à une transaction déjà réglée, même
+  // patron que abonnement_pharmacie ci-dessus.
+  abonnements_medecin   AbonnementMedecin[]
 
   @@map("transaction_paiement")
+}
+
+// compte_escrow séquestre les fonds d'un rendez_vous jusqu'à ce que la
+// consultation soit honorée (déblocage) ou contestée (remboursement) —
+// voir le diagramme 06_paiement_escrow pour la définition complète.
+// Comme pour appel_urgence/garde_pharmacie plus bas dans ce fichier, le
+// lien avec rendez_vous est porté par ce module externe (rdv_id y sera
+// modélisé) : AUCUNE FK n'est donc déclarée ici depuis rendez_vous,
+// uniquement une relation fonctionnelle, le temps de la fusion.
+/// @ref module 06_paiement_escrow — définition complète à fusionner
+model CompteEscrow {
+  escrow_id String @id @default(uuid()) @db.Uuid
+
+  @@map("compte_escrow")
 }
 
 /// @ref module 07_services_connexes — définition complète à fusionner
@@ -959,4 +1045,189 @@ model ServiceAmbulance {
   agents AgentAmbulance[]
 
   @@map("service_ambulance")
+}
+
+// -----------------------------------------------------------------
+// Urgences (diagramme APS — Module : Urgences)
+//
+// Annuaire des numéros d'urgence par pays (police, pompiers, hôpital,
+// etc.), catégorisés par type_urgence. À NE PAS CONFONDRE avec la
+// future table "appel_urgence" (module 05_urgences, mentionnée dans
+// le commentaire de GardePharmacie plus haut) : celle-ci désignera un
+// journal d'appels et se branchera fonctionnellement sur
+// garde_pharmacie, sans FK. Les deux tables sont indépendantes.
+//
+// Lecture publique / écriture admin-superadmin — voir
+// urgences.routes.js et urgences.controller.js.
+// -----------------------------------------------------------------
+model TypeUrgence {
+  type_urgence_id String @id @default(uuid()) @db.Uuid
+
+  libelle     String  @db.VarChar(100)
+  description String? @db.Text
+
+  urgences Urgence[]
+
+  @@map("type_urgence")
+}
+
+model Urgence {
+  urgence_id String @id @default(uuid()) @db.Uuid
+
+  type_urgence_id String  @db.Uuid
+  pays_id         String  @db.Uuid
+  libelle         String  @db.VarChar(150)
+  description     String? @db.Text
+  telephone       String  @db.VarChar(20)
+
+  type_urgence TypeUrgence @relation(fields: [type_urgence_id], references: [type_urgence_id])
+  pays         Pays        @relation(fields: [pays_id], references: [pays_id])
+
+  @@index([type_urgence_id])
+  @@index([pays_id])
+  @@map("urgence")
+}
+
+// =====================================================================
+// APS — Module transverse : Gestion des médecins
+//
+// Le médecin est un compte "utilisateur" spécialisé (role='medecin'),
+// publié après vérification (statut_verification, porté par le
+// modèle Medecin déjà défini plus haut dans ce fichier — section IAM).
+// Il peut exercer en présentiel et/ou en téléconsultation
+// (teleconsultation_activee), recevoir des avis publics, honorer des
+// rendez-vous et émettre des ordonnances. Contrairement aux autres
+// types de services, il est EXCLU de la publicité : seul l'abonnement
+// de présence forfaitaire (abonnement_medecin) lui est ouvert.
+// =====================================================================
+
+// -----------------------------------------------------------------
+// Avis (même patron de modération que AvisPharmacie : un avis déposé
+// n'est jamais visible publiquement avant validation par un
+// admin/superadmin — réutilise l'enum générique StatutModerationAvis).
+// -----------------------------------------------------------------
+model AvisMedecin {
+  avis_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id    String               @db.Uuid
+  medecin_id        String               @db.Uuid
+  note              Int                  @db.SmallInt
+  commentaire       String?              @db.Text
+  statut_moderation StatutModerationAvis @default(en_attente)
+  date_creation     DateTime             @default(now())
+
+  utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
+  medecin     Medecin     @relation(fields: [medecin_id], references: [medecin_id])
+
+  @@index([utilisateur_id])
+  @@index([medecin_id])
+  @@map("avis_medecin")
+}
+
+// -----------------------------------------------------------------
+// Abonnement de présence forfaitaire (même patron que
+// AbonnementPharmacie) : toujours adossé à une transaction_paiement
+// déjà réglée (module 06_paiement_escrow, table «ref» stubée plus
+// haut). ligne_abonnement_medecin détaille les avantages inclus.
+// -----------------------------------------------------------------
+model AbonnementMedecin {
+  abonnement_id String @id @default(uuid()) @db.Uuid
+
+  medecin_id     String                  @db.Uuid
+  libelle        String                  @db.VarChar(100)
+  montant        Decimal                 @db.Decimal(12, 2)
+  duree_jours    Int
+  date_debut     DateTime                @db.Date
+  date_fin       DateTime                @db.Date
+  transaction_id String                  @db.Uuid
+  statut         StatutAbonnementMedecin
+
+  medecin     Medecin             @relation(fields: [medecin_id], references: [medecin_id])
+  transaction TransactionPaiement @relation(fields: [transaction_id], references: [transaction_id])
+
+  lignes LigneAbonnementMedecin[]
+
+  @@index([medecin_id])
+  @@index([transaction_id])
+  @@map("abonnement_medecin")
+}
+
+model LigneAbonnementMedecin {
+  ligne_id String @id @default(uuid()) @db.Uuid
+
+  abonnement_id    String  @db.Uuid
+  libelle_avantage String  @db.VarChar(150)
+  description      String? @db.Text
+  ordre_affichage  Int     @db.SmallInt
+
+  abonnement AbonnementMedecin @relation(fields: [abonnement_id], references: [abonnement_id])
+
+  @@index([abonnement_id])
+  @@map("ligne_abonnement_medecin")
+}
+
+// -----------------------------------------------------------------
+// Rendez-vous — pivot du module : relie patient et médecin, en
+// présentiel (structure_id renseigné, cabinet ou structure de santé)
+// ou en téléconsultation (structure_id nullable). code_unique et
+// qr_token_secret servent au contrôle de présence à l'accueil
+// (scan/QR) — voir le diagramme pour le détail du parcours.
+//
+// Le séquestre des fonds (compte_escrow, module 06_paiement_escrow)
+// est fonctionnellement rattaché à chaque rendez-vous mais n'est pas
+// modélisé par une FK ici : voir la note sur CompteEscrow plus haut.
+// -----------------------------------------------------------------
+model RendezVous {
+  rdv_id String @id @default(uuid()) @db.Uuid
+
+  patient_id      String           @db.Uuid
+  medecin_id      String           @db.Uuid
+  structure_id    String?          @db.Uuid
+  type_rdv        TypeRdv
+  date_creneau    DateTime
+  statut          StatutRendezVous
+  code_unique     String           @unique @db.VarChar(8)
+  qr_token_secret String           @db.Text
+
+  patient   Patient         @relation(fields: [patient_id], references: [patient_id])
+  medecin   Medecin         @relation(fields: [medecin_id], references: [medecin_id])
+  structure StructureSante? @relation(fields: [structure_id], references: [structure_id])
+
+  ordonnances Ordonnance[]
+
+  @@index([patient_id])
+  @@index([medecin_id])
+  @@index([structure_id])
+  @@map("rendez_vous")
+}
+
+// -----------------------------------------------------------------
+// Ordonnance — émise par le médecin à l'issue d'un rendez-vous.
+// identifiant_unique sert de référence de vérification externe (ex :
+// consultée par une pharmacie). pays_emission_id peut différer du
+// pays d'exercice du médecin en téléconsultation transfrontalière,
+// d'où une FK dédiée vers Pays plutôt qu'une réutilisation de
+// medecin.pays_exercice_id.
+// -----------------------------------------------------------------
+model Ordonnance {
+  ordonnance_id String @id @default(uuid()) @db.Uuid
+
+  rdv_id             String   @db.Uuid
+  medecin_id         String   @db.Uuid
+  patient_id         String   @db.Uuid
+  identifiant_unique String   @unique @db.VarChar(50)
+  pays_emission_id   String   @db.Uuid
+  contenu            String   @db.Text
+  date_emission      DateTime @default(now())
+
+  rendez_vous   RendezVous @relation(fields: [rdv_id], references: [rdv_id])
+  medecin       Medecin    @relation(fields: [medecin_id], references: [medecin_id])
+  patient       Patient    @relation(fields: [patient_id], references: [patient_id])
+  pays_emission Pays       @relation(fields: [pays_emission_id], references: [pays_id])
+
+  @@index([rdv_id])
+  @@index([medecin_id])
+  @@index([patient_id])
+  @@index([pays_emission_id])
+  @@map("ordonnance")
 }

@@ -1,6 +1,7 @@
 // src/controllers/assurance.controller.js
 // Composant "annuaire — assurance" (diagramme 08_annuaire_assurances) :
-// gère UNIQUEMENT service_assurance et mise_en_relation.
+// gère service_assurance, mise_en_relation, ainsi que le catalogue
+// activite / option_activite et les agence physiques d'un service.
 //
 // v8 : les anciens sous-modules "publicité/abonnement/avis assurance"
 // n'existent plus (voir schema.prisma — Publicite est désormais un
@@ -8,7 +9,18 @@
 // n'y a pas d'équivalent AbonnementAssurance/AvisAssurance pour ce
 // composant). "contact_prospect_assurance" (patient -> assurance) est
 // remplacé par "mise_en_relation" (utilisateur quelconque <-> assurance,
-// N-N) — voir plus bas.
+// N-N) — voir plus bas. v8 ajoute également le catalogue activite /
+// option_activite (une assurance possède N activités, chaque activité
+// porte ses propres options) et agence (une assurance possède N
+// agences physiques) — voir plus bas, sections dédiées.
+//
+// Autorisation pour activite / option_activite / agence : lecture
+// publique (même logique que service_assurance), écriture réservée à
+// l'agent du service_assurance concerné ou à admin/superadmin — ce
+// sont des données de catalogue gérées par l'assurance elle-même, pas
+// des fiches librement modifiables par tout utilisateur (contrairement
+// à service_assurance) ni des sollicitations ouvertes (contrairement à
+// mise_en_relation).
 //
 // Module secondaire (Phase 4) : n'entre pas dans le parcours critique
 // de soin/urgence, mais suit la même logique d'annuaire public que
@@ -664,6 +676,596 @@ export async function supprimerServiceAssurance(req, res, next) {
   }
 }
 
+async function estAgentDuServiceAssurance(utilisateur, serviceAssuranceId) {
+  if (!utilisateur) return false;
+  const agent = await prisma.agentAssurance.findUnique({
+    where: { utilisateur_id: utilisateur.utilisateur_id },
+  });
+  return !!agent && agent.service_assurance_id === serviceAssuranceId;
+}
+
+/* ===================================================================
+ * Activités (catalogue produits d'un service d'assurance)
+ *
+ * v8 : nouveau sous-module — chaque service d'assurance propose un
+ * catalogue d'activités (ex. "Activa Santé Individuelle" / public_cible
+ * "Particuliers et familles"), chacune pouvant porter ses propres
+ * options (voir OptionActivite plus bas). Lecture publique (même
+ * logique que service_assurance) ; écriture réservée à l'agent du
+ * service concerné ou à admin/superadmin.
+ * =================================================================== */
+
+/**
+ * GET /api/activites?service_assurance_id=...
+ * PUBLIQUE. Filtre optionnel par service_assurance_id ; sans filtre,
+ * retourne l'ensemble du catalogue.
+ */
+export async function listerActivites(req, res, next) {
+  try {
+    const { service_assurance_id } = req.query;
+
+    const activites = await prisma.activite.findMany({
+      where: service_assurance_id ? { service_assurance_id } : {},
+      include: { options: true },
+      orderBy: { titre: "asc" },
+    });
+
+    return res.status(200).json({ activites });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/activites/:id
+ * PUBLIQUE.
+ */
+export async function obtenirActivite(req, res, next) {
+  try {
+    const activite = await prisma.activite.findUnique({
+      where: { activite_id: req.params.id },
+      include: { options: true },
+    });
+    if (!activite) {
+      return res.status(404).json({ message: "Activité introuvable." });
+    }
+    return res.status(200).json({ activite });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/activites
+ * Réservée à l'agent du service_assurance concerné (service_assurance_id
+ * fourni dans le corps) ou à admin/superadmin.
+ * Champs requis : service_assurance_id, titre, public_cible.
+ * Champ optionnel : description.
+ */
+export async function creerActivite(req, res, next) {
+  try {
+    const { service_assurance_id, titre, public_cible, description } = req.body;
+
+    if (!service_assurance_id || !titre || !titre.trim() || !public_cible || !public_cible.trim()) {
+      return res.status(400).json({
+        message: "Champs requis manquants : service_assurance_id, titre, public_cible.",
+      });
+    }
+
+    const service = await prisma.serviceAssurance.findUnique({ where: { service_assurance_id } });
+    if (!service) {
+      return res.status(400).json({ message: "service_assurance_id introuvable." });
+    }
+
+    const estAdmin = estAdminOuSuperadmin(req.utilisateur);
+    if (!estAdmin && !(await estAgentDuServiceAssurance(req.utilisateur, service_assurance_id))) {
+      return res.status(403).json({
+        message: "Accès réservé à l'agent du service d'assurance concerné ou à un administrateur.",
+      });
+    }
+
+    const activite = await prisma.activite.create({
+      data: {
+        service_assurance_id,
+        titre: titre.trim(),
+        public_cible: public_cible.trim(),
+        description: description?.trim() || null,
+      },
+    });
+
+    return res.status(201).json({ message: "Activité créée.", activite });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PUT /api/activites/:id
+ * Réservée à l'agent du service d'assurance propriétaire de l'activité,
+ * ou à admin/superadmin. Ne permet pas de déplacer l'activité vers un
+ * autre service_assurance_id (le champ n'est pas modifiable ici).
+ */
+export async function modifierActivite(req, res, next) {
+  try {
+    const { titre, public_cible, description } = req.body;
+
+    const existante = await prisma.activite.findUnique({ where: { activite_id: req.params.id } });
+    if (!existante) {
+      return res.status(404).json({ message: "Activité introuvable." });
+    }
+
+    const estAdmin = estAdminOuSuperadmin(req.utilisateur);
+    if (!estAdmin && !(await estAgentDuServiceAssurance(req.utilisateur, existante.service_assurance_id))) {
+      return res.status(403).json({
+        message: "Accès réservé à l'agent du service d'assurance concerné ou à un administrateur.",
+      });
+    }
+
+    const activite = await prisma.activite.update({
+      where: { activite_id: req.params.id },
+      data: {
+        ...(titre && { titre: titre.trim() }),
+        ...(public_cible && { public_cible: public_cible.trim() }),
+        ...(description !== undefined && { description: description?.trim() || null }),
+      },
+    });
+
+    return res.status(200).json({ message: "Activité mise à jour.", activite });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /api/activites/:id
+ * Réservée à l'agent du service d'assurance propriétaire, ou à
+ * admin/superadmin. Bloquée si des options y sont encore rattachées
+ * (même principe que supprimerServiceAssurance : supprimer les options
+ * d'abord).
+ */
+export async function supprimerActivite(req, res, next) {
+  try {
+    const existante = await prisma.activite.findUnique({ where: { activite_id: req.params.id } });
+    if (!existante) {
+      return res.status(404).json({ message: "Activité introuvable." });
+    }
+
+    const estAdmin = estAdminOuSuperadmin(req.utilisateur);
+    if (!estAdmin && !(await estAgentDuServiceAssurance(req.utilisateur, existante.service_assurance_id))) {
+      return res.status(403).json({
+        message: "Accès réservé à l'agent du service d'assurance concerné ou à un administrateur.",
+      });
+    }
+
+    const nbOptions = await prisma.optionActivite.count({ where: { activite_id: req.params.id } });
+    if (nbOptions > 0) {
+      return res.status(409).json({
+        message: `Impossible de supprimer : ${nbOptions} option(s) encore rattachée(s) à cette activité.`,
+      });
+    }
+
+    await prisma.activite.delete({ where: { activite_id: req.params.id } });
+
+    return res.status(200).json({ message: "Activité supprimée." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/* ===================================================================
+ * Options d'activité
+ *
+ * Rattachées à une activité (et non directement à l'assurance) — ex.
+ * "Hospitalisation", "Consultations & pharmacie", "Maternité". Même
+ * logique d'autorisation que Activité, déduite indirectement du
+ * service_assurance propriétaire de l'activité parente.
+ * =================================================================== */
+
+async function obtenirServiceAssuranceIdDeLActivite(activiteId) {
+  const activite = await prisma.activite.findUnique({
+    where: { activite_id: activiteId },
+    select: { service_assurance_id: true },
+  });
+  return activite?.service_assurance_id ?? null;
+}
+
+/**
+ * GET /api/options-activite?activite_id=...
+ * PUBLIQUE. activite_id requis : pas de liste globale non filtrée,
+ * même principe que listerMisesEnRelationAssurance.
+ */
+export async function listerOptionsActivite(req, res, next) {
+  try {
+    const { activite_id } = req.query;
+    if (!activite_id) {
+      return res.status(400).json({ message: "Paramètre requis : activite_id." });
+    }
+
+    const options = await prisma.optionActivite.findMany({
+      where: { activite_id },
+      orderBy: { libelle: "asc" },
+    });
+
+    return res.status(200).json({ options_activite: options });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/options-activite/:id
+ * PUBLIQUE.
+ */
+export async function obtenirOptionActivite(req, res, next) {
+  try {
+    const option = await prisma.optionActivite.findUnique({
+      where: { option_activite_id: req.params.id },
+    });
+    if (!option) {
+      return res.status(404).json({ message: "Option d'activité introuvable." });
+    }
+    return res.status(200).json({ option_activite: option });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/options-activite
+ * Réservée à l'agent du service d'assurance propriétaire de l'activité
+ * parente (activite_id fourni dans le corps), ou à admin/superadmin.
+ * Champs requis : activite_id, libelle. Champ optionnel : description.
+ */
+export async function creerOptionActivite(req, res, next) {
+  try {
+    const { activite_id, libelle, description } = req.body;
+
+    if (!activite_id || !libelle || !libelle.trim()) {
+      return res.status(400).json({ message: "Champs requis manquants : activite_id, libelle." });
+    }
+
+    const serviceAssuranceId = await obtenirServiceAssuranceIdDeLActivite(activite_id);
+    if (!serviceAssuranceId) {
+      return res.status(400).json({ message: "activite_id introuvable." });
+    }
+
+    const estAdmin = estAdminOuSuperadmin(req.utilisateur);
+    if (!estAdmin && !(await estAgentDuServiceAssurance(req.utilisateur, serviceAssuranceId))) {
+      return res.status(403).json({
+        message: "Accès réservé à l'agent du service d'assurance concerné ou à un administrateur.",
+      });
+    }
+
+    const option = await prisma.optionActivite.create({
+      data: {
+        activite_id,
+        libelle: libelle.trim(),
+        description: description?.trim() || null,
+      },
+    });
+
+    return res.status(201).json({ message: "Option d'activité créée.", option_activite: option });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PUT /api/options-activite/:id
+ * Réservée à l'agent du service d'assurance propriétaire (via
+ * l'activité parente), ou à admin/superadmin. Ne permet pas de
+ * déplacer l'option vers une autre activité.
+ */
+export async function modifierOptionActivite(req, res, next) {
+  try {
+    const { libelle, description } = req.body;
+
+    const existante = await prisma.optionActivite.findUnique({
+      where: { option_activite_id: req.params.id },
+    });
+    if (!existante) {
+      return res.status(404).json({ message: "Option d'activité introuvable." });
+    }
+
+    const serviceAssuranceId = await obtenirServiceAssuranceIdDeLActivite(existante.activite_id);
+
+    const estAdmin = estAdminOuSuperadmin(req.utilisateur);
+    if (!estAdmin && !(await estAgentDuServiceAssurance(req.utilisateur, serviceAssuranceId))) {
+      return res.status(403).json({
+        message: "Accès réservé à l'agent du service d'assurance concerné ou à un administrateur.",
+      });
+    }
+
+    const option = await prisma.optionActivite.update({
+      where: { option_activite_id: req.params.id },
+      data: {
+        ...(libelle && { libelle: libelle.trim() }),
+        ...(description !== undefined && { description: description?.trim() || null }),
+      },
+    });
+
+    return res.status(200).json({ message: "Option d'activité mise à jour.", option_activite: option });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /api/options-activite/:id
+ * Réservée à l'agent du service d'assurance propriétaire (via
+ * l'activité parente), ou à admin/superadmin.
+ */
+export async function supprimerOptionActivite(req, res, next) {
+  try {
+    const existante = await prisma.optionActivite.findUnique({
+      where: { option_activite_id: req.params.id },
+    });
+    if (!existante) {
+      return res.status(404).json({ message: "Option d'activité introuvable." });
+    }
+
+    const serviceAssuranceId = await obtenirServiceAssuranceIdDeLActivite(existante.activite_id);
+
+    const estAdmin = estAdminOuSuperadmin(req.utilisateur);
+    if (!estAdmin && !(await estAgentDuServiceAssurance(req.utilisateur, serviceAssuranceId))) {
+      return res.status(403).json({
+        message: "Accès réservé à l'agent du service d'assurance concerné ou à un administrateur.",
+      });
+    }
+
+    await prisma.optionActivite.delete({ where: { option_activite_id: req.params.id } });
+
+    return res.status(200).json({ message: "Option d'activité supprimée." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/* ===================================================================
+ * Agences (implantations physiques d'un service d'assurance)
+ *
+ * Ex. "Agence Douala — Akwa (Siège)". Une assurance possède N agences ;
+ * une agence appartient à une seule assurance. gps suit le même patron
+ * que ServiceAssurance.geolocalisation (GEOGRAPHY(POINT,4326), lu/écrit
+ * en SQL brut faute de support natif Prisma pour ce type).
+ * =================================================================== */
+
+async function recupererGpsAgence(agenceId) {
+  const resultat = await prisma.$queryRaw`
+    SELECT ST_Y(gps::geometry) AS latitude,
+           ST_X(gps::geometry) AS longitude
+    FROM agence
+    WHERE agence_id = ${agenceId}::uuid
+      AND gps IS NOT NULL
+  `;
+
+  if (!resultat.length) return null;
+
+  const { latitude, longitude } = resultat[0];
+  return latitude !== null && longitude !== null ? { latitude, longitude } : null;
+}
+
+async function definirGpsAgence(agenceId, latitude, longitude) {
+  await prisma.$executeRaw`
+    UPDATE agence
+    SET gps = ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)
+    WHERE agence_id = ${agenceId}::uuid
+  `;
+}
+
+async function effacerGpsAgence(agenceId) {
+  await prisma.$executeRaw`
+    UPDATE agence
+    SET gps = NULL
+    WHERE agence_id = ${agenceId}::uuid
+  `;
+}
+
+/**
+ * Même contrat que appliquerGeolocalisation (voir plus haut), pour le
+ * champ gps de agence.
+ */
+async function appliquerGpsAgence(agenceId, latitude, longitude) {
+  const latFournie = latitude !== undefined;
+  const lngFournie = longitude !== undefined;
+
+  if (!latFournie && !lngFournie) return null;
+
+  if (latFournie !== lngFournie) {
+    return "latitude et longitude doivent être fournies ensemble.";
+  }
+
+  if (latitude === null && longitude === null) {
+    await effacerGpsAgence(agenceId);
+    return null;
+  }
+
+  if (typeof latitude !== "number" || typeof longitude !== "number") {
+    return "latitude et longitude doivent être des nombres.";
+  }
+  if (latitude < -90 || latitude > 90) {
+    return "latitude invalide (doit être comprise entre -90 et 90).";
+  }
+  if (longitude < -180 || longitude > 180) {
+    return "longitude invalide (doit être comprise entre -180 et 180).";
+  }
+
+  await definirGpsAgence(agenceId, latitude, longitude);
+  return null;
+}
+
+async function enrichirAgence(agence) {
+  const gps = await recupererGpsAgence(agence.agence_id);
+  return { ...agence, gps };
+}
+
+/**
+ * GET /api/agences?service_assurance_id=...
+ * PUBLIQUE. Filtre optionnel par service_assurance_id.
+ */
+export async function listerAgences(req, res, next) {
+  try {
+    const { service_assurance_id } = req.query;
+
+    const agences = await prisma.agence.findMany({
+      where: service_assurance_id ? { service_assurance_id } : {},
+      orderBy: { libelle: "asc" },
+    });
+
+    const resultat = await Promise.all(agences.map(enrichirAgence));
+
+    return res.status(200).json({ agences: resultat });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/agences/:id
+ * PUBLIQUE.
+ */
+export async function obtenirAgence(req, res, next) {
+  try {
+    const agence = await prisma.agence.findUnique({ where: { agence_id: req.params.id } });
+    if (!agence) {
+      return res.status(404).json({ message: "Agence introuvable." });
+    }
+
+    const resultat = await enrichirAgence(agence);
+    return res.status(200).json({ agence: resultat });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/agences
+ * Réservée à l'agent du service_assurance concerné (service_assurance_id
+ * fourni dans le corps), ou à admin/superadmin.
+ * Champs requis : service_assurance_id, libelle, localisation, contact.
+ * Champs optionnels : latitude, longitude (voir appliquerGpsAgence).
+ */
+export async function creerAgence(req, res, next) {
+  try {
+    const { service_assurance_id, libelle, localisation, contact, latitude, longitude } = req.body;
+
+    if (
+      !service_assurance_id || !libelle || !libelle.trim() ||
+      !localisation || !localisation.trim() || !contact || !contact.trim()
+    ) {
+      return res.status(400).json({
+        message: "Champs requis manquants : service_assurance_id, libelle, localisation, contact.",
+      });
+    }
+
+    const service = await prisma.serviceAssurance.findUnique({ where: { service_assurance_id } });
+    if (!service) {
+      return res.status(400).json({ message: "service_assurance_id introuvable." });
+    }
+
+    const estAdmin = estAdminOuSuperadmin(req.utilisateur);
+    if (!estAdmin && !(await estAgentDuServiceAssurance(req.utilisateur, service_assurance_id))) {
+      return res.status(403).json({
+        message: "Accès réservé à l'agent du service d'assurance concerné ou à un administrateur.",
+      });
+    }
+
+    const agence = await prisma.agence.create({
+      data: {
+        service_assurance_id,
+        libelle: libelle.trim(),
+        localisation: localisation.trim(),
+        contact: contact.trim(),
+      },
+    });
+
+    const erreurGps = await appliquerGpsAgence(agence.agence_id, latitude, longitude);
+
+    const resultat = await enrichirAgence(agence);
+
+    if (erreurGps) {
+      return res.status(201).json({
+        message: `Agence créée avec succès. Avertissement : ${erreurGps}`,
+        agence: resultat,
+      });
+    }
+
+    return res.status(201).json({ message: "Agence créée avec succès.", agence: resultat });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PUT /api/agences/:id
+ * Réservée à l'agent du service d'assurance propriétaire, ou à
+ * admin/superadmin. Ne permet pas de déplacer l'agence vers un autre
+ * service_assurance_id.
+ */
+export async function modifierAgence(req, res, next) {
+  try {
+    const { libelle, localisation, contact, latitude, longitude } = req.body;
+
+    const existante = await prisma.agence.findUnique({ where: { agence_id: req.params.id } });
+    if (!existante) {
+      return res.status(404).json({ message: "Agence introuvable." });
+    }
+
+    const estAdmin = estAdminOuSuperadmin(req.utilisateur);
+    if (!estAdmin && !(await estAgentDuServiceAssurance(req.utilisateur, existante.service_assurance_id))) {
+      return res.status(403).json({
+        message: "Accès réservé à l'agent du service d'assurance concerné ou à un administrateur.",
+      });
+    }
+
+    const agence = await prisma.agence.update({
+      where: { agence_id: req.params.id },
+      data: {
+        ...(libelle && { libelle: libelle.trim() }),
+        ...(localisation && { localisation: localisation.trim() }),
+        ...(contact && { contact: contact.trim() }),
+      },
+    });
+
+    const erreurGps = await appliquerGpsAgence(agence.agence_id, latitude, longitude);
+    if (erreurGps) {
+      return res.status(400).json({ message: erreurGps });
+    }
+
+    const resultat = await enrichirAgence(agence);
+    return res.status(200).json({ message: "Agence mise à jour.", agence: resultat });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /api/agences/:id
+ * Réservée à l'agent du service d'assurance propriétaire, ou à
+ * admin/superadmin.
+ */
+export async function supprimerAgence(req, res, next) {
+  try {
+    const existante = await prisma.agence.findUnique({ where: { agence_id: req.params.id } });
+    if (!existante) {
+      return res.status(404).json({ message: "Agence introuvable." });
+    }
+
+    const estAdmin = estAdminOuSuperadmin(req.utilisateur);
+    if (!estAdmin && !(await estAgentDuServiceAssurance(req.utilisateur, existante.service_assurance_id))) {
+      return res.status(403).json({
+        message: "Accès réservé à l'agent du service d'assurance concerné ou à un administrateur.",
+      });
+    }
+
+    await prisma.agence.delete({ where: { agence_id: req.params.id } });
+
+    return res.status(200).json({ message: "Agence supprimée." });
+  } catch (err) {
+    next(err);
+  }
+}
+
 /* ===================================================================
  * Mise en relation
  *
@@ -679,14 +1281,6 @@ export async function supprimerServiceAssurance(req, res, next) {
  * concerné ou à admin/superadmin — une mise en relation est une donnée
  * commerciale privée, pas une fiche annuaire publique.
  * =================================================================== */
-
-async function estAgentDuServiceAssurance(utilisateur, serviceAssuranceId) {
-  if (!utilisateur) return false;
-  const agent = await prisma.agentAssurance.findUnique({
-    where: { utilisateur_id: utilisateur.utilisateur_id },
-  });
-  return !!agent && agent.service_assurance_id === serviceAssuranceId;
-}
 
 /**
  * GET /api/mises-en-relation-assurance?service_assurance_id=...

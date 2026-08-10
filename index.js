@@ -11,6 +11,9 @@ import pharmacieRoutes from "./src/routes/pharmacie.routes.js";
 import avisRoutes from "./src/routes/avis.routes.js";
 import abonnementRoutes from "./src/routes/abonnement.routes.js";
 import publiciteRoutes from "./src/routes/publicite.routes.js";
+import assuranceRoutes from "./src/routes/assurance.routes.js";
+import urgencesRoutes from "./src/routes/urgences.routes.js";
+import medecinRoutes from "./src/routes/medecin.routes.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -74,7 +77,9 @@ app.use("/api", pharmacieRoutes);
 app.use("/api", avisRoutes);
 app.use("/api", abonnementRoutes);
 app.use("/api", publiciteRoutes);
-
+app.use("/api", assuranceRoutes);
+app.use("/api", urgencesRoutes);
+app.use("/api", medecinRoutes);
 // ─── Gestion d'erreurs centralisée ─────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error(err);

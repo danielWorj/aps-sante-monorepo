@@ -13,7 +13,12 @@
 //   - document_agrement  : agrément officiel (image ou PDF) autorisant
 //                          l'établissement à exercer
 //
-// Le caractère "obligatoire" (3 fichiers requis à la création, optionnels
+// Également utilisé (voir plus bas, gererTeleversementMedecin) pour la
+// création/modification d'un médecin, qui exige 2 champs fichier :
+//   - cni          : carte nationale d'identité (image ou PDF)
+//   - attestation  : attestation d'inscription à l'Ordre (image ou PDF)
+//
+// Le caractère "obligatoire" (fichiers requis à la création, optionnels
 // en modification) est vérifié dans le contrôleur, pas ici : ce
 // middleware se contente du parsing + de la validation de format/taille.
 
@@ -150,6 +155,38 @@ export function gererTeleversementAssurance(req, res, next) {
     if (err) {
       return res.status(400).json({
         message: err.message || "Erreur lors du téléversement de l'image.",
+      });
+    }
+    next();
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Médecin — même logique que Centre de santé / Pharmacie (pièces
+// justificatives, jamais de simple "visuel") : 2 fichiers requis à la
+// création (voir authentification.controller.js, creerCompteAdministre),
+// optionnels en modification (voir medecin.controller.js) :
+//   - cni          : carte nationale d'identité du médecin
+//   - attestation  : attestation d'inscription à l'Ordre
+// Comme piece_identite/document_agrement (Centre de santé / Pharmacie),
+// ces deux pièces peuvent être une image OU un PDF numérisé : on
+// réutilise donc TYPES_AUTORISES (et non le filtre restreint aux
+// images de Publicité/Assurance).
+// ─────────────────────────────────────────────────────────────────
+const televersementMedecin = multer({
+  storage: stockage,
+  limits: { fileSize: TAILLE_MAX_OCTETS },
+  fileFilter: filtreFichier,
+}).fields([
+  { name: "cni", maxCount: 1 },
+  { name: "attestation", maxCount: 1 },
+]);
+
+export function gererTeleversementMedecin(req, res, next) {
+  televersementMedecin(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        message: err.message || "Erreur lors du téléversement des fichiers.",
       });
     }
     next();
