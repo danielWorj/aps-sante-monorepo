@@ -172,14 +172,26 @@ export function gererTeleversementAssurance(req, res, next) {
 // ces deux pièces peuvent être une image OU un PDF numérisé : on
 // réutilise donc TYPES_AUTORISES (et non le filtre restreint aux
 // images de Publicité/Assurance).
+//
+// Un 3e champ, optionnel à la création comme en modification (voir
+// schema.prisma, Medecin.photo_url, nullable) :
+//   - photo : photo de profil du médecin
+// Contrairement à cni/attestation (pièces justificatives, jamais de
+// PDF exclu), une photo de profil n'a de sens qu'en image — on
+// réutilise donc TYPES_AUTORISES_VISUEL (même filtre que
+// Publicité/Assurance) et non filtreFichier.
 // ─────────────────────────────────────────────────────────────────
 const televersementMedecin = multer({
   storage: stockage,
   limits: { fileSize: TAILLE_MAX_OCTETS },
-  fileFilter: filtreFichier,
+  fileFilter: (req, file, cb) => {
+    if (file.fieldname === "photo") return filtreFichierVisuel(req, file, cb);
+    return filtreFichier(req, file, cb);
+  },
 }).fields([
   { name: "cni", maxCount: 1 },
   { name: "attestation", maxCount: 1 },
+  { name: "photo", maxCount: 1 },
 ]);
 
 export function gererTeleversementMedecin(req, res, next) {

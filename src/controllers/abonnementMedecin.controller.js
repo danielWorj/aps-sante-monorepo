@@ -1,14 +1,20 @@
 // src/controllers/abonnementMedecin.controller.js
 // Module transverse "Gestion des médecins" — sous-module Abonnement
 // (présence forfaitaire) : abonnement_medecin et ses lignes
-// d'avantages (ligne_abonnement_medecin). Même patron exact que
-// abonnement_pharmacie (voir abonnement.routes.js) : donnée commerciale
-// interne, pas d'Annuaire public ici — TOUTES les routes exigent déjà
-// "authentifier" (middleware), l'autorisation fine (le médecin
-// concerné vs admin/superadmin) est appliquée ICI, au cas par cas, car
-// elle dépend du médecin ciblé par l'abonnement.
+// d'avantages (ligne_abonnement_medecin).
 //
-// Un abonnement est toujours adossé à une transaction_paiement déjà
+// v9 : abonnement_medecin n'a PLUS de medecin_id direct. C'est
+// désormais une offre commerciale indépendante (ex. "Présence
+// Premium 30 jours"), reliée aux médecins par la table de jointure
+// N-N forfait_abonnement_medecin (voir schema.prisma) : un médecin
+// peut souscrire à plusieurs abonnements, et un même abonnement peut
+// être souscrit par plusieurs médecins (offre groupée, ex. tous les
+// médecins d'un même cabinet). Toute vérification "ce médecin a-t-il
+// le droit de voir/modifier cet abonnement" passe donc désormais par
+// abonnement.forfaits.some(f => f.medecin_id === medecin.medecin_id)
+// plutôt que par une comparaison directe de medecin_id.
+//
+// Un abonnement reste toujours adossé à une transaction_paiement déjà
 // réglée (module 06_paiement_escrow, table «ref» stubée dans
 // schema.prisma) : on ne crée jamais un abonnement sans transaction_id
 // valide. date_fin est dérivée de date_debut + duree_jours plutôt que
@@ -34,6 +40,16 @@ async function profilMedecinCourant(utilisateurCourant) {
   });
 }
 
+/**
+ * true si `medecinId` figure parmi les souscripteurs (forfaits) de
+ * l'abonnement fourni. `abonnement` doit avoir été chargé avec son
+ * include `forfaits`.
+ */
+function estSouscripteur(medecinId, abonnement) {
+  if (!medecinId || !abonnement?.forfaits) return false;
+  return abonnement.forfaits.some((f) => f.medecin_id === medecinId);
+}
+
 function ajouterJours(date, jours) {
   const resultat = new Date(date);
   resultat.setDate(resultat.getDate() + jours);
@@ -47,9 +63,9 @@ function ajouterJours(date, jours) {
 /**
  * GET /api/abonnements-medecin
  * Filtres optionnels (admin/superadmin uniquement) : ?medecin_id=...&statut=...
- * Un médecin non-admin ne voit que ses propres abonnements, quel que
- * soit le filtre envoyé — il n'a pas accès aux abonnements des autres
- * médecins.
+ * Un médecin non-admin ne voit que les abonnements auxquels il est
+ * rattaché via forfait_abonnement_medecin, quel que soit le filtre
+ * envoyé — il n'a pas accès aux abonnements des autres médecins.
  */
 export async function listerAbonnementsMedecin(req, res, next) {
   try {
@@ -64,20 +80,23 @@ export async function listerAbonnementsMedecin(req, res, next) {
     const where = {};
 
     if (estAdmin(req.utilisateur)) {
-      if (medecin_id) where.medecin_id = medecin_id;
+      if (medecin_id) where.forfaits = { some: { medecin_id } };
       if (statut) where.statut = statut;
     } else {
       const medecin = await profilMedecinCourant(req.utilisateur);
       if (!medecin) {
         return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
       }
-      where.medecin_id = medecin.medecin_id;
+      where.forfaits = { some: { medecin_id: medecin.medecin_id } };
       if (statut) where.statut = statut;
     }
 
     const abonnements = await prisma.abonnementMedecin.findMany({
       where,
-      include: { lignes: { orderBy: { ordre_affichage: "asc" } } },
+      include: {
+        lignes: { orderBy: { ordre_affichage: "asc" } },
+        forfaits: true,
+      },
       orderBy: { date_debut: "desc" },
     });
 
@@ -94,7 +113,10 @@ export async function obtenirAbonnementMedecin(req, res, next) {
   try {
     const abonnement = await prisma.abonnementMedecin.findUnique({
       where: { abonnement_id: req.params.id },
-      include: { lignes: { orderBy: { ordre_affichage: "asc" } } },
+      include: {
+        lignes: { orderBy: { ordre_affichage: "asc" } },
+        forfaits: true,
+      },
     });
     if (!abonnement) {
       return res.status(404).json({ message: "Abonnement introuvable." });
@@ -102,7 +124,7 @@ export async function obtenirAbonnementMedecin(req, res, next) {
 
     if (!estAdmin(req.utilisateur)) {
       const medecin = await profilMedecinCourant(req.utilisateur);
-      if (!medecin || medecin.medecin_id !== abonnement.medecin_id) {
+      if (!estSouscripteur(medecin?.medecin_id, abonnement)) {
         return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
       }
     }
@@ -115,27 +137,41 @@ export async function obtenirAbonnementMedecin(req, res, next) {
 
 /**
  * POST /api/abonnements-medecin
- * Ouvert au médecin concerné (medecin_id déduit du token, ignoré s'il
- * est envoyé dans le corps) ou à admin/superadmin (qui doit alors
- * fournir explicitement medecin_id). statut est toujours forcé à
- * "actif" à la création — un abonnement n'est créé qu'une fois la
- * transaction réglée.
+ * Ouvert au médecin concerné (souscription pour lui-même, déduite du
+ * token — tout medecin_id/medecin_ids envoyé dans le corps est
+ * ignoré) ou à admin/superadmin, qui doit alors fournir explicitement
+ * un ou plusieurs médecins à rattacher :
+ *   - medecin_id   : souscription individuelle
+ *   - medecin_ids  : offre groupée (ex. tous les médecins d'un même
+ *                    cabinet souscrivent au même abonnement)
+ * statut est toujours forcé à "actif" à la création — un abonnement
+ * n'est créé qu'une fois la transaction réglée. La création de
+ * l'abonnement et le rattachement du/des médecin(s) (table de
+ * jointure forfait_abonnement_medecin) se font dans une seule
+ * transaction Prisma.
  */
 export async function creerAbonnementMedecin(req, res, next) {
   try {
     const { libelle, montant, duree_jours, date_debut, transaction_id } = req.body;
-    let { medecin_id } = req.body;
 
+    let medecinIds;
     if (estAdmin(req.utilisateur)) {
-      if (!medecin_id) {
-        return res.status(400).json({ message: "medecin_id requis pour un admin/superadmin." });
+      const { medecin_id, medecin_ids } = req.body;
+      if (Array.isArray(medecin_ids) && medecin_ids.length > 0) {
+        medecinIds = [...new Set(medecin_ids)];
+      } else if (medecin_id) {
+        medecinIds = [medecin_id];
+      } else {
+        return res.status(400).json({
+          message: "medecin_id (ou medecin_ids pour une offre groupée) requis pour un admin/superadmin.",
+        });
       }
     } else {
       const medecin = await profilMedecinCourant(req.utilisateur);
       if (!medecin) {
         return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
       }
-      medecin_id = medecin.medecin_id;
+      medecinIds = [medecin.medecin_id];
     }
 
     if (!libelle || montant === undefined || !duree_jours || !date_debut || !transaction_id) {
@@ -153,9 +189,11 @@ export async function creerAbonnementMedecin(req, res, next) {
       return res.status(400).json({ message: "duree_jours invalide (entier positif attendu)." });
     }
 
-    const medecinCible = await prisma.medecin.findUnique({ where: { medecin_id } });
-    if (!medecinCible) {
-      return res.status(400).json({ message: "medecin_id introuvable." });
+    const medecinsTrouves = await prisma.medecin.findMany({
+      where: { medecin_id: { in: medecinIds } },
+    });
+    if (medecinsTrouves.length !== medecinIds.length) {
+      return res.status(400).json({ message: "Un ou plusieurs medecin_id sont introuvables." });
     }
 
     const transaction = await prisma.transactionPaiement.findUnique({
@@ -171,17 +209,30 @@ export async function creerAbonnementMedecin(req, res, next) {
     }
     const dateFin = ajouterJours(dateDebut, dureeNombre);
 
-    const abonnement = await prisma.abonnementMedecin.create({
-      data: {
-        medecin_id,
-        libelle: libelle.trim(),
-        montant: montantNombre,
-        duree_jours: dureeNombre,
-        date_debut: dateDebut,
-        date_fin: dateFin,
-        transaction_id,
-        statut: "actif",
-      },
+    const abonnement = await prisma.$transaction(async (tx) => {
+      const nouvelAbonnement = await tx.abonnementMedecin.create({
+        data: {
+          libelle: libelle.trim(),
+          montant: montantNombre,
+          duree_jours: dureeNombre,
+          date_debut: dateDebut,
+          date_fin: dateFin,
+          transaction_id,
+          statut: "actif",
+        },
+      });
+
+      await tx.forfaitAbonnementMedecin.createMany({
+        data: medecinIds.map((medecin_id) => ({
+          medecin_id,
+          abonnement_id: nouvelAbonnement.abonnement_id,
+        })),
+      });
+
+      return tx.abonnementMedecin.findUnique({
+        where: { abonnement_id: nouvelAbonnement.abonnement_id },
+        include: { forfaits: true },
+      });
     });
 
     return res.status(201).json({ message: "Abonnement créé.", abonnement });
@@ -192,13 +243,17 @@ export async function creerAbonnementMedecin(req, res, next) {
 
 /**
  * PUT /api/abonnements-medecin/:id
- * Ouvert au médecin concerné ou à admin/superadmin. duree_jours et/ou
- * date_debut, si fournis, recalculent automatiquement date_fin.
+ * Ouvert à tout médecin souscripteur (rattaché via un forfait) ou à
+ * admin/superadmin. duree_jours et/ou date_debut, si fournis,
+ * recalculent automatiquement date_fin. La composition des
+ * souscripteurs (ajout/retrait de médecins) ne passe plus par cette
+ * route — voir ajouterMedecinAbonnement / retirerMedecinAbonnement.
  */
 export async function modifierAbonnementMedecin(req, res, next) {
   try {
     const abonnement = await prisma.abonnementMedecin.findUnique({
       where: { abonnement_id: req.params.id },
+      include: { forfaits: true },
     });
     if (!abonnement) {
       return res.status(404).json({ message: "Abonnement introuvable." });
@@ -206,7 +261,7 @@ export async function modifierAbonnementMedecin(req, res, next) {
 
     if (!estAdmin(req.utilisateur)) {
       const medecin = await profilMedecinCourant(req.utilisateur);
-      if (!medecin || medecin.medecin_id !== abonnement.medecin_id) {
+      if (!estSouscripteur(medecin?.medecin_id, abonnement)) {
         return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
       }
     }
@@ -264,12 +319,13 @@ export async function modifierAbonnementMedecin(req, res, next) {
 
 /**
  * DELETE /api/abonnements-medecin/:id
- * Ouvert au médecin concerné ou à admin/superadmin.
+ * Ouvert à tout médecin souscripteur ou à admin/superadmin.
  */
 export async function supprimerAbonnementMedecin(req, res, next) {
   try {
     const abonnement = await prisma.abonnementMedecin.findUnique({
       where: { abonnement_id: req.params.id },
+      include: { forfaits: true },
     });
     if (!abonnement) {
       return res.status(404).json({ message: "Abonnement introuvable." });
@@ -277,19 +333,109 @@ export async function supprimerAbonnementMedecin(req, res, next) {
 
     if (!estAdmin(req.utilisateur)) {
       const medecin = await profilMedecinCourant(req.utilisateur);
-      if (!medecin || medecin.medecin_id !== abonnement.medecin_id) {
+      if (!estSouscripteur(medecin?.medecin_id, abonnement)) {
         return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
       }
     }
 
-    // Supprime aussi les lignes d'avantages rattachées (pas de cascade
-    // en base — voir schema.prisma) avant l'abonnement lui-même.
+    // Supprime aussi les lignes d'avantages et les rattachements
+    // médecin (forfaits) — pas de cascade en base, voir schema.prisma
+    // — avant l'abonnement lui-même.
     await prisma.$transaction([
       prisma.ligneAbonnementMedecin.deleteMany({ where: { abonnement_id: req.params.id } }),
+      prisma.forfaitAbonnementMedecin.deleteMany({ where: { abonnement_id: req.params.id } }),
       prisma.abonnementMedecin.delete({ where: { abonnement_id: req.params.id } }),
     ]);
 
     return res.status(200).json({ message: "Abonnement supprimé." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/* ===================================================================
+ * Souscripteurs (forfait_abonnement_medecin) — composition N-N
+ * =================================================================== */
+
+/**
+ * POST /api/abonnements-medecin/:id/medecins
+ * Réservé à admin/superadmin : rattache un médecin supplémentaire à
+ * un abonnement existant (offre groupée, ex. plusieurs médecins d'un
+ * même cabinet souscrivant au même abonnement). Un médecin ne peut
+ * pas s'auto-ajouter à un abonnement après coup — seul admin/
+ * superadmin gère la composition d'un abonnement groupé, la
+ * souscription initiale se fait à la création (voir
+ * creerAbonnementMedecin).
+ */
+export async function ajouterMedecinAbonnement(req, res, next) {
+  try {
+    if (!estAdmin(req.utilisateur)) {
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
+    }
+
+    const abonnement = await prisma.abonnementMedecin.findUnique({
+      where: { abonnement_id: req.params.id },
+    });
+    if (!abonnement) {
+      return res.status(404).json({ message: "Abonnement introuvable." });
+    }
+
+    const { medecin_id } = req.body;
+    if (!medecin_id) {
+      return res.status(400).json({ message: "medecin_id requis." });
+    }
+
+    const medecin = await prisma.medecin.findUnique({ where: { medecin_id } });
+    if (!medecin) {
+      return res.status(400).json({ message: "medecin_id introuvable." });
+    }
+
+    const dejaRattache = await prisma.forfaitAbonnementMedecin.findUnique({
+      where: {
+        medecin_id_abonnement_id: { medecin_id, abonnement_id: req.params.id },
+      },
+    });
+    if (dejaRattache) {
+      return res.status(409).json({ message: "Ce médecin est déjà rattaché à cet abonnement." });
+    }
+
+    const forfait = await prisma.forfaitAbonnementMedecin.create({
+      data: { medecin_id, abonnement_id: req.params.id },
+    });
+
+    return res.status(201).json({ message: "Médecin rattaché à l'abonnement.", forfait });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /api/abonnements-medecin/:id/medecins/:medecinId
+ * Réservé à admin/superadmin.
+ */
+export async function retirerMedecinAbonnement(req, res, next) {
+  try {
+    if (!estAdmin(req.utilisateur)) {
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
+    }
+
+    const forfait = await prisma.forfaitAbonnementMedecin.findUnique({
+      where: {
+        medecin_id_abonnement_id: {
+          medecin_id: req.params.medecinId,
+          abonnement_id: req.params.id,
+        },
+      },
+    });
+    if (!forfait) {
+      return res.status(404).json({ message: "Ce médecin n'est pas rattaché à cet abonnement." });
+    }
+
+    await prisma.forfaitAbonnementMedecin.delete({
+      where: { forfait_abonnement_medecin_id: forfait.forfait_abonnement_medecin_id },
+    });
+
+    return res.status(200).json({ message: "Médecin retiré de l'abonnement." });
   } catch (err) {
     next(err);
   }
@@ -301,13 +447,14 @@ export async function supprimerAbonnementMedecin(req, res, next) {
 
 /**
  * POST /api/abonnements-medecin/:id/lignes
- * Ouvert au médecin propriétaire de l'abonnement parent ou à
+ * Ouvert à tout médecin souscripteur de l'abonnement parent ou à
  * admin/superadmin.
  */
 export async function ajouterLigneAbonnementMedecin(req, res, next) {
   try {
     const abonnement = await prisma.abonnementMedecin.findUnique({
       where: { abonnement_id: req.params.id },
+      include: { forfaits: true },
     });
     if (!abonnement) {
       return res.status(404).json({ message: "Abonnement introuvable." });
@@ -315,7 +462,7 @@ export async function ajouterLigneAbonnementMedecin(req, res, next) {
 
     if (!estAdmin(req.utilisateur)) {
       const medecin = await profilMedecinCourant(req.utilisateur);
-      if (!medecin || medecin.medecin_id !== abonnement.medecin_id) {
+      if (!estSouscripteur(medecin?.medecin_id, abonnement)) {
         return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
       }
     }
@@ -354,7 +501,7 @@ export async function modifierLigneAbonnementMedecin(req, res, next) {
   try {
     const ligne = await prisma.ligneAbonnementMedecin.findUnique({
       where: { ligne_id: req.params.ligneId },
-      include: { abonnement: true },
+      include: { abonnement: { include: { forfaits: true } } },
     });
     if (!ligne) {
       return res.status(404).json({ message: "Ligne d'avantage introuvable." });
@@ -362,7 +509,7 @@ export async function modifierLigneAbonnementMedecin(req, res, next) {
 
     if (!estAdmin(req.utilisateur)) {
       const medecin = await profilMedecinCourant(req.utilisateur);
-      if (!medecin || medecin.medecin_id !== ligne.abonnement.medecin_id) {
+      if (!estSouscripteur(medecin?.medecin_id, ligne.abonnement)) {
         return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
       }
     }
@@ -402,7 +549,7 @@ export async function supprimerLigneAbonnementMedecin(req, res, next) {
   try {
     const ligne = await prisma.ligneAbonnementMedecin.findUnique({
       where: { ligne_id: req.params.ligneId },
-      include: { abonnement: true },
+      include: { abonnement: { include: { forfaits: true } } },
     });
     if (!ligne) {
       return res.status(404).json({ message: "Ligne d'avantage introuvable." });
@@ -410,7 +557,7 @@ export async function supprimerLigneAbonnementMedecin(req, res, next) {
 
     if (!estAdmin(req.utilisateur)) {
       const medecin = await profilMedecinCourant(req.utilisateur);
-      if (!medecin || medecin.medecin_id !== ligne.abonnement.medecin_id) {
+      if (!estSouscripteur(medecin?.medecin_id, ligne.abonnement)) {
         return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
       }
     }

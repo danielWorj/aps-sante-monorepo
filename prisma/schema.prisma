@@ -342,11 +342,27 @@ model Utilisateur {
   @@map("utilisateur")
 }
 
+// Référentiel des spécialités médicales (ex : cardiologie, pédiatrie,
+// dermatologie...). Auparavant portée par un simple VARCHAR libre sur
+// Medecin.specialite — corrigé ici en une véritable entité, réutilisable
+// et normalisée, à laquelle un médecin est rattaché par FK (même patron
+// que Langue/Devise réutilisés par Pays plus haut dans ce fichier).
+model Specialite {
+  specialite_id String @id @default(uuid()) @db.Uuid
+
+  nom         String  @unique @db.VarChar(150)
+  description String? @db.Text
+
+  medecins Medecin[]
+
+  @@map("specialite")
+}
+
 model Medecin {
   medecin_id String @id @default(uuid()) @db.Uuid
 
   utilisateur_id            String                    @unique @db.Uuid
-  specialite                String                    @db.VarChar(150)
+  specialite_id              String                    @db.Uuid
   numero_ordre               String                    @db.VarChar(100)
   statut_verification        StatutVerificationMedecin
   pays_exercice_id           String                    @db.Uuid
@@ -366,17 +382,28 @@ model Medecin {
   cni_url         String @db.VarChar(255)
   attestation_url String @db.VarChar(255)
 
+  // Photo de profil du médecin (Cloudinary) — même règle de stockage
+  // que cni_url / attestation_url ci-dessus.
+  photo_url String? @db.VarChar(255)
+
+  date_creation DateTime @default(now())
+
   utilisateur    Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
+  specialite     Specialite  @relation(fields: [specialite_id], references: [specialite_id])
   pays_exercice  Pays        @relation(fields: [pays_exercice_id], references: [pays_id])
   ville_exercice Ville       @relation(fields: [ville_exercice_id], references: [ville_id])
 
   // Module transverse Gestion des médecins (diagramme APS — Module
   // transverse : Gestion des médecins) — voir plus bas dans ce fichier.
   avis        AvisMedecin[]
-  abonnements AbonnementMedecin[]
+  // v9 : un médecin peut souscrire à plusieurs abonnements (successifs
+  // ou simultanés) — relation N-N portée par la table de jointure
+  // ForfaitAbonnementMedecin, voir plus bas dans ce fichier.
+  forfaits_abonnement ForfaitAbonnementMedecin[]
   rendez_vous RendezVous[]
   ordonnances Ordonnance[]
 
+  @@index([specialite_id])
   @@index([pays_exercice_id])
   @@index([ville_exercice_id])
   @@map("medecin")
@@ -1129,11 +1156,18 @@ model AvisMedecin {
 // AbonnementPharmacie) : toujours adossé à une transaction_paiement
 // déjà réglée (module 06_paiement_escrow, table «ref» stubée plus
 // haut). ligne_abonnement_medecin détaille les avantages inclus.
+//
+// v9 : abonnement_medecin est désormais une entité INDÉPENDANTE du
+// médecin — ce n'est plus une ligne portée par un medecin_id direct,
+// mais une offre commerciale (ex. "Présence Premium 30 jours") qui
+// peut être souscrite par PLUSIEURS médecins, et un médecin peut lui
+// même souscrire à PLUSIEURS abonnements (successifs ou simultanés).
+// Cette relation N-N est portée par la table de jointure
+// forfait_abonnement_medecin, voir juste après.
 // -----------------------------------------------------------------
 model AbonnementMedecin {
   abonnement_id String @id @default(uuid()) @db.Uuid
 
-  medecin_id     String                  @db.Uuid
   libelle        String                  @db.VarChar(100)
   montant        Decimal                 @db.Decimal(12, 2)
   duree_jours    Int
@@ -1142,14 +1176,36 @@ model AbonnementMedecin {
   transaction_id String                  @db.Uuid
   statut         StatutAbonnementMedecin
 
-  medecin     Medecin             @relation(fields: [medecin_id], references: [medecin_id])
   transaction TransactionPaiement @relation(fields: [transaction_id], references: [transaction_id])
 
-  lignes LigneAbonnementMedecin[]
+  lignes   LigneAbonnementMedecin[]
+  // v9 : médecin(s) souscripteur(s) de cet abonnement — voir
+  // ForfaitAbonnementMedecin.
+  forfaits ForfaitAbonnementMedecin[]
 
-  @@index([medecin_id])
   @@index([transaction_id])
   @@map("abonnement_medecin")
+}
+
+// Table de jointure N-N medecin <-> abonnement_medecin (v9). Un
+// médecin peut souscrire plusieurs abonnements, et un même abonnement
+// peut être souscrit par plusieurs médecins (ex. offre groupée pour
+// un cabinet). La contrainte unique [medecin_id, abonnement_id]
+// empêche qu'un médecin soit rattaché deux fois au même abonnement.
+model ForfaitAbonnementMedecin {
+  forfait_abonnement_medecin_id String @id @default(uuid()) @db.Uuid
+
+  medecin_id    String   @db.Uuid
+  abonnement_id String   @db.Uuid
+  date_creation DateTime @default(now())
+
+  medecin    Medecin           @relation(fields: [medecin_id], references: [medecin_id])
+  abonnement AbonnementMedecin @relation(fields: [abonnement_id], references: [abonnement_id])
+
+  @@unique([medecin_id, abonnement_id])
+  @@index([medecin_id])
+  @@index([abonnement_id])
+  @@map("forfait_abonnement_medecin")
 }
 
 model LigneAbonnementMedecin {
@@ -1186,6 +1242,7 @@ model RendezVous {
   type_rdv        TypeRdv
   date_creneau    DateTime
   statut          StatutRendezVous
+  motif           String?          @db.Text
   code_unique     String           @unique @db.VarChar(8)
   qr_token_secret String           @db.Text
 

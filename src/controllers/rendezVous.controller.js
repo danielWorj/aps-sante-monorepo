@@ -169,12 +169,23 @@ export async function creerRendezVous(req, res, next) {
       return res.status(403).json({ message: "Seul un compte patient peut réserver un rendez-vous." });
     }
 
-    const { medecin_id, structure_id, type_rdv, date_creneau } = req.body;
+    const { medecin_id, structure_id, type_rdv, date_creneau, motif } = req.body;
 
     if (!medecin_id || !type_rdv || !date_creneau) {
       return res.status(400).json({
         message: "Champs requis manquants : medecin_id, type_rdv, date_creneau.",
       });
+    }
+
+    let motifNettoye;
+    if (motif !== undefined && motif !== null) {
+      if (typeof motif !== "string") {
+        return res.status(400).json({ message: "motif doit être une chaîne de caractères." });
+      }
+      motifNettoye = motif.trim();
+      if (motifNettoye.length > 1000) {
+        return res.status(400).json({ message: "motif trop long (1000 caractères maximum)." });
+      }
     }
 
     if (!TYPES_RDV.includes(type_rdv)) {
@@ -216,6 +227,7 @@ export async function creerRendezVous(req, res, next) {
         type_rdv,
         date_creneau: dateCreneau,
         statut: "cree",
+        motif: motifNettoye ? motifNettoye : null,
         code_unique,
         qr_token_secret,
       },
@@ -233,6 +245,9 @@ export async function creerRendezVous(req, res, next) {
  * admin/superadmin — ex. confirmation, annulation, contestation.
  *   - date_creneau : reprogrammation, ouverte à toutes les parties
  *     autorisées.
+ *   - motif : précision/correction du motif de consultation, ouverte à
+ *     toutes les parties autorisées (envoyer une chaîne vide ou null
+ *     efface le motif).
  *   - statut : doit rester une transition cohérente avec le rôle
  *     (un patient ne peut pas se déclarer "honore" lui-même, etc.) —
  *     validation volontairement permissive ici (valeur dans l'enum
@@ -252,7 +267,7 @@ export async function modifierRendezVous(req, res, next) {
       return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
     }
 
-    const { statut, date_creneau, structure_id } = req.body;
+    const { statut, date_creneau, structure_id, motif } = req.body;
     const donnees = {};
 
     if (statut !== undefined) {
@@ -281,6 +296,21 @@ export async function modifierRendezVous(req, res, next) {
         donnees.structure_id = structure_id;
       } else {
         donnees.structure_id = null;
+      }
+    }
+
+    if (motif !== undefined) {
+      if (motif === null || motif === "") {
+        donnees.motif = null;
+      } else {
+        if (typeof motif !== "string") {
+          return res.status(400).json({ message: "motif doit être une chaîne de caractères." });
+        }
+        const motifNettoye = motif.trim();
+        if (motifNettoye.length > 1000) {
+          return res.status(400).json({ message: "motif trop long (1000 caractères maximum)." });
+        }
+        donnees.motif = motifNettoye;
       }
     }
 
