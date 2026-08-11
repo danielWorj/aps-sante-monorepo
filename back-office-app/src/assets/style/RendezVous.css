@@ -1,0 +1,83 @@
+/* src/components/RendezVous.css
+ *
+ * Styles ADDITIFS pour RendezVous.jsx uniquement. Le reste du visuel
+ * (aps-card, aps-kpi, aps-table, aps-badge is-primary/is-success/
+ * is-warning/is-danger/is-info, aps-notice, aps-search…) vient déjà
+ * de la feuille de style globale du back-office (voir Ordonnance.jsx /
+ * Medecin.jsx / Pharmacie.jsx, qui la réutilisent sans redéfinition
+ * locale) — on ne redéclare ici QUE ce qui manque :
+ *   1) le badge "annulé" (aps-badge.is-muted n'existe pas ailleurs) ;
+ *   2) l'affichage du code de contrôle d'accueil (code_unique) ;
+ *   3) quelques ajustements mineurs propres à cette page.
+ *
+ * Portée : toutes les règles sont préfixées par .rdv-page ou ciblent
+ * des classes spécifiques à ce composant (rdv-code-unique), pour ne
+ * jamais interférer avec les autres pages du back-office.
+ */
+
+/* ────────────────────────── Badge "annulé" ────────────────────────── */
+/* Modificateur manquant du système aps-badge existant (is-primary /
+   is-success / is-warning / is-danger / is-info sont déjà stylés
+   globalement) : un rendez-vous annulé n'est ni une erreur (danger)
+   ni une réussite (success), simplement un état neutre/éteint. */
+.aps-badge.is-muted {
+  background-color: #eef0f3;
+  color: #6b7280;
+  border: 1px solid #dfe3e8;
+}
+
+.aps-badge.is-muted i {
+  color: #9ca3af;
+}
+
+/* ────────────────────────── Code de contrôle (accueil) ────────────────────────── */
+/* code_unique : affiché en évidence, en police monospace, pour être
+   facilement recopié ou montré à l'accueil (scan/QR côté staff) —
+   qr_token_secret n'est volontairement jamais rendu à l'écran. */
+.rdv-code-unique {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  background-color: #f8f9fb;
+  border: 1px dashed #d7dbe2;
+  border-radius: 6px;
+  padding: 6px 10px;
+  display: inline-block;
+}
+
+/* ────────────────────────── Ajustements de page ────────────────────────── */
+
+/* La colonne "Motif" peut contenir un texte assez long : on l'ellipse
+   proprement plutôt que de laisser le tableau s'étirer (le texte
+   complet reste consultable via "Voir / modifier"). */
+.rdv-page .aps-table td {
+  vertical-align: middle;
+}
+
+/* Rendez-vous passés : légère atténuation visuelle des lignes
+   "annulé"/"non honoré" dans la table pour distinguer d'un coup d'œil
+   le passé/l'inactif du reste du planning. */
+.rdv-page .aps-table tbody tr:has(.aps-badge.is-muted),
+.rdv-page .aps-table tbody tr:has(.aps-badge.is-danger) {
+  opacity: 0.75;
+}
+
+/* Zone de saisie du motif : compteur de caractères aligné à droite,
+   cohérent avec le style discret déjà utilisé pour les aides de
+   formulaire (aps-text-muted) ailleurs dans le back-office. */
+.rdv-page textarea.form-control {
+  resize: vertical;
+  min-height: 90px;
+}
+
+/* Petit indicateur visuel devant le type de rendez-vous dans la table
+   (icône) pour repérer une téléconsultation d'un coup d'œil sans
+   attendre le chargement complet de la ligne. */
+.rdv-page .aps-table td i.fa-video {
+  color: #6366f1;
+}
+
+.rdv-page .aps-table td i.fa-hospital {
+  color: #0ea5e9;
+}

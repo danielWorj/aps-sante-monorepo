@@ -50,6 +50,7 @@ import {
   modifierOrdonnance,
   supprimerOrdonnance,
   listerRendezVous,
+  listerMedecins,
 } from '../services/medecinService';
 
 /* ────────────────────────── Aides rôle / identité ────────────────────────── */
@@ -125,6 +126,15 @@ function apercuTexte(texte, longueur = 120) {
 
 // Libellé lisible d'un rendez-vous brut (utilisé pour peupler le
 // sélecteur de création côté médecin).
+function libelleMedecin(m) {
+  if (!m) return '—';
+  const nomComplet = [m.prenom, m.nom].filter(Boolean).join(' ').trim();
+  const specialite = m.specialite?.nom || m.specialite_nom || null;
+  if (nomComplet && specialite) return `Dr ${nomComplet} — ${specialite}`;
+  if (nomComplet) return `Dr ${nomComplet}`;
+  return m.medecin_id || '—';
+}
+
 function libelleRendezVous(rv) {
   if (!rv) return '—';
   const date = formaterDateHeure(rv.date_heure);
@@ -234,6 +244,50 @@ export default function Ordonnance() {
   const [filtrePatientAdmin, setFiltrePatientAdmin] = useState(''); // admin
   const [recherche, setRecherche] = useState('');
 
+  // Options des sélecteurs de filtre admin (médecin / patient) —
+  // chargées une seule fois, indépendamment des filtres actifs, pour
+  // ne pas faire disparaître des options au fur et à mesure qu'on
+  // filtre la liste des ordonnances.
+  const [medecinsFiltrablesAdmin, setMedecinsFiltrablesAdmin] = useState([]);
+  const [patientsFiltrablesAdmin, setPatientsFiltrablesAdmin] = useState([]);
+  const [chargementFiltresAdmin, setChargementFiltresAdmin] = useState(false);
+
+  // Alimente les sélecteurs "Médecin" / "Patient" du filtre admin.
+  // `listerMedecins()` sans filtre renvoie l'annuaire complet.
+  // ⚠️ Aucun `listerPatients()` n'existe dans medecinService.js : la
+  // liste des patients est donc déduite des ordonnances existantes
+  // (non filtrées), seule source de cette information côté front — à
+  // remplacer par un vrai annuaire si un endpoint patients est ajouté
+  // côté serveur.
+  const chargerFiltresAdmin = useCallback(() => {
+    if (!estAdmin) {
+      setMedecinsFiltrablesAdmin([]);
+      setPatientsFiltrablesAdmin([]);
+      return;
+    }
+    setChargementFiltresAdmin(true);
+    Promise.all([listerMedecins(), listerOrdonnances()])
+      .then(([medecins, toutesLesOrdonnances]) => {
+        setMedecinsFiltrablesAdmin(medecins);
+        const parPatient = new Map();
+        toutesLesOrdonnances.forEach((o) => {
+          if (o.patient_id == null) return;
+          const cle = String(o.patient_id);
+          if (!parPatient.has(cle)) {
+            parPatient.set(cle, { patient_id: o.patient_id, nom: o.patient?.nom_complet || null });
+          }
+        });
+        setPatientsFiltrablesAdmin(
+          Array.from(parPatient.values()).sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr'))
+        );
+      })
+      .catch(() => {
+        setMedecinsFiltrablesAdmin([]);
+        setPatientsFiltrablesAdmin([]);
+      })
+      .finally(() => setChargementFiltresAdmin(false));
+  }, [estAdmin]);
+
   const chargerRendezVousMedecin = useCallback(() => {
     if (!estMedecin || !medecinId) {
       setRendezVousMedecin([]);
@@ -274,13 +328,28 @@ export default function Ordonnance() {
 
   useEffect(() => {
     if (status === 'loading') return;
+    chargerFiltresAdmin();
+  }, [status, chargerFiltresAdmin]);
+
+  useEffect(() => {
+    if (status === 'loading') return;
     chargerOrdonnances();
   }, [status, chargerOrdonnances]);
 
   const lignesTable = useMemo(() => {
     const q = recherche.trim().toLowerCase();
     if (!q) return ordonnances;
-    return ordonnances.filter((o) => (o.contenu || '').toLowerCase().includes(q));
+    return ordonnances.filter((o) => {
+      const medecinNom = o.medecin?.nom_complet || '';
+      const patientNom = o.patient?.nom_complet || '';
+      return (
+        (o.contenu || '').toLowerCase().includes(q) ||
+        medecinNom.toLowerCase().includes(q) ||
+        patientNom.toLowerCase().includes(q) ||
+        String(o.medecin_id || '').toLowerCase().includes(q) ||
+        String(o.patient_id || '').toLowerCase().includes(q)
+      );
+    });
   }, [ordonnances, recherche]);
 
   /* ─── Modale création / consultation / édition ─────────────────── */
@@ -453,24 +522,36 @@ export default function Ordonnance() {
               {estAdmin && (
                 <>
                   <div className="col-md-3">
-                    <label className="form-label">ID médecin</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="Filtrer par médecin…"
+                    <label className="form-label">Médecin</label>
+                    <select
+                      className="form-select"
                       value={filtreMedecinAdmin}
                       onChange={(e) => setFiltreMedecinAdmin(e.target.value)}
-                    />
+                      disabled={chargementFiltresAdmin}
+                    >
+                      <option value="">Tous les médecins</option>
+                      {medecinsFiltrablesAdmin.map((m) => (
+                        <option key={m.medecin_id} value={m.medecin_id}>
+                          {libelleMedecin(m)}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="col-md-3">
-                    <label className="form-label">ID patient</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="Filtrer par patient…"
+                    <label className="form-label">Patient</label>
+                    <select
+                      className="form-select"
                       value={filtrePatientAdmin}
                       onChange={(e) => setFiltrePatientAdmin(e.target.value)}
-                    />
+                      disabled={chargementFiltresAdmin}
+                    >
+                      <option value="">Tous les patients</option>
+                      {patientsFiltrablesAdmin.map((p) => (
+                        <option key={p.patient_id} value={p.patient_id}>
+                          {p.nom || `Patient #${p.patient_id}`}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </>
               )}
@@ -480,10 +561,26 @@ export default function Ordonnance() {
                   <i className="fa-solid fa-magnifying-glass"></i>
                   <input
                     type="text"
-                    placeholder="Rechercher dans le contenu de l'ordonnance…"
+                    placeholder="Contenu, médecin, patient…"
                     value={recherche}
                     onChange={(e) => setRecherche(e.target.value)}
                   />
+                  {recherche && (
+                    <button
+                      type="button"
+                      aria-label="Effacer la recherche"
+                      onClick={() => setRecherche('')}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'inherit',
+                        opacity: 0.6,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

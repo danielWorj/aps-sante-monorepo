@@ -28,8 +28,14 @@ import ForfaitPublicitaire from './pages/ForfaitPublicitaire';
 import Assurances from './pages/Assurances';
 //URGENCES
 import Urgences from './pages/Urgences';
+//MEDECIN 
+import Medecin from './pages/Medecin';
+import AvisMedecin from './pages/avisMedecin';
+import AbonnementMedecin from './pages/AbonnementMedecin';
+import Ordonnance from './pages/Ordonnance';
 
-
+// RENDEZ VOUS
+import RendezVous from './pages/RendezVous';
 
 import AvisPharmacie from './pages/avisPharmacie';
 import Utilisateurs from './pages/Utilisateurs';
@@ -73,7 +79,13 @@ export const router = createBrowserRouter([
 
           // URGENCES
           { path: '/urgences', element: <Urgences /> },
-
+          //MEDECIN
+          { path: '/medecin', element: <Medecin /> },
+          { path: '/avis-medecin', element: <AvisMedecin /> },
+          { path: '/abonnement-medecin', element: <AbonnementMedecin /> },
+          { path: '/ordonnance', element: <Ordonnance /> },
+          // RENDEZ VOUS 
+          { path: '/rendez-vous', element: <RendezVous /> },
           //   { path: '/pharmacie', element: <Pharmacie /> },
           //   { path: '/structure-sante', element: <StructureSante /> },
           //   { path: '/profil/:id', element: <ProfilMedecin /> },

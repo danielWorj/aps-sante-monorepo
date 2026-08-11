@@ -1,0 +1,247 @@
+/* src/components/medecin.css
+ *
+ * Styles scoping la page "Médecins" (medecin.jsx) : fiche détail
+ * (modale), accordéon des pièces justificatives (CNI / attestation
+ * d'exercice), avatar générique de la fiche et des cartes de la
+ * grille.
+ *
+ * Contrairement à Pharmacie.jsx (styles injectés en ligne via une
+ * balise <style>), ce fichier est importé normalement depuis
+ * medecin.jsx :
+ *   import "./medecin.css";
+ *
+ * Un médecin n'a pas de photo de profil dans le modèle actuel (seuls
+ * cni_url et attestation_url existent côté backend, voir
+ * CHAMPS_FICHIERS_MEDECIN dans medecinService.js) : pas d'équivalent
+ * de .aps-fiche-image-wrap (Pharmacie.jsx) ici, remplacé par un avatar
+ * icône générique.
+ *
+ * Classes préfixées "aps-fiche-" / "aps-accordion-" / "aps-medecin-"
+ * pour ne pas entrer en collision avec admin.css (qui définit déjà
+ * aps-card, aps-kpi, aps-badge, aps-status-*, variables --aps-*…).
+ */
+
+/* ── Fiche détail (modale) ────────────────────────────────────────── */
+
+.aps-fiche-header {
+  align-items: flex-start;
+}
+.aps-fiche-souscritre {
+  font-size: 13px;
+}
+
+.aps-fiche-avatar-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 32px 16px 20px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--aps-primary-100, #EAF4FD) 0%, #ffffff 100%);
+}
+.aps-fiche-avatar {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  color: var(--aps-primary, #1C8FE0);
+  font-size: 44px;
+  box-shadow: 0 6px 18px rgba(28, 143, 224, 0.2);
+  margin-bottom: 6px;
+}
+.aps-fiche-statut-flottant {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+.aps-fiche-nom {
+  font-size: 17px;
+  font-weight: 600;
+}
+.aps-fiche-specialite {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--aps-primary, #1C8FE0);
+}
+.aps-fiche-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--aps-text-500, #6B7280);
+}
+.aps-fiche-note i {
+  color: #F5A623;
+}
+
+.aps-fiche-type-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--aps-border, #E7EAF0);
+  border-radius: 12px;
+}
+.aps-fiche-type-icone {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.aps-fiche-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  margin-bottom: 18px;
+}
+.aps-fiche-info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.aps-fiche-info-item > i {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--aps-primary-100, #EAF4FD);
+  color: var(--aps-primary, #1C8FE0);
+  font-size: 13px;
+  margin-top: 1px;
+}
+.aps-fiche-info-label {
+  font-size: 11.5px;
+  color: var(--aps-text-500, #6B7280);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.aps-fiche-info-valeur {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.aps-fiche-section-titre {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--aps-text-500, #6B7280);
+  margin-bottom: 8px;
+}
+
+/* ── Accordéon des pièces justificatives ──────────────────────────── */
+
+.aps-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.aps-accordion-item {
+  border: 1px solid var(--aps-border, #E7EAF0);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+.aps-accordion-item.is-open {
+  border-color: var(--aps-primary, #1C8FE0);
+}
+.aps-accordion-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13.5px;
+}
+.aps-accordion-item.is-open .aps-accordion-trigger {
+  background: var(--aps-primary-100, #EAF4FD);
+}
+.aps-accordion-icone {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--aps-primary-100, #EAF4FD);
+  color: var(--aps-primary, #1C8FE0);
+  font-size: 12px;
+}
+.aps-accordion-libelle {
+  flex: 1;
+  font-weight: 500;
+}
+.aps-accordion-lien-externe {
+  color: var(--aps-text-500, #6B7280);
+  font-size: 12px;
+  padding: 4px;
+}
+.aps-accordion-lien-externe:hover {
+  color: var(--aps-primary, #1C8FE0);
+}
+.aps-accordion-chevron {
+  font-size: 12px;
+  color: var(--aps-text-500, #6B7280);
+  transition: transform 0.15s ease;
+}
+.aps-accordion-item.is-open .aps-accordion-chevron {
+  transform: rotate(180deg);
+  color: var(--aps-primary, #1C8FE0);
+}
+
+.aps-accordion-panel {
+  padding: 12px;
+  border-top: 1px solid var(--aps-border, #E7EAF0);
+  background: #FAFBFC;
+}
+.aps-accordion-apercu-objet {
+  display: block;
+  width: 100%;
+  height: 380px;
+  border: 0;
+  border-radius: 8px;
+  background: #fff;
+}
+.aps-accordion-apercu-repli {
+  font-size: 13px;
+  padding: 4px 2px;
+}
+
+/* ── Avatar sur les cartes de la grille ───────────────────────────── */
+
+.aps-medecin-carte-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.aps-medecin-avatar-carte {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--aps-primary-100, #EAF4FD);
+  color: var(--aps-primary, #1C8FE0);
+  font-size: 20px;
+}

@@ -17,38 +17,58 @@
 // "/api" — les chemins ci-dessous commencent donc directement par
 // "/medecins…", "/avis-medecin…", "/abonnements-medecin…",
 // "/lignes-abonnement-medecin…", "/rendez-vous…", "/ordonnances…",
-// pas par "/api/…".
+// "/specialites…", pas par "/api/…".
 //
-// IMPORTANT — modifierMedecin envoie un `FormData` (multipart, à cause
-// de gererTeleversementMedecin qui traite cni_url / attestation_url,
-// voir medecin.routes.js) et non un objet JSON. apiFetch détecte déjà
-// les instances de FormData et laisse passer le corps tel quel, sans
-// JSON.stringify ni Content-Type manuel — rien à faire ici de ce côté.
-// Aucune route de création de fiche médecin n'existe dans
-// medecin.routes.js (pas de POST /medecins) : la fiche est
-// vraisemblablement créée ailleurs (inscription du compte médecin),
-// d'où l'absence d'un `creerMedecin` ci-dessous.
+// IMPORTANT — creerMedecin ET modifierMedecin envoient un `FormData`
+// (multipart, à cause de gererTeleversementMedecin qui traite les
+// fichiers `cni` / `attestation` / `photo`, voir upload.middleware.js)
+// et non un objet JSON. apiFetch détecte déjà les instances de
+// FormData et laisse passer le corps tel quel, sans JSON.stringify ni
+// Content-Type manuel — rien à faire ici de ce côté.
+// ⚠️ Les clés FormData attendues par multer sont `cni`, `attestation`
+// et `photo` (PAS `cni_url`/`attestation_url`/`photo_url`, qui sont les
+// noms des colonnes en base écrites par le contrôleur après upload —
+// voir upload.middleware.js, .fields([{name:"cni"},{name:"attestation"},
+// {name:"photo"}])).
+// `photo` (photo de profil du médecin) est OPTIONNELLE, aussi bien à
+// la création qu'en modification (schema.prisma, Medecin.photo_url,
+// nullable) — contrairement à cni/attestation qui sont obligatoires à
+// la création. C'est confirmé par medecin.controller.js
+// (gererTeleversementMedecin, creerMedecin/modifierMedecin :
+// `req.files?.photo?.[0]`), ce n'est plus une hypothèse.
 //
-// ⚠️ Comme medecin.controller.js n'a pas été fourni, plusieurs éléments
-// ci-dessous sont des HYPOTHÈSES déduites par analogie avec les autres
-// services du front (Pharmacie / StructureSante / Assurance / Avis
-// Pharmacie), à vérifier/ajuster une fois le contrôleur réel
-// disponible :
-//   - noms exacts des clés de réponse JSON (`d.medecins`, `d.medecin`,
-//     etc.) — parfois camelCase (StructureSanteService,
-//     pharmacieService), parfois snake_case (assuranceService) selon
-//     les fichiers déjà fournis ; camelCase retenu ici par défaut ;
-//   - champs acceptés par chaque POST/PUT (listés à titre indicatif) ;
+// creerMedecin : POST /medecins, réservé admin/superadmin. Crée EN
+// MÊME TEMPS le compte utilisateur du médecin (rôle "medecin", mot de
+// passe temporaire généré côté serveur) et la fiche medecin. Le mot de
+// passe temporaire n'est renvoyé qu'une seule fois dans la réponse
+// (`utilisateur.mot_de_passe_temporaire`) — à afficher/communiquer par
+// l'appelant, jamais re-consultable ensuite.
+//
+// ⚠️ Comme medecin.controller.js n'a été fourni que partiellement,
+// plusieurs éléments ci-dessous restent des HYPOTHÈSES déduites par
+// analogie avec les autres services du front (Pharmacie /
+// StructureSante / Assurance / Avis Pharmacie), à vérifier/ajuster :
+//   - champs acceptés par les POST/PUT non couverts par le contrôleur
+//     fourni (avis, abonnements, rendez-vous, ordonnances) ;
 //   - valeurs exactes des enums de statut (statut_moderation des avis,
 //     statut d'un rendez-vous, etc.), non documentées dans les
 //     commentaires de medecin.routes.js.
 //
-// Rappel des règles d'accès côté serveur (déduites des commentaires de
-// medecin.routes.js — le serveur reste la seule source de vérité) :
+// Point confirmé par medecin.routes.js (et non plus une hypothèse) :
+// la spécialité n'est PAS une colonne texte libre de la fiche médecin
+// mais une vraie entité référentiel (table Specialite), reliée par FK
+// medecin.specialite_id — d'où la section "Spécialités médicales"
+// ci-dessous, absente de la version précédente de ce service.
+//
+// Rappel des règles d'accès côté serveur (confirmées par
+// medecin.controller.js / medecin.routes.js — le serveur reste la
+// seule source de vérité) :
 //
 //   Médecins (fiche Annuaire)
 //   - GET (liste, détail)  : public, aucun token requis, aucune vue
 //     "admin" élargie sur ces deux routes.
+//   - POST                 : admin/superadmin uniquement — crée aussi
+//     le compte utilisateur lié.
 //   - PUT                  : le médecin propriétaire (déduit du token)
 //     ou admin/superadmin.
 //   - DELETE                : superadmin uniquement.
@@ -82,6 +102,14 @@
 //   - DELETE                : admin/superadmin uniquement, jamais par
 //     le médecin après émission.
 //
+//   Spécialités médicales (référentiel)
+//   - GET (liste, détail)  : public, aucun token requis (même patron
+//     que Langue/Devise/Pays/Ville).
+//   - POST / PUT           : admin/superadmin.
+//   - DELETE                : superadmin uniquement — le contrôleur
+//     renvoie 409 si des fiches medecin référencent encore la
+//     spécialité via specialite_id.
+//
 // apiFetch lève une Error (avec `.status` et `.data`) si le backend
 // répond en erreur — chaque fonction ci-dessous se contente de la
 // laisser remonter telle quelle à l'appelant.
@@ -109,20 +137,40 @@ export const STATUTS_MODERATION_AVIS_MEDECIN = [
   { valeur: 'rejete', libelle: 'Rejeté' },
 ];
 
-// Hypothèse : le commentaire de medecin.routes.js mentionne
-// explicitement statut="annule" pour l'annulation ; les autres valeurs
-// (cycle de vie avant/après le rendez-vous) sont devinées par usage
-// courant — à confirmer avec le contrôleur réel.
+// Confirmé par rendezVous.controller.js (STATUTS_RDV) : cycle de vie
+// complet d'un rendez-vous, y compris le contrôle de présence à
+// l'accueil (code_unique / QR) et la contestation a posteriori.
 export const STATUTS_RENDEZ_VOUS = [
-  { valeur: 'planifie', libelle: 'Planifié' },
+  { valeur: 'cree', libelle: 'Créé' },
   { valeur: 'confirme', libelle: 'Confirmé' },
-  { valeur: 'termine', libelle: 'Terminé' },
+  { valeur: 'en_attente_presence', libelle: 'En attente de présence' },
+  { valeur: 'honore', libelle: 'Honoré' },
+  { valeur: 'non_honore', libelle: 'Non honoré' },
   { valeur: 'annule', libelle: 'Annulé' },
+  { valeur: 'conteste', libelle: 'Contesté' },
 ];
 
-// Champs fichier attendus par gererTeleversementMedecin (voir
-// medecin.routes.js / upload.middleware.js).
-const CHAMPS_FICHIERS_MEDECIN = ['cni_url', 'attestation_url'];
+// Confirmé par rendezVous.controller.js (TYPES_RDV). structure_id n'a
+// de sens que pour "physique" (sinon cabinet libéral, structure_id
+// reste null) ; "teleconsultation" exige que le médecin visé ait
+// teleconsultation_activee = true, sans quoi le serveur renvoie 400.
+export const TYPES_RENDEZ_VOUS = [
+  { valeur: 'physique', libelle: 'Consultation physique' },
+  { valeur: 'teleconsultation', libelle: 'Téléconsultation' },
+];
+
+// motif : champ texte libre optionnel (précision du motif de
+// consultation), trim() côté serveur, 1000 caractères maximum — au
+// delà le serveur renvoie 400 (voir creerRendezVous / modifierRendezVous
+// dans rendezVous.controller.js). Envoyer une chaîne vide ou null en
+// modification efface le motif existant.
+export const MOTIF_RENDEZ_VOUS_LONGUEUR_MAX = 1000;
+
+// Champs fichier attendus par gererTeleversementMedecin — noms des
+// clés multer (.fields([{name:"cni"},{name:"attestation"},
+// {name:"photo"}])), PAS les noms des colonnes en base
+// (cni_url/attestation_url/photo_url) — voir upload.middleware.js.
+const CHAMPS_FICHIERS_MEDECIN = ['cni', 'attestation', 'photo'];
 
 function construireParametres(filtres = {}) {
   const params = new URLSearchParams();
@@ -136,11 +184,13 @@ function construireParametres(filtres = {}) {
 }
 
 /**
- * Construit le FormData envoyé à la modification d'une fiche médecin :
- * les champs texte tels quels, et cni_url / attestation_url
- * uniquement s'ils contiennent un vrai `File` (permet un envoi
- * partiel : un fichier non re-sélectionné n'est pas renvoyé, donc pas
- * remplacé côté serveur).
+ * Construit le FormData envoyé à la création/modification d'une fiche
+ * médecin : les champs texte tels quels, et cni / attestation / photo
+ * uniquement s'ils contiennent un vrai `File`. En modification, cela
+ * permet un envoi partiel : un fichier non re-sélectionné n'est pas
+ * renvoyé, donc pas remplacé côté serveur (cni/attestation restent
+ * inchangés, et photo aussi — elle est optionnelle même à la création,
+ * voir CHAMPS_FICHIERS_MEDECIN ci-dessus).
  */
 function construireFormDataMedecin(donnees = {}) {
   const formData = new FormData();
@@ -159,44 +209,104 @@ function construireFormDataMedecin(donnees = {}) {
  * Médecins (fiche Annuaire)
  * =================================================================== */
 
+// medecin.controller.js renvoie nom/prenom/email/telephone imbriqués
+// sous `medecin.utilisateur.{...}` (relation Prisma), alors que
+// Medecin.jsx les lit en propriétés plates directement sur l'objet
+// medecin (medecin.nom, medecin.prenom, medecin.email,
+// medecin.telephone — voir la fiche détail, le tableau et le
+// formulaire d'édition). Sans cet aplatissement, ces 4 champs
+// s'affichaient toujours vides ("—") même quand le formulaire avait
+// bien été rempli et bien enregistré côté serveur.
+// À l'inverse, ville_exercice / pays_exercice restent des objets
+// imbriqués (medecin.ville_exercice.nom, medecin.pays_exercice.nom) :
+// c'est déjà la forme attendue par le JSX, on ne les touche pas ici.
+function normaliserMedecin(m) {
+  if (!m) return m;
+  return {
+    ...m,
+    nom: m.nom ?? m.utilisateur?.nom ?? "",
+    prenom: m.prenom ?? m.utilisateur?.prenom ?? "",
+    email: m.email ?? m.utilisateur?.email ?? "",
+    telephone: m.telephone ?? m.utilisateur?.telephone ?? "",
+  };
+}
+
+/**
+ * POST /api/medecins  (admin/superadmin uniquement)
+ * Crée en même temps le compte utilisateur du médecin (rôle "medecin")
+ * et sa fiche annuaire. cni et attestation sont obligatoires ; photo
+ * est optionnelle (schema.prisma, Medecin.photo_url, nullable).
+ * @param {Object} donnees - {
+ *   nom, prenom, email, telephone?, pays_id,           // compte utilisateur
+ *   specialite_id, numero_ordre, pays_exercice_id, ville_exercice_id,
+ *   teleconsultation_activee, tarif_indicatif,          // fiche médecin
+ *   statut_verification?,                               // admin seulement, sinon "non_publie" par défaut
+ *   cni (File), attestation (File),                      // obligatoires
+ *   photo? (File)                                        // optionnelle, photo de profil
+ * }
+ *   specialite_id référence la table Specialite (voir listerSpecialites
+ *   ci-dessous) — ce n'est plus un texte libre, cf. schema.prisma.
+ * @returns {Promise<Object>} réponse brute du backend :
+ *   { message, medecin, utilisateur }. `utilisateur.mot_de_passe_temporaire`
+ *   n'est présent qu'ici, une seule fois — à communiquer au médecin,
+ *   qui devra le changer à sa première connexion.
+ */
+export function creerMedecin(donnees) {
+  return apiFetch('/medecins', { method: 'POST', body: construireFormDataMedecin(donnees) });
+}
+
 /**
  * GET /api/medecins
- * PUBLIQUE, aucune vue "admin" élargie côté serveur sur cette route.
- * @param {Object} filtres - { pays_id?, ville_id?, specialite?,
+ * PUBLIQUE, authentification optionnelle côté serveur : un visiteur
+ * anonyme ne reçoit que nom/prenom, un admin/superadmin connecté reçoit
+ * en plus email/téléphone (voir medecin.controller.js,
+ * selectionUtilisateurSelonRole) — apiFetch ajoute déjà le token si
+ * l'utilisateur est connecté, rien à faire de plus ici.
+ * @param {Object} filtres - { pays_id?, ville_id?, specialite_id?,
  *   statut_verification?, recherche? } — champs devinés par analogie
  *   avec les autres fiches annuaire (Pharmacie / StructureSante), à
  *   confirmer.
- * @returns {Promise<Array>} liste des médecins
+ * @returns {Promise<Array>} liste des médecins, avec nom/prenom/email/
+ *   telephone aplatis sur chaque objet (voir normaliserMedecin).
  */
 export function listerMedecins(filtres = {}) {
   const suffixe = construireParametres(filtres);
-  return apiFetch(`/medecins${suffixe}`).then((d) => d.medecins ?? []);
+  return apiFetch(`/medecins${suffixe}`).then((d) => (d.medecins ?? []).map(normaliserMedecin));
 }
 
 /**
  * GET /api/medecins/:id
- * PUBLIQUE.
- * @returns {Promise<Object>} le médecin
+ * PUBLIQUE, authentification optionnelle (mêmes règles que
+ * listerMedecins ci-dessus).
+ * @returns {Promise<Object>} le médecin, avec nom/prenom/email/
+ *   telephone aplatis (voir normaliserMedecin).
  */
 export function obtenirMedecin(id) {
-  return apiFetch(`/medecins/${id}`).then((d) => d.medecin);
+  return apiFetch(`/medecins/${id}`).then((d) => normaliserMedecin(d.medecin));
 }
 
 /**
  * PUT /api/medecins/:id  (médecin propriétaire ou admin/superadmin)
  * @param {Object} donnees - champs partiels à mettre à jour ;
- *   cni_url / attestation_url optionnels (n'envoyer que les fichiers à
- *   remplacer — gérés par gererTeleversementMedecin côté serveur).
+ *   cni? / attestation? / photo? (File) optionnels — n'envoyer que les
+ *   fichiers à remplacer (gérés par gererTeleversementMedecin côté
+ *   serveur) ; un fichier omis reste inchangé côté serveur, y compris
+ *   photo qui est optionnelle même à la création.
  *   statut_verification n'est vraisemblablement honoré tel quel que
  *   pour admin/superadmin (par analogie avec Pharmacie/StructureSante,
  *   à confirmer).
- * @returns {Promise<Object>} le médecin mis à jour
+ *   nom / prenom / telephone sont désormais bien pris en compte par le
+ *   serveur (ils vivent sur le compte utilisateur lié, pas sur la
+ *   fiche medecin — voir medecin.controller.js, CHAMPS_MODIFIABLES_
+ *   UTILISATEUR) : ne plus les omettre côté appelant.
+ * @returns {Promise<Object>} le médecin mis à jour, avec nom/prenom/
+ *   email/telephone aplatis (voir normaliserMedecin).
  */
 export function modifierMedecin(id, donnees) {
   return apiFetch(`/medecins/${id}`, {
     method: 'PUT',
     body: construireFormDataMedecin(donnees),
-  }).then((d) => d.medecin);
+  }).then((d) => normaliserMedecin(d.medecin));
 }
 
 /**
@@ -359,18 +469,37 @@ export function supprimerLigneAbonnementMedecin(ligneId) {
  *
  * Donnée privée patient/médecin : authentifier partout. Autorisation
  * fine (patient concerné, médecin concerné, admin/superadmin) gérée
- * côté serveur dans chaque handler.
+ * côté serveur dans chaque handler (voir rendezVous.controller.js).
+ *
+ * Confirmé par rendezVous.controller.js (n'est plus une hypothèse) :
+ *   - champ de créneau : `date_creneau` (PAS `date_heure`) ;
+ *   - le back-end répond `{ rendez_vous: ... }` (snake_case, singulier
+ *     même pour la liste) sur les 4 routes ci-dessous — d'où
+ *     `d.rendez_vous` et non `d.rendezVous` dans les extracteurs ;
+ *   - `patient_id` est TOUJOURS déduit du token côté serveur à la
+ *     création (jamais lu dans req.body) : un compte sans profil
+ *     patient reçoit 403. Inutile donc de l'envoyer depuis le front.
+ *   - `motif` (string, optionnelle, 1000 caractères max, trim() côté
+ *     serveur) : champ libre de précision du motif de consultation.
+ *     Envoyer '' ou null en modification l'efface. Voir
+ *     MOTIF_RENDEZ_VOUS_LONGUEUR_MAX ci-dessus pour la validation
+ *     front (même limite que le serveur, pour un message d'erreur
+ *     immédiat plutôt qu'un aller-retour réseau).
  * =================================================================== */
 
 /**
  * GET /api/rendez-vous
- * @param {Object} filtres - { medecin_id?, patient_id?, statut?,
- *   date_debut?, date_fin? }
+ * Toujours scopé à l'utilisateur courant (son propre profil patient
+ * ou médecin) côté serveur, sauf admin/superadmin qui peut filtrer
+ * librement.
+ * @param {Object} filtres - { statut?, medecin_id?, patient_id? } —
+ *   seuls filtres reconnus par le contrôleur ; `statut` doit être une
+ *   valeur de STATUTS_RENDEZ_VOUS sous peine de 400.
  * @returns {Promise<Array>} liste des rendez-vous
  */
 export function listerRendezVous(filtres = {}) {
   const suffixe = construireParametres(filtres);
-  return apiFetch(`/rendez-vous${suffixe}`).then((d) => d.rendezVous ?? []);
+  return apiFetch(`/rendez-vous${suffixe}`).then((d) => d.rendez_vous ?? []);
 }
 
 /**
@@ -378,37 +507,47 @@ export function listerRendezVous(filtres = {}) {
  * @returns {Promise<Object>} le rendez-vous
  */
 export function obtenirRendezVous(id) {
-  return apiFetch(`/rendez-vous/${id}`).then((d) => d.rendezVous);
+  return apiFetch(`/rendez-vous/${id}`).then((d) => d.rendez_vous);
 }
 
 /**
- * POST /api/rendez-vous  (tout utilisateur authentifié)
- * @param {Object} donnees - { medecin_id, patient_id?, date_heure, motif? }
- *   patient_id vraisemblablement déduit du token pour un patient
- *   (comme utilisateur_id ailleurs dans le front), envoyable
- *   explicitement seulement par un admin/superadmin — à confirmer.
+ * POST /api/rendez-vous  (réservé à un compte PATIENT — 403 sinon)
+ * `code_unique` / `qr_token_secret` (contrôle de présence à l'accueil)
+ * sont générés côté serveur, jamais saisis ici.
+ * @param {Object} donnees - {
+ *   medecin_id,                 // requis
+ *   type_rdv,                   // requis — 'physique' | 'teleconsultation'
+ *   date_creneau,                // requis — ISO date/heure
+ *   structure_id?,               // optionnel, sens uniquement si type_rdv === 'physique'
+ *   motif?,                      // optionnel, texte libre, 1000 caractères max
+ * }
  * @returns {Promise<Object>} le rendez-vous créé
  */
 export function creerRendezVous(donnees) {
-  return apiFetch('/rendez-vous', { method: 'POST', body: donnees }).then((d) => d.rendezVous);
+  return apiFetch('/rendez-vous', { method: 'POST', body: donnees }).then((d) => d.rendez_vous);
 }
 
 /**
  * PUT /api/rendez-vous/:id
- * @param {Object} donnees - champs partiels, typiquement { statut } pour
- *   confirmer/annuler ("annule" = annulation "douce", cf. commentaire
- *   de medecin.routes.js), ou { date_heure, motif } pour un
- *   déplacement.
+ * Ouvert au patient concerné, au médecin concerné, ou à
+ * admin/superadmin (ex. confirmation, reprogrammation, annulation
+ * douce via statut, contestation, correction du motif).
+ * @param {Object} donnees - champs partiels parmi { statut, date_creneau,
+ *   structure_id, motif } — envoyer motif: '' ou motif: null efface le
+ *   motif existant. `statut` doit être une valeur de
+ *   STATUTS_RENDEZ_VOUS ; le serveur valide seulement l'appartenance à
+ *   l'enum, pas la cohérence de la transition avec le rôle appelant.
  * @returns {Promise<Object>} le rendez-vous mis à jour
  */
 export function modifierRendezVous(id, donnees) {
-  return apiFetch(`/rendez-vous/${id}`, { method: 'PUT', body: donnees }).then((d) => d.rendezVous);
+  return apiFetch(`/rendez-vous/${id}`, { method: 'PUT', body: donnees }).then((d) => d.rendez_vous);
 }
 
 /**
  * DELETE /api/rendez-vous/:id  (admin/superadmin uniquement)
  * Suppression PHYSIQUE — un rendez-vous s'annule normalement via
- * modifierRendezVous(id, { statut: 'annule' }).
+ * modifierRendezVous(id, { statut: 'annule' }). Le serveur renvoie 409
+ * si une ordonnance est encore rattachée à ce rendez-vous.
  */
 export function supprimerRendezVous(id) {
   return apiFetch(`/rendez-vous/${id}`, { method: 'DELETE' });
@@ -466,6 +605,70 @@ export function supprimerOrdonnance(id) {
 }
 
 /* ===================================================================
+ * Spécialités médicales (référentiel)
+ *
+ * Table de référence autonome (même patron que Langue/Devise/Pays/
+ * Ville) : lecture publique, écriture réservée à admin/superadmin,
+ * suppression réservée à superadmin. Une fiche médecin référence sa
+ * spécialité via specialite_id (FK) — voir creerMedecin/modifierMedecin
+ * ci-dessus.
+ * =================================================================== */
+
+/**
+ * GET /api/specialites
+ * PUBLIQUE, aucune authentification requise.
+ * @param {Object} filtres - { recherche? } — champ deviné par analogie
+ *   avec les autres référentiels, à confirmer.
+ * @returns {Promise<Array>} liste des spécialités
+ */
+export function listerSpecialites(filtres = {}) {
+  const suffixe = construireParametres(filtres);
+  return apiFetch(`/specialites${suffixe}`).then((d) => d.specialites ?? []);
+}
+
+/**
+ * GET /api/specialites/:id
+ * PUBLIQUE.
+ * @returns {Promise<Object>} la spécialité
+ */
+export function obtenirSpecialite(id) {
+  return apiFetch(`/specialites/${id}`).then((d) => d.specialite);
+}
+
+/**
+ * POST /api/specialites  (admin/superadmin uniquement)
+ * @param {Object} donnees - { nom, description? } — champs devinés par
+ *   analogie avec les autres référentiels, à confirmer avec le
+ *   contrôleur réel.
+ * @returns {Promise<Object>} la spécialité créée
+ */
+export function creerSpecialite(donnees) {
+  return apiFetch('/specialites', { method: 'POST', body: donnees }).then((d) => d.specialite);
+}
+
+/**
+ * PUT /api/specialites/:id  (admin/superadmin uniquement)
+ * @param {Object} donnees - champs partiels à mettre à jour.
+ * @returns {Promise<Object>} la spécialité mise à jour
+ */
+export function modifierSpecialite(id, donnees) {
+  return apiFetch(`/specialites/${id}`, { method: 'PUT', body: donnees }).then(
+    (d) => d.specialite
+  );
+}
+
+/**
+ * DELETE /api/specialites/:id  (superadmin uniquement)
+ * ⚠️ Le contrôleur renvoie 409 si une ou plusieurs fiches medecin
+ * référencent encore cette spécialité via specialite_id — l'appelant
+ * doit prévoir la gestion de ce cas (message d'erreur adapté plutôt
+ * qu'un échec silencieux).
+ */
+export function supprimerSpecialite(id) {
+  return apiFetch(`/specialites/${id}`, { method: 'DELETE' });
+}
+
+/* ===================================================================
  * Référentiels géographiques (pour peupler un formulaire pays / ville,
  * ex. filtre de recherche de médecins)
  * Ré-exportés depuis referentielService.js plutôt que dupliqués ici,
@@ -491,7 +694,10 @@ const MedecinService = {
   STATUTS_VERIFICATION_MEDECIN,
   STATUTS_MODERATION_AVIS_MEDECIN,
   STATUTS_RENDEZ_VOUS,
+  TYPES_RENDEZ_VOUS,
+  MOTIF_RENDEZ_VOUS_LONGUEUR_MAX,
   // Médecins
+  creerMedecin,
   listerMedecins,
   obtenirMedecin,
   modifierMedecin,
@@ -523,6 +729,12 @@ const MedecinService = {
   creerOrdonnance,
   modifierOrdonnance,
   supprimerOrdonnance,
+  // Spécialités médicales
+  listerSpecialites,
+  obtenirSpecialite,
+  creerSpecialite,
+  modifierSpecialite,
+  supprimerSpecialite,
   // Référentiels
   listerPays,
   listerVilles,

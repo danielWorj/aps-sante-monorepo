@@ -57,19 +57,23 @@ const APS_MENU = [
           // Pas de /publicite-pharmacie dédiée : la publicité pharmacie
           // passe par la rubrique "Publicité" générique plus bas.
         ]
+      },
+      {
+        // Nouveau : /medecin, /avis-medecin, /abonnement-medecin et
+        // /ordonnance sont bien déclarées dans router.jsx -> l'entité
+        // remplace l'ancien placeholder "professionnels" (jamais routé).
+        key: "medecin",
+        label: "Médecins",
+        icon: "fa-solid fa-user-doctor",
+        to: "/medecin",
+        children: [
+          { key: "avis-medecin", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-medecin" },
+          { key: "abonnement-medecin", label: "Abonnements", icon: "fa-solid fa-id-card-clip", to: "/abonnement-medecin" },
+          { key: "ordonnance", label: "Ordonnances", icon: "fa-solid fa-file-prescription", to: "/ordonnance" }
+        ]
       }
 
       // Entités prévues côté maquette mais sans route dans router.jsx :
-      // {
-      //   key: "professionnels",
-      //   label: "Professionnels de santé",
-      //   icon: "fa-solid fa-user-doctor",
-      //   to: "/professionnels",
-      //   children: [
-      //     { key: "publicite-professionnels", label: "Publicité", icon: "fa-solid fa-bullhorn", to: "/publicite-professionnels" },
-      //     { key: "avis-professionnels", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-professionnels" }
-      //   ]
-      // },
       // {
       //   key: "assureurs",
       //   label: "Assureurs & courtiers",
@@ -93,6 +97,17 @@ const APS_MENU = [
     ],
     items: [
       { key: "utilisateurs", label: "Utilisateurs", icon: "fa-solid fa-users", to: "/utilisateurs" }
+    ]
+  },
+   {
+    group: "Mise en Relation",
+    entities: [
+      {
+        key: "rendez-vous",
+        label: "Rendez-vous",
+        icon: "fa-solid fa-calendar-check",
+        to: "/rendez-vous"
+      }
     ]
   },
    {
