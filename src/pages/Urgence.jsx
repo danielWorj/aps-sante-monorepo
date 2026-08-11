@@ -1,76 +1,179 @@
-import { useState } from "react";
-import pub2 from "../assets/img/ads/pub2.jpg";
-
+// src/pages/Urgence.jsx
+//
 // Page "Urgences" — accès à l'aide en un geste : numéros officiels,
 // pharmacies de garde, ambulances et structures ouvertes à proximité.
+//
+// Cette version consomme le backend via urgenceServices :
+//   - GET /types-urgence
+//   - GET /urgences?type_urgence_id=...
+//
+// Les données ne sont plus codées en dur : elles proviennent de l'API.
 
-const emergencyTypes = [
-  { id: "medicale", icon: "fa-kit-medical", label: "Médicale" },
-  { id: "ambulance", icon: "fa-truck-medical", label: "Ambulance" },
-  { id: "garde-nocturne", icon: "fa-moon", label: "Garde nocturne" },
-  { id: "accouchement", icon: "fa-baby", label: "Accouchement" },
-  { id: "intoxication", icon: "fa-skull-crossbones", label: "Intoxication" },
-  { id: "accident", icon: "fa-car-burst", label: "Accident" },
-];
+import { useEffect, useMemo, useState } from "react";
+import pub2 from "../assets/img/ads/pub2.jpg";
+import urgenceServices from "./../services/urgenceService";
 
-const officialNumbers = [
-  { name: "SAMU", meta: "Service d'aide médicale urgente", tel: "119" },
-  { name: "Pompiers", meta: "Protection civile", tel: "118" },
-  { name: "Police secours", meta: "Sécurité publique", tel: "117" },
-];
+/* ===================================================================
+   Helpers d'affichage
+=================================================================== */
 
-const pharmacies = [
-  {
-    name: "Pharmacie du Wouri",
-    meta: "Bonapriso, Douala — 0,8 km · garde jusqu'à 7h00",
-    tel: "+237600000001",
-  },
-  {
-    name: "Pharmacie Bonanjo Nuit & Jour",
-    meta: "Bonanjo, Douala — 1,9 km · garde jusqu'à 7h00",
-    tel: "+237600000004",
-  },
-];
+/**
+ * Transforme un libellé en slug exploitable pour associer une icône.
+ * Exemple : "Garde nocturne" => "garde-nocturne"
+ */
+function normaliserSlug(valeur) {
+  if (valeur === null || valeur === undefined) return "";
 
-const ambulances = [
-  {
-    name: "Ambulance Assistance Douala",
-    meta: "Joignable 24/7 · véhicule médicalisé",
-    tel: "+237600000010",
-  },
-  {
-    name: "SOS Ambulances Littoral",
-    meta: "Joignable 24/7 · transport sanitaire simple & réanimation",
-    tel: "+237600000011",
-  },
-];
+  return String(valeur)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
-const facilities = [
-  {
-    name: "Clinique de la Cité des Palmiers",
-    meta: "Urgences ouvertes 24/7 — 2,3 km",
-    tel: "+237600000012",
-  },
-];
+/**
+ * Icônes FontAwesome associées aux types d'urgence.
+ * Si le type vient du backend avec un libelle proche, on tente de
+ * faire correspondre une icône métier. Sinon, icône téléphone par défaut.
+ */
+const ICONES_TYPES = {
+  medicale: "fa-kit-medical",
+  ambulance: "fa-truck-medical",
+  "garde-nocturne": "fa-moon",
+  accouchement: "fa-baby",
+  intoxication: "fa-skull-crossbones",
+  accident: "fa-car-burst",
+  pharmacie: "fa-mortar-pestle",
+  "pharmacie-de-garde": "fa-mortar-pestle",
+  structure: "fa-hospital",
+  "structure-medicale": "fa-hospital",
+  hopital: "fa-hospital",
+  clinique: "fa-hospital",
+  centre: "fa-hospital",
+  officiel: "fa-phone-volume",
+  samu: "fa-truck-medical",
+  pompiers: "fa-fire-extinguisher",
+  police: "fa-shield-halved",
+};
 
-function UrgenceRow({ name, meta, tel, callOnly, withItinerary }) {
+function obtenirIconeType(typeUrgence) {
+  const slug = normaliserSlug(typeUrgence?.libelle || "");
+
+  return ICONES_TYPES[slug] || "fa-phone";
+}
+
+/**
+ * Détermine si le type correspond à un lieu physique pour lequel
+ * on peut proposer un itinéraire (pharmacie, hôpital, clinique, etc.).
+ */
+function estTypeLieuPhysique(typeUrgence) {
+  const slug = normaliserSlug(typeUrgence?.libelle || "");
+
+  const lieuxPossibles = [
+    "pharmacie",
+    "structure",
+    "clinique",
+    "hopital",
+    "centre",
+    "laboratoire",
+    "dispensaire",
+  ];
+
+  return lieuxPossibles.some((motif) => slug.includes(motif));
+}
+
+/**
+ * Nettoie le numéro pour le lien tel:.
+ * Exemple : "+237 6 00 00 00 00" => "+237600000000"
+ */
+function formaterTelephonePourLien(telephone) {
+  return String(telephone || "").replace(/[^+\d]/g, "");
+}
+
+/**
+ * Les numéros courts officiels (119, 118, 117...) sont affichés
+ * directement dans le bouton plutôt qu'avec le texte "Appeler".
+ */
+function estNumeroCourt(telephone) {
+  const telephoneNettoye = String(telephone || "").replace(/[^+\d]/g, "");
+
+  return !telephoneNettoye.startsWith("+") && telephoneNettoye.length <= 5;
+}
+
+/**
+ * Construit la ligne descriptive d'une urgence.
+ * Si le backend ne renvoie pas de description, on affiche le type
+ * et le pays en secours.
+ */
+function obtenirMetaUrgence(urgence) {
+  if (urgence?.description) {
+    return urgence.description;
+  }
+
+  return [urgence?.type_urgence?.libelle, urgence?.pays?.nom]
+    .filter(Boolean)
+    .join(" — ");
+}
+
+/**
+ * Construit une URL Google Maps pour proposer un itinéraire.
+ * À terme, si vous ajoutez une adresse ou des coordonnées GPS
+ * dans le backend, il faudra utiliser ces champs ici.
+ */
+function obtenirItineraireUrl(urgence) {
+  const requete = [urgence?.libelle, urgence?.pays?.nom]
+    .filter(Boolean)
+    .join(", ");
+
+  if (!requete) {
+    return "#";
+  }
+
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    requete
+  )}`;
+}
+
+/* ===================================================================
+   Composant ligne d'urgence
+=================================================================== */
+
+function UrgenceRow({ name, meta, tel, callOnly, itineraryHref }) {
+  const telephoneHref = `tel:${formaterTelephonePourLien(tel)}`;
+
   return (
     <div className="urgence-row">
       <div>
         <div className="name">{name}</div>
-        <div className="meta">{meta}</div>
+        {meta ? <div className="meta">{meta}</div> : null}
       </div>
-      {withItinerary ? (
+
+      {itineraryHref ? (
         <div className="d-flex gap-2">
-          <a href={`tel:${tel}`} className="btn btn-urgence btn-sm-aps">
+          <a
+            href={telephoneHref}
+            className="btn btn-urgence btn-sm-aps"
+            aria-label={`Appeler ${name}`}
+          >
             <i className="fa-solid fa-phone" />
           </a>
-          <a href="#" className="btn btn-outline-primary btn-sm-aps">
+
+          <a
+            href={itineraryHref}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-outline-primary btn-sm-aps"
+          >
             Itinéraire
           </a>
         </div>
       ) : (
-        <a href={`tel:${tel}`} className="btn btn-urgence btn-sm-aps">
+        <a
+          href={telephoneHref}
+          className="btn btn-urgence btn-sm-aps"
+          aria-label={`Appeler ${name}`}
+        >
           <i className="fa-solid fa-phone" /> {callOnly ? tel : "Appeler"}
         </a>
       )}
@@ -78,59 +181,246 @@ function UrgenceRow({ name, meta, tel, callOnly, withItinerary }) {
   );
 }
 
-export default function Urgence() {
-  const [activeType, setActiveType] = useState(emergencyTypes[0].id);
+/* ===================================================================
+   Page Urgence
+=================================================================== */
 
+export default function Urgence() {
+  const [typesUrgence, setTypesUrgence] = useState([]);
+  const [activeTypeId, setActiveTypeId] = useState("");
+  const [urgences, setUrgences] = useState([]);
+
+  const [chargementTypes, setChargementTypes] = useState(true);
+  const [chargementUrgences, setChargementUrgences] = useState(false);
+
+  const [erreurTypes, setErreurTypes] = useState("");
+  const [erreurUrgences, setErreurUrgences] = useState("");
+
+  const [rechargementTypes, setRechargementTypes] = useState(0);
+  const [rechargementUrgences, setRechargementUrgences] = useState(0);
+
+  const activeType = useMemo(() => {
+    return typesUrgence.find(
+      (type) => type.type_urgence_id === activeTypeId
+    );
+  }, [typesUrgence, activeTypeId]);
+
+  /* ---------------------------------------------------------------
+     Chargement des types d'urgence
+  --------------------------------------------------------------- */
+  useEffect(() => {
+    let actif = true;
+
+    async function chargerTypesUrgence() {
+      setChargementTypes(true);
+      setErreurTypes("");
+
+      try {
+        const reponse = await urgenceServices.listerTypesUrgence();
+        const types = reponse?.types || [];
+
+        if (!actif) return;
+
+        setTypesUrgence(types);
+
+        setActiveTypeId((ancienTypeId) => {
+          if (ancienTypeId) return ancienTypeId;
+
+          return types[0]?.type_urgence_id || "";
+        });
+      } catch (erreur) {
+        if (!actif) return;
+
+        setTypesUrgence([]);
+        setErreurTypes(
+          erreur?.data?.message ||
+            erreur?.message ||
+            "Impossible de charger les types d'urgence."
+        );
+      } finally {
+        if (actif) {
+          setChargementTypes(false);
+        }
+      }
+    }
+
+    chargerTypesUrgence();
+
+    return () => {
+      actif = false;
+    };
+  }, [rechargementTypes]);
+
+  /* ---------------------------------------------------------------
+     Chargement des urgences du type sélectionné
+  --------------------------------------------------------------- */
+  useEffect(() => {
+    if (!activeTypeId) {
+      setUrgences([]);
+      return;
+    }
+
+    let actif = true;
+
+    async function chargerUrgences() {
+      setChargementUrgences(true);
+      setErreurUrgences("");
+
+      try {
+        const reponse = await urgenceServices.listerUrgences({
+          type_urgence_id: activeTypeId,
+        });
+
+        if (!actif) return;
+
+        setUrgences(reponse?.urgences || []);
+      } catch (erreur) {
+        if (!actif) return;
+
+        setUrgences([]);
+        setErreurUrgences(
+          erreur?.data?.message ||
+            erreur?.message ||
+            "Impossible de charger les numéros d'urgence."
+        );
+      } finally {
+        if (actif) {
+          setChargementUrgences(false);
+        }
+      }
+    }
+
+    chargerUrgences();
+
+    return () => {
+      actif = false;
+    };
+  }, [activeTypeId, rechargementUrgences]);
+
+  /* ---------------------------------------------------------------
+     Actions UI
+  --------------------------------------------------------------- */
+  function allerAuxResultats() {
+    document
+      .getElementById("resultats-urgences")
+      ?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  function selectionnerType(typeUrgence) {
+    if (!typeUrgence?.type_urgence_id) return;
+
+    setActiveTypeId(typeUrgence.type_urgence_id);
+  }
+
+  /* ---------------------------------------------------------------
+     Rendu
+  --------------------------------------------------------------- */
   return (
     <>
       {/* ============================ HERO SOS ============================ */}
       <section className="urgence-hero">
         <div className="container-aps" style={{ maxWidth: "920px" }}>
-          <span className="eyebrow" style={{ color: "var(--urgence-dark)" }}>
+          <span
+            className="eyebrow"
+            style={{ color: "var(--urgence-dark)" }}
+          >
             Accès en un geste
           </span>
+
           <h1 style={{ fontSize: "1.85rem", marginTop: ".4rem" }}>
             Une urgence ? Obtenez de l'aide immédiatement.
           </h1>
+
           <p>
             Numéros officiels, pharmacies de garde, ambulances joignables et
             structures ouvertes, affichés instantanément par proximité. Aucune
             publicité ici, en toutes circonstances.
           </p>
 
-          <button type="button" className="big-sos">
-            <i className="fa-solid fa-triangle-exclamation" /> J'AI BESOIN D'AIDE
-            MAINTENANT
+          <button
+            type="button"
+            className="big-sos"
+            onClick={allerAuxResultats}
+          >
+            <i className="fa-solid fa-triangle-exclamation" /> J'AI BESOIN
+            D'AIDE MAINTENANT
           </button>
-         
 
-          <label className="form-label-aps" style={{ marginTop: "1.75rem" }}>
+          <label
+            className="form-label-aps"
+            style={{ marginTop: "1.75rem" }}
+          >
             Sélectionnez le type d'urgence
           </label>
+
           <div className="row g-4 align-items-stretch">
             <div className="col-lg-8">
-              <div className="type-grid">
-                {emergencyTypes.map((type) => (
-                  <div
-                    key={type.id}
-                    className={`type-card${activeType === type.id ? " active" : ""}`}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setActiveType(type.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") setActiveType(type.id);
-                    }}
-                  >
-                    <i className={`fa-solid ${type.icon}`} />
-                    <span>{type.label}</span>
+              {chargementTypes ? (
+                <div className="type-grid">
+                  <div className="text-center w-100 py-4">
+                    <i className="fa-solid fa-spinner fa-spin me-2" />
+                    Chargement des types d'urgence...
                   </div>
-                ))}
-              </div>
+                </div>
+              ) : erreurTypes ? (
+                <div className="alert alert-danger" role="alert">
+                  <p className="mb-2">{erreurTypes}</p>
+                  <button
+                    type="button"
+                    className="btn btn-outline-danger btn-sm"
+                    onClick={() =>
+                      setRechargementTypes((nombre) => nombre + 1)
+                    }
+                  >
+                    <i className="fa-solid fa-rotate-right me-1" />
+                    Réessayer
+                  </button>
+                </div>
+              ) : typesUrgence.length === 0 ? (
+                <div className="alert alert-warning" role="alert">
+                  Aucun type d'urgence disponible pour le moment.
+                </div>
+              ) : (
+                <div className="type-grid">
+                  {typesUrgence.map((type) => {
+                    const actif = type.type_urgence_id === activeTypeId;
+
+                    return (
+                      <div
+                        key={type.type_urgence_id}
+                        className={`type-card ${actif ? "active" : ""}`}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={actif}
+                        onClick={() => selectionnerType(type)}
+                        onKeyDown={(evenement) => {
+                          if (
+                            evenement.key === "Enter" ||
+                            evenement.key === " "
+                          ) {
+                            evenement.preventDefault();
+                            selectionnerType(type);
+                          }
+                        }}
+                      >
+                        <i
+                          className={`fa-solid ${obtenirIconeType(type)}`}
+                        />
+                        <span>{type.libelle}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
+
             <div className="col-lg-4 urgence-ad-col">
               <a href="#" className="ad-slot">
                 <span className="ad-tag">Publicité</span>
-                <img src={pub2} alt="Publicité — MTN, plus de data, plus d'appels" />
+                <img
+                  src={pub2}
+                  alt="Publicité — MTN, plus de data, plus d'appels"
+                />
               </a>
             </div>
           </div>
@@ -138,62 +428,121 @@ export default function Urgence() {
           <div className="geoloc-strip">
             <i className="fa-solid fa-location-crosshairs" />
             <span>
-              Localisation activée (avec votre consentement) — Douala, Cameroun. À
-              l'étranger, ces services basculent automatiquement sur le pays où vous
-              vous trouvez.
+              Localisation activée (avec votre consentement) — Douala,
+              Cameroun. À l'étranger, ces services basculent automatiquement
+              sur le pays où vous vous trouvez.
             </span>
           </div>
         </div>
       </section>
 
-      {/* ============================ RESULTATS PAR PROXIMITE ============================ */}
-      <section>
+      {/* ============================ RESULTATS ============================ */}
+      <section id="resultats-urgences">
         <div className="container-aps">
           <div className="section-head">
             <span className="eyebrow">Résultats instantanés</span>
             <h2>Services disponibles près de vous</h2>
-            <p>Classés par ordre de proximité et par priorité de santé publique.</p>
+            <p>
+              Classés par type d'urgence et mis à jour depuis la base de
+              données officielle.
+            </p>
           </div>
 
           <div className="row g-4">
             <div className="col-lg-8">
-              <div className="result-block">
-                <h3>
-                  <i className="fa-solid fa-phone-volume" /> Numéros d'urgence
-                  officiels — Cameroun
-                </h3>
-                {officialNumbers.map((item) => (
-                  <UrgenceRow key={item.name} {...item} callOnly />
-                ))}
-              </div>
+              {chargementTypes && !erreurTypes ? (
+                <div className="result-block">
+                  <h3>
+                    <i className="fa-solid fa-spinner fa-spin" /> Chargement
+                    des services...
+                  </h3>
+                </div>
+              ) : erreurTypes ? (
+                <div className="result-block">
+                  <h3>
+                    <i className="fa-solid fa-circle-exclamation" /> Service
+                    momentanément indisponible
+                  </h3>
+                  <p>{erreurTypes}</p>
+                </div>
+              ) : !activeType ? (
+                <div className="result-block">
+                  <h3>
+                    <i className="fa-solid fa-phone-volume" /> Services
+                    disponibles
+                  </h3>
+                  <p>
+                    Sélectionnez un type d'urgence pour afficher les numéros
+                    et services correspondants.
+                  </p>
+                </div>
+              ) : (
+                <div className="result-block">
+                  <h3>
+                    <i
+                      className={`fa-solid ${obtenirIconeType(activeType)}`}
+                    />{" "}
+                    {activeType.libelle} — services disponibles
+                  </h3>
 
-              <div className="result-block">
-                <h3>
-                  <i className="fa-solid fa-mortar-pestle" /> Pharmacies de garde
-                  actives
-                </h3>
-                {pharmacies.map((item) => (
-                  <UrgenceRow key={item.name} {...item} withItinerary />
-                ))}
-              </div>
+                  {activeType.description ? (
+                    <p style={{ fontSize: ".9rem" }}>
+                      {activeType.description}
+                    </p>
+                  ) : null}
 
-              <div className="result-block">
-                <h3>
-                  <i className="fa-solid fa-truck-medical" /> Ambulances joignables
-                </h3>
-                {ambulances.map((item) => (
-                  <UrgenceRow key={item.name} {...item} />
-                ))}
-              </div>
+                  {chargementUrgences ? (
+                    <div className="text-center py-4">
+                      <i className="fa-solid fa-spinner fa-spin me-2" />
+                      Chargement des numéros d'urgence...
+                    </div>
+                  ) : erreurUrgences ? (
+                    <div className="alert alert-danger" role="alert">
+                      <p className="mb-2">{erreurUrgences}</p>
+                      <button
+                        type="button"
+                        className="btn btn-outline-danger btn-sm"
+                        onClick={() =>
+                          setRechargementUrgences((nombre) => nombre + 1)
+                        }
+                      >
+                        <i className="fa-solid fa-rotate-right me-1" />
+                        Réessayer
+                      </button>
+                    </div>
+                  ) : urgences.length === 0 ? (
+                    <div className="alert alert-warning" role="alert">
+                      Aucun numéro disponible pour ce type d'urgence pour le
+                      moment.
+                    </div>
+                  ) : (
+                    urgences.map((urgence) => {
+                      const itineranceDisponible =
+                        estTypeLieuPhysique(activeType);
 
-              <div className="result-block" style={{ marginBottom: 0 }}>
-                <h3>
-                  <i className="fa-solid fa-hospital" /> Structures médicales ouvertes
-                </h3>
-                {facilities.map((item) => (
-                  <UrgenceRow key={item.name} {...item} />
-                ))}
-              </div>
+                      return (
+                        <UrgenceRow
+                          key={urgence.urgence_id}
+                          name={urgence.libelle}
+                          meta={obtenirMetaUrgence(urgence)}
+                          tel={urgence.telephone}
+                          callOnly={
+                            estNumeroCourt(urgence.telephone) ||
+                            normaliserSlug(activeType.libelle).includes(
+                              "officiel"
+                            )
+                          }
+                          itineraryHref={
+                            itineranceDisponible
+                              ? obtenirItineraireUrl(urgence)
+                              : null
+                          }
+                        />
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Colonne latérale : SMS contact, mode hors-ligne, transfrontalier */}
@@ -202,16 +551,25 @@ export default function Urgence() {
                 <h3>
                   <i className="fa-solid fa-comment-sms" /> Alerter un proche
                 </h3>
+
                 <p style={{ fontSize: ".85rem" }}>
                   Envoyez votre position par SMS à un contact d'urgence
                   pré-enregistré.
                 </p>
+
                 <select className="form-select mb-2">
-                  <option>Contact d'urgence — Maman (+237 6XX XX XX XX)</option>
+                  <option>
+                    Contact d'urgence — Maman (+237 6XX XX XX XX)
+                  </option>
                   <option>+ Ajouter un contact</option>
                 </select>
-                <button className="btn btn-urgence btn-block-aps btn-sm-aps" type="button">
-                  <i className="fa-solid fa-paper-plane" /> Envoyer ma position
+
+                <button
+                  className="btn btn-urgence btn-block-aps btn-sm-aps"
+                  type="button"
+                >
+                  <i className="fa-solid fa-paper-plane" /> Envoyer ma
+                  position
                 </button>
               </div>
 
@@ -219,23 +577,23 @@ export default function Urgence() {
                 <i className="fa-solid fa-wifi" />
                 <span>
                   <strong>Mode hors connexion.</strong> Les numéros d'urgence
-                  officiels du pays restent accessibles depuis l'application même sans
-                  connexion internet.
+                  officiels du pays restent accessibles depuis l'application
+                  même sans connexion internet.
                 </span>
               </div>
 
               <div className="offline-note">
                 <i className="fa-solid fa-earth-africa" />
                 <span>
-                  <strong>À l'étranger ?</strong> Le module bascule automatiquement sur
-                  les numéros et services officiels du pays où vous vous trouvez.
+                  <strong>À l'étranger ?</strong> Le module bascule
+                  automatiquement sur les numéros et services officiels du
+                  pays où vous vous trouvez.
                 </span>
               </div>
             </div>
           </div>
         </div>
       </section>
-
     </>
   );
 }

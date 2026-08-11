@@ -1,10 +1,22 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getInsurerById } from "../data/insurers";
+import {
+  obtenirServiceAssurance,
+  listerActivites,
+  listerAgences,
+  creerMiseEnRelation,
+} from "../services/assuranceService";
+import { getAccessToken } from "../lib/apiClient";
 
 // Fiche assurance — page de détail d'une compagnie d'assurance ou d'un
-// courtier, avec ses agences et son formulaire de mise en relation.
-// Sans abonnement actif, seule une présence minimale est affichée.
+// courtier, avec ses activités (catalogue produits), ses agences et
+// son formulaire de mise en relation. Contenu entièrement dynamisé
+// depuis l'API (GET /services-assurance/:id, /activites, /agences).
+
+const LABEL_TYPE_ACTEUR = {
+  compagnie: "Compagnie d'assurance",
+  courtier: "Courtier",
+};
 
 /* Distance à vol d'oiseau (formule de Haversine), en kilomètres. */
 function distanceKm(a, b) {
@@ -48,26 +60,28 @@ function SiegePanel({ insurer }) {
           <tbody>
             <tr>
               <td>Dénomination</td>
-              <td>{insurer.name}</td>
+              <td>{insurer.nom}</td>
             </tr>
             <tr>
               <td>Type d'acteur</td>
-              <td>{insurer.type}</td>
+              <td>{LABEL_TYPE_ACTEUR[insurer.type_acteur] || insurer.type_acteur}</td>
             </tr>
             <tr>
               <td>Agrément</td>
-              <td>{insurer.agrementCima}</td>
+              <td>{insurer.agrement}</td>
             </tr>
             <tr>
-              <td>Adresse du siège</td>
-              <td>{insurer.siege.adresse}</td>
+              <td>Localisation</td>
+              <td>{insurer.ville?.nom}, {insurer.pays?.nom}</td>
             </tr>
-            <tr>
-              <td>Coordonnées GPS</td>
-              <td>
-                {insurer.siege.gps.lat.toFixed(4)}, {insurer.siege.gps.lng.toFixed(4)}
-              </td>
-            </tr>
+            {insurer.geolocalisation && (
+              <tr>
+                <td>Coordonnées GPS</td>
+                <td>
+                  {insurer.geolocalisation.latitude?.toFixed(4)}, {insurer.geolocalisation.longitude?.toFixed(4)}
+                </td>
+              </tr>
+            )}
             <tr>
               <td>Téléphone</td>
               <td>
@@ -84,98 +98,80 @@ function SiegePanel({ insurer }) {
         </table>
       </div>
 
-      <div className="info-card">
-        <h3>
-          <i className="fa-solid fa-circle-info" /> Présentation institutionnelle
-        </h3>
-        <p style={{ fontSize: ".9rem" }}>{insurer.presentation}</p>
-      </div>
+      {insurer.description && (
+        <div className="info-card">
+          <h3>
+            <i className="fa-solid fa-circle-info" /> Présentation institutionnelle
+          </h3>
+          <p style={{ fontSize: ".9rem" }}>{insurer.description}</p>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ============================ VOLET 2 — ACTIVITÉS ============================ */
-function ActivitesPanel({ insurer }) {
+function ActivitesPanel({ activites, chargement }) {
+  if (chargement) return <p className="minimal-note">Chargement des activités…</p>;
+  if (!activites.length) {
+    return <p className="minimal-note">Aucune activité renseignée pour cette fiche.</p>;
+  }
+
   return (
     <div className="tab-panel active">
       <div className="info-card">
         <h3>
-          <i className="fa-solid fa-layer-group" /> Branches &amp; domaines d'intervention
+          <i className="fa-solid fa-file-shield" /> Activités &amp; produits
         </h3>
-        <div className="d-flex gap-2 flex-wrap">
-          {insurer.branches.map((branche) => (
-            <span key={branche} className="chip chip-complet">
-              {branche}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="info-card">
-        <h3>
-          <i className="fa-solid fa-file-shield" /> Produits proposés
-        </h3>
-        {insurer.produits.map((produit) => (
-          <div key={produit.nom} className="mb-3">
-            <strong style={{ fontSize: ".92rem" }}>{produit.nom}</strong>
+        {activites.map((activite) => (
+          <div key={activite.activite_id} className="mb-3">
+            <strong style={{ fontSize: ".92rem" }}>{activite.titre}</strong>
             <div className="practitioner-meta mt-1 mb-2">
-              <span>Public cible : {produit.publicCible}</span>
+              <span>Public cible : {activite.public_cible}</span>
             </div>
+            {activite.description && (
+              <p style={{ fontSize: ".86rem" }}>{activite.description}</p>
+            )}
             <div className="d-flex gap-2 flex-wrap">
-              {produit.garanties.map((garantie) => (
-                <span key={garantie} className="chip chip-complet">
-                  {garantie}
+              {(activite.options || []).map((option) => (
+                <span key={option.option_activite_id} className="chip chip-complet">
+                  {option.libelle}
                 </span>
               ))}
             </div>
           </div>
         ))}
         <p className="minimal-note mb-0">
-          <i className="fa-solid fa-circle-info" /> Garanties présentées à titre
-          informatif uniquement. Aucune comparaison de produits, aucune
-          souscription en ligne sur APS.
+          <i className="fa-solid fa-circle-info" /> Informations présentées à titre
+          informatif uniquement. Aucune comparaison de produits, aucune souscription
+          en ligne sur APS.
         </p>
       </div>
     </div>
   );
 }
 
-/* ============================ VOLET 3 — FILIALES & AGENCES ============================ */
-function AgencesPanel({ insurer, selectedAgencyId, onSelectAgency }) {
-  const [region, setRegion] = useState("Toutes les régions");
-  const [ville, setVille] = useState("Toutes les villes");
+/* ============================ VOLET 3 — AGENCES ============================ */
+function AgencesPanel({ agences, chargement }) {
+  const [recherche, setRecherche] = useState("");
   const [userPos, setUserPos] = useState(null);
   const [geoStatus, setGeoStatus] = useState("idle"); // idle | loading | error
 
-  const regions = useMemo(
-    () => ["Toutes les régions", ...new Set(insurer.agences.map((a) => a.region))],
-    [insurer.agences]
-  );
-  const villes = useMemo(
-    () => [
-      "Toutes les villes",
-      ...new Set(
-        insurer.agences
-          .filter((a) => region === "Toutes les régions" || a.region === region)
-          .map((a) => a.ville)
-      ),
-    ],
-    [insurer.agences, region]
-  );
-
-  const agences = useMemo(() => {
-    let list = insurer.agences.filter(
-      (a) =>
-        (region === "Toutes les régions" || a.region === region) &&
-        (ville === "Toutes les villes" || a.ville === ville)
+  const agencesFiltrees = useMemo(() => {
+    let list = agences.filter((a) =>
+      !recherche || a.localisation?.toLowerCase().includes(recherche.toLowerCase())
     );
     if (userPos) {
       list = list
-        .map((a) => ({ ...a, distance: distanceKm(userPos, a.gps) }))
-        .sort((a, b) => a.distance - b.distance);
+        .map((a) =>
+          a.gps
+            ? { ...a, distance: distanceKm(userPos, { lat: a.gps.latitude, lng: a.gps.longitude }) }
+            : a
+        )
+        .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
     }
     return list;
-  }, [insurer.agences, region, ville, userPos]);
+  }, [agences, recherche, userPos]);
 
   const localiser = () => {
     if (!navigator.geolocation) {
@@ -192,80 +188,52 @@ function AgencesPanel({ insurer, selectedAgencyId, onSelectAgency }) {
     );
   };
 
+  if (chargement) return <p className="minimal-note">Chargement des agences…</p>;
+
   return (
     <div className="tab-panel active">
       <div className="info-card">
         <h3>
           <i className="fa-solid fa-sliders" /> Rechercher une agence
         </h3>
-        <div className="row g-2">
-          <div className="col-6">
-            <label className="form-label-aps" htmlFor="ag-region">
-              Région
-            </label>
-            <select
-              id="ag-region"
-              className="form-select"
-              value={region}
-              onChange={(e) => {
-                setRegion(e.target.value);
-                setVille("Toutes les villes");
-              }}
-            >
-              {regions.map((r) => (
-                <option key={r}>{r}</option>
-              ))}
-            </select>
-          </div>
-          <div className="col-6">
-            <label className="form-label-aps" htmlFor="ag-ville">
-              Ville
-            </label>
-            <select
-              id="ag-ville"
-              className="form-select"
-              value={ville}
-              onChange={(e) => setVille(e.target.value)}
-            >
-              {villes.map((v) => (
-                <option key={v}>{v}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+        <label className="form-label-aps" htmlFor="ag-recherche">
+          Localisation
+        </label>
+        <input
+          id="ag-recherche"
+          className="form-control"
+          placeholder="Ville, quartier…"
+          value={recherche}
+          onChange={(e) => setRecherche(e.target.value)}
+        />
         <button
           type="button"
           className="btn btn-outline-primary btn-sm-aps mt-3"
           onClick={localiser}
         >
           <i className="fa-solid fa-location-crosshairs" />{" "}
-          {geoStatus === "loading"
-            ? "Localisation en cours…"
-            : "Agences les plus proches de moi"}
+          {geoStatus === "loading" ? "Localisation en cours…" : "Agences les plus proches de moi"}
         </button>
         {geoStatus === "error" && (
           <p className="minimal-note mt-2 mb-0">
             <i className="fa-solid fa-triangle-exclamation" /> Localisation
-            indisponible ou refusée. Utilisez les filtres région / ville.
+            indisponible ou refusée.
           </p>
         )}
       </div>
 
-      {agences.map((agence) => (
-        <div
-          key={agence.id}
-          className={`insurer-card${selectedAgencyId === agence.id ? " is-premium" : ""}`}
-        >
+      {agencesFiltrees.map((agence) => (
+        <div key={agence.agence_id} className="insurer-card">
           <div className="insurer-head">
             <div className="d-flex gap-3">
               <div className="insurer-logo">
                 <i className="fa-solid fa-shop" />
               </div>
               <div>
-                <h3 style={{ marginBottom: ".3rem" }}>{agence.nom}</h3>
+                <h3 style={{ marginBottom: ".3rem" }}>{agence.libelle}</h3>
                 <div className="practitioner-meta">
                   <span>
-                    <i className="fa-solid fa-location-dot" /> {agence.adresse}
+                    <i className="fa-solid fa-location-dot" /> {agence.localisation}
                   </span>
                   {"distance" in agence && (
                     <>
@@ -274,84 +242,74 @@ function AgencesPanel({ insurer, selectedAgencyId, onSelectAgency }) {
                     </>
                   )}
                 </div>
-                <div className="practitioner-meta mt-1">
-                  <span>
-                    GPS {agence.gps.lat.toFixed(4)}, {agence.gps.lng.toFixed(4)}
-                  </span>
-                </div>
               </div>
             </div>
             <div className="practitioner-actions" style={{ marginLeft: 0 }}>
-              <a href={`tel:${agence.telephone}`} className="btn btn-outline-primary btn-sm-aps">
+              <a href={`tel:${agence.contact}`} className="btn btn-outline-primary btn-sm-aps">
                 <i className="fa-solid fa-phone" />
               </a>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm-aps"
-                onClick={() => onSelectAgency(agence.id)}
-              >
-                {selectedAgencyId === agence.id ? "Agence choisie" : "Choisir cette agence"}
-              </button>
             </div>
           </div>
         </div>
       ))}
 
-      {agences.length === 0 && (
+      {agencesFiltrees.length === 0 && (
         <p className="minimal-note">Aucune agence pour ces critères.</p>
       )}
     </div>
   );
 }
 
-/* ============================ FORMULAIRE DE MISE EN RELATION ============================ */
-function ContactSidebar({ insurer, agences, selectedAgencyId, onSelectAgency }) {
-  const [form, setForm] = useState({ nom: "", contact: "", message: "" });
-  const [demande, setDemande] = useState(null);
+/* ============================ MISE EN RELATION ============================ */
+function ContactSidebar({ insurer }) {
+  const [message, setMessage] = useState("");
+  const [envoi, setEnvoi] = useState(false);
+  const [erreur, setErreur] = useState("");
+  const [envoye, setEnvoye] = useState(false);
+  const connecte = !!getAccessToken();
 
-  const agenceDestinataire = agences.find((a) => a.id === selectedAgencyId);
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!agenceDestinataire || !form.nom || !form.contact) return;
-    setDemande({
-      horodatage: new Date().toLocaleString("fr-FR"),
-      agence: agenceDestinataire.nom,
-      copieAuSiege: true,
-      statut: "Envoyée — en attente de traitement",
-    });
+    if (!message.trim()) return;
+    setEnvoi(true);
+    setErreur("");
+    try {
+      await creerMiseEnRelation({
+        service_assurance_id: insurer.service_assurance_id,
+        message: message.trim(),
+      });
+      setEnvoye(true);
+    } catch (err) {
+      setErreur(err.data?.message || err.message || "Échec de l'envoi. Réessayez.");
+    } finally {
+      setEnvoi(false);
+    }
   };
 
-  if (demande) {
+  if (envoye) {
     return (
       <div className="info-card">
         <h3>
           <i className="fa-solid fa-circle-check" /> Demande envoyée
         </h3>
-        <table className="hours-table">
-          <tbody>
-            <tr>
-              <td>Horodatage</td>
-              <td>{demande.horodatage}</td>
-            </tr>
-            <tr>
-              <td>Agence destinataire</td>
-              <td>{demande.agence}</td>
-            </tr>
-            <tr>
-              <td>Copie</td>
-              <td>Siège — {insurer.name}</td>
-            </tr>
-            <tr>
-              <td>Statut</td>
-              <td>{demande.statut}</td>
-            </tr>
-          </tbody>
-        </table>
         <p className="minimal-note mt-2 mb-0">
-          <i className="fa-solid fa-circle-info" /> Vous recevrez une réponse
-          directement de l'agence ou du siège. APS n'intervient pas dans le
-          traitement de la demande.
+          <i className="fa-solid fa-circle-info" /> Votre message a été transmis au
+          siège de {insurer.nom}. Vous recevrez une réponse directement de leur part —
+          APS n'intervient pas dans le traitement de la demande.
+        </p>
+      </div>
+    );
+  }
+
+  if (!connecte) {
+    return (
+      <div className="info-card">
+        <h3>
+          <i className="fa-solid fa-envelope" /> Mise en relation
+        </h3>
+        <p className="minimal-note mb-0">
+          <i className="fa-solid fa-circle-info" /> Connectez-vous pour contacter
+          directement {insurer.nom}.
         </p>
       </div>
     );
@@ -362,110 +320,34 @@ function ContactSidebar({ insurer, agences, selectedAgencyId, onSelectAgency }) 
       <h3>
         <i className="fa-solid fa-envelope" /> Mise en relation
       </h3>
+      {erreur && (
+        <p className="minimal-note mb-2" style={{ color: "var(--danger, #c0392b)" }}>
+          <i className="fa-solid fa-triangle-exclamation" /> {erreur}
+        </p>
+      )}
       <form onSubmit={handleSubmit}>
         <div className="mb-2">
-          <label className="form-label-aps" htmlFor="ct-agence">
-            Agence destinataire
-          </label>
-          <select
-            id="ct-agence"
-            className="form-select"
-            value={selectedAgencyId || ""}
-            onChange={(e) => onSelectAgency(e.target.value)}
-            required
-          >
-            <option value="" disabled>
-              Choisir une agence
-            </option>
-            {agences.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.nom}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="mb-2">
-          <label className="form-label-aps" htmlFor="ct-nom">
-            Nom complet
-          </label>
-          <input
-            id="ct-nom"
-            className="form-control"
-            value={form.nom}
-            onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))}
-            required
-          />
-        </div>
-        <div className="mb-2">
-          <label className="form-label-aps" htmlFor="ct-contact">
-            Téléphone ou courriel
-          </label>
-          <input
-            id="ct-contact"
-            className="form-control"
-            value={form.contact}
-            onChange={(e) => setForm((f) => ({ ...f, contact: e.target.value }))}
-            required
-          />
-        </div>
-        <div className="mb-2">
           <label className="form-label-aps" htmlFor="ct-message">
-            Message (facultatif)
+            Votre message
           </label>
           <textarea
             id="ct-message"
             className="form-control"
-            rows={3}
-            value={form.message}
-            onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
+            rows={4}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            required
           />
         </div>
-        <button type="submit" className="btn btn-primary btn-block-aps">
-          <i className="fa-solid fa-paper-plane" /> Envoyer la demande
+        <button type="submit" className="btn btn-primary btn-block-aps" disabled={envoi}>
+          <i className="fa-solid fa-paper-plane" /> {envoi ? "Envoi…" : "Envoyer la demande"}
         </button>
       </form>
       <p className="minimal-note mt-2 mb-0">
-        <i className="fa-solid fa-circle-info" /> La demande est adressée
-        directement à l'agence sélectionnée, avec copie systématique au
-        siège. Aucune souscription n'est effectuée sur APS.
+        <i className="fa-solid fa-circle-info" /> La demande est adressée directement
+        au siège de {insurer.nom}. Aucune souscription n'est effectuée sur APS.
       </p>
     </div>
-  );
-}
-
-/* ============================ PRÉSENCE MINIMALE ============================ */
-function FicheMinimale({ insurer }) {
-  return (
-    <section style={{ padding: "2.5rem 0" }}>
-      <div className="container-aps" style={{ maxWidth: "640px" }}>
-        <div className="insurer-card">
-          <div className="insurer-head">
-            <div className="d-flex gap-3">
-              <div className="insurer-logo">
-                <i className="fa-solid fa-building-shield" />
-              </div>
-              <div>
-                <h3 style={{ marginBottom: ".3rem" }}>{insurer.name}</h3>
-                <div className="practitioner-meta">
-                  <span>{insurer.type}</span>
-                  <span>&middot;</span>
-                  <span>
-                    <i className="fa-solid fa-location-dot" /> Siège —{" "}
-                    {insurer.siege.adresse}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <p className="minimal-note mt-2 mb-0">
-            <i className="fa-solid fa-circle-info" /> Présence minimale (sans
-            abonnement actif) : dénomination, activité principale et
-            localisation du siège uniquement. Réseau d'agences, produits et
-            mise en relation ne sont disponibles qu'avec un abonnement actif.
-          </p>
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -489,28 +371,73 @@ function FicheIntrouvable() {
 }
 
 /* ============================ COMPOSANT PRINCIPAL ============================ */
-export default function FicheAssurance({ insurer: insurerProp }) {
+export default function FicheAssurance() {
   const { id } = useParams();
-  const insurer = insurerProp ?? getInsurerById(id);
 
+  const [insurer, setInsurer] = useState(null);
+  const [activites, setActivites] = useState([]);
+  const [agences, setAgences] = useState([]);
+  const [chargementFiche, setChargementFiche] = useState(true);
+  const [chargementActivites, setChargementActivites] = useState(true);
+  const [chargementAgences, setChargementAgences] = useState(true);
+  const [introuvable, setIntrouvable] = useState(false);
   const [activeTab, setActiveTab] = useState("siege");
-  const [selectedAgencyId, setSelectedAgencyId] = useState(
-    insurer?.agences?.[0]?.id ?? null
-  );
 
-  if (!insurer) {
-    return <FicheIntrouvable />;
+  useEffect(() => {
+    let annule = false;
+    setChargementFiche(true);
+    setIntrouvable(false);
+
+    obtenirServiceAssurance(id)
+      .then((data) => {
+        if (!annule) setInsurer(data.service_assurance);
+      })
+      .catch((err) => {
+        if (!annule && err.status === 404) setIntrouvable(true);
+      })
+      .finally(() => {
+        if (!annule) setChargementFiche(false);
+      });
+
+    setChargementActivites(true);
+    listerActivites(id)
+      .then((data) => {
+        if (!annule) setActivites(data.activites || []);
+      })
+      .finally(() => {
+        if (!annule) setChargementActivites(false);
+      });
+
+    setChargementAgences(true);
+    listerAgences(id)
+      .then((data) => {
+        if (!annule) setAgences(data.agences || []);
+      })
+      .finally(() => {
+        if (!annule) setChargementAgences(false);
+      });
+
+    return () => {
+      annule = true;
+    };
+  }, [id]);
+
+  if (chargementFiche) {
+    return (
+      <div className="container-aps" style={{ padding: "3rem 0" }}>
+        <p className="minimal-note">Chargement de la fiche…</p>
+      </div>
+    );
   }
 
-  // Sans abonnement actif, seule la présence minimale est affichée.
-  if (!insurer.abonnementActif) {
-    return <FicheMinimale insurer={insurer} />;
+  if (introuvable || !insurer) {
+    return <FicheIntrouvable />;
   }
 
   const tabs = [
     { id: "siege", label: "Siège" },
-    { id: "activites", label: "Activités" },
-    { id: "agences", label: `Filiales & agences (${insurer.agences.length})` },
+    { id: "activites", label: `Activités (${activites.length})` },
+    { id: "agences", label: `Agences (${agences.length})` },
   ];
 
   return (
@@ -525,7 +452,7 @@ export default function FicheAssurance({ insurer: insurerProp }) {
           Assurances
         </Link>
         <i className="fa-solid fa-chevron-right text-faint mx-1" style={{ fontSize: ".6rem" }} />
-        <span className="text-faint">{insurer.name}</span>
+        <span className="text-faint">{insurer.nom}</span>
       </div>
 
       {/* ============================ EN-TÊTE FICHE ============================ */}
@@ -534,28 +461,34 @@ export default function FicheAssurance({ insurer: insurerProp }) {
           <div className="profile-header-inner">
             <div
               className="profile-avatar"
-              style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}
             >
-              <i className="fa-solid fa-building-shield" style={{ fontSize: "1.8rem" }} />
+              {insurer.image_url ? (
+                <img src={insurer.image_url} alt={insurer.nom} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <i className="fa-solid fa-building-shield" style={{ fontSize: "1.8rem" }} />
+              )}
             </div>
             <div>
-              <h1>{insurer.name}</h1>
+              <h1>{insurer.nom}</h1>
               <div className="practitioner-meta mb-2">
-                <span>{insurer.type}</span>
+                <span>{LABEL_TYPE_ACTEUR[insurer.type_acteur] || insurer.type_acteur}</span>
                 <span>&middot;</span>
                 <span>
-                  <i className="fa-solid fa-location-dot" /> Siège — {insurer.siege.adresse}
+                  <i className="fa-solid fa-location-dot" /> {insurer.ville?.nom}, {insurer.pays?.nom}
                 </span>
               </div>
               <div className="d-flex gap-2 flex-wrap">
-                {insurer.premium && (
-                  <span className="chip chip-premium">
-                    <i className="fa-solid fa-star" /> Vitrine premium
+                {insurer.statut_verification === "publie" ? (
+                  <span className="chip chip-verifie">
+                    <i className="fa-solid fa-circle-check" /> Vérifiée APS
+                  </span>
+                ) : (
+                  <span className="chip chip-complet">
+                    <i className="fa-solid fa-hourglass-half" /> En cours de vérification
                   </span>
                 )}
-                <span className="chip chip-verifie">
-                  <i className="fa-solid fa-circle" /> {insurer.agrementCima}
-                </span>
+                <span className="chip chip-complet">Agrément {insurer.agrement}</span>
               </div>
             </div>
             <div className="profile-actions">
@@ -592,24 +525,17 @@ export default function FicheAssurance({ insurer: insurerProp }) {
               <Tabs active={activeTab} onChange={setActiveTab} tabs={tabs} />
 
               {activeTab === "siege" && <SiegePanel insurer={insurer} />}
-              {activeTab === "activites" && <ActivitesPanel insurer={insurer} />}
+              {activeTab === "activites" && (
+                <ActivitesPanel activites={activites} chargement={chargementActivites} />
+              )}
               {activeTab === "agences" && (
-                <AgencesPanel
-                  insurer={insurer}
-                  selectedAgencyId={selectedAgencyId}
-                  onSelectAgency={setSelectedAgencyId}
-                />
+                <AgencesPanel agences={agences} chargement={chargementAgences} />
               )}
             </div>
 
             {/* Colonne latérale — mise en relation */}
             <div className="col-lg-4" id="mise-en-relation">
-              <ContactSidebar
-                insurer={insurer}
-                agences={insurer.agences}
-                selectedAgencyId={selectedAgencyId}
-                onSelectAgency={setSelectedAgencyId}
-              />
+              <ContactSidebar insurer={insurer} />
             </div>
           </div>
         </div>

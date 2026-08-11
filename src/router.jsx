@@ -7,6 +7,7 @@ import StructureSante from './pages/StructureSante';
 import ProfilMedecin from './pages/ProfilMedecin';
 import RendezVous from './pages/RendezVous';
 import Urgences from './pages/Urgence';
+import Login from './pages/Login';
 import Assurance from './pages/Assurance';
 import Abonnement from './pages/Abonnement';
 import FicheAssurance from './pages/FicheAssurance';
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
       { path: '/rendez-vous/:id', element: <RendezVous /> },
       { path: '/urgences', element: <Urgences /> },
       { path: '/pricing', element: <Abonnement /> },
+      { path: '/login', element: <Login /> },
       { path: '/assurance', element: <Assurance /> },
       { path: "/assurances/:id", element: <FicheAssurance /> }
     ],

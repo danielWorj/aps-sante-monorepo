@@ -1,5 +1,17 @@
+// src/components/Navbar.jsx
+//
+// Branché sur useAuth() (AuthContext) :
+//   - status === 'loading'        -> zone compte non affichée (évite un
+//     flash "Login" puis "nom" au chargement/rechargement de page).
+//   - status === 'unauthenticated' -> lien "Login" (comportement d'origine).
+//   - status === 'authenticated'   -> nom de l'utilisateur + menu déroulant
+//     (Mes rendez-vous / Déconnexion). deconnecter() vient d'AuthContext,
+//     qui nettoie déjà la session même si l'appel réseau à /auth/logout
+//     échoue — on redirige simplement vers l'accueil après.
+
 import { useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 function navLinkClass({ isActive }) {
   return isActive ? 'active' : undefined;
@@ -7,6 +19,21 @@ function navLinkClass({ isActive }) {
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
+  const [menuCompteOuvert, setMenuCompteOuvert] = useState(false);
+  const { user, status, isAuthenticated, deconnecter } = useAuth();
+  const navigate = useNavigate();
+
+  const prenomAffiche = user?.prenom || user?.nom || user?.email || 'Mon compte';
+
+  const handleDeconnexion = async () => {
+    setMenuCompteOuvert(false);
+    setOpen(false);
+    try {
+      await deconnecter();
+    } finally {
+      navigate('/');
+    }
+  };
 
   return (
     <header className="aps-navbar">
@@ -23,7 +50,48 @@ export default function Navbar() {
             <li><NavLink to="/urgences" className={navLinkClass} onClick={() => setOpen(false)}> <i className="fa-solid fa-truck-medical" /> Urgences</NavLink></li>
             <li><NavLink to="/assurance" className={navLinkClass} onClick={() => setOpen(false)}> <i className="fa-solid fa-shield-heart" /> Assurance</NavLink></li>
             <li><NavLink to="/pricing" className={navLinkClass} onClick={() => setOpen(false)}> <i className="fa-solid fa-coins" /> Abonnement</NavLink></li>
-            {/* ... */}
+
+            {/* Zone compte : rien pendant la restauration de session, pour
+                éviter un flash "Login" -> "nom" au chargement de la page. */}
+            {status !== 'loading' && !isAuthenticated && (
+              <li>
+                <NavLink to="/login" className={navLinkClass} onClick={() => setOpen(false)}>
+                  <i className="fa-solid fa-sign-in-alt" /> Login
+                </NavLink>
+              </li>
+            )}
+
+            {isAuthenticated && (
+              <li className={`aps-nav-account ${menuCompteOuvert ? 'is-open' : ''}`}>
+                <button
+                  type="button"
+                  className="aps-nav-account-toggle"
+                  onClick={() => setMenuCompteOuvert((v) => !v)}
+                  aria-expanded={menuCompteOuvert}
+                >
+                  <i className="fa-solid fa-circle-user" /> {prenomAffiche}
+                  <i className="fa-solid fa-chevron-down" style={{ fontSize: '.7rem', marginLeft: '.35rem' }} />
+                </button>
+                {menuCompteOuvert && (
+                  <ul className="aps-nav-account-menu">
+                    <li>
+                      <NavLink
+                        to="/rendez-vous"
+                        className={navLinkClass}
+                        onClick={() => { setMenuCompteOuvert(false); setOpen(false); }}
+                      >
+                        <i className="fa-solid fa-calendar-check" /> Mes rendez-vous
+                      </NavLink>
+                    </li>
+                    <li>
+                      <button type="button" className="aps-nav-account-logout" onClick={handleDeconnexion}>
+                        <i className="fa-solid fa-right-from-bracket" /> Déconnexion
+                      </button>
+                    </li>
+                  </ul>
+                )}
+              </li>
+            )}
           </ul>
         </nav>
 
