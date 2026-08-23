@@ -200,7 +200,14 @@ function construireFormDataMedecin(donnees = {}) {
       if (valeur instanceof File) formData.append(cle, valeur);
       return;
     }
-    formData.append(cle, valeur);
+    // FormData ne transporte que des strings : un booléen JS (ex.
+    // teleconsultation_activee) est converti explicitement en
+    // "true"/"false" plutôt que de laisser le navigateur le faire
+    // implicitement (String(valeur) donne le même résultat, mais c'est
+    // plus lisible ainsi et ça documente le contrat attendu côté
+    // backend, qui doit reconvertir cette string en Boolean avant
+    // l'écriture Prisma).
+    formData.append(cle, typeof valeur === 'boolean' ? String(valeur) : valeur);
   });
   return formData;
 }
@@ -299,6 +306,12 @@ export function obtenirMedecin(id) {
  *   serveur (ils vivent sur le compte utilisateur lié, pas sur la
  *   fiche medecin — voir medecin.controller.js, CHAMPS_MODIFIABLES_
  *   UTILISATEUR) : ne plus les omettre côté appelant.
+ *   teleconsultation_activee : n'envoyer cette clé QUE si l'utilisateur
+ *   a explicitement modifié la case dans le formulaire (voir Medecin.jsx,
+ *   teleconsultationModifieeParUtilisateur) — l'omettre entièrement de
+ *   `donnees` sinon, pour que le serveur conserve la valeur déjà
+ *   enregistrée à la création plutôt que de la réécrire avec la valeur
+ *   par défaut du formulaire.
  * @returns {Promise<Object>} le médecin mis à jour, avec nom/prenom/
  *   email/telephone aplatis (voir normaliserMedecin).
  */
@@ -314,6 +327,87 @@ export function modifierMedecin(id, donnees) {
  */
 export function supprimerMedecin(id) {
   return apiFetch(`/medecins/${id}`, { method: 'DELETE' });
+}
+
+/**
+ * PATCH /api/medecins/:id/publier  (admin/superadmin uniquement)
+ * Action explicite équivalente à modifierMedecin(id, { statut_verification:
+ * 'publie' }), mais isolée côté serveur dans son propre handler — à
+ * préférer à PUT pour ce cas précis (pas besoin de repasser tout le
+ * FormData/fichiers pour changer uniquement le statut de publication).
+ * Idempotent : si la fiche est déjà publiée, le serveur renvoie 200
+ * sans erreur.
+ * @returns {Promise<Object>} le médecin mis à jour, avec nom/prenom/
+ *   email/telephone aplatis (voir normaliserMedecin).
+ */
+export function publierMedecin(id) {
+  return apiFetch(`/medecins/${id}/publier`, { method: 'PATCH' }).then((d) =>
+    normaliserMedecin(d.medecin)
+  );
+}
+
+/**
+ * PATCH /api/medecins/:id/suspendre  (admin/superadmin uniquement)
+ * Suspend le COMPTE utilisateur lié (bloque la connexion du médecin)
+ * ET retire dans la même opération la fiche de l'annuaire public
+ * (statut_verification repasse à "non_publie" côté serveur, en
+ * transaction) — voir medecin.controller.js, suspendreMedecin.
+ * Réversible via reactiverMedecin ci-dessous. Idempotent : si le
+ * compte est déjà suspendu, le serveur renvoie 200 sans erreur (et
+ * sans objet `medecin` dans ce cas précis — ne pas dépendre de la
+ * valeur de retour pour détecter ce cas, se fier plutôt au message).
+ * @returns {Promise<Object>} le médecin mis à jour, avec nom/prenom/
+ *   email/telephone aplatis (voir normaliserMedecin).
+ */
+export function suspendreMedecin(id) {
+  return apiFetch(`/medecins/${id}/suspendre`, { method: 'PATCH' }).then((d) =>
+    normaliserMedecin(d.medecin)
+  );
+}
+
+/**
+ * PATCH /api/medecins/:id/reactiver  (admin/superadmin uniquement)
+ * Inverse de suspendreMedecin : redonne au médecin l'accès à son
+ * compte (statut_compte redevient "actif"). Ne republie PAS
+ * automatiquement la fiche dans l'annuaire — appeler explicitement
+ * publierMedecin ensuite si c'est le résultat voulu.
+ * @returns {Promise<Object>} réponse brute du backend { message } —
+ *   pas d'objet `medecin` dans la réponse serveur pour cette route.
+ */
+export function reactiverMedecin(id) {
+  return apiFetch(`/medecins/${id}/reactiver`, { method: 'PATCH' });
+}
+
+/**
+ * POST /api/medecins/verifier-ordre
+ * PUBLIQUE (pas de token requis) — vérifie l'appartenance d'un médecin
+ * au Tableau de l'Ordre National des Médecins du Cameroun (ONMC) à
+ * partir de son numero_ordre. Utile en amont de creerMedecin, avant
+ * même la création d'un compte (voir medecin.routes.js).
+ *
+ * ⚠️ Le serveur distingue explicitement deux cas d'échec, à traiter
+ * différemment côté appelant :
+ *   - 200 avec `appartient_ordre: false`  → numéro simplement introuvable
+ *     au tableau de l'Ordre (réponse normale, pas une erreur réseau).
+ *   - 502                                  → la vérification externe
+ *     elle-même a échoué (site ONMC injoignable, timeout, structure de
+ *     page changée, etc.) — NE SIGNIFIE PAS que le médecin n'appartient
+ *     pas à l'Ordre. apiFetch lève une Error avec `.status === 502`
+ *     dans ce cas ; ne jamais l'interpréter comme un rejet définitif,
+ *     proposer plutôt un nouvel essai à l'appelant.
+ *
+ * @param {string} numeroOrdre - numéro d'inscription au Tableau de
+ *   l'Ordre à vérifier (obligatoire, sinon 400 côté serveur).
+ * @returns {Promise<Object>} { numero_ordre, appartient_ordre,
+ *   nom_complet?, numero_ordre_onmc? } — `nom_complet` et
+ *   `numero_ordre_onmc` ne sont présents que si `appartient_ordre` est
+ *   `true`.
+ */
+export function verifierAppartenanceOrdre(numeroOrdre) {
+  return apiFetch('/medecins/verifier-ordre', {
+    method: 'POST',
+    body: { numero_ordre: numeroOrdre },
+  });
 }
 
 /* ===================================================================
@@ -487,6 +581,34 @@ export function supprimerLigneAbonnementMedecin(ligneId) {
  *     immédiat plutôt qu'un aller-retour réseau).
  * =================================================================== */
 
+// rendezVous.controller.js renvoie désormais medecin.utilisateur.
+// {nom,prenom} et patient.utilisateur.{nom,prenom} (relations Prisma
+// incluses côté serveur), alors que RendezVous.jsx lit medecin.prenom /
+// medecin.nom à plat (même patron que libelleMedecin) et
+// patient.nom_complet (un seul champ). Sans cet aplatissement, le
+// tableau et le filtre "Patient" retombaient sur medecin_id/patient_id
+// bruts même quand le back renvoyait bien les noms.
+function normaliserRendezVous(rdv) {
+  if (!rdv) return rdv;
+  const medecin = rdv.medecin
+    ? {
+        ...rdv.medecin,
+        nom: rdv.medecin.nom ?? rdv.medecin.utilisateur?.nom ?? '',
+        prenom: rdv.medecin.prenom ?? rdv.medecin.utilisateur?.prenom ?? '',
+      }
+    : rdv.medecin;
+  const patient = rdv.patient
+    ? {
+        ...rdv.patient,
+        nom_complet:
+          rdv.patient.nom_complet ||
+          [rdv.patient.utilisateur?.prenom, rdv.patient.utilisateur?.nom].filter(Boolean).join(' ') ||
+          '',
+      }
+    : rdv.patient;
+  return { ...rdv, medecin, patient };
+}
+
 /**
  * GET /api/rendez-vous
  * Toujours scopé à l'utilisateur courant (son propre profil patient
@@ -495,11 +617,13 @@ export function supprimerLigneAbonnementMedecin(ligneId) {
  * @param {Object} filtres - { statut?, medecin_id?, patient_id? } —
  *   seuls filtres reconnus par le contrôleur ; `statut` doit être une
  *   valeur de STATUTS_RENDEZ_VOUS sous peine de 400.
- * @returns {Promise<Array>} liste des rendez-vous
+ * @returns {Promise<Array>} liste des rendez-vous, avec medecin.nom/
+ *   medecin.prenom et patient.nom_complet aplatis (voir
+ *   normaliserRendezVous) pour l'affichage direct dans RendezVous.jsx.
  */
 export function listerRendezVous(filtres = {}) {
   const suffixe = construireParametres(filtres);
-  return apiFetch(`/rendez-vous${suffixe}`).then((d) => d.rendez_vous ?? []);
+  return apiFetch(`/rendez-vous${suffixe}`).then((d) => (d.rendez_vous ?? []).map(normaliserRendezVous));
 }
 
 /**
@@ -507,7 +631,7 @@ export function listerRendezVous(filtres = {}) {
  * @returns {Promise<Object>} le rendez-vous
  */
 export function obtenirRendezVous(id) {
-  return apiFetch(`/rendez-vous/${id}`).then((d) => d.rendez_vous);
+  return apiFetch(`/rendez-vous/${id}`).then((d) => normaliserRendezVous(d.rendez_vous));
 }
 
 /**
@@ -702,6 +826,10 @@ const MedecinService = {
   obtenirMedecin,
   modifierMedecin,
   supprimerMedecin,
+  publierMedecin,
+  suspendreMedecin,
+  reactiverMedecin,
+  verifierAppartenanceOrdre,
   // Avis médecin
   listerAvisMedecin,
   obtenirAvisMedecin,

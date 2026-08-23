@@ -77,6 +77,16 @@ import {
   listerMedecins,
   modifierMedecin,
   supprimerMedecin,
+  // Actions explicites de bascule de statut (routes PATCH dédiées,
+  // admin/superadmin uniquement) — préférées à modifierMedecin() pour
+  // ce cas précis : pas besoin de repasser tout le FormData/fichiers
+  // pour changer uniquement le statut de publication (voir
+  // medecinService.js). suspendreMedecin() suspend en plus le COMPTE
+  // utilisateur lié (bloque la connexion du médecin), pas seulement la
+  // fiche annuaire — d'où le message d'avertissement dédié dans la
+  // modale de confirmation ci-dessous.
+  publierMedecin,
+  suspendreMedecin,
   listerPays,
   listerVilles,
   STATUTS_VERIFICATION_MEDECIN,
@@ -88,6 +98,11 @@ import {
   creerSpecialite,
   modifierSpecialite,
   supprimerSpecialite,
+  // Vérification d'appartenance au Tableau de l'Ordre National des
+  // Médecins du Cameroun (ONMC) — POST public /medecins/verifier-ordre
+  // (voir medecinService.js). Utilisée ici depuis la fiche détail pour
+  // vérifier a posteriori un numero_ordre déjà enregistré.
+  verifierAppartenanceOrdre,
 } from "../services/medecinService.js";
 import "../assets/style/medecin.css";
 
@@ -157,6 +172,11 @@ const FORMULAIRE_VIDE = {
   // au moment de l'envoi (le contrôleur rejette explicitement
   // `undefined`, contrairement à `false`/chaîne vide).
   teleconsultation_activee: false, tarif_indicatif: "",
+  // biographie : NOT NULL en base (schema.prisma) — obligatoire à la
+  // création ET en édition (le contrôleur rejette une chaîne vide ou
+  // absente, voir medecin.controller.js). Initialisée ici pour ne
+  // jamais être `undefined` au moment de l'envoi.
+  biographie: "",
   // À la création : cni/attestation sont OBLIGATOIRES (voir creerMedecin
   // dans medecinService.js). En édition : toujours optionnels — un
   // champ laissé vide conserve le fichier déjà enregistré.
@@ -328,6 +348,17 @@ export default function Medecin() {
     return estAdmin || estProprietaireFiche(medecin, utilisateur);
   }
 
+  /**
+   * Détermine l'action de bascule de statut proposée pour une fiche :
+   * "publie" => on ne peut que suspendre ; "non_publie"/"en_cours" =>
+   * on ne peut que publier. Un seul bouton contextuel plutôt que deux
+   * boutons distincts (cf. publierMedecin/suspendreMedecin dans
+   * medecinService.js, toutes deux admin/superadmin uniquement).
+   */
+  function determinerActionStatut(medecin) {
+    return medecin?.statut_verification === "publie" ? "suspendre" : "publier";
+  }
+
   // Liste filtrée (grille de la page)
   const [medecins, setMedecins] = useState([]);
   const [chargement, setChargement] = useState(true);
@@ -362,6 +393,22 @@ export default function Medecin() {
   // non. Réinitialisé à chaque changement de médecin affiché.
   const [piecesOuvertes, setPiecesOuvertes] = useState({});
 
+  // Vérification ONMC déclenchée depuis la fiche détail (bouton dédié,
+  // pas automatique à l'ouverture — POST /medecins/verifier-ordre reste
+  // volontairement une action explicite, voir onmcVerificationService.js
+  // pour le coût de l'appel côté serveur, piloté par navigateur headless).
+  // `resultat` = null tant qu'aucune vérification n'a été lancée pour la
+  // fiche actuellement affichée, sinon { appartient_ordre, nom_complet?,
+  // numero_ordre_onmc? }. `erreur` distingue explicitement le cas 502
+  // (vérification externe indisponible) d'un numéro simplement introuvable
+  // (ce dernier cas est un `resultat` normal, pas une erreur — voir
+  // medecinService.js).
+  const [verificationOrdre, setVerificationOrdre] = useState({
+    enCours: false,
+    resultat: null,
+    erreur: null,
+  });
+
   const [modaleOuverte, setModaleOuverte] = useState(false);
   const [formulaire, setFormulaire] = useState(FORMULAIRE_VIDE);
   // Fichiers déjà en ligne pour la fiche en cours d'édition (URLs
@@ -371,9 +418,26 @@ export default function Medecin() {
   const [fichiersExistants, setFichiersExistants] = useState(null);
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
   const [erreurFormulaire, setErreurFormulaire] = useState(null);
+  // Suivi explicite : l'utilisateur a-t-il touché la case
+  // "téléconsultation" pendant CETTE session d'édition ? Si non, on
+  // n'envoie PAS teleconsultation_activee au serveur — celui-ci
+  // n'écrase alors rien et conserve la valeur déjà enregistrée en
+  // base lors de la création du compte (voir soumettreFormulaire).
+  // Toujours `true` en création (ouvrirCreation) : le champ est
+  // obligatoire à la création, donc toujours envoyé.
+  const [teleconsultationModifieeParUtilisateur, setTeleconsultationModifieeParUtilisateur] = useState(true);
 
   const [cibleSuppression, setCibleSuppression] = useState(null);
   const [suppressionEnCours, setSuppressionEnCours] = useState(false);
+
+  // Bascule de statut (publier/suspendre), admin/superadmin uniquement
+  // (voir publierMedecin/suspendreMedecin dans medecinService.js).
+  // `cibleChangementStatut` = { medecin, action } où action vaut
+  // "publier" ou "suspendre" ; null tant qu'aucune confirmation n'est
+  // demandée. L'action proposée dépend du statut courant de la fiche
+  // (voir determinerActionStatut ci-dessous).
+  const [cibleChangementStatut, setCibleChangementStatut] = useState(null);
+  const [changementStatutEnCours, setChangementStatutEnCours] = useState(false);
 
   /* ─── Gestion des spécialités (référentiel) ────────────────────
        Modale dédiée, indépendante de la modale fiche médecin :
@@ -412,6 +476,36 @@ export default function Medecin() {
   // Referme tous les panneaux "pièce justificative" quand on ouvre la
   // fiche d'un autre médecin.
   useEffect(() => { setPiecesOuvertes({}); }, [medecinSelectionne?.medecin_id]);
+
+  // Réinitialise le résultat de vérification ONMC quand on ouvre la
+  // fiche d'un autre médecin (ou qu'on referme la fiche) — on ne veut
+  // jamais afficher le résultat d'un précédent médecin sur la fiche
+  // suivante, même brièvement.
+  useEffect(() => {
+    setVerificationOrdre({ enCours: false, resultat: null, erreur: null });
+  }, [medecinSelectionne?.medecin_id]);
+
+  async function lancerVerificationOrdre() {
+    if (!medecinSelectionne?.numero_ordre) return;
+    setVerificationOrdre({ enCours: true, resultat: null, erreur: null });
+    try {
+      const reponse = await verifierAppartenanceOrdre(medecinSelectionne.numero_ordre);
+      setVerificationOrdre({ enCours: false, resultat: reponse, erreur: null });
+    } catch (err) {
+      // 502 = vérification externe indisponible (site ONMC injoignable,
+      // timeout…) — à ne surtout pas confondre avec un numéro introuvable
+      // au tableau (celui-ci arrive en 200 avec appartient_ordre=false et
+      // suit donc la branche `resultat`, pas `erreur`).
+      setVerificationOrdre({
+        enCours: false,
+        resultat: null,
+        erreur:
+          err.status === 502
+            ? "La vérification auprès de l'ONMC a échoué. Cela ne signifie pas que le médecin n'appartient pas à l'Ordre — réessayez dans un instant."
+            : err.message || "Impossible de lancer la vérification.",
+      });
+    }
+  }
 
   useEffect(() => {
     listerMedecins({}).then(setStatistiques).catch(() => setStatistiques([]));
@@ -578,6 +672,9 @@ export default function Medecin() {
     setErreurFormulaire(null);
     setModaleOuverte(true);
     setMedecinSelectionne(null);
+    // Création : teleconsultation_activee est obligatoire en base, donc
+    // toujours envoyé (voir déclaration du state plus haut).
+    setTeleconsultationModifieeParUtilisateur(true);
   }
 
   function ouvrirEdition(medecin) {
@@ -594,6 +691,7 @@ export default function Medecin() {
       latitude: medecin.geolocalisation?.latitude ?? "", longitude: medecin.geolocalisation?.longitude ?? "",
       teleconsultation_activee: medecin.teleconsultation_activee ?? false,
       tarif_indicatif: medecin.tarif_indicatif ?? "",
+      biographie: medecin.biographie ?? "",
       cni: null, attestation: null, photo: null,
     });
     setFichiersExistants({
@@ -604,12 +702,19 @@ export default function Medecin() {
     setErreurFormulaire(null);
     setModaleOuverte(true);
     setMedecinSelectionne(null);
+    // Édition : tant que l'utilisateur ne touche pas explicitement la
+    // case, on ne renverra pas ce champ au serveur (voir
+    // soumettreFormulaire) — la valeur de création reste inchangée.
+    setTeleconsultationModifieeParUtilisateur(false);
   }
 
   function fermerModale() { setModaleOuverte(false); setErreurFormulaire(null); }
 
   function modifierChampFormulaire(champ, valeur) {
     setFormulaire((p) => ({ ...p, [champ]: valeur, ...(champ === "pays_exercice_id" ? { ville_exercice_id: "" } : {}) }));
+    // La case téléconsultation vient d'être manipulée volontairement :
+    // à partir de maintenant sa valeur sera bien envoyée au serveur.
+    if (champ === "teleconsultation_activee") setTeleconsultationModifieeParUtilisateur(true);
   }
 
   function modifierFichierFormulaire(champ, fichier) {
@@ -637,6 +742,15 @@ export default function Medecin() {
       ...(enCreation ? { pays_id: reste.pays_exercice_id } : {}),
       ...(latitude !== "" && longitude !== "" ? { latitude: Number(latitude), longitude: Number(longitude) } : {}),
     };
+
+    // En édition, si l'utilisateur n'a pas touché la case
+    // téléconsultation, on ne l'envoie pas du tout : le serveur ignore
+    // les champs absents (voir CHAMPS_MODIFIABLES_MEDECIN côté back) et
+    // conserve donc la valeur déjà enregistrée à la création, plutôt
+    // que de la réécrire avec la valeur par défaut du formulaire.
+    if (!enCreation && !teleconsultationModifieeParUtilisateur) {
+      delete donnees.teleconsultation_activee;
+    }
 
     try {
       if (enCreation) {
@@ -681,6 +795,39 @@ export default function Medecin() {
       setCibleSuppression(null);
     } finally {
       setSuppressionEnCours(false);
+    }
+  }
+
+  /**
+   * Confirme la publication ou la suspension d'une fiche (déclenché
+   * depuis la modale de confirmation ci-dessous). suspendreMedecin est
+   * idempotent et ne renvoie pas toujours un objet `medecin` (voir
+   * medecinService.js) : on ne met alors à jour que via
+   * chargerMedecins(), sans dépendre du retour.
+   */
+  async function confirmerChangementStatut() {
+    if (!cibleChangementStatut) return;
+    const { medecin, action } = cibleChangementStatut;
+    setChangementStatutEnCours(true);
+    try {
+      const medecinMaj = action === "publier"
+        ? await publierMedecin(medecin.medecin_id)
+        : await suspendreMedecin(medecin.medecin_id);
+      setCibleChangementStatut(null);
+      if (medecinMaj && medecinSelectionne?.medecin_id === medecin.medecin_id) {
+        setMedecinSelectionne((prev) => (prev ? { ...prev, ...medecinMaj } : prev));
+      }
+      await chargerMedecins();
+    } catch (err) {
+      setErreur(
+        err.message ||
+          (action === "publier"
+            ? "Impossible de publier cette fiche médecin."
+            : "Impossible de suspendre cette fiche médecin.")
+      );
+      setCibleChangementStatut(null);
+    } finally {
+      setChangementStatutEnCours(false);
     }
   }
 
@@ -1103,6 +1250,21 @@ export default function Medecin() {
                               <i className={`fa-solid ${medecin.statut_verification === "en_cours" ? "fa-file-signature" : "fa-pen"}`}></i>
                             </button>
                           )}
+                          {/* Publier/Suspendre : action PATCH dédiée,
+                              admin/superadmin uniquement (voir
+                              publierMedecin/suspendreMedecin dans
+                              medecinService.js) — un seul bouton
+                              contextuel selon le statut courant. */}
+                          {estAdmin && (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-light"
+                              title={medecin.statut_verification === "publie" ? "Suspendre" : "Publier"}
+                              onClick={() => setCibleChangementStatut({ medecin, action: determinerActionStatut(medecin) })}
+                            >
+                              <i className={`fa-solid ${medecin.statut_verification === "publie" ? "fa-ban" : "fa-circle-check"}`}></i>
+                            </button>
+                          )}
                           {peutSupprimer && (
                             <button
                               type="button"
@@ -1236,6 +1398,62 @@ export default function Medecin() {
                           <div className="aps-text-muted" style={{ fontSize: 12 }}>N° d'ordre</div>
                         </div>
                       </div>
+
+                      {/* Vérification ONMC — action explicite, pas
+                          automatique (voir onmcVerificationService.js :
+                          l'appel pilote un navigateur headless côté
+                          serveur, donc plus coûteux qu'un simple fetch). */}
+                      {medecinSelectionne.numero_ordre && (
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            className="btn btn-outline-primary btn-sm w-100"
+                            onClick={lancerVerificationOrdre}
+                            disabled={verificationOrdre.enCours}
+                          >
+                            {verificationOrdre.enCours ? (
+                              <>
+                                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                Vérification en cours…
+                              </>
+                            ) : (
+                              <>
+                                <i className="fa-solid fa-shield-halved me-1"></i>
+                                Vérifier l'appartenance à l'ONMC
+                              </>
+                            )}
+                          </button>
+
+                          {verificationOrdre.erreur && (
+                            <div className="alert alert-warning py-2 px-2 mt-2 mb-0" style={{ fontSize: 12 }}>
+                              <i className="fa-solid fa-triangle-exclamation me-1"></i>
+                              {verificationOrdre.erreur}
+                            </div>
+                          )}
+
+                          {verificationOrdre.resultat && (
+                            verificationOrdre.resultat.appartient_ordre ? (
+                              <div className="alert alert-success py-2 px-2 mt-2 mb-0" style={{ fontSize: 12 }}>
+                                <i className="fa-solid fa-circle-check me-1"></i>
+                                Inscrit au Tableau de l'Ordre National des Médecins du Cameroun
+                                {verificationOrdre.resultat.nom_complet && (
+                                  <div className="aps-text-muted mt-1">
+                                    Nom au tableau : {verificationOrdre.resultat.nom_complet}
+                                    {verificationOrdre.resultat.numero_ordre_onmc
+                                      ? ` (${verificationOrdre.resultat.numero_ordre_onmc})`
+                                      : ""}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="alert alert-danger py-2 px-2 mt-2 mb-0" style={{ fontSize: 12 }}>
+                                <i className="fa-solid fa-circle-xmark me-1"></i>
+                                Ce numéro d'ordre n'a pas été retrouvé au Tableau de l'Ordre National des Médecins du Cameroun
+                              </div>
+                            )
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* ── Colonne infos + pièces justificatives ────── */}
@@ -1331,6 +1549,21 @@ export default function Medecin() {
                   </div>
                 </div>
                 <div className="modal-footer">
+                  {estAdmin && (
+                    <button
+                      type="button"
+                      className={`btn ${medecinSelectionne.statut_verification === "publie" ? "btn-outline-danger" : "btn-outline-success"}`}
+                      onClick={() =>
+                        setCibleChangementStatut({
+                          medecin: medecinSelectionne,
+                          action: determinerActionStatut(medecinSelectionne),
+                        })
+                      }
+                    >
+                      <i className={`fa-solid ${medecinSelectionne.statut_verification === "publie" ? "fa-ban" : "fa-circle-check"} me-1`}></i>
+                      {medecinSelectionne.statut_verification === "publie" ? "Suspendre" : "Publier"}
+                    </button>
+                  )}
                   {peutModifierFiche(medecinSelectionne) && (
                     <button type="button" className="btn btn-primary" onClick={() => ouvrirEdition(medecinSelectionne)}>
                       <i className="fa-solid fa-pen me-1"></i> Modifier
@@ -1485,6 +1718,19 @@ export default function Medecin() {
                     </div>
 
                     <div className="col-12">
+                      <label className="form-label">Biographie</label>
+                      {/* biographie : NOT NULL en base (schema.prisma),
+                          rejetée par le contrôleur si vide/absente,
+                          aussi bien à la création qu'en édition — voir
+                          medecin.controller.js (champsManquants /
+                          "Le champ biographie ne peut pas être vide."). */}
+                      <textarea className="form-control" rows={4} required
+                                placeholder="Parcours, expérience, approche de la médecine…"
+                                value={formulaire.biographie}
+                                onChange={(e) => modifierChampFormulaire("biographie", e.target.value)} />
+                    </div>
+
+                    <div className="col-12">
                       <label className="form-label">Adresse du cabinet <span className="aps-text-muted">(optionnel)</span></label>
                       <input type="text" className="form-control" value={formulaire.adresse_cabinet}
                              onChange={(e) => modifierChampFormulaire("adresse_cabinet", e.target.value)} />
@@ -1588,6 +1834,75 @@ export default function Medecin() {
                   <button type="button" className="btn btn-light" onClick={() => setCibleSuppression(null)}>Annuler</button>
                   <button type="button" className="btn btn-danger" onClick={confirmerSuppression} disabled={suppressionEnCours}>
                     {suppressionEnCours ? "Suppression…" : "Supprimer définitivement"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* =========================================================
+           MODALE — CONFIRMATION PUBLICATION / SUSPENSION
+           (admin/superadmin uniquement — voir publierMedecin /
+           suspendreMedecin dans medecinService.js). Le contenu (titre,
+           texte, bouton) s'adapte à `cibleChangementStatut.action`.
+           suspendreMedecin bloque aussi la connexion du médecin (pas
+           seulement sa visibilité dans l'annuaire) : avertissement
+           explicite dans ce cas précis.
+           ========================================================= */}
+      {cibleChangementStatut && (
+        <>
+          <div className="modal-backdrop fade show"></div>
+          <div
+            className="modal fade show"
+            style={{ display: "block" }}
+            tabIndex={-1}
+            onClick={() => setCibleChangementStatut(null)}
+          >
+            <div className="modal-dialog modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">
+                    {cibleChangementStatut.action === "publier"
+                      ? "Publier cette fiche médecin ?"
+                      : "Suspendre cette fiche médecin ?"}
+                  </h5>
+                  <button type="button" className="btn-close" onClick={() => setCibleChangementStatut(null)}></button>
+                </div>
+                <div className="modal-body">
+                  {cibleChangementStatut.action === "publier" ? (
+                    <p className="mb-0">
+                      La fiche « Dr {cibleChangementStatut.medecin.prenom} {cibleChangementStatut.medecin.nom} » sera
+                      visible dans l'annuaire public.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="mb-2">
+                        La fiche « Dr {cibleChangementStatut.medecin.prenom} {cibleChangementStatut.medecin.nom} » sera
+                        retirée de l'annuaire public.
+                      </p>
+                      <p className="mb-0 aps-text-muted" style={{ fontSize: 13 }}>
+                        <i className="fa-solid fa-triangle-exclamation me-1"></i>
+                        Le compte utilisateur du médecin sera également suspendu : il ne pourra plus se connecter
+                        tant que le compte n'aura pas été réactivé.
+                      </p>
+                    </>
+                  )}
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-light" onClick={() => setCibleChangementStatut(null)}>
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${cibleChangementStatut.action === "publier" ? "btn-success" : "btn-danger"}`}
+                    onClick={confirmerChangementStatut}
+                    disabled={changementStatutEnCours}
+                  >
+                    {changementStatutEnCours
+                      ? (cibleChangementStatut.action === "publier" ? "Publication…" : "Suspension…")
+                      : (cibleChangementStatut.action === "publier" ? "Publier" : "Suspendre")}
                   </button>
                 </div>
               </div>
