@@ -1,0 +1,223 @@
+/* ==========================================================================
+   StructureSante.css — styles du formulaire "Ajouter une structure"
+   (pop-up modale, stepper, dropzones, récapitulatif, écran de succès).
+   Le reste de la page (cartes résultats, filtres, publicité, pagination…)
+   utilise les styles globaux du projet : rien n'est redéfini ici.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Pop-up de création (overlay + carte)
+-------------------------------------------------------------------------- */
+.dm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 25, 20, .45);
+  backdrop-filter: blur(3px);
+  z-index: 1050;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 2rem 1rem;
+  overflow-y: auto;
+}
+.dm-modal-card {
+  background: #fff;
+  border-radius: 1.1rem;
+  max-width: 720px;
+  width: 100%;
+  padding: 1.5rem;
+  box-shadow: 0 20px 60px rgba(15, 25, 20, .25);
+}
+
+.dm-modal-head { display: flex; gap: .9rem; align-items: flex-start; margin-bottom: 1.25rem; }
+.dm-head-icon {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: .8rem;
+  background: var(--green, #2f8f6f);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.dm-head-text { flex: 1; }
+.dm-head-text h3 { margin: 0; font-size: 1.15rem; }
+.dm-head-text p { margin: .15rem 0 0; color: var(--muted, #8a9591); font-size: .88rem; }
+
+.dm-section {
+  margin: 1.1rem 0 .6rem;
+  font-size: .78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted, #8a9591);
+}
+
+.dm-error {
+  margin-top: 1rem;
+  background: #fdecea;
+  color: #b3261e;
+  border: 1px solid #f5c6c0;
+  border-radius: .6rem;
+  padding: .6rem .9rem;
+  font-size: .88rem;
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+}
+
+.dm-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: 1.4rem;
+}
+
+.dm-star { color: var(--danger, #c0392b); margin-left: .25rem; }
+
+/* --------------------------------------------------------------------------
+   Stepper — barre d'étapes du formulaire (1 → 4)
+-------------------------------------------------------------------------- */
+.dm-stepper {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.dm-step { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+.dm-step-dot {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: .85rem;
+  color: var(--muted, #9aa5a1);
+  border: 2px solid var(--line, #dfe7e4);
+  background: #fff;
+  transition: all .2s ease;
+}
+.dm-step-label {
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--muted, #9aa5a1);
+  white-space: nowrap;
+}
+.dm-step.is-active .dm-step-dot,
+.dm-step.is-done .dm-step-dot {
+  background: var(--green, #2f8f6f);
+  border-color: var(--green, #2f8f6f);
+  color: #fff;
+}
+.dm-step.is-active .dm-step-label,
+.dm-step.is-done .dm-step-label { color: var(--ink, #17252f); }
+.dm-step-line { flex: 1; min-width: 1.5rem; height: 2px; background: var(--line, #dfe7e4); }
+.dm-step-line.is-done { background: var(--green, #2f8f6f); }
+
+/* --------------------------------------------------------------------------
+   Dropzones du formulaire — pointillés, icône à gauche, texte centré
+-------------------------------------------------------------------------- */
+.dropzone {
+  position: relative;
+  border: 2px dashed var(--line-strong, #cfdcd6);
+  background: var(--soft, #f2f7f5);
+  border-radius: .9rem;
+  padding: 1.6rem 2.75rem 1.6rem 1.25rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+  transition: border-color .2s ease, background .2s ease;
+}
+.dropzone:hover { border-color: var(--green, #2f8f6f); }
+.dropzone.is-dragover { border-color: var(--green, #2f8f6f); background: #eaf5f0; }
+.dropzone.has-file { border-style: solid; border-color: var(--green, #2f8f6f); background: #eef8f3; }
+
+.dropzone-icon { font-size: 1.7rem; color: var(--green, #2f8f6f); }
+.dropzone-title { display: block; text-align: center; font-weight: 700; color: var(--ink, #17252f); }
+.dropzone-hint { display: block; text-align: center; color: var(--muted, #9aa5a1); font-size: .85rem; margin-top: .3rem; }
+.dropzone.has-file .dropzone-hint { color: var(--green, #2f8f6f); }
+
+.dropzone input[type="file"] { display: none; }
+
+.dropzone-remove {
+  position: absolute;
+  top: .5rem;
+  right: .5rem;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  color: var(--danger, #c0392b);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .15);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.dropzone.has-file .dropzone-remove { display: inline-flex; }
+
+/* --------------------------------------------------------------------------
+   Récapitulatif (étape 4 — Confirmation)
+-------------------------------------------------------------------------- */
+.dm-recap {
+  border: 1px solid var(--line, #dfe7e4);
+  border-radius: .75rem;
+  overflow: hidden;
+}
+.dm-recap-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .6rem .9rem;
+  font-size: .9rem;
+  border-bottom: 1px solid var(--line, #dfe7e4);
+}
+.dm-recap-row:last-child { border-bottom: 0; }
+.dm-recap-row span { color: var(--muted, #8a9591); flex-shrink: 0; }
+.dm-recap-row strong { text-align: right; word-break: break-word; }
+.dm-recap-row strong i { color: var(--green, #2f8f6f); margin-right: .25rem; }
+
+/* --------------------------------------------------------------------------
+   Écran de succès du formulaire
+-------------------------------------------------------------------------- */
+.form-done { text-align: center; padding: 1.5rem 0 .5rem; }
+.form-done-check {
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 50%;
+  background: var(--green, #2f8f6f);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  margin: 0 auto 1rem;
+}
+.dm-password-note { font-size: .9rem; color: var(--muted, #8a9591); }
+.dm-password-note code {
+  background: var(--soft, #eef5f2);
+  color: var(--ink, #17252f);
+  padding: .15rem .45rem;
+  border-radius: .35rem;
+  font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive (formulaire uniquement)
+-------------------------------------------------------------------------- */
+@media (max-width: 576px) {
+  .dm-step-label { display: none; }
+  .dm-step.is-active .dm-step-label { display: inline; }
+  .dm-footer { flex-direction: column-reverse; }
+  .dm-footer .btn { width: 100%; }
+  .dm-recap-row { flex-direction: column; gap: .15rem; }
+  .dm-recap-row strong { text-align: left; }
+}
