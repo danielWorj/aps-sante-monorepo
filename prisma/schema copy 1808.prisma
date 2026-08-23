@@ -219,25 +219,18 @@ model Pays {
   medecins_exercice Medecin[]
   structures_sante  StructureSante[]
   pharmacies        Pharmacie[]
-  plannings_garde   PlanningGarde[]
-  
+  plannings_garde       PlanningGarde[]
   // v8 : Publicite (module autonome, plus PublicitePharmacie) — voir
   // plus bas.
   publicites            Publicite[]
-  
   // v8 : Annuaire assurances (diagramme 08_annuaire_assurances).
   services_assurance    ServiceAssurance[]
-  
   // Module Urgences (diagramme APS — Module : Urgences).
   urgences              Urgence[]
-  
   // Module transverse Gestion des médecins — pays d'émission d'une
   // ordonnance (peut différer du pays d'exercice du médecin en
   // téléconsultation transfrontalière).
   ordonnances_emises    Ordonnance[]
-  
-  // Module transverse : Moyens de paiement du médecin
-  types_mobile_money    TypeMobileMoney[]
 
   @@index([devise_id])
   @@index([langue_id])
@@ -260,7 +253,6 @@ model Ville {
   structures_sante  StructureSante[]
   pharmacies        Pharmacie[]
   gardes_pharmacie  GardePharmacie[]
-  
   // v8 : Annuaire assurances (diagramme 08_annuaire_assurances).
   services_assurance ServiceAssurance[]
 
@@ -332,15 +324,12 @@ model Utilisateur {
   agent_pharmacie         AgentPharmacie?
   agent_ambulance         AgentAmbulance?
   avis_pharmacie          AvisPharmacie[]
-  
   // Module transverse Gestion des médecins — voir plus bas dans ce fichier.
   avis_medecin            AvisMedecin[]
-  
   // v8 : module autonome "Présence, publicité & boost commercial" —
   // une publicité est déposée directement par un utilisateur, quel
   // que soit son rôle, sans passer par un profil agent_xxx.
   publicites              Publicite[]
-  
   // v8 : Annuaire assurances — remplace l'ancien
   // "contact_prospect_assurance" (patient -> assurance, 1-N) par cette
   // relation N-N utilisateur <-> assurance (n'importe quel utilisateur
@@ -373,15 +362,17 @@ model Medecin {
   medecin_id String @id @default(uuid()) @db.Uuid
 
   utilisateur_id            String                    @unique @db.Uuid
-  specialite_id             String                    @db.Uuid
-  numero_ordre              String                    @db.VarChar(100)
-  statut_verification       StatutVerificationMedecin
-  pays_exercice_id          String                    @db.Uuid
-  ville_exercice_id         String                    @db.Uuid
-  teleconsultation_activee  Boolean
-  tarif_indicatif           Decimal                   @db.Decimal(12, 2)
-  biographie String @default("") @db.Text 
-  linkedInUrl               String?                    @db.VarChar(255)
+  specialite_id              String                    @db.Uuid
+  numero_ordre               String                    @db.VarChar(100)
+  statut_verification        StatutVerificationMedecin
+  pays_exercice_id           String                    @db.Uuid
+  ville_exercice_id          String                    @db.Uuid
+  teleconsultation_activee   Boolean
+  tarif_indicatif             Decimal                   @db.Decimal(12, 2)
+  biographie                String                      @db.Text  
+  linkedInUrl               String                      @db.VarChar(255)
+
+
 
   // Pièces justificatives (Cloudinary) — voir lib/cloudinaryService.js.
   // Seul le "nom" (public_id Cloudinary, avec extension) est stocké,
@@ -394,7 +385,7 @@ model Medecin {
   //   - attestation_url : attestation d'inscription à l'Ordre
   cni_url         String @db.VarChar(255)
   attestation_url String @db.VarChar(255)
-  cv_url          String? @db.VarChar(255)
+  cv_url String @db.VarChar(255)
 
   // Photo de profil du médecin (Cloudinary) — même règle de stockage
   // que cni_url / attestation_url ci-dessus.
@@ -410,17 +401,12 @@ model Medecin {
   // Module transverse Gestion des médecins (diagramme APS — Module
   // transverse : Gestion des médecins) — voir plus bas dans ce fichier.
   avis        AvisMedecin[]
-  
   // v9 : un médecin peut souscrire à plusieurs abonnements (successifs
   // ou simultanés) — relation N-N portée par la table de jointure
   // ForfaitAbonnementMedecin, voir plus bas dans ce fichier.
   forfaits_abonnement ForfaitAbonnementMedecin[]
-  rendez_vous         RendezVous[]
-  ordonnances         Ordonnance[]
-  
-  // Module transverse : Moyens de paiement du médecin
-  mobile_moneys       MobileMoney[]
-  comptes_bancaires   CompteBancaire[]
+  rendez_vous RendezVous[]
+  ordonnances Ordonnance[]
 
   @@index([specialite_id])
   @@index([pays_exercice_id])
@@ -1306,66 +1292,4 @@ model Ordonnance {
   @@index([patient_id])
   @@index([pays_emission_id])
   @@map("ordonnance")
-}
-
-// =====================================================================
-// APS — Module transverse : Moyens de paiement du médecin
-// (Mobile Money & Compte Bancaire)
-// =====================================================================
-
-// -----------------------------------------------------------------
-// TypeMobileMoney : Référentiel des opérateurs de mobile money par pays
-// -----------------------------------------------------------------
-model TypeMobileMoney {
-  id String @id @default(uuid()) @db.Uuid
-
-  pays_id String  @db.Uuid
-  libelle String  @db.VarChar(100)
-
-  pays          Pays          @relation(fields: [pays_id], references: [pays_id])
-  mobile_moneys MobileMoney[]
-
-  @@index([pays_id])
-  @@map("type_mobile_money")
-}
-
-// -----------------------------------------------------------------
-// MobileMoney : Coordonnées de paiement mobile money d'un médecin
-// -----------------------------------------------------------------
-model MobileMoney {
-  id String @id @default(uuid()) @db.Uuid
-
-  // Correspond à "id_typemobilemoney" de la demande
-  type_mobile_money_id String  @db.Uuid 
-  // Correspond à "id_medecin" de la demande
-  medecin_id           String  @db.Uuid 
-  
-  numero    String @db.VarChar(50)
-  titulaire String @db.VarChar(255)
-
-  type_mobile_money TypeMobileMoney @relation(fields: [type_mobile_money_id], references: [id])
-  medecin           Medecin         @relation(fields: [medecin_id], references: [medecin_id])
-
-  @@index([type_mobile_money_id])
-  @@index([medecin_id])
-  @@map("mobile_money")
-}
-
-// -----------------------------------------------------------------
-// CompteBancaire : Coordonnées bancaires d'un médecin
-// -----------------------------------------------------------------
-model CompteBancaire {
-  id String @id @default(uuid()) @db.Uuid
-
-  // Correspond à "id_medecin" de la demande
-  medecin_id String  @db.Uuid 
-  
-  nom_banque String  @db.VarChar(150)
-  titulaire  String  @db.VarChar(255)
-  iban       String  @db.VarChar(100)
-
-  medecin Medecin @relation(fields: [medecin_id], references: [medecin_id])
-
-  @@index([medecin_id])
-  @@map("compte_bancaire")
 }

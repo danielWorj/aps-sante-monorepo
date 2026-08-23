@@ -5,13 +5,17 @@ import { Router } from "express";
 import {
   inscrire,
   connecter,
+  changerMotDePasseInitial,
   rafraichirToken,
   deconnecter,
   profil,
   creerCompteAdministre,
   amorcerSuperAdmin,
 } from "../controllers/authentification.controller.js";
-import { authentifier } from "../middlewares/auth.middleware.js";
+import {
+  authentifier,
+  exigerTokenChangementMotDePasse,
+} from "../middlewares/auth.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
 
 const router = Router();
@@ -22,6 +26,15 @@ const router = Router();
 // sans authentification.
 router.post("/register", inscrire);
 router.post("/login", connecter);
+// Route "publique" au sens où elle ne passe pas par `authentifier`,
+// mais protégée par exigerTokenChangementMotDePasse : seul le token
+// restreint renvoyé par /login (quand mot_de_passe_a_changer=true)
+// permet de l'appeler. Voir authentification.controller.js.
+router.post(
+  "/changer-mot-de-passe-initial",
+  exigerTokenChangementMotDePasse,
+  changerMotDePasseInitial
+);
 router.post("/refresh", rafraichirToken);
 router.post("/logout", authentifier, deconnecter);
 router.get("/me", authentifier, profil);

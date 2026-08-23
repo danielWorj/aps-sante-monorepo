@@ -43,6 +43,10 @@ import {
   obtenirMedecin,
   modifierMedecin,
   supprimerMedecin,
+  publierMedecin,
+  suspendreMedecin,
+  reactiverMedecin,
+  verifierAppartenanceOrdre,
   // Avis médecin
   listerAvisMedecin,
   obtenirAvisMedecin,
@@ -114,6 +118,27 @@ router.put("/medecins/:id", authentifier, gererTeleversementMedecin, modifierMed
 
 // Réservé à superadmin (pas admin simple).
 router.delete("/medecins/:id", authentifier, autoriser("superadmin"), supprimerMedecin);
+
+// Publication / suspension — actions explicites distinctes du PUT
+// générique (qui permet toujours aussi de fixer statut_verification
+// "à la main", pour compat). Réservées à admin/superadmin :
+//   - publier   : passe la fiche à statut_verification="publie".
+//   - suspendre : bloque le compte du médecin (statut_compte="suspendu")
+//                 et retire la fiche de l'annuaire public en même temps.
+//   - reactiver : débloque le compte (statut_compte="actif") sans
+//                 republier automatiquement la fiche.
+router.patch("/medecins/:id/publier", authentifier, autoriser("admin", "superadmin"), publierMedecin);
+router.patch("/medecins/:id/suspendre", authentifier, autoriser("admin", "superadmin"), suspendreMedecin);
+router.patch("/medecins/:id/reactiver", authentifier, autoriser("admin", "superadmin"), reactiverMedecin);
+
+// PUBLIQUE — vérifie l'appartenance d'un médecin au Tableau de l'Ordre
+// National des Médecins du Cameroun (ONMC) à partir de son
+// numero_ordre, en interrogeant https://onmc.app/tableau_de_lordre
+// (voir onmcVerificationService.js — ce site n'a pas d'API publique
+// documentée, la vérification pilote donc un navigateur headless).
+// Volontairement PUBLIQUE (pas de authentifier) : utile en amont de
+// POST /medecins, avant même la création d'un compte.
+router.post("/medecins/verifier-ordre", verifierAppartenanceOrdre);
 
 /* ===================================================================
  * Avis médecin

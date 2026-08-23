@@ -6,11 +6,16 @@ import prisma from "../lib/prisma.js";
 import {
   genererAccessToken,
   genererRefreshToken,
+  genererTokenChangementMotDePasse,
   hasherToken,
   NOM_COOKIE_REFRESH_TOKEN,
   optionsCookieRefreshToken,
   optionsClearCookieRefreshToken,
 } from "../utils/token.utils.js";
+
+// Délai laissé au titulaire d'un mot de passe temporaire pour le
+// changer, à compter de sa toute première connexion réussie.
+const DELAI_CHANGEMENT_MOT_DE_PASSE_MS = 24 * 60 * 60 * 1000; // 24h
 
 const SALT_ROUNDS = 10;
 const MOT_DE_PASSE_LONGUEUR_MIN = 8;
@@ -479,6 +484,63 @@ export async function connecter(req, res, next) {
       return res.status(403).json({ message: "Compte suspendu." });
     }
 
+    // ─── Mot de passe temporaire : pas de session normale ─────────
+    // Un compte créé par un admin (creerCompteAdministre) avec un mot
+    // de passe généré porte mot_de_passe_temporaire=true tant que le
+    // titulaire ne l'a pas remplacé. Dans ce cas, connecter() ne doit
+    // JAMAIS émettre de session complète (access + refresh token) :
+    // seul un token restreint, utilisable uniquement pour changer le
+    // mot de passe, est renvoyé. Le frontend redirige alors
+    // automatiquement vers l'écran de changement de mot de passe.
+    if (utilisateur.mot_de_passe_temporaire) {
+      const maintenant = new Date();
+
+      if (!utilisateur.mot_de_passe_expire_le) {
+        // Toute première connexion réussie avec ce mot de passe
+        // temporaire : on amorce la deadline de 24h à partir de
+        // maintenant, pas depuis la création du compte.
+        utilisateur = await prisma.utilisateur.update({
+          where: { utilisateur_id: utilisateur.utilisateur_id },
+          data: {
+            mot_de_passe_expire_le: new Date(
+              maintenant.getTime() + DELAI_CHANGEMENT_MOT_DE_PASSE_MS
+            ),
+          },
+          include: { role: true },
+        });
+      } else if (utilisateur.mot_de_passe_expire_le < maintenant) {
+        // Le titulaire s'est connecté au moins une fois mais n'a
+        // jamais changé son mot de passe dans le délai imparti : on
+        // bloque l'accès plutôt que de reconduire indéfiniment un
+        // mot de passe temporaire. Seul un admin peut réinitialiser
+        // le compte (nouveau mot de passe temporaire + nouvelle
+        // fenêtre de 24h).
+        return res.status(403).json({
+          message:
+            "Le délai pour changer votre mot de passe temporaire est dépassé. Contactez un administrateur pour réinitialiser votre compte.",
+        });
+      }
+      // Si mot_de_passe_expire_le est déjà posé et pas encore dépassé
+      // (reconnexions successives dans la fenêtre de 24h avant que le
+      // changement soit effectif), on ne touche pas à la deadline :
+      // elle reste calée sur la toute première connexion.
+
+      const {
+        token: tokenChangementMotDePasse,
+        date_expiration: expirationTokenChangementMotDePasse,
+      } = genererTokenChangementMotDePasse(utilisateur);
+
+      return res.status(200).json({
+        message:
+          "Mot de passe temporaire détecté : vous devez le changer avant de continuer.",
+        mot_de_passe_a_changer: true,
+        token_changement_mot_de_passe: tokenChangementMotDePasse,
+        token_changement_mot_de_passe_expire_le:
+          expirationTokenChangementMotDePasse,
+        mot_de_passe_expire_le: utilisateur.mot_de_passe_expire_le,
+      });
+    }
+
     // Le token porte le libellé du rôle (ex: "patient", "agent_pharmacie"),
     // pas l'UUID role_id, pour rester exploitable par les middlewares
     // d'autorisation existants.
@@ -513,6 +575,140 @@ export async function connecter(req, res, next) {
       message: "Connexion réussie.",
       access_token: accessToken,
       utilisateur: serialiserUtilisateur(utilisateur),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/auth/changer-mot-de-passe-initial
+ * Protégée par exigerTokenChangementMotDePasse (PAS authentifier) :
+ * n'accepte que le token restreint renvoyé par connecter() quand
+ * mot_de_passe_temporaire=true. Le fait de posséder ce token prouve
+ * déjà que l'appelant connaît le mot de passe temporaire (vérifié par
+ * bcrypt.compare lors du login qui l'a émis) : aucune re-saisie de
+ * l'ancien mot de passe n'est donc redemandée ici.
+ *
+ * Effets :
+ *  - remplace mot_de_passe_hash par le nouveau mot de passe choisi ;
+ *  - repasse mot_de_passe_temporaire à false et mot_de_passe_expire_le
+ *    à null (le compte sort définitivement du régime "temporaire") ;
+ *  - révoque le jti du token restreint (à usage unique) ;
+ *  - ouvre directement une session complète (access + refresh token),
+ *    comme un login normal, pour éviter à l'utilisateur de ressaisir
+ *    son nouveau mot de passe immédiatement après l'avoir choisi.
+ */
+export async function changerMotDePasseInitial(req, res, next) {
+  try {
+    const { nouveau_mot_de_passe } = req.body;
+
+    const erreurMotDePasse = validerMotDePasse(nouveau_mot_de_passe);
+    if (erreurMotDePasse) {
+      return res.status(400).json({ message: erreurMotDePasse });
+    }
+
+    const utilisateur = await prisma.utilisateur.findUnique({
+      where: { utilisateur_id: req.utilisateurTemp.utilisateur_id },
+      include: { role: true },
+    });
+
+    if (!utilisateur) {
+      return res.status(404).json({ message: "Utilisateur introuvable." });
+    }
+
+    // Garde-fou : si le mot de passe a déjà été changé entre-temps
+    // (ex. deux onglets, token réutilisé avant sa révocation), on
+    // refuse plutôt que d'écraser silencieusement un mot de passe déjà
+    // définitif.
+    if (!utilisateur.mot_de_passe_temporaire) {
+      return res.status(409).json({
+        message: "Le mot de passe de ce compte a déjà été défini.",
+      });
+    }
+
+    if (
+      utilisateur.statut_compte === "suspendu"
+    ) {
+      return res.status(403).json({ message: "Compte suspendu." });
+    }
+
+    const nouveauMotDePasseIdentiqueAuTemporaire = await bcrypt.compare(
+      nouveau_mot_de_passe,
+      utilisateur.mot_de_passe_hash
+    );
+    if (nouveauMotDePasseIdentiqueAuTemporaire) {
+      return res.status(400).json({
+        message:
+          "Le nouveau mot de passe doit être différent du mot de passe temporaire.",
+      });
+    }
+
+    const mot_de_passe_hash = await bcrypt.hash(nouveau_mot_de_passe, SALT_ROUNDS);
+
+    const utilisateurMisAJour = await prisma.$transaction(async (tx) => {
+      const maj = await tx.utilisateur.update({
+        where: { utilisateur_id: utilisateur.utilisateur_id },
+        data: {
+          mot_de_passe_hash,
+          mot_de_passe_temporaire: false,
+          mot_de_passe_expire_le: null,
+        },
+        include: { role: true },
+      });
+
+      // Le token restreint est à usage unique : on l'ajoute à la
+      // denylist pour qu'une éventuelle copie interceptée ne puisse
+      // pas être rejouée sur cet endpoint.
+      await tx.jetonRevoque.upsert({
+        where: { jti: req.utilisateurTemp.jti },
+        update: {},
+        create: {
+          jti: req.utilisateurTemp.jti,
+          utilisateur_id: utilisateur.utilisateur_id,
+          date_expiration_initiale: req.utilisateurTemp.exp
+            ? new Date(req.utilisateurTemp.exp * 1000)
+            : new Date(Date.now() + 15 * 60 * 1000),
+          motif: "changement_mdp",
+        },
+      });
+
+      return maj;
+    });
+
+    // Ouverture immédiate d'une session complète, comme un login
+    // classique réussi.
+    const { token: accessToken } = genererAccessToken({
+      ...utilisateurMisAJour,
+      role: utilisateurMisAJour.role.libelle,
+    });
+    const {
+      token: refreshToken,
+      token_hash,
+      date_expiration,
+    } = genererRefreshToken();
+
+    await prisma.refreshToken.create({
+      data: {
+        utilisateur_id: utilisateurMisAJour.utilisateur_id,
+        token_hash,
+        date_expiration,
+        user_agent: req.headers["user-agent"]?.slice(0, 255),
+        ip_creation: req.ip,
+        statut: "actif",
+      },
+    });
+
+    res.cookie(
+      NOM_COOKIE_REFRESH_TOKEN,
+      refreshToken,
+      optionsCookieRefreshToken(date_expiration)
+    );
+
+    return res.status(200).json({
+      message: "Mot de passe mis à jour. Connexion réussie.",
+      access_token: accessToken,
+      utilisateur: serialiserUtilisateur(utilisateurMisAJour),
     });
   } catch (err) {
     next(err);

@@ -38,8 +38,9 @@
 //   medecin { medecin_id, utilisateur_id (unique), specialite_id,
 //     numero_ordre (PAS unique), statut_verification,
 //     pays_exercice_id, ville_exercice_id, teleconsultation_activee,
-//     tarif_indicatif, cni_url, attestation_url, photo_url
-//     (optionnel/nullable), date_creation }
+//     tarif_indicatif, biographie, cni_url, attestation_url, photo_url
+//     (optionnel/nullable), cv_url (optionnel/nullable à la création),
+//     linkedInUrl (optionnel/nullable à la création), date_creation }
 //   utilisateur { utilisateur_id, nom, prenom, email (unique),
 //     telephone?, mot_de_passe_hash, role_id, pays_id, statut_compte,
 //     mot_de_passe_temporaire, mot_de_passe_expire_le? }
@@ -58,6 +59,7 @@ import crypto from "node:crypto";
 import bcrypt from "bcrypt"; // ajuster vers "bcryptjs" si c'est la lib utilisée ailleurs dans le projet
 import prisma from "../lib/prisma.js";
 import cloudinaryService, { construireUrl } from "../lib/cloudinaryService.js";
+import { verifierAppartenanceOrdreONMC } from "../lib/onmcVerificationService.js";
 
 export {
   listerAvisMedecin,
@@ -183,6 +185,10 @@ function estAdmin(utilisateur) {
  * À appliquer sur toute réponse contenant une fiche medecin destinée à
  * être affichée (listerMedecins, obtenirMedecin, modifierMedecin,
  * creerMedecin).
+ *
+ * cv_url suit la même règle que photo_url : nullable en base (nullable
+ * à la création — voir modifierMedecin), donc on ne le fait passer par
+ * construireUrl() que s'il est effectivement renseigné.
  */
 function avecUrlsFichiersMedecin(medecin) {
   if (!medecin) return medecin;
@@ -191,6 +197,7 @@ function avecUrlsFichiersMedecin(medecin) {
     cni_url: construireUrl(medecin.cni_url),
     attestation_url: construireUrl(medecin.attestation_url),
     photo_url: medecin.photo_url ? construireUrl(medecin.photo_url) : null,
+    cv_url: medecin.cv_url ? construireUrl(medecin.cv_url) : null,
   };
 }
 
@@ -219,8 +226,9 @@ function genererMotDePasseTemporaire() {
  *      vérification) — voir plus bas.
  * Champs requis dans req.body : nom, prenom, email, pays_id (compte
  * utilisateur) + specialite, numero_ordre, pays_exercice_id,
- * ville_exercice_id, teleconsultation_activee, tarif_indicatif (fiche
- * médecin — tous obligatoires en base, aucun n'est nullable).
+ * ville_exercice_id, teleconsultation_activee, tarif_indicatif,
+ * biographie (fiche médecin — tous obligatoires en base, aucun n'est
+ * nullable ; biographie ne doit pas non plus être une chaîne vide).
  * Fichiers requis (multipart, voir gererTeleversementMedecin) : cni,
  * attestation. Fichier optionnel : photo (photo de profil, photo_url
  * nullable en base).
@@ -248,6 +256,7 @@ export async function creerMedecin(req, res, next) {
       ville_exercice_id,
       teleconsultation_activee,
       tarif_indicatif,
+      biographie,
     } = req.body;
 
     const champsManquants = [];
@@ -261,6 +270,13 @@ export async function creerMedecin(req, res, next) {
     if (!ville_exercice_id) champsManquants.push("ville_exercice_id");
     if (teleconsultation_activee === undefined) champsManquants.push("teleconsultation_activee");
     if (tarif_indicatif === undefined) champsManquants.push("tarif_indicatif");
+    // biographie : NOT NULL en base (schema.prisma) — jusqu'ici absente
+    // de ce handler, ce qui faisait échouer prisma.medecin.create() sur
+    // la contrainte NOT NULL (remonté comme 500 générique via next(err))
+    // plutôt que par un message 400 clair. Même règle de "non vide" que
+    // dans modifierMedecin : une chaîne vide/blanche est traitée comme
+    // manquante, pas acceptée telle quelle.
+    if (!biographie || !String(biographie).trim()) champsManquants.push("biographie");
 
     if (champsManquants.length > 0) {
       return res.status(400).json({
@@ -336,6 +352,7 @@ export async function creerMedecin(req, res, next) {
             ville_exercice_id,
             teleconsultation_activee: Boolean(teleconsultation_activee),
             tarif_indicatif,
+            biographie,
             cni_url: resultatCni.nom,
             attestation_url: resultatAttestation.nom,
             photo_url: resultatPhoto ? resultatPhoto.nom : null,
@@ -466,16 +483,33 @@ export async function obtenirMedecin(req, res, next) {
  * Ouvert au médecin concerné (utilisateur_id déduit du token) ou à
  * admin/superadmin (voir en-tête medecin.routes.js).
  *   - Le médecin lui-même : peut modifier ses champs de fiche
- *     (CHAMPS_MODIFIABLES_MEDECIN) et/ou remplacer cni_url/attestation_url/
- *     photo_url (fichiers déjà téléversés par gererTeleversementMedecin
+ *     (CHAMPS_MODIFIABLES_MEDECIN, + biographie/linkedInUrl, voir
+ *     ci-dessous) et/ou remplacer cni_url/attestation_url/photo_url/
+ *     cv_url (fichiers déjà téléversés par gererTeleversementMedecin
  *     dans req.files — voir upload.middleware.js). Contrairement à
- *     cni/attestation, la photo est optionnelle : son absence ne bloque
- *     rien. Il ne peut jamais choisir
+ *     cni/attestation, la photo et le CV sont optionnels : leur
+ *     absence ne bloque rien. Il ne peut jamais choisir
  *     statut_verification lui-même : toute modification de sa fiche le
  *     repasse automatiquement à "en_cours" pour re-vérification.
  *   - admin/superadmin : peut en plus fixer statut_verification
  *     librement ; cela ne déclenche pas le repassage automatique à
  *     "en_cours".
+ *
+ * ⚠️ CORRECTIF — biographie / cv_url / linkedInUrl
+ * Trois champs ajoutés au modèle Medecin, absents jusqu'ici de ce
+ * handler :
+ *   - biographie  : NOT NULL en base. Modifiable comme un champ de
+ *     fiche classique, mais on refuse explicitement une valeur
+ *     vide/nulle si le champ est présent dans la requête, plutôt que de
+ *     laisser Prisma échouer avec une erreur 500 sur la contrainte NOT
+ *     NULL.
+ *   - linkedInUrl : nullable (y compris à la création). Peut être
+ *     renseigné, mis à jour, ou explicitement vidé (chaîne vide/null
+ *     envoyée) pour retirer le lien.
+ *   - cv_url      : nullable (y compris à la création) — fichier
+ *     Cloudinary, même patron que photo_url : remplacement optionnel
+ *     via req.files.cv, ancien fichier nettoyé (best effort) une fois
+ *     la mise à jour DB confirmée.
  */
 export async function modifierMedecin(req, res, next) {
   try {
@@ -497,6 +531,23 @@ export async function modifierMedecin(req, res, next) {
       if (req.body[champ] !== undefined) donnees[champ] = req.body[champ];
     }
 
+    // biographie : NOT NULL en base (contrairement à linkedInUrl et
+    // cv_url, nullables à la création) — traitée à part du simple
+    // passage direct ci-dessus pour refuser une valeur vide/nulle si
+    // elle est fournie.
+    if (req.body.biographie !== undefined) {
+      if (!req.body.biographie || !String(req.body.biographie).trim()) {
+        return res.status(400).json({ message: "Le champ biographie ne peut pas être vide." });
+      }
+      donnees.biographie = req.body.biographie;
+    }
+
+    // linkedInUrl : nullable — peut être renseigné/mis à jour normalement,
+    // ou explicitement vidé (chaîne vide envoyée) pour retirer le lien.
+    if (req.body.linkedInUrl !== undefined) {
+      donnees.linkedInUrl = req.body.linkedInUrl || null;
+    }
+
     // nom/prenom/telephone : champs du compte utilisateur, distincts de
     // la fiche medecin — traités séparément et écrits sur `utilisateur`
     // plus bas (voir CHAMPS_MODIFIABLES_UTILISATEUR).
@@ -512,6 +563,7 @@ export async function modifierMedecin(req, res, next) {
     let ancienCniNom = null;
     let ancienAttestationNom = null;
     let ancienPhotoNom = null;
+    let ancienCvNom = null;
 
     if (req.files?.cni?.[0]) {
       const resultat = await cloudinaryService.televerserFichier(req.files.cni[0].buffer, "medecins/cni");
@@ -534,6 +586,14 @@ export async function modifierMedecin(req, res, next) {
       const resultat = await cloudinaryService.televerserFichier(req.files.photo[0].buffer, "medecins/photos");
       donnees.photo_url = resultat.nom;
       ancienPhotoNom = medecin.photo_url;
+    }
+    // cv_url : optionnelle, même règle de remplacement que photo_url
+    // (nullable en base, y compris à la création — pas d'"ancienne"
+    // valeur à nettoyer si le médecin n'en avait pas encore).
+    if (req.files?.cv?.[0]) {
+      const resultat = await cloudinaryService.televerserFichier(req.files.cv[0].buffer, "medecins/cv");
+      donnees.cv_url = resultat.nom;
+      ancienCvNom = medecin.cv_url;
     }
 
     if (estAdministrateur) {
@@ -601,11 +661,150 @@ export async function modifierMedecin(req, res, next) {
       ancienCniNom ? cloudinaryService.supprimerFichier(ancienCniNom) : Promise.resolve(),
       ancienAttestationNom ? cloudinaryService.supprimerFichier(ancienAttestationNom) : Promise.resolve(),
       ancienPhotoNom ? cloudinaryService.supprimerFichier(ancienPhotoNom) : Promise.resolve(),
+      ancienCvNom ? cloudinaryService.supprimerFichier(ancienCvNom) : Promise.resolve(),
     ]);
 
     return res.status(200).json({
       message: "Fiche médecin mise à jour.",
       medecin: avecUrlsFichiersMedecin(medecinMisAJour),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PATCH /api/medecins/:id/publier
+ * Réservé à admin/superadmin (voir medecin.routes.js).
+ * Action explicite équivalente à PUT /medecins/:id avec
+ * { statut_verification: "publie" }, mais isolée dans son propre
+ * handler pour rester auditable/appelable sans repasser par le reste
+ * des champs modifiables de modifierMedecin. Ne touche jamais
+ * statut_compte (compte utilisateur) : une fiche peut être republiée
+ * indépendamment de l'état de suspension du compte, à l'appréciation
+ * de l'admin (voir reactiverMedecin ci-dessous si le compte est
+ * suspendu).
+ */
+export async function publierMedecin(req, res, next) {
+  try {
+    const medecin = await prisma.medecin.findUnique({ where: { medecin_id: req.params.id } });
+    if (!medecin) {
+      return res.status(404).json({ message: "Médecin introuvable." });
+    }
+
+    if (medecin.statut_verification === "publie") {
+      return res.status(200).json({
+        message: "Ce médecin est déjà publié.",
+        medecin: avecUrlsFichiersMedecin(medecin),
+      });
+    }
+
+    const medecinMisAJour = await prisma.medecin.update({
+      where: { medecin_id: req.params.id },
+      data: { statut_verification: "publie" },
+      include: {
+        utilisateur: SELECTION_UTILISATEUR_ADMIN,
+        specialite: SELECTION_SPECIALITE_PUBLIC,
+        ville_exercice: SELECTION_VILLE_PUBLIC,
+        pays_exercice: SELECTION_PAYS_PUBLIC,
+      },
+    });
+
+    return res.status(200).json({
+      message: "Fiche médecin publiée.",
+      medecin: avecUrlsFichiersMedecin(medecinMisAJour),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PATCH /api/medecins/:id/suspendre
+ * Réservé à admin/superadmin (voir medecin.routes.js).
+ * Suspend le COMPTE utilisateur lié (utilisateur.statut_compte =
+ * "suspendu") — bloque la connexion du médecin, indépendamment de
+ * l'état de la fiche annuaire. Dans la même transaction, la fiche est
+ * repassée à statut_verification = "non_publie" : il n'y a pas de sens
+ * à laisser une fiche visible dans l'annuaire public pour un compte
+ * dont l'accès est bloqué. Contrairement à supprimerMedecin, aucune
+ * donnée n'est perdue — l'opération est réversible via
+ * reactiverMedecin.
+ */
+export async function suspendreMedecin(req, res, next) {
+  try {
+    const medecin = await prisma.medecin.findUnique({ where: { medecin_id: req.params.id } });
+    if (!medecin) {
+      return res.status(404).json({ message: "Médecin introuvable." });
+    }
+
+    const utilisateur = await prisma.utilisateur.findUnique({
+      where: { utilisateur_id: medecin.utilisateur_id },
+    });
+    if (utilisateur?.statut_compte === "suspendu") {
+      return res.status(200).json({ message: "Ce médecin est déjà suspendu." });
+    }
+
+    const [, medecinMisAJour] = await prisma.$transaction([
+      prisma.utilisateur.update({
+        where: { utilisateur_id: medecin.utilisateur_id },
+        data: { statut_compte: "suspendu" },
+      }),
+      prisma.medecin.update({
+        where: { medecin_id: req.params.id },
+        data: { statut_verification: "non_publie" },
+        include: {
+          utilisateur: SELECTION_UTILISATEUR_ADMIN,
+          specialite: SELECTION_SPECIALITE_PUBLIC,
+          ville_exercice: SELECTION_VILLE_PUBLIC,
+          pays_exercice: SELECTION_PAYS_PUBLIC,
+        },
+      }),
+    ]);
+
+    return res.status(200).json({
+      message: "Médecin suspendu : accès au compte bloqué et fiche retirée de l'annuaire public.",
+      medecin: avecUrlsFichiersMedecin(medecinMisAJour),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PATCH /api/medecins/:id/reactiver
+ * Réservé à admin/superadmin (voir medecin.routes.js).
+ * Inverse de suspendreMedecin : repasse utilisateur.statut_compte à
+ * "actif" (le médecin peut de nouveau se connecter). Ne republie PAS
+ * automatiquement la fiche (statut_verification reste "non_publie") —
+ * volontaire : la republication est une décision distincte, à
+ * confirmer explicitement par l'admin via publierMedecin après
+ * réactivation.
+ */
+export async function reactiverMedecin(req, res, next) {
+  try {
+    const medecin = await prisma.medecin.findUnique({ where: { medecin_id: req.params.id } });
+    if (!medecin) {
+      return res.status(404).json({ message: "Médecin introuvable." });
+    }
+
+    const utilisateur = await prisma.utilisateur.findUnique({
+      where: { utilisateur_id: medecin.utilisateur_id },
+    });
+    if (!utilisateur) {
+      return res.status(404).json({ message: "Compte utilisateur lié introuvable." });
+    }
+    if (utilisateur.statut_compte === "actif") {
+      return res.status(200).json({ message: "Ce médecin n'est pas suspendu." });
+    }
+
+    await prisma.utilisateur.update({
+      where: { utilisateur_id: medecin.utilisateur_id },
+      data: { statut_compte: "actif" },
+    });
+
+    return res.status(200).json({
+      message: "Compte médecin réactivé. Pensez à republier la fiche (PATCH /medecins/:id/publier) si nécessaire.",
     });
   } catch (err) {
     next(err);
@@ -635,6 +834,63 @@ export async function supprimerMedecin(req, res, next) {
           "Impossible de supprimer ce médecin : des avis, abonnements, rendez-vous ou ordonnances y sont encore rattachés.",
       });
     }
+    next(err);
+  }
+}
+
+/**
+ * POST /api/medecins/verifier-ordre
+ * PUBLIQUE — aucune authentification requise. Corps attendu :
+ *   { "numero_ordre": "3261/1990" }
+ * Vérifie l'appartenance au Tableau de l'Ordre National des Médecins
+ * du Cameroun (ONMC) en interrogeant https://onmc.app/tableau_de_lordre
+ * (seule source publique connue — voir onmcVerificationService.js pour
+ * le détail et les limites de cette vérification, ce site n'exposant
+ * aucune API documentée).
+ * Utile notamment en amont de POST /medecins (candidature) pour
+ * pré-valider un numero_ordre avant upload des pièces, et/ou côté
+ * admin lors de la vérification d'une fiche avant publication.
+ * ⚠️ Cette vérification est INDÉPENDANTE de numero_ordre en base
+ * locale (medecin.numero_ordre n'est pas unique — voir en-tête de
+ * fichier) : elle ne fait qu'interroger la source externe ONMC, sans
+ * toucher à notre propre table medecin.
+ * Réponse 200 :
+ *   { numero_ordre, appartient_ordre: boolean, nom_complet? }
+ * Réponse 502 si l'ONMC est injoignable / le site a changé de
+ * structure (voir onmcVerificationService.js) — on ne renvoie jamais
+ * une fausse confirmation d'appartenance dans ce cas.
+ */
+export async function verifierAppartenanceOrdre(req, res, next) {
+  try {
+    const { numero_ordre } = req.body;
+
+    if (!numero_ordre || !String(numero_ordre).trim()) {
+      return res.status(400).json({ message: "Le champ numero_ordre est obligatoire." });
+    }
+
+    let resultat;
+    try {
+      resultat = await verifierAppartenanceOrdreONMC(numero_ordre);
+    } catch (errVerification) {
+      // Échec de la vérification externe (site ONMC injoignable,
+      // structure de page changée, timeout, etc.) — distinct d'un
+      // numero_ordre simplement introuvable. On ne fait JAMAIS
+      // remonter ceci comme appartient_ordre=false, pour éviter de
+      // rejeter à tort un médecin réellement inscrit.
+      return res.status(502).json({
+        message:
+          "Impossible de vérifier ce numéro auprès du Tableau de l'Ordre (ONMC) pour le moment. Réessayez plus tard.",
+      });
+    }
+
+    return res.status(200).json({
+      numero_ordre,
+      appartient_ordre: resultat.appartientOrdre,
+      ...(resultat.appartientOrdre
+        ? { nom_complet: resultat.nomComplet, numero_ordre_onmc: resultat.numeroOrdre }
+        : {}),
+    });
+  } catch (err) {
     next(err);
   }
 }

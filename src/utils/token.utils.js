@@ -146,6 +146,55 @@ export function verifierAccessToken(token) {
   });
 }
 
+// ─── Token restreint : changement de mot de passe temporaire ─────
+// Émis à la place d'une session complète lorsque `connecter()` détecte
+// un compte avec mot_de_passe_temporaire=true. Signé avec la même
+// paire de clés que l'access token classique (même vérificateur,
+// verifierAccessToken), mais porte un claim `scope` dédié et n'a NI
+// `role` NI `pays_id` : il est structurellement incapable de passer
+// autoriser("...") et le middleware `authentifier` le rejette
+// explicitement pour toute route standard (voir auth.middleware.js).
+// Il ne donne accès qu'à POST /auth/changer-mot-de-passe-initial, via
+// le middleware dédié `exigerTokenChangementMotDePasse`.
+export const SCOPE_CHANGEMENT_MOT_DE_PASSE = "changement_mot_de_passe_oblige";
+
+const CHANGEMENT_MOT_DE_PASSE_TOKEN_EXPIRES_IN =
+  process.env.JWT_CHANGEMENT_MDP_EXPIRES_IN || "15m";
+
+/**
+ * Génère le token restreint remis à la place d'une session lorsque
+ * l'utilisateur se connecte avec un mot de passe temporaire. Sa durée
+ * de vie courte (15 min par défaut) est indépendante de la deadline
+ * fonctionnelle des 24h portée par `utilisateur.mot_de_passe_expire_le` :
+ * cette dernière autorise la reconnexion pour obtenir un nouveau token
+ * de ce type pendant 24h, tandis que chaque token individuel expire
+ * bien plus vite pour limiter la fenêtre d'exploitation en cas de fuite.
+ */
+export function genererTokenChangementMotDePasse(utilisateur) {
+  const jti = crypto.randomUUID();
+
+  const token = jwt.sign(
+    {
+      sub: utilisateur.utilisateur_id,
+      scope: SCOPE_CHANGEMENT_MOT_DE_PASSE,
+      jti,
+    },
+    ACCESS_TOKEN_PRIVATE_KEY,
+    {
+      algorithm: ACCESS_TOKEN_ALGORITHM,
+      expiresIn: CHANGEMENT_MOT_DE_PASSE_TOKEN_EXPIRES_IN,
+    }
+  );
+
+  const decoded = jwt.decode(token);
+
+  return {
+    token,
+    jti,
+    date_expiration: new Date(decoded.exp * 1000),
+  };
+}
+
 /**
  * Génère un refresh token opaque (aléatoire) ainsi que son hash SHA-256,
  * qui seul est persisté en base (le token en clair n'est jamais stocké).

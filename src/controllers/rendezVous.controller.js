@@ -30,6 +30,20 @@ function estAdmin(utilisateur) {
   return utilisateur?.role === "admin" || utilisateur?.role === "superadmin";
 }
 
+// Sans cet `include`, l'API ne renvoyait que medecin_id / patient_id
+// bruts (clés étrangères) : le front (RendezVous.jsx / medecinService.js)
+// attend medecin.utilisateur.{nom,prenom} et patient.utilisateur.
+// {nom,prenom} pour afficher des noms plutôt que des UUID dans le
+// tableau et les filtres — même patron que SELECTION_UTILISATEUR_*
+// dans medecin.controller.js.
+// ⚠️ Hypothèse : le modèle `patient` porte une relation `utilisateur`
+// du même type que `medecin.utilisateur` (schema.prisma non fourni) —
+// à confirmer/ajuster si le nom de la relation diffère.
+const INCLUSION_NOMS_RDV = {
+  medecin: { include: { utilisateur: { select: { nom: true, prenom: true } } } },
+  patient: { include: { utilisateur: { select: { nom: true, prenom: true } } } },
+};
+
 async function profilPatientCourant(utilisateurCourant) {
   if (!utilisateurCourant) return null;
   return prisma.patient.findUnique({
@@ -129,6 +143,7 @@ export async function listerRendezVous(req, res, next) {
 
     const rendezVous = await prisma.rendezVous.findMany({
       where,
+      include: INCLUSION_NOMS_RDV,
       orderBy: { date_creneau: "desc" },
     });
 
@@ -143,7 +158,10 @@ export async function listerRendezVous(req, res, next) {
  */
 export async function obtenirRendezVous(req, res, next) {
   try {
-    const rdv = await prisma.rendezVous.findUnique({ where: { rdv_id: req.params.id } });
+    const rdv = await prisma.rendezVous.findUnique({
+      where: { rdv_id: req.params.id },
+      include: INCLUSION_NOMS_RDV,
+    });
     if (!rdv || !(await estAutoriseSurRdv(rdv, req.utilisateur))) {
       return res.status(404).json({ message: "Rendez-vous introuvable." });
     }
