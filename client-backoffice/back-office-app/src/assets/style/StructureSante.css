@@ -1,0 +1,409 @@
+/* src/components/StructureSante.css
+ *
+ * Direction : "fiches d'annuaire santé". Chaque carte reprend le geste
+ * d'un onglet de dossier médical — une languette de couleur sur le
+ * bord gauche encode le type de structure, comme un classeur physique
+ * trié par catégorie. Palette clinique sobre (vert sauge/teal), pas de
+ * terracotta ni de near-black générique.
+ */
+
+.ss-page {
+  --ss-bg: #f6f8f6;
+  --ss-surface: #ffffff;
+  --ss-ink: #16241f;
+  --ss-muted: #5b6660;
+  --ss-border: #e1e6e0;
+  --ss-primary: #0f6e5c;
+  --ss-primary-dark: #0b4f42;
+  --ss-primary-tint: #e6f1ee;
+  --ss-danger: #a4402f;
+  --ss-danger-tint: #f7e9e6;
+
+  --ss-type-clinique: #0f6e5c;
+  --ss-type-hopital: #2a5f8c;
+  --ss-type-centre_medical: #6b5b95;
+  --ss-type-dispensaire: #b9832e;
+  --ss-type-laboratoire: #4a7a3a;
+
+  --ss-statut-publie: #0f6e5c;
+  --ss-statut-en_cours: #b9832e;
+  --ss-statut-non_publie: #8a93a6;
+
+  --ss-font-display: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --ss-font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+
+  background: var(--ss-bg);
+  color: var(--ss-ink);
+  font-family: var(--ss-font-body);
+  min-height: 100vh;
+  padding: 2.5rem clamp(1rem, 4vw, 3rem) 4rem;
+  box-sizing: border-box;
+}
+
+.ss-page *,
+.ss-page *::before,
+.ss-page *::after {
+  box-sizing: border-box;
+}
+
+/* ─── En-tête ────────────────────────────────────────────────── */
+
+.ss-en-tete {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 2rem;
+}
+
+.ss-eyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ss-primary);
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+}
+
+.ss-en-tete h1 {
+  font-family: var(--ss-font-display);
+  font-size: clamp(1.75rem, 3vw, 2.4rem);
+  margin: 0 0 0.5rem;
+  color: var(--ss-ink);
+}
+
+.ss-sous-titre {
+  color: var(--ss-muted);
+  margin: 0;
+  max-width: 46ch;
+  line-height: 1.5;
+}
+
+/* ─── Contrôles ──────────────────────────────────────────────── */
+
+.ss-bouton {
+  font-family: var(--ss-font-body);
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.65rem 1.1rem;
+  border-radius: 8px;
+  border: 1px solid var(--ss-border);
+  background: var(--ss-surface);
+  color: var(--ss-ink);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ss-bouton:hover {
+  border-color: var(--ss-primary);
+}
+
+.ss-bouton:focus-visible {
+  outline: 2px solid var(--ss-primary);
+  outline-offset: 2px;
+}
+
+.ss-bouton--principal {
+  background: var(--ss-primary);
+  border-color: var(--ss-primary);
+  color: #fff;
+}
+
+.ss-bouton--principal:hover {
+  background: var(--ss-primary-dark);
+  border-color: var(--ss-primary-dark);
+}
+
+.ss-bouton--danger {
+  background: var(--ss-danger);
+  border-color: var(--ss-danger);
+  color: #fff;
+}
+
+.ss-bouton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ss-filtres {
+  display: grid;
+  grid-template-columns: 2fr repeat(4, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 900px) {
+  .ss-filtres {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.ss-champ {
+  font-family: var(--ss-font-body);
+  font-size: 0.9rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--ss-border);
+  background: var(--ss-surface);
+  color: var(--ss-ink);
+  width: 100%;
+}
+
+.ss-champ:focus-visible {
+  outline: 2px solid var(--ss-primary);
+  outline-offset: 1px;
+}
+
+.ss-compteur {
+  color: var(--ss-muted);
+  font-size: 0.85rem;
+  margin: 0 0 1.25rem;
+}
+
+.ss-alerte {
+  background: var(--ss-danger-tint);
+  color: var(--ss-danger);
+  border: 1px solid var(--ss-danger);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+/* ─── Grille de fiches ───────────────────────────────────────── */
+
+.ss-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.ss-vide {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--ss-muted);
+}
+
+.ss-vide__astuce {
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.ss-carte {
+  background: var(--ss-surface);
+  border: 1px solid var(--ss-border);
+  border-left: 5px solid var(--ss-type-clinique);
+  border-radius: 10px;
+  padding: 1.1rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ss-carte:has(.ss-badge--hopital) { border-left-color: var(--ss-type-hopital); }
+.ss-carte:has(.ss-badge--centre_medical) { border-left-color: var(--ss-type-centre_medical); }
+.ss-carte:has(.ss-badge--dispensaire) { border-left-color: var(--ss-type-dispensaire); }
+.ss-carte:has(.ss-badge--laboratoire) { border-left-color: var(--ss-type-laboratoire); }
+
+.ss-carte__entete {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ss-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--ss-type-clinique);
+}
+
+.ss-badge--hopital { background: var(--ss-type-hopital); }
+.ss-badge--centre_medical { background: var(--ss-type-centre_medical); }
+.ss-badge--dispensaire { background: var(--ss-type-dispensaire); }
+.ss-badge--laboratoire { background: var(--ss-type-laboratoire); }
+
+.ss-statut {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ss-statut-non_publie);
+}
+
+.ss-statut--publie { color: var(--ss-statut-publie); }
+.ss-statut--en_cours { color: var(--ss-statut-en_cours); }
+
+.ss-carte__nom {
+  font-family: var(--ss-font-display);
+  font-size: 1.15rem;
+  margin: 0.1rem 0 0;
+}
+
+.ss-carte__lieu,
+.ss-carte__telephone {
+  font-size: 0.85rem;
+  color: var(--ss-muted);
+  margin: 0;
+}
+
+.ss-carte__actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--ss-border);
+  padding-top: 0.6rem;
+}
+
+.ss-lien {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--ss-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ss-lien:hover {
+  text-decoration: underline;
+}
+
+.ss-lien--danger {
+  color: var(--ss-danger);
+}
+
+/* ─── Superposition / panneaux ──────────────────────────────── */
+
+.ss-superposition {
+  position: fixed;
+  inset: 0;
+  background: rgba(22, 36, 31, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 40;
+}
+
+.ss-fiche,
+.ss-panneau,
+.ss-confirmation {
+  background: var(--ss-surface);
+  border-radius: 12px;
+  padding: 1.75rem;
+  max-width: 520px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(22, 36, 31, 0.25);
+}
+
+.ss-fermer {
+  position: absolute;
+  top: 0.9rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ss-muted);
+}
+
+.ss-fiche h2 {
+  font-family: var(--ss-font-display);
+  margin: 0.6rem 0 1rem;
+}
+
+.ss-fiche__liste {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem 1rem;
+  font-size: 0.9rem;
+}
+
+.ss-fiche__liste dt {
+  color: var(--ss-muted);
+  font-weight: 600;
+}
+
+.ss-fiche__liste dd {
+  margin: 0;
+}
+
+.ss-panneau__entete {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.ss-panneau__entete h2 {
+  font-family: var(--ss-font-display);
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.ss-etiquette {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ss-muted);
+  margin-bottom: 0.85rem;
+}
+
+.ss-etiquette .ss-champ {
+  margin-top: 0.35rem;
+  font-weight: 400;
+  color: var(--ss-ink);
+}
+
+.ss-optionnel {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.ss-ligne-deux {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.ss-panneau__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--ss-border);
+  padding-top: 1rem;
+}
+
+.ss-confirmation h2 {
+  font-family: var(--ss-font-display);
+  margin-top: 0;
+}
+
+.ss-confirmation__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ss-carte {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .ss-carte:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(22, 36, 31, 0.08);
+  }
+}
