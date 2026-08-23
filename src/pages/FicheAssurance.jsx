@@ -56,7 +56,11 @@ function SiegePanel({ insurer }) {
         <h3>
           <i className="fa-solid fa-building-shield" /> Informations générales
         </h3>
-        <table className="hours-table">
+        <table className="hours-table" style={{ width: "100%", tableLayout: "fixed" }}>
+          <colgroup>
+            <col style={{ width: "220px" }} />
+            <col />
+          </colgroup>
           <tbody>
             <tr>
               <td>Dénomination</td>

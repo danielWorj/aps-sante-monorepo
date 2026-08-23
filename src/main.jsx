@@ -5,6 +5,7 @@ import { RouterProvider } from 'react-router-dom'
 import 'bootstrap/dist/css/bootstrap.min.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import './assets/styles/style.css';
+import './assets/styles/portail-medecin.css';
 import './index.css'
 import { router } from './router.jsx'
 import { AuthProvider } from './context/AuthContext'   // ⬅️ ajout

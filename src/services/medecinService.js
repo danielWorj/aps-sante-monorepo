@@ -147,6 +147,56 @@ export async function supprimerMedecin(id) {
   return apiFetch(`/medecins/${id}`, { method: 'DELETE' });
 }
 
+/**
+ * PATCH /medecins/:id/publier
+ * Réservé à admin/superadmin. Fait passer la fiche à
+ * statut_verification="publie". Ne touche jamais statut_compte.
+ * @returns {Promise<Object>} le médecin mis à jour (ou message seul
+ *   si la fiche était déjà publiée).
+ */
+export async function publierMedecin(id) {
+  return apiFetch(`/medecins/${id}/publier`, { method: 'PATCH' });
+}
+
+/**
+ * PATCH /medecins/:id/suspendre
+ * Réservé à admin/superadmin. Bloque le compte utilisateur lié
+ * (statut_compte="suspendu") ET retire la fiche de l'annuaire public
+ * (statut_verification repassé à "non_publie") en même temps.
+ * Réversible via reactiverMedecin.
+ */
+export async function suspendreMedecin(id) {
+  return apiFetch(`/medecins/${id}/suspendre`, { method: 'PATCH' });
+}
+
+/**
+ * PATCH /medecins/:id/reactiver
+ * Réservé à admin/superadmin. Débloque le compte (statut_compte=
+ * "actif") sans republier automatiquement la fiche — appeler
+ * publierMedecin() ensuite si nécessaire.
+ */
+export async function reactiverMedecin(id) {
+  return apiFetch(`/medecins/${id}/reactiver`, { method: 'PATCH' });
+}
+
+/**
+ * POST /medecins/verifier-ordre
+ * Route publique — aucune authentification requise. Vérifie
+ * l'appartenance au Tableau de l'Ordre National des Médecins du
+ * Cameroun (ONMC) à partir d'un numero_ordre, indépendamment de tout
+ * enregistrement local (utile avant même la création d'un compte).
+ * @param {string} numeroOrdre
+ * @returns {Promise<{numero_ordre, appartient_ordre: boolean, nom_complet?, numero_ordre_onmc?}>}
+ * @throws {Error} avec .status 400 (numero_ordre manquant) ou 502
+ *   (ONMC injoignable — ne signifie PAS que le médecin n'y figure pas).
+ */
+export async function verifierAppartenanceOrdre(numeroOrdre) {
+  return apiFetch('/medecins/verifier-ordre', {
+    method: 'POST',
+    body: { numero_ordre: numeroOrdre },
+  });
+}
+
 /* ===================================================================
  * Spécialités médicales (référentiel — /specialites, confirmé dans
  * medecin.routes.js)
@@ -168,6 +218,241 @@ export async function listerSpecialites(recherche) {
 export async function obtenirSpecialite(id) {
   const data = await apiFetch(`/specialites/${id}`);
   return data.specialite;
+}
+
+/**
+ * POST /specialites
+ * Réservé à admin/superadmin.
+ * @param {Object} donnees - { nom, description? } — nom requis et
+ *   unique.
+ */
+export async function creerSpecialite(donnees) {
+  const data = await apiFetch('/specialites', {
+    method: 'POST',
+    body: donnees,
+  });
+  return data.specialite;
+}
+
+/**
+ * PUT /specialites/:id
+ * Réservé à admin/superadmin.
+ * @param {Object} donnees - champs partiels parmi { nom, description }.
+ */
+export async function modifierSpecialite(id, donnees = {}) {
+  const data = await apiFetch(`/specialites/${id}`, {
+    method: 'PUT',
+    body: donnees,
+  });
+  return data.specialite;
+}
+
+/**
+ * DELETE /specialites/:id
+ * Réservé à superadmin. Le serveur renvoie 409 si des médecins
+ * référencent encore cette spécialité.
+ */
+export async function supprimerSpecialite(id) {
+  return apiFetch(`/specialites/${id}`, { method: 'DELETE' });
+}
+
+/* ===================================================================
+ * Avis médecin
+ *
+ * Lecture publique mais enrichie si connecté (l'auteur voit son propre
+ * avis en attente/rejeté, admin/superadmin voit tout — authentification
+ * optionnelle côté serveur, déjà gérée automatiquement par apiFetch qui
+ * ajoute le token s'il existe). Dépôt réservé aux utilisateurs
+ * authentifiés (patient inclus).
+ *
+ * ⚠️ src/controllers/avis.controller.js n'a pas été fourni pour cette
+ * tâche (medecin.controller.js le ré-exporte tel quel, voir son
+ * en-tête) : la forme exacte des champs d'un avis (note, commentaire,
+ * statut_moderation, etc.) n'est donc pas connue avec certitude ici.
+ * Les fonctions ci-dessous suivent le seul contrat observable côté
+ * routes (medecin.routes.js) : `donnees` est transmis tel quel au
+ * serveur, qui reste responsable de sa validation.
+ * =================================================================== */
+
+/**
+ * GET /avis-medecin
+ * @param {Object} filtres - { medecin_id?, statut_moderation?, ... } —
+ *   selon ce qu'accepte le serveur.
+ * @returns {Promise<Array>} liste des avis
+ */
+export async function listerAvisMedecin(filtres = {}) {
+  const data = await apiFetch(`/avis-medecin${construireQueryString(filtres)}`);
+  return data.avis;
+}
+
+/**
+ * GET /avis-medecin/:id
+ */
+export async function obtenirAvisMedecin(id) {
+  const data = await apiFetch(`/avis-medecin/${id}`);
+  return data.avis;
+}
+
+/**
+ * POST /avis-medecin
+ * Réservé aux utilisateurs authentifiés.
+ * @param {Object} donnees - contenu de l'avis (ex. medecin_id, note,
+ *   commentaire) — voir avis.controller.js côté serveur pour le détail
+ *   exact des champs acceptés.
+ */
+export async function creerAvisMedecin(donnees) {
+  const data = await apiFetch('/avis-medecin', {
+    method: 'POST',
+    body: donnees,
+  });
+  return data.avis;
+}
+
+/**
+ * PUT /avis-medecin/:id
+ * Ouvert à l'auteur (tant que "en_attente") ou admin/superadmin (peut
+ * en plus modifier statut_moderation).
+ */
+export async function modifierAvisMedecin(id, donnees = {}) {
+  const data = await apiFetch(`/avis-medecin/${id}`, {
+    method: 'PUT',
+    body: donnees,
+  });
+  return data.avis;
+}
+
+/**
+ * DELETE /avis-medecin/:id
+ * Ouvert à l'auteur (quel que soit le statut) ou admin/superadmin.
+ */
+export async function supprimerAvisMedecin(id) {
+  return apiFetch(`/avis-medecin/${id}`, { method: 'DELETE' });
+}
+
+/* ===================================================================
+ * Abonnements médecin
+ *
+ * Donnée commerciale interne : jamais publique, authentification
+ * requise partout, autorisation fine (médecin souscripteur vs
+ * admin/superadmin) gérée côté serveur.
+ *
+ * v9 : abonnement_medecin n'a plus de medecin_id direct — c'est une
+ * offre reliée aux médecins par la table de jointure N-N
+ * forfait_abonnement_medecin. La souscription initiale se fait à la
+ * création ; l'ajout/retrait d'un médecin à un abonnement déjà
+ * existant passe par ajouterMedecinAbonnement/retirerMedecinAbonnement
+ * (réservés à admin/superadmin).
+ *
+ * ⚠️ src/controllers/abonnementMedecin.controller.js n'a pas été
+ * fourni pour cette tâche (même remarque que pour Avis médecin
+ * ci-dessus) : la forme exacte des champs n'est pas connue avec
+ * certitude, les fonctions suivent le contrat observable côté routes.
+ * =================================================================== */
+
+/**
+ * GET /abonnements-medecin
+ * @param {Object} filtres - selon ce qu'accepte le serveur.
+ * @returns {Promise<Array>} liste des abonnements
+ */
+export async function listerAbonnementsMedecin(filtres = {}) {
+  const data = await apiFetch(`/abonnements-medecin${construireQueryString(filtres)}`);
+  return data.abonnements;
+}
+
+/**
+ * GET /abonnements-medecin/:id
+ */
+export async function obtenirAbonnementMedecin(id) {
+  const data = await apiFetch(`/abonnements-medecin/${id}`);
+  return data.abonnement;
+}
+
+/**
+ * POST /abonnements-medecin
+ * @param {Object} donnees - contenu de l'offre + souscripteurs
+ *   initiaux (un ou plusieurs médecins) — voir
+ *   abonnementMedecin.controller.js côté serveur.
+ */
+export async function creerAbonnementMedecin(donnees) {
+  const data = await apiFetch('/abonnements-medecin', {
+    method: 'POST',
+    body: donnees,
+  });
+  return data.abonnement;
+}
+
+/**
+ * PUT /abonnements-medecin/:id
+ */
+export async function modifierAbonnementMedecin(id, donnees = {}) {
+  const data = await apiFetch(`/abonnements-medecin/${id}`, {
+    method: 'PUT',
+    body: donnees,
+  });
+  return data.abonnement;
+}
+
+/**
+ * DELETE /abonnements-medecin/:id
+ */
+export async function supprimerAbonnementMedecin(id) {
+  return apiFetch(`/abonnements-medecin/${id}`, { method: 'DELETE' });
+}
+
+/**
+ * POST /abonnements-medecin/:id/medecins
+ * Réservé à admin/superadmin. Ajoute un médecin aux souscripteurs
+ * d'un abonnement groupé déjà existant.
+ * @param {string} abonnementId
+ * @param {string} medecinId
+ */
+export async function ajouterMedecinAbonnement(abonnementId, medecinId) {
+  return apiFetch(`/abonnements-medecin/${abonnementId}/medecins`, {
+    method: 'POST',
+    body: { medecin_id: medecinId },
+  });
+}
+
+/**
+ * DELETE /abonnements-medecin/:id/medecins/:medecinId
+ * Réservé à admin/superadmin.
+ */
+export async function retirerMedecinAbonnement(abonnementId, medecinId) {
+  return apiFetch(`/abonnements-medecin/${abonnementId}/medecins/${medecinId}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * POST /abonnements-medecin/:id/lignes
+ * Ajoute une ligne d'avantage à un abonnement.
+ * @param {string} abonnementId
+ * @param {Object} donnees - contenu de la ligne d'avantage.
+ */
+export async function ajouterLigneAbonnementMedecin(abonnementId, donnees) {
+  return apiFetch(`/abonnements-medecin/${abonnementId}/lignes`, {
+    method: 'POST',
+    body: donnees,
+  });
+}
+
+/**
+ * PUT /lignes-abonnement-medecin/:ligneId
+ * Route indépendante (pas nichée sous /:id), comme documenté dans
+ * medecin.routes.js.
+ */
+export async function modifierLigneAbonnementMedecin(ligneId, donnees = {}) {
+  return apiFetch(`/lignes-abonnement-medecin/${ligneId}`, {
+    method: 'PUT',
+    body: donnees,
+  });
+}
+
+/**
+ * DELETE /lignes-abonnement-medecin/:ligneId
+ */
+export async function supprimerLigneAbonnementMedecin(ligneId) {
+  return apiFetch(`/lignes-abonnement-medecin/${ligneId}`, { method: 'DELETE' });
 }
 
 /* ===================================================================
@@ -261,6 +546,78 @@ export async function supprimerRendezVous(id) {
   return apiFetch(`/rendez-vous/${id}`, { method: 'DELETE' });
 }
 
+/* ===================================================================
+ * Ordonnances
+ *
+ * Donnée médicale nominative : authentification requise partout.
+ * Création réservée au médecin du rendez-vous concerné (même un admin
+ * ne peut émettre à sa place). Modification ouverte au médecin auteur
+ * ou admin/superadmin. Suppression réservée à admin/superadmin — jamais
+ * par le médecin après émission.
+ *
+ * ⚠️ src/controllers/rendezVous.controller.js (qui porte aussi les
+ * handlers Ordonnances, voir en-tête de medecin.controller.js) n'a pas
+ * été fourni pour cette tâche : la forme exacte des champs d'une
+ * ordonnance n'est pas connue avec certitude, les fonctions suivent le
+ * contrat observable côté routes (medecin.routes.js).
+ * =================================================================== */
+
+/**
+ * GET /ordonnances
+ * Toujours scopé à l'utilisateur courant côté serveur (son propre
+ * profil patient ou médecin), sauf admin/superadmin.
+ * @param {Object} filtres - { rendez_vous_id?, medecin_id?, patient_id? }
+ *   — selon ce qu'accepte le serveur.
+ * @returns {Promise<Array>} liste des ordonnances
+ */
+export async function listerOrdonnances(filtres = {}) {
+  const data = await apiFetch(`/ordonnances${construireQueryString(filtres)}`);
+  return data.ordonnances;
+}
+
+/**
+ * GET /ordonnances/:id
+ */
+export async function obtenirOrdonnance(id) {
+  const data = await apiFetch(`/ordonnances/${id}`);
+  return data.ordonnance;
+}
+
+/**
+ * POST /ordonnances
+ * Réservé au médecin du rendez-vous concerné.
+ * @param {Object} donnees - contenu de l'ordonnance (ex. rendez_vous_id,
+ *   contenu/prescriptions) — voir rendezVous.controller.js côté serveur
+ *   pour le détail exact des champs acceptés.
+ */
+export async function creerOrdonnance(donnees) {
+  const data = await apiFetch('/ordonnances', {
+    method: 'POST',
+    body: donnees,
+  });
+  return data.ordonnance;
+}
+
+/**
+ * PUT /ordonnances/:id
+ * Ouvert au médecin auteur ou admin/superadmin.
+ */
+export async function modifierOrdonnance(id, donnees = {}) {
+  const data = await apiFetch(`/ordonnances/${id}`, {
+    method: 'PUT',
+    body: donnees,
+  });
+  return data.ordonnance;
+}
+
+/**
+ * DELETE /ordonnances/:id
+ * Réservé à admin/superadmin.
+ */
+export async function supprimerOrdonnance(id) {
+  return apiFetch(`/ordonnances/${id}`, { method: 'DELETE' });
+}
+
 export default {
   // Médecins
   listerMedecins,
@@ -268,9 +625,33 @@ export default {
   creerMedecin,
   modifierMedecin,
   supprimerMedecin,
+  publierMedecin,
+  suspendreMedecin,
+  reactiverMedecin,
+  verifierAppartenanceOrdre,
   // Spécialités
   listerSpecialites,
   obtenirSpecialite,
+  creerSpecialite,
+  modifierSpecialite,
+  supprimerSpecialite,
+  // Avis médecin
+  listerAvisMedecin,
+  obtenirAvisMedecin,
+  creerAvisMedecin,
+  modifierAvisMedecin,
+  supprimerAvisMedecin,
+  // Abonnements médecin
+  listerAbonnementsMedecin,
+  obtenirAbonnementMedecin,
+  creerAbonnementMedecin,
+  modifierAbonnementMedecin,
+  supprimerAbonnementMedecin,
+  ajouterMedecinAbonnement,
+  retirerMedecinAbonnement,
+  ajouterLigneAbonnementMedecin,
+  modifierLigneAbonnementMedecin,
+  supprimerLigneAbonnementMedecin,
   // Rendez-vous
   STATUTS_RENDEZ_VOUS,
   TYPES_RENDEZ_VOUS,
@@ -280,4 +661,10 @@ export default {
   creerRendezVous,
   modifierRendezVous,
   supprimerRendezVous,
+  // Ordonnances
+  listerOrdonnances,
+  obtenirOrdonnance,
+  creerOrdonnance,
+  modifierOrdonnance,
+  supprimerOrdonnance,
 };

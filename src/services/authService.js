@@ -118,8 +118,22 @@ export async function creerCompteAdministre(donnees) {
  * Route publique. Pose le refresh token en cookie httpOnly côté
  * serveur et renvoie l'access token (géré ensuite en mémoire par
  * apiClient.js pour les appels suivants).
+ *
+ * ⚠️ Deux formes de réponse possibles, à distinguer via
+ * `mot_de_passe_a_changer` :
+ *  - session normale : { access_token, utilisateur } — apiClient.js
+ *    doit stocker access_token comme d'habitude.
+ *  - mot de passe temporaire détecté (première connexion ou
+ *    reconnexion avant expiration de la fenêtre de 24h) :
+ *    { mot_de_passe_a_changer: true, token_changement_mot_de_passe,
+ *      token_changement_mot_de_passe_expire_le, mot_de_passe_expire_le }
+ *    Dans ce cas, AUCUNE session n'est ouverte côté serveur (pas de
+ *    cookie refresh_token utile, pas d'access_token de session) : ne
+ *    pas stocker token_changement_mot_de_passe comme l'access token
+ *    normal, il n'est valable que pour changerMotDePasseInitial().
  * @param {string} email
  * @param {string} mot_de_passe
+ * @returns {Promise<Object>} l'une des deux formes ci-dessus.
  */
 export async function connecter(email, mot_de_passe) {
   return apiFetch('/auth/login', {
@@ -128,6 +142,45 @@ export async function connecter(email, mot_de_passe) {
     // Évite qu'un 401 (mauvais identifiants) déclenche une tentative
     // de refresh silencieux inutile sur l'appel de login lui-même.
     skipAuthRetry: true,
+  });
+}
+
+/**
+ * POST /auth/changer-mot-de-passe-initial
+ * À appeler juste après un connecter() ayant renvoyé
+ * `mot_de_passe_a_changer: true`, typiquement depuis l'écran de
+ * changement de mot de passe forcé affiché automatiquement par le
+ * routeur (voir note d'intégration ci-dessous).
+ *
+ * En cas de succès, ouvre directement une session complète (même
+ * forme de réponse qu'un connecter() normal : { access_token,
+ * utilisateur } + cookie refresh_token posé côté serveur) — pas besoin
+ * de rappeler connecter() avec le nouveau mot de passe ensuite.
+ *
+ * ⚠️ NOTE D'INTÉGRATION : cet appel doit porter
+ * `Authorization: Bearer <token_changement_mot_de_passe>` — PAS
+ * l'access token de session habituel (il n'y en a justement pas
+ * tant que le mot de passe temporaire n'est pas changé). Ceci
+ * suppose que apiClient.js expose un moyen de forcer l'en-tête
+ * Authorization d'un appel précis plutôt que d'utiliser l'access
+ * token en mémoire par défaut (ex. option `authOverride` ci-dessous,
+ * à adapter au nom réel exposé par apiClient.js si différent).
+ *
+ * @param {string} tokenChangementMotDePasse - reçu du connecter() précédent.
+ * @param {string} nouveauMotDePasse
+ * @returns {Promise<{message, access_token, utilisateur}>}
+ */
+export async function changerMotDePasseInitial(
+  tokenChangementMotDePasse,
+  nouveauMotDePasse
+) {
+  return apiFetch('/auth/changer-mot-de-passe-initial', {
+    method: 'POST',
+    body: { nouveau_mot_de_passe: nouveauMotDePasse },
+    // Pas de session encore ouverte : ne pas tenter de refresh
+    // silencieux ni d'injecter l'access token habituel sur cet appel.
+    skipAuthRetry: true,
+    authOverride: `Bearer ${tokenChangementMotDePasse}`,
   });
 }
 
@@ -179,6 +232,7 @@ export default {
   inscrirePatient,
   creerCompteAdministre,
   connecter,
+  changerMotDePasseInitial,
   rafraichirToken,
   obtenirProfilCourant,
   deconnecter,

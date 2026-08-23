@@ -352,7 +352,9 @@ export default function RendezVous() {
     };
   }, [medecinId]);
 
-  const nomComplet = medecin ? `${medecin.prenom ?? ''} ${medecin.nom ?? ''}`.trim() : '';
+  const nomComplet = medecin
+    ? `Dr. ${medecin.utilisateur?.prenom ?? ''} ${medecin.utilisateur?.nom ?? ''}`.trim()
+    : '';
   const specialiteLabel = medecin?.specialite?.nom ?? medecin?.specialite ?? '';
   const villeLabel = medecin?.ville_exercice?.nom ?? medecin?.ville_exercice ?? '';
   const teleconsultationDisponible = Boolean(medecin?.teleconsultation_activee);
@@ -509,7 +511,7 @@ export default function RendezVous() {
             <>
               <div className="d-flex align-items-center gap-3 mb-4">
                 <div className="avatar-ph" style={{ width: 56, height: 56, fontSize: '1.3rem' }}>
-                  <img src={medecin?.photo || med1} alt={nomComplet} />
+                  <img src={medecin?.photo_url || med1} alt={nomComplet} />
                 </div>
                 <div>
                   <h1 style={{ fontSize: '1.35rem' }}>Prendre rendez-vous avec {nomComplet}</h1>

@@ -66,11 +66,23 @@ export async function tenterRefresh() {
  *  - sur 401, tente un refresh puis rejoue la requête une seule fois
  *    (sauf si `skipAuthRetry: true`, utilisé pour login/logout/refresh
  *    eux-mêmes afin d'éviter toute boucle).
+ *  - `authOverride` (ex. `"Bearer <token_changement_mot_de_passe>"`)
+ *    force l'en-tête Authorization de CET appel précis, à la place de
+ *    l'access_token de session en mémoire. Utilisé par
+ *    changerMotDePasseInitial() dans authService.js : au moment de cet
+ *    appel il n'y a justement pas encore d'access_token de session.
+ *    Un appel avec authOverride ne déclenche jamais de refresh
+ *    silencieux sur 401 : ce n'est pas un jeton de session, un refresh
+ *    du cookie httpOnly n'a aucun sens ici et rejouerait la requête
+ *    avec un token complètement différent.
  *
  * Lève une Error (avec `.status` et `.data`) si la réponse finale n'est
  * pas OK, pour un traitement simple par les appelants (try/catch).
  */
-export async function apiFetch(path, { body, headers, skipAuthRetry = false, ...options } = {}) {
+export async function apiFetch(
+  path,
+  { body, headers, skipAuthRetry = false, authOverride, ...options } = {}
+) {
   // Un FormData (upload multipart, ex. création/modification de centre
   // de santé avec fichiers) ne doit JAMAIS être passé à JSON.stringify
   // (il n'a pas de propriétés énumérables : on obtiendrait "{}", donc
@@ -86,7 +98,11 @@ export async function apiFetch(path, { body, headers, skipAuthRetry = false, ...
       credentials: 'include',
       headers: {
         ...(estFormData ? {} : { 'Content-Type': 'application/json' }),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(authOverride
+          ? { Authorization: authOverride }
+          : token
+          ? { Authorization: `Bearer ${token}` }
+          : {}),
         ...headers,
       },
       body: body === undefined ? undefined : estFormData ? body : JSON.stringify(body),
@@ -94,7 +110,7 @@ export async function apiFetch(path, { body, headers, skipAuthRetry = false, ...
 
   let res = await doFetch(accessToken);
 
-  if (res.status === 401 && !skipAuthRetry) {
+  if (res.status === 401 && !skipAuthRetry && !authOverride) {
     const nouveauToken = await tenterRefresh();
     if (nouveauToken) {
       res = await doFetch(nouveauToken);

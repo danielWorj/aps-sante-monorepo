@@ -92,14 +92,52 @@ export function AuthProvider({ children }) {
    * une inscription (authService.inscrirePatient ne renvoie pas de
    * session à elle seule — voir ProfilMedecin.jsx pour un exemple
    * d'enchaînement inscription -> connecter).
+   *
+   * ⚠️ Deux formes de réponse possibles (voir authService.connecter) :
+   *  - session normale : { access_token, utilisateur } — la session
+   *    locale est ouverte ici.
+   *  - mot de passe temporaire détecté par le serveur :
+   *    { mot_de_passe_a_changer: true, token_changement_mot_de_passe,
+   *      ... } — AUCUNE session n'est ouverte (pas d'access_token ni
+   *      d'utilisateur dans ce cas). On renvoie la réponse telle
+   *      quelle sans toucher à `user`/`status`, à charge pour
+   *      l'appelant (écran de login) de rediriger vers le changement
+   *      de mot de passe forcé avec le token restreint.
    */
   const connecter = useCallback(async (email, mot_de_passe) => {
-    const { access_token, utilisateur } = await authService.connecter(email, mot_de_passe);
-    setAccessToken(access_token);
-    setUser(utilisateur);
+    const data = await authService.connecter(email, mot_de_passe);
+
+    if (data?.mot_de_passe_a_changer) {
+      return data;
+    }
+
+    setAccessToken(data.access_token);
+    setUser(data.utilisateur);
     setStatus('authenticated');
-    return utilisateur;
+    return data;
   }, []);
+
+  /**
+   * POST /auth/changer-mot-de-passe-initial : à appeler juste après un
+   * connecter() ayant renvoyé mot_de_passe_a_changer: true, avec le
+   * token restreint reçu à ce moment-là (PAS l'access token de
+   * session, il n'y en a pas encore). En cas de succès, ouvre une
+   * session complète exactement comme connecter() — on met donc à jour
+   * l'état local de la même façon.
+   */
+  const changerMotDePasseInitial = useCallback(
+    async (tokenChangementMotDePasse, nouveauMotDePasse) => {
+      const { access_token, utilisateur } = await authService.changerMotDePasseInitial(
+        tokenChangementMotDePasse,
+        nouveauMotDePasse
+      );
+      setAccessToken(access_token);
+      setUser(utilisateur);
+      setStatus('authenticated');
+      return utilisateur;
+    },
+    []
+  );
 
   /**
    * POST /auth/logout puis nettoyage de la session locale, même si
@@ -134,10 +172,11 @@ export function AuthProvider({ children }) {
       status,
       isAuthenticated: status === 'authenticated',
       connecter,
+      changerMotDePasseInitial,
       deconnecter,
       rafraichirUtilisateur,
     }),
-    [user, status, connecter, deconnecter, rafraichirUtilisateur]
+    [user, status, connecter, changerMotDePasseInitial, deconnecter, rafraichirUtilisateur]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import med7 from '../assets/img/med7.jpg';
+import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { connecter } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: '', password: '', remember: true });
   const [errors, setErrors] = useState({});
@@ -23,18 +25,56 @@ export default function Login() {
     return next;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const next = validate();
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
     setLoading(true);
-    // TODO: brancher sur l'API d'authentification réelle
-    setTimeout(() => {
+
+    try {
+      // AuthContext.connecter() ouvre déjà la session (access_token +
+      // user + status) quand la réponse est une session normale. Il ne
+      // le fait PAS quand mot_de_passe_a_changer=true : la réponse est
+      // alors renvoyée telle quelle, sans toucher à l'état
+      // d'authentification.
+      const data = await connecter(form.email, form.password);
+
+      // Mot de passe temporaire détecté par le serveur : aucune session
+      // n'est ouverte (pas d'access_token exploitable, cookie
+      // refresh_token inutile). On redirige vers l'écran de changement
+      // de mot de passe forcé en transmettant le token restreint via le
+      // state de navigation — jamais dans l'URL ni dans un stockage
+      // persistant (localStorage/sessionStorage), pour limiter son
+      // exposition. `replace: true` évite qu'un retour arrière renvoie
+      // sur ce formulaire de login déjà soumis.
+      if (data?.mot_de_passe_a_changer) {
+        navigate('/modifier-mot-de-passe', {
+          replace: true,
+          state: {
+            mode: 'initial',
+            token: data.token_changement_mot_de_passe,
+            tokenExpireLe: data.token_changement_mot_de_passe_expire_le,
+            motDePasseExpireLe: data.mot_de_passe_expire_le,
+            email: form.email,
+          },
+        });
+        return;
+      }
+
+      // Session normale déjà ouverte par connecter() ci-dessus.
+      navigate('/portail/medecin-agenda', { replace: true });
+    } catch (err) {
+      setErrors({
+        general:
+          err?.status === 401
+            ? 'E-mail ou mot de passe incorrect.'
+            : err?.message || 'Une erreur est survenue. Merci de réessayer.',
+      });
+    } finally {
       setLoading(false);
-      navigate('/tableau-de-bord');
-    }, 900);
+    }
   };
 
   return (
@@ -120,6 +160,27 @@ export default function Login() {
                 </Link>
               </p>
 
+              {/* Bandeau d'erreur générale (identifiants invalides, erreur réseau…) */}
+              {errors.general && (
+                <div
+                  style={{
+                    background: 'rgba(220,53,69,.08)',
+                    border: '1px solid var(--urgence)',
+                    color: 'var(--urgence-dark)',
+                    padding: '.8rem 1rem',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '.86rem',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '.6rem',
+                    marginBottom: '1.2rem',
+                  }}
+                >
+                  <i className="fa-solid fa-circle-exclamation" /> {errors.general}
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} noValidate>
                 <div className="search-field">
                   <label className="form-label-aps" htmlFor="login-email">Adresse e-mail</label>
@@ -134,6 +195,7 @@ export default function Login() {
                       value={form.email}
                       onChange={handleChange}
                       autoComplete="email"
+                      disabled={loading}
                     />
                   </div>
                   {errors.email && (
@@ -162,6 +224,7 @@ export default function Login() {
                       onChange={handleChange}
                       autoComplete="current-password"
                       style={{ paddingRight: '2.6rem' }}
+                      disabled={loading}
                     />
                     <button
                       type="button"
@@ -197,6 +260,7 @@ export default function Login() {
                     name="remember"
                     checked={form.remember}
                     onChange={handleChange}
+                    disabled={loading}
                   />
                   <label className="form-check-label" htmlFor="login-remember" style={{ fontSize: '.86rem', color: 'var(--ink-soft)' }}>
                     Rester connecté sur cet appareil
