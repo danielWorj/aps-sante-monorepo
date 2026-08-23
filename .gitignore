@@ -1,0 +1,19 @@
+# --- client-plateform ---
+client-plateform/node_modules
+client-plateform/dist
+
+# --- client-backoffice ---
+client-backoffice/back-office-app/node_modules
+client-backoffice/back-office-app/dist
+
+# --- server ---
+server/node_modules
+server/generated/prisma
+server/keys/jwt_access_private.pem
+server/deploiment_info
+server/guide
+
+# --- commun ---
+.env
+*.log
+.DS_Store

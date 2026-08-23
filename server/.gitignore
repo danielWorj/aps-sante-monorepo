@@ -5,3 +5,4 @@ node_modules
 /generated/prisma
 /deploiment_info
 keys/jwt_access_private.pem
+npm-debug.log

@@ -1,0 +1,50 @@
+version: "3.9"
+
+services:
+  client-plateform:
+    build:
+      context: ./client-plateform
+      args:
+        VITE_API_URL: ${VITE_API_URL_PLATEFORM}
+    ports:
+      - "8080:80"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  client-backoffice:
+    build:
+      context: ./client-backoffice/back-office-app
+      args:
+        VITE_API_URL: ${VITE_API_URL_BACKOFFICE}
+    ports:
+      - "8081:80"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  server:
+    build: ./server
+    env_file: .env
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgis/postgis:16-3.4-alpine
+    env_file: .env
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    # Pas de "ports:" exposés publiquement, voir bonnes pratiques
+
+volumes:
+  pg_data:
