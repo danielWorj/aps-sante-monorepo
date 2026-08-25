@@ -1,9 +1,23 @@
 // src/pages/Teleconsultation.jsx
 //
-// Page d'arrivée du bouton "Démarrer la visio" du portail médecin (voir
-// components/portails/components/medecin-rdv.jsx :
-//   onClick={() => navigate(`/portail/consultation/${rdv.rdv_id}`)}
+// Page d'arrivée du lien "rejoindre la visio" côté PATIENT (voir
+// pages/RendezVous.jsx, étape 3 de confirmation :
+//   <Link to={`/portail/consultation/${rendezVousCree.rdv_id}`}>
 // ).
+//
+// ⚠️ Côté MÉDECIN, le bouton "Démarrer la visio" du portail
+// (components/portails/components/medecin-rdv.jsx) NE navigue PAS ici :
+// il appelle ouvrirVisio(rdv), qui monte <VisioModal /> par-dessus la
+// page (voir visio-modal.jsx) — un choix volontaire pour que le
+// médecin reste dans son contexte "Rendez-vous". Les deux chemins
+// convergent malgré tout vers la même session : VisioModal et cette
+// page délèguent tous deux à <ConsultationRoom rdvId={...} />, qui
+// obtient un roomName déterministe (`rdv-${rdv_id}`) auprès du serveur
+// — médecin et patient atterrissent donc bien dans le même salon Jitsi,
+// simplement via deux habillages différents. Si un jour le comportement
+// médecin doit aussi passer par cette route plein écran, remplacer
+// l'appel à ouvrirVisio(rdv) par un navigate(`/portail/consultation/${rdv.rdv_id}`)
+// dans medecin-rdv.jsx.
 //
 // Route : /portail/consultation/:id — déclarée dans router.jsx comme
 // enfant DIRECT de <RequireAuth /> (donc protégée : redirection
@@ -24,11 +38,6 @@
 // existant <ConsultationRoom /> (components/visio/ConsultationRoom.jsx),
 // qui gère déjà l'appel à POST /visio/token et le rendu de
 // @jitsi/react-sdk.
-//
-// ⚠️ Dépendance à ajouter avant de tester : @jitsi/react-sdk est déjà
-// importé par ConsultationRoom.jsx mais absent de
-// client-plateform/package.json.
-//   npm install @jitsi/react-sdk --workspace client-plateform
 //
 // ⚠️ Hypothèse (à confirmer côté back-office) : useAuth().user.role vaut
 // 'medecin' pour un compte médecin (cf. RendezVous.jsx, ligne
