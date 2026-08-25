@@ -64,7 +64,15 @@ export default function Login() {
       }
 
       // Session normale déjà ouverte par connecter() ci-dessus.
-      navigate('/portail/medecin-agenda', { replace: true });
+      // Session normale déjà ouverte par connecter() ci-dessus.
+      const role = data?.utilisateur?.role;
+
+      const destinationParRole = {
+        patient: '/portail/patient-rdv',
+        medecin: '/portail/medecin-agenda',
+      };
+
+      navigate(destinationParRole[role] ?? '/home', { replace: true });
     } catch (err) {
       setErrors({
         general:
