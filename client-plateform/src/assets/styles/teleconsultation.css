@@ -1,0 +1,96 @@
+/* src/assets/styles/teleconsultation.css
+   Styles de la page Teleconsultation.jsx — utilise les tokens définis
+   dans assets/styles/style.css (--primary, --ink, --surface, --line,
+   --radius-*, --shadow-*). Voir ce fichier pour les valeurs. */
+
+.tc-etat-plein-ecran,
+.tc-salle-attente {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--surface-alt, #f5f9f7);
+  font-family: var(--font-body, "Inter", sans-serif);
+  color: var(--ink, #3f4a44);
+  text-align: center;
+}
+
+.tc-etat-icone {
+  font-size: 40px;
+  color: var(--primary, #4f9e82);
+  margin-bottom: 16px;
+}
+
+.tc-etat-icone-succes {
+  color: var(--teal-dark, #2fa57f);
+}
+
+.tc-etat-message {
+  max-width: 420px;
+  margin-bottom: 20px;
+  color: var(--ink-soft, #71807a);
+}
+
+.tc-carte {
+  background: var(--surface, #fff);
+  border: 1px solid var(--line, #e7f0eb);
+  border-radius: var(--radius-lg, 10px);
+  box-shadow: var(--shadow-md, 0 10px 26px rgba(79, 158, 130, 0.11));
+  padding: 40px 32px;
+  max-width: 440px;
+  width: 100%;
+}
+
+.tc-avatar {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  border-radius: 999px;
+  background: var(--primary-tint, #eaf6f0);
+  color: var(--primary-dark, #3a7c64);
+  font-family: var(--font-display, "Manrope", sans-serif);
+  font-weight: 700;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tc-titre {
+  font-family: var(--font-display, "Manrope", sans-serif);
+  font-size: 20px;
+  margin-bottom: 8px;
+}
+
+.tc-creneau {
+  color: var(--ink-soft, #71807a);
+  margin-bottom: 4px;
+}
+
+.tc-motif {
+  font-style: italic;
+  color: var(--ink-soft, #71807a);
+  margin-bottom: 16px;
+}
+
+.tc-note {
+  font-size: 14px;
+  color: var(--ink-faint, #aab6af);
+  margin: 16px 0 24px;
+}
+
+.tc-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.tc-session {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 1050;
+}

@@ -248,6 +248,67 @@ body.portail{ background:var(--surface-alt); }
 .chip-st-todo{ background:var(--orange-tint); color:var(--orange-dark); }
 .chip-st-todo i{ color:var(--orange-dark); }
 
+/* ---------------------------- MODALE VISIO (téléconsultation) ---------------------------- */
+/* visio-modal.jsx : grande modale (pas une page dédiée) qui embarque
+   ConsultationRoom (Jitsi). Réutilise les animations rdvFadeIn /
+   rdvSlideUp déjà définies plus haut pour rester cohérent avec .rdv-modal. */
+.visio-modal-overlay{
+  position:fixed; inset:0; z-index:700;
+  background:rgba(14,18,15,.72); backdrop-filter:blur(3px);
+  display:flex; align-items:center; justify-content:center; padding:1.5rem;
+  animation:rdvFadeIn .18s ease;
+}
+.visio-modal{
+  position:relative; width:100%; max-width:1080px; height:min(720px,88vh);
+  display:flex; flex-direction:column;
+  background:var(--surface); border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-lg); overflow:hidden;
+  animation:rdvSlideUp .22s ease;
+}
+.visio-modal-head{
+  display:flex; align-items:center; justify-content:space-between; gap:1rem;
+  padding:1rem 1.3rem; border-bottom:1px solid var(--line);
+  background:var(--surface); flex:none;
+}
+.visio-modal-who{ display:flex; align-items:center; gap:.8rem; min-width:0; }
+.visio-modal-avatar{
+  width:44px; height:44px; min-width:44px; border-radius:50%;
+  background:var(--primary-tint); color:var(--primary-dark);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-display); font-weight:800; font-size:.92rem;
+}
+.visio-modal-heading h3{ font-size:1rem; margin:0 0 .15rem; }
+.visio-status{ display:inline-flex; align-items:center; gap:.4rem; font-size:.78rem; font-weight:600; color:var(--ink-faint); }
+.visio-status-dot{ width:8px; height:8px; border-radius:50%; background:var(--ink-faint); flex:none; }
+.visio-status.is-connecting .visio-status-dot{ background:var(--gold); animation:visioPulse 1.2s ease-in-out infinite; }
+.visio-status.is-live{ color:var(--teal-dark); font-family:var(--font-mono); }
+.visio-status.is-live .visio-status-dot{ background:var(--teal-dark); animation:visioPulse 1.6s ease-in-out infinite; }
+.visio-modal-close{
+  flex:none; width:34px; height:34px; border:none; border-radius:50%;
+  background:var(--surface-alt); color:var(--ink-soft);
+  display:flex; align-items:center; justify-content:center; font-size:.9rem; cursor:pointer;
+  transition:background .15s ease, color .15s ease;
+}
+.visio-modal-close:hover{ background:var(--urgence-tint); color:var(--urgence-dark); }
+
+.visio-stage{
+  flex:1; min-height:0; position:relative;
+  background:linear-gradient(160deg,#1B221D,#10140F);
+  display:flex; align-items:center; justify-content:center;
+}
+.visio-stage p{ color:#EAF2ED; margin:0; }
+.visio-stage .text-danger{ color:#F6A99A !important; }
+.visio-stage .spinner-border{ color:var(--teal) !important; }
+
+.visio-modal-foot{
+  flex:none; padding:.6rem 1.3rem; border-top:1px solid var(--line);
+  background:var(--surface-alt); text-align:center;
+}
+.visio-modal-foot span{ font-size:.72rem; color:var(--ink-faint); font-weight:600; }
+.visio-modal-foot i{ color:var(--teal-dark); margin-right:.35rem; }
+
+@keyframes visioPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
+
 /* ---------------------------- AGENDA ---------------------------- */
 .agenda-toolbar{
   display:flex; align-items:center; justify-content:space-between;
@@ -658,6 +719,12 @@ RESPONSIVE
   .rdv-modal{ padding:1.3rem 1.2rem 1.2rem; }
   .rdv-modal-actions{ flex-direction:column-reverse; }
   .rdv-modal-actions .btn{ width:100%; justify-content:center; }
+
+  /* --- Modale visio : plein écran sur mobile --- */
+  .visio-modal-overlay{ padding:0; }
+  .visio-modal{ max-width:none; height:100vh; height:100dvh; border-radius:0; }
+  .visio-modal-head{ padding:.8rem 1rem; }
+  .visio-modal-heading h3{ font-size:.92rem; }
 }
 
 /* ---------- ≤ 640px ---------- */
