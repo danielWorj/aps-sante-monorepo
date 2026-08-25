@@ -524,6 +524,26 @@ export async function listerRendezVousMedecinConnecte({ statut } = {}) {
 }
 
 /**
+ * GET /rendez-vous — variante dédiée à l'espace patient connecté
+ * (tableau de bord "Rendez-vous", voir portail/patient-rdv).
+ *
+ * Symétrique de listerRendezVousMedecinConnecte ci-dessus : ne prend
+ * PAS de patient_id, le serveur scope déjà la réponse au profil
+ * patient correspondant au token de l'appelant. Sert uniquement à
+ * documenter l'intention d'appel (« mes rendez-vous en tant que
+ * patient ») et à isoler le filtre `statut` pour matcher les onglets
+ * du tableau de bord (À venir / En attente / Passés / Annulés).
+ *
+ * @param {Object} [filtres]
+ * @param {string} [filtres.statut] - une valeur de STATUTS_RENDEZ_VOUS.
+ *   Omettre pour tout récupérer.
+ * @returns {Promise<Array>} liste des rendez-vous du patient connecté.
+ */
+export async function listerRendezVousPatientConnecte({ statut } = {}) {
+  return listerRendezVous({ statut });
+}
+
+/**
  * GET /rendez-vous/:id
  */
 export async function obtenirRendezVous(id) {
@@ -693,6 +713,7 @@ export default {
   MOTIF_RENDEZ_VOUS_LONGUEUR_MAX,
   listerRendezVous,
   listerRendezVousMedecinConnecte,
+  listerRendezVousPatientConnecte,
   obtenirRendezVous,
   creerRendezVous,
   modifierRendezVous,
