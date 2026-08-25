@@ -348,6 +348,109 @@ export async function modifierRendezVous(req, res, next) {
 }
 
 /**
+ * Matrice des transitions de statut autorisées par rôle, à partir du
+ * statut courant du rendez-vous. admin/superadmin ne sont pas dans
+ * cette table : ils peuvent forcer n'importe quelle transition (cas
+ * de correction manuelle) — voir changerStatutRendezVous ci-dessous.
+ *
+ * ⚠️ Hypothèse métier (non fournie par le schéma) — à ajuster selon
+ * les règles produit réelles :
+ *   - patient : peut annuler tant que le rdv n'a pas eu lieu, et
+ *     contester une issue ("honore"/"non_honore") qu'il conteste.
+ *   - médecin : fait progresser le rdv (confirmation, passage en
+ *     salle d'attente, issue de consultation) et peut annuler avant
+ *     l'issue ; ne revient jamais en arrière une fois honore/non_honore.
+ */
+const TRANSITIONS_AUTORISEES = {
+  patient: {
+    cree: ["annule"],
+    confirme: ["annule"],
+    en_attente_presence: [],
+    honore: ["conteste"],
+    non_honore: ["conteste"],
+    annule: [],
+    conteste: [],
+  },
+  medecin: {
+    cree: ["confirme", "annule"],
+    confirme: ["en_attente_presence", "annule"],
+    en_attente_presence: ["honore", "non_honore"],
+    honore: [],
+    non_honore: [],
+    annule: [],
+    conteste: [],
+  },
+};
+
+/**
+ * PATCH /api/rendez-vous/:id/statut
+ * Body: { statut: <valeur de StatutRendezVous> }
+ *
+ * Action dédiée au changement de statut (même patron que
+ * publier/suspendre/reactiver sur medecin) : contrairement à
+ * PUT /rendez-vous/:id (qui accepte "statut" sans contrôle de
+ * transition), cet endpoint vérifie que le passage demandé est
+ * cohérent avec le rôle de l'appelant et le statut actuel du rdv —
+ * voir TRANSITIONS_AUTORISEES.
+ *   - patient concerné / médecin concerné : transition doit figurer
+ *     dans TRANSITIONS_AUTORISEES[role][statut_actuel].
+ *   - admin/superadmin : toute transition vers un statut différent
+ *     est acceptée (correction manuelle).
+ */
+export async function changerStatutRendezVous(req, res, next) {
+  try {
+    const rdv = await prisma.rendezVous.findUnique({ where: { rdv_id: req.params.id } });
+    if (!rdv) {
+      return res.status(404).json({ message: "Rendez-vous introuvable." });
+    }
+
+    if (!(await estAutoriseSurRdv(rdv, req.utilisateur))) {
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
+    }
+
+    const { statut } = req.body;
+    if (!statut) {
+      return res.status(400).json({ message: "Champ requis manquant : statut." });
+    }
+    if (!STATUTS_RDV.includes(statut)) {
+      return res.status(400).json({
+        message: `statut invalide. Valeurs acceptées : ${STATUTS_RDV.join(", ")}.`,
+      });
+    }
+
+    if (statut === rdv.statut) {
+      return res.status(400).json({ message: "Le rendez-vous a déjà ce statut." });
+    }
+
+    if (!estAdmin(req.utilisateur)) {
+      const patient = await profilPatientCourant(req.utilisateur);
+      const medecin = await profilMedecinCourant(req.utilisateur);
+
+      // estAutoriseSurRdv garantit que l'un des deux correspond au rdv ;
+      // on détermine lequel pour choisir la bonne matrice de transitions.
+      const role = patient && patient.patient_id === rdv.patient_id ? "patient" : "medecin";
+
+      const transitionsPermises = TRANSITIONS_AUTORISEES[role][rdv.statut] || [];
+      if (!transitionsPermises.includes(statut)) {
+        return res.status(403).json({
+          message: `Transition non autorisée : un ${role === "patient" ? "patient" : "médecin"} ne peut pas faire passer un rendez-vous de "${rdv.statut}" à "${statut}".`,
+        });
+      }
+    }
+
+    const rdvMisAJour = await prisma.rendezVous.update({
+      where: { rdv_id: req.params.id },
+      data: { statut },
+      include: INCLUSION_NOMS_RDV,
+    });
+
+    return res.status(200).json({ message: "Statut du rendez-vous mis à jour.", rendez_vous: rdvMisAJour });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * DELETE /api/rendez-vous/:id
  * Réservé à admin/superadmin (route déjà verrouillée par
  * autoriser("admin", "superadmin")) — un rendez-vous s'annule via PUT

@@ -138,7 +138,10 @@ export async function modifierMedecin(id, donnees = {}, fichiers = {}) {
     body: construireFormData(donnees, fichiers),
   });
 }
-
+export async function obtenirMonProfil() {
+  const data = await apiFetch('/medecins/mon-profil');
+  return data;
+}
 /**
  * DELETE /medecins/:id
  * Réservé à superadmin côté backend.
@@ -490,6 +493,37 @@ export async function listerRendezVous(filtres = {}) {
 }
 
 /**
+ * GET /rendez-vous — variante dédiée à l'espace médecin connecté
+ * (tableau de bord "Rendez-vous", voir portail/medecin-rdv).
+ *
+ * Ne prend PAS de medecin_id en paramètre : le serveur scope déjà la
+ * réponse au médecin correspondant au token de l'appelant (voir
+ * listerRendezVous ci-dessus) — inutile et même trompeur de le
+ * redemander ici. Cette fonction sert uniquement à documenter
+ * l'intention d'appel (« mes rendez-vous en tant que médecin ») côté
+ * composants, et à séparer le filtre `statut` du reste pour matcher
+ * les onglets du tableau de bord (À venir / En attente / Passés /
+ * Annulés).
+ *
+ * ⚠️ Suppose que l'utilisateur courant est bien connecté avec un
+ * compte de rôle "medecin" — sinon le serveur renverra simplement les
+ * rendez-vous liés à son propre profil (patient) ou, pour un
+ * admin/superadmin, la liste complète si aucun filtre n'est fourni.
+ * Cette fonction ne vérifie pas le rôle elle-même (voir useAuth().user
+ * côté composant pour ce garde-fou).
+ *
+ * @param {Object} [filtres]
+ * @param {string} [filtres.statut] - une valeur de STATUTS_RENDEZ_VOUS
+ *   ('cree' | 'confirme' | 'en_attente_presence' | 'honore' |
+ *   'non_honore' | 'annule' | 'conteste'). Omettre pour tout récupérer.
+ * @returns {Promise<Array>} liste des rendez-vous du médecin connecté,
+ *   triée/telle que renvoyée par le serveur.
+ */
+export async function listerRendezVousMedecinConnecte({ statut } = {}) {
+  return listerRendezVous({ statut });
+}
+
+/**
  * GET /rendez-vous/:id
  */
 export async function obtenirRendezVous(id) {
@@ -624,6 +658,7 @@ export default {
   obtenirMedecin,
   creerMedecin,
   modifierMedecin,
+  obtenirMonProfil,
   supprimerMedecin,
   publierMedecin,
   suspendreMedecin,
@@ -657,6 +692,7 @@ export default {
   TYPES_RENDEZ_VOUS,
   MOTIF_RENDEZ_VOUS_LONGUEUR_MAX,
   listerRendezVous,
+  listerRendezVousMedecinConnecte,
   obtenirRendezVous,
   creerRendezVous,
   modifierRendezVous,

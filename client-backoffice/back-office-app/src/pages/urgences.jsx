@@ -39,7 +39,7 @@ import {
   supprimerUrgence,
 } from "../services/urgenceService";
 import { listerPays } from "../services/referentielService";
-import "./../assets/style/Urgences.css";
+import "./../assets/style/urgences.css";
 
 const COULEURS_GRAPHIQUE = {
   primary: "#1C8FE0", teal: "#17B6C4", success: "#1B8A4B",

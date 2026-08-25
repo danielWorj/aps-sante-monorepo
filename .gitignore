@@ -17,3 +17,5 @@ server/guide
 .env
 *.log
 .DS_Store
+# -- Deploiement --
+./deploiement
