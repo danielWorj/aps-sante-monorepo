@@ -1,6 +1,6 @@
 // medecin-rdv.jsx
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import PortailNavbar from "./../layouts/portail-navbar";
 import PortailFooter from "./../layouts/portail-footer";
 import PortailSidebar from "./../layouts/portail-sidebar";
@@ -115,6 +115,7 @@ const MedecinRdv = () => {
   // 'authenticated' | 'unauthenticated' — voir AuthContext.jsx.
   const { user, status } = useAuth();
   const estMedecin = status === "authenticated" && user?.role === "medecin";
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState("avenir");
   const [toast, setToast] = useState(null);
@@ -467,7 +468,10 @@ const MedecinRdv = () => {
               </>
             )}
             {categorie === "avenir" && isTeleconsultation && (
-              <button className="btn btn-primary btn-sm-aps">
+              <button
+                className="btn btn-primary btn-sm-aps"
+                onClick={() => navigate(`/portail/consultation/${rdv.rdv_id}`)}
+              >
                 <i className="fa-solid fa-video"></i> Démarrer la visio
               </button>
             )}
