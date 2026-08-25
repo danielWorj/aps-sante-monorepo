@@ -789,6 +789,17 @@ export default function RendezVous() {
                               </tbody>
                             </table>
 
+                            {rendezVousCree.type_rdv === 'teleconsultation' && (
+                              <p className="text-faint mb-3" style={{ fontSize: '.8rem' }}>
+                                <i className="fa-solid fa-video" /> La téléconsultation ne sera accessible
+                                qu&apos;une fois le rendez-vous confirmé par le médecin. Ce lien restera
+                                valable jusque-là :{' '}
+                                <Link to={`/portail/consultation/${rendezVousCree.rdv_id}`}>
+                                  rejoindre la visio
+                                </Link>
+                              </p>
+                            )}
+
                             <div className="d-flex gap-2 mt-3">
                               {rendezVousCree.code_unique && (
                                 <button type="button" className="btn btn-outline-primary btn-block-aps" onClick={copyCode}>

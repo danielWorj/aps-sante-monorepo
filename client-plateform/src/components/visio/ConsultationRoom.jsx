@@ -5,6 +5,10 @@
 // server/src/controllers/visio.controller.js), puis rend l'iframe
 // Jitsi via @jitsi/react-sdk avec ce token.
 //
+// Conçu pour être embarqué dans un conteneur de taille contrainte
+// (ex : la modale visio du portail médecin) : l'iframe se cale sur
+// 100% du parent plutôt que sur 100vh.
+//
 // Utilise `apiFetch` (jamais axios / jamais de token en localStorage,
 // voir lib/apiClient.js) — cohérent avec le reste du front.
 
@@ -12,7 +16,7 @@ import { useEffect, useState } from "react";
 import { JitsiMeeting } from "@jitsi/react-sdk";
 import { apiFetch } from "../../lib/apiClient";
 
-function ConsultationRoom({ rdvId, onCallEnded }) {
+function ConsultationRoom({ rdvId, onCallEnded, onReady }) {
   const [visioData, setVisioData] = useState(null);
   const [error, setError] = useState(null);
 
@@ -53,29 +57,36 @@ function ConsultationRoom({ rdvId, onCallEnded }) {
   }
 
   return (
-    <JitsiMeeting
-      domain={visioData.domain}
-      roomName={visioData.roomName}
-      jwt={visioData.token}
-      configOverwrite={{
-        fileRecordingsEnabled: false,
-        liveStreamingEnabled: false,
-        prejoinPageEnabled: false,
-        disableModeratorIndicator: true,
-      }}
-      interfaceConfigOverwrite={{
-        TOOLBAR_BUTTONS: ["microphone", "camera", "hangup", "chat", "tileview"],
-      }}
-      getIFrameRef={(iframeRef) => {
-        iframeRef.style.height = "100vh";
-        iframeRef.style.width = "100%";
-        iframeRef.style.border = "0";
-      }}
-      onApiReady={(externalApi) => {
-        externalApi.addEventListener("videoConferenceLeft", () => onCallEnded?.());
-        externalApi.addEventListener("readyToClose", () => onCallEnded?.());
-      }}
-    />
+    <div style={{ height: "100%", width: "100%" }}>
+      <JitsiMeeting
+        domain={visioData.domain}
+        roomName={visioData.roomName}
+        jwt={visioData.token}
+        configOverwrite={{
+          fileRecordingsEnabled: false,
+          liveStreamingEnabled: false,
+          prejoinPageEnabled: false,
+          disableModeratorIndicator: true,
+        }}
+        interfaceConfigOverwrite={{
+          TOOLBAR_BUTTONS: ["microphone", "camera", "hangup", "chat", "tileview"],
+        }}
+        getIFrameRef={(iframeRef) => {
+          iframeRef.style.height = "100%";
+          iframeRef.style.width = "100%";
+          iframeRef.style.border = "0";
+        }}
+        onApiReady={(externalApi) => {
+          // Le SDK appelle onApiReady dès le chargement de l'iframe (avant
+          // que le médecin ait rejoint le salon) ; on affine avec
+          // videoConferenceJoined pour ne passer "en direct" qu'une fois
+          // réellement connecté.
+          externalApi.addEventListener("videoConferenceJoined", () => onReady?.(externalApi));
+          externalApi.addEventListener("videoConferenceLeft", () => onCallEnded?.());
+          externalApi.addEventListener("readyToClose", () => onCallEnded?.());
+        }}
+      />
+    </div>
   );
 }
 

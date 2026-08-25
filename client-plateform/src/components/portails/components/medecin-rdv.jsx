@@ -1,9 +1,10 @@
 // medecin-rdv.jsx
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import PortailNavbar from "./../layouts/portail-navbar";
 import PortailFooter from "./../layouts/portail-footer";
 import PortailSidebar from "./../layouts/portail-sidebar";
+import VisioModal from "./visio-modal";
 import {
   listerRendezVousMedecinConnecte,
   modifierRendezVous,
@@ -115,7 +116,6 @@ const MedecinRdv = () => {
   // 'authenticated' | 'unauthenticated' — voir AuthContext.jsx.
   const { user, status } = useAuth();
   const estMedecin = status === "authenticated" && user?.role === "medecin";
-  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState("avenir");
   const [toast, setToast] = useState(null);
@@ -131,6 +131,14 @@ const MedecinRdv = () => {
   const [detailRdv, setDetailRdv] = useState(null); // { rdv, categorie } | null
   const ouvrirDetail = (rdv, categorie) => setDetailRdv({ rdv, categorie });
   const fermerDetail = () => setDetailRdv(null);
+
+  // ─── Modale de téléconsultation (visio) ──────────────────────
+  const [visioRdv, setVisioRdv] = useState(null); // rdv | null
+  const ouvrirVisio = (rdv) => {
+    fermerDetail();
+    setVisioRdv(rdv);
+  };
+  const fermerVisio = () => setVisioRdv(null);
 
   useEffect(() => {
     if (!detailRdv) return;
@@ -470,7 +478,7 @@ const MedecinRdv = () => {
             {categorie === "avenir" && isTeleconsultation && (
               <button
                 className="btn btn-primary btn-sm-aps"
-                onClick={() => navigate(`/portail/consultation/${rdv.rdv_id}`)}
+                onClick={() => ouvrirVisio(rdv)}
               >
                 <i className="fa-solid fa-video"></i> Démarrer la visio
               </button>
@@ -723,6 +731,14 @@ const MedecinRdv = () => {
       </div>
 
       {renderDetailModal()}
+
+      {visioRdv && (
+        <VisioModal
+          rdv={visioRdv}
+          patientNom={nomPatient(visioRdv)}
+          onClose={fermerVisio}
+        />
+      )}
     </>
   );
 };
