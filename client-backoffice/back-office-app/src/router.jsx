@@ -27,7 +27,7 @@ import ForfaitPublicitaire from './pages/ForfaitPublicitaire';
 // ASSURANCES 
 import Assurances from './pages/Assurances';
 //URGENCES
-import Urgences from './pages/Urgences';
+import Urgences from './pages/urgences';
 //MEDECIN 
 import Medecin from './pages/Medecin';
 import AvisMedecin from './pages/avisMedecin';

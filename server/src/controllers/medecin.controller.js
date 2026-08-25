@@ -87,6 +87,7 @@ export {
   obtenirRendezVous,
   creerRendezVous,
   modifierRendezVous,
+  changerStatutRendezVous,
   supprimerRendezVous,
   listerOrdonnances,
   obtenirOrdonnance,
@@ -477,7 +478,105 @@ export async function obtenirMedecin(req, res, next) {
     next(err);
   }
 }
+/**
+GET /api/medecins/mon-profil
+AUTHENTIFIÉ uniquement (voir medecin.routes.js).
+Récupère le profil complet du médecin connecté (déduit du token)
+avec toutes ses relations : utilisateur, spécialité, pays/ville
+d'exercice, moyens de paiement, avis, abonnements.
 
+Cette route est dédiée à l'écran "Mon profil" du médecin et garantit
+que seul le médecin propriétaire peut accéder à ses données sensibles
+(email, téléphone, moyens de paiement).
+*/
+export async function obtenirMonProfil(req, res, next) {
+  try {
+    // Récupérer l'utilisateur_id depuis le token (peuplé par authentifier)
+    const utilisateurId = req.utilisateur?.utilisateur_id;
+    if (!utilisateurId) {
+      return res.status(401).json({ message: "Utilisateur non authentifié." });
+    }
+
+    // Trouver le médecin associé à cet utilisateur
+    const medecin = await prisma.medecin.findUnique({
+      where: { utilisateur_id: utilisateurId },
+      include: {
+        utilisateur: {
+          select: {
+            utilisateur_id: true,
+            nom: true,
+            prenom: true,
+            email: true,
+            telephone: true,
+            pays_id: true,
+            statut_compte: true,
+          },
+        },
+        specialite: SELECTION_SPECIALITE_PUBLIC,
+        ville_exercice: SELECTION_VILLE_PUBLIC,
+        pays_exercice: SELECTION_PAYS_PUBLIC,
+        // Moyens de paiement
+        mobile_moneys: {
+          include: {
+            type_mobile_money: {
+              select: {
+                id: true,
+                libelle: true,
+              },
+            },
+          },
+        },
+        comptes_bancaires: true,
+        // Statistiques d'avis (pour affichage profil)
+        avis: {
+          where: { statut_moderation: "publie" },
+          select: {
+            note: true,
+          },
+        },
+        // Abonnements actifs
+        forfaits_abonnement: {
+          include: {
+            abonnement: {
+              select: {
+                abonnement_id: true,
+                libelle: true,
+                statut: true,
+                date_debut: true,
+                date_fin: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!medecin) {
+      return res.status(404).json({
+        message: "Aucun profil médecin associé à ce compte.",
+      });
+    }
+
+    // Calculer les statistiques d'avis
+    const totalAvis = medecin.avis.length;
+    const noteMoyenne = totalAvis > 0
+      ? medecin.avis.reduce((sum, avis) => sum + avis.note, 0) / totalAvis
+      : null;
+
+    // Nettoyer les avis du résultat (on ne renvoie que les stats)
+    const { avis, ...medecinSansAvis } = medecin;
+
+    return res.status(200).json({
+      medecin: avecUrlsFichiersMedecin(medecinSansAvis),
+      statistiques: {
+        total_avis: totalAvis,
+        note_moyenne: noteMoyenne ? Math.round(noteMoyenne * 10) / 10 : null,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
 /**
  * PUT /api/medecins/:id
  * Ouvert au médecin concerné (utilisateur_id déduit du token) ou à

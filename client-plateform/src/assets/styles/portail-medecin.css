@@ -15,7 +15,41 @@ body.portail{ background:var(--surface-alt); }
   align-items:start;
   padding:2.2rem 0 3.5rem;
 }
-.portail-main{ min-width:0; }
+.portail-main{
+  min-width:0;
+  width:100%;
+  max-width:var(--container-w);
+  margin:0 auto;
+  padding:2.2rem 1.5rem 3.5rem;
+}
+/* Les pages qui s'enveloppent déjà dans .container-aps > .portail-shell
+   (ex : medecin-rdv.jsx) ne doivent pas doubler le padding. */
+.container-aps .portail-shell .portail-main{ max-width:none; padding:0; margin:0; }
+
+/* ---------------------------- NAVBAR PORTAIL ---------------------------- */
+/* portail-navbar.jsx : className="portail-navbar", jamais stylé (cf. capture d'écran,
+   tout s'affichait empilé et sans mise en forme). */
+.portail-navbar{
+  display:flex; align-items:center; justify-content:space-between; gap:1.5rem;
+  background:var(--surface); border-bottom:1px solid var(--line);
+  padding:.9rem 1.5rem; position:sticky; top:0; z-index:200;
+}
+.portail-navbar__brand{ flex:none; }
+.portail-navbar__logo{
+  font-family:var(--font-display); font-weight:800; font-size:1.15rem;
+  color:var(--primary-dark); letter-spacing:-.01em;
+}
+.portail-navbar__nav{ display:flex; align-items:center; gap:.3rem; flex:1; }
+.portail-navbar__link{
+  padding:.55rem .9rem; border-radius:var(--radius-md);
+  font-weight:600; font-size:.88rem; color:var(--ink-soft); white-space:nowrap;
+  background:transparent; border:none; cursor:pointer;
+}
+.portail-navbar__link:hover{ background:var(--surface-alt); color:var(--primary); }
+.portail-navbar__link--active{ background:var(--primary-tint); color:var(--primary-dark); }
+.portail-navbar__actions{ display:flex; align-items:center; gap:.6rem; flex:none; }
+.portail-navbar__link--logout{ color:var(--urgence-dark); }
+.portail-navbar__link--logout:hover{ background:var(--urgence-tint); color:var(--urgence-dark); }
 
 /* ---------------------------- EN-TÊTE DE PAGE ---------------------------- */
 .portail-head{
@@ -25,6 +59,35 @@ body.portail{ background:var(--surface-alt); }
 .portail-head h1{ font-size:1.7rem; margin:.55rem 0 .2rem; }
 .portail-head p{ margin:0; font-size:.92rem; }
 .portail-head .chips-row{ display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.6rem; }
+
+/* ---------------------------- BOUTONS (variantes portail) ---------------------------- */
+/* Le design system de base (style.css) expose .btn-primary / .btn-outline-primary
+   à tiret simple ; les composants du portail utilisent une convention BEM à double
+   tiret (.btn--primary, .btn--outline, ...). On ajoute ici les variantes manquantes
+   plutôt que de renommer style.css, pour ne pas casser le site public. */
+.btn--primary{ background:var(--primary); border-color:var(--primary); color:#fff; }
+.btn--primary:hover{ background:var(--primary-hover); border-color:var(--primary-hover); color:#fff; }
+.btn--secondary{ background:var(--surface); border-color:var(--line-strong); color:var(--ink); }
+.btn--secondary:hover{ border-color:var(--primary); color:var(--primary); background:var(--primary-tint); }
+.btn--outline{ background:transparent; border-color:var(--line-strong); color:var(--ink); }
+.btn--outline:hover{ border-color:var(--primary); color:var(--primary); background:var(--primary-tint); }
+.btn--success{ background:var(--teal-dark); border-color:var(--teal-dark); color:#fff; }
+.btn--success:hover{ background:var(--primary-dark); border-color:var(--primary-dark); color:#fff; }
+.btn--danger{ background:var(--urgence); border-color:var(--urgence); color:#fff; }
+.btn--danger:hover{ background:var(--urgence-dark); border-color:var(--urgence-dark); color:#fff; }
+.btn--sm{ padding:.42rem .85rem; font-size:.8rem; border-radius:var(--radius-sm); }
+
+/* ---------------------------- BADGES (chips profil) ---------------------------- */
+/* .badge / .badge--* : utilisés dans medecin-profil.JSX, jamais définis nulle part. */
+.badge{
+  display:inline-flex; align-items:center; gap:.35rem;
+  border-radius:var(--radius-pill); padding:.3rem .7rem;
+  font-size:.74rem; font-weight:700;
+}
+.badge--verifie{ background:var(--teal-tint); color:var(--teal-dark); }
+.badge--progress{ background:var(--primary-tint); color:var(--primary-dark); }
+.badge--encours{ background:var(--gold-tint); color:#8A6115; }
+.badge--afournir{ background:var(--orange-tint); color:var(--orange-dark); }
 
 /* ---------------------------- SIDEBAR (droite) ---------------------------- */
 .portail-sidebar{ position:sticky; top:88px; display:flex; flex-direction:column; gap:1rem; }
@@ -98,26 +161,76 @@ body.portail{ background:var(--surface-alt); }
   display:flex; align-items:center; gap:1.1rem; flex-wrap:wrap;
   background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-lg);
   padding:1.1rem 1.3rem; box-shadow:var(--shadow-sm);
+  cursor:pointer; transition:border-color .15s ease, box-shadow .15s ease, transform .15s ease;
 }
+.rdv-item:hover, .rdv-item:focus-visible{
+  border-color:var(--primary-tint-strong); box-shadow:var(--shadow-md, var(--shadow-sm));
+  transform:translateY(-1px);
+}
+.rdv-item:focus-visible{ outline:2px solid var(--primary); outline-offset:2px; }
 .rdv-item.is-pending{ border-left:3px solid var(--gold); }
+.rdv-empty{
+  text-align:center; padding:2.4rem 1rem; margin:0;
+  color:var(--ink-faint); font-size:.88rem;
+  background:var(--surface); border:1px dashed var(--line-strong); border-radius:var(--radius-lg);
+}
 .rdv-time{
   min-width:68px; flex:none; text-align:center;
   background:var(--surface-alt); border-radius:var(--radius-md); padding:.5rem .4rem;
 }
 .rdv-time .t{ display:block; font-family:var(--font-mono); font-weight:700; color:var(--ink); font-size:.95rem; }
 .rdv-time .d{ display:block; font-size:.66rem; font-weight:700; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.05em; }
-.patient-avatar{
-  width:44px; height:44px; min-width:44px; border-radius:50%; flex:none;
-  background:var(--primary-tint); color:var(--primary-dark);
-  display:flex; align-items:center; justify-content:center; font-size:.8rem; font-weight:700;
-}
 .rdv-body{ flex:1; min-width:0; }
 .rdv-body h3{ font-size:.98rem; margin-bottom:.3rem; }
 .rdv-meta{ display:flex; flex-wrap:wrap; gap:.4rem 1rem; font-size:.8rem; color:var(--ink-soft); }
 .rdv-meta i{ color:var(--ink-faint); margin-right:.3rem; }
 .rdv-meta .fa-video{ color:var(--teal-dark); }
 .rdv-meta .fa-credit-card{ color:var(--primary); }
-.rdv-status{ display:flex; flex-direction:column; align-items:flex-end; gap:.4rem; }
+.rdv-chevron{ flex:none; color:var(--ink-faint); font-size:.85rem; margin-left:.4rem; }
+
+/* ---------------------------- POP-UP DÉTAILS RDV ---------------------------- */
+.rdv-modal-overlay{
+  position:fixed; inset:0; z-index:600;
+  background:rgba(18,22,28,.5); backdrop-filter:blur(2px);
+  display:flex; align-items:center; justify-content:center; padding:1.2rem;
+  animation:rdvFadeIn .18s ease;
+}
+.rdv-modal{
+  position:relative; width:100%; max-width:440px; max-height:88vh; overflow-y:auto;
+  background:var(--surface); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg);
+  padding:1.6rem 1.6rem 1.4rem; animation:rdvSlideUp .2s ease;
+}
+.rdv-modal-close{
+  position:absolute; top:1rem; right:1rem; width:32px; height:32px;
+  border:none; border-radius:50%; background:var(--surface-alt); color:var(--ink-soft);
+  display:flex; align-items:center; justify-content:center; font-size:.85rem; cursor:pointer;
+  transition:background .15s ease, color .15s ease;
+}
+.rdv-modal-close:hover{ background:var(--primary-tint); color:var(--primary-dark); }
+.rdv-modal-head{ display:flex; align-items:center; gap:.9rem; padding-right:2rem; margin-bottom:.9rem; }
+.rdv-modal-avatar{
+  width:52px; height:52px; min-width:52px; border-radius:50%;
+  background:var(--primary-tint); color:var(--primary-dark);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-display); font-weight:800; font-size:1rem;
+}
+.rdv-modal-heading h3{ font-size:1.08rem; margin:0 0 .2rem; }
+.rdv-modal-type{ font-size:.82rem; color:var(--ink-soft); }
+.rdv-modal-type i{ color:var(--ink-faint); margin-right:.3rem; }
+.rdv-modal-status{ display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:1.1rem; }
+.rdv-modal-details{
+  display:flex; flex-direction:column; gap:.85rem;
+  background:var(--surface-alt); border-radius:var(--radius-md);
+  padding:1rem 1.1rem; margin-bottom:1.3rem;
+}
+.rdv-modal-row{ display:flex; align-items:flex-start; gap:.75rem; font-size:.86rem; }
+.rdv-modal-row i{ color:var(--primary); width:16px; text-align:center; margin-top:.2rem; }
+.rdv-modal-row .label{ display:block; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-faint); }
+.rdv-modal-row .value{ display:block; color:var(--ink); font-weight:600; margin-top:.1rem; word-break:break-word; }
+.rdv-modal-actions{ display:flex; gap:.6rem; flex-wrap:wrap; justify-content:flex-end; }
+
+@keyframes rdvFadeIn{ from{ opacity:0; } to{ opacity:1; } }
+@keyframes rdvSlideUp{ from{ opacity:0; transform:translateY(12px) scale(.98); } to{ opacity:1; transform:translateY(0) scale(1); } }
 .rdv-actions{ display:flex; gap:.5rem; flex-wrap:wrap; }
 .btn-icon{ padding:.5rem .68rem; }
 
@@ -220,6 +333,43 @@ body.block-mode .block-hint{ display:flex; }
 .hours-edit .sep{ color:var(--ink-faint); text-align:center; padding:0 .1rem; }
 .hours-edit input[type="time"]{ width:108px; padding:.35rem .5rem; font-size:.8rem; }
 .hours-edit input[type="time"]:disabled{ background:var(--surface-alt); color:var(--ink-faint); }
+.status--open{ color:var(--teal-dark); font-weight:700; }
+.status--closed{ color:var(--ink-faint); font-weight:700; }
+
+/* ---------------------------- FORMULAIRE PROFIL ---------------------------- */
+.profil-form{ display:flex; flex-direction:column; gap:1.8rem; }
+.profil-section{
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-sm); padding:1.5rem 1.6rem;
+}
+.profil-section h2{ font-size:1.1rem; margin-bottom:1.1rem; }
+.profil-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:1rem 1.2rem; }
+.profil-field{ display:flex; flex-direction:column; gap:.4rem; margin-bottom:1rem; }
+.profil-field:last-child{ margin-bottom:0; }
+.profil-label{ font-size:.8rem; font-weight:700; color:var(--ink); }
+.profil-input, .profil-select, .profil-textarea{
+  width:100%; border:1px solid var(--line-strong); border-radius:var(--radius-md);
+  padding:.62rem .8rem; font-family:var(--font-body); font-size:.88rem; color:var(--ink);
+  background:var(--surface);
+}
+.profil-input:focus, .profil-select:focus, .profil-textarea:focus{
+  outline:none; border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-tint);
+}
+.profil-textarea{ resize:vertical; min-height:96px; }
+.profil-input-suffix{ display:flex; align-items:stretch; overflow:hidden; padding:0; }
+.profil-input-suffix .profil-input{ border:none; }
+.profil-input-suffix span{ display:flex; align-items:center; padding:0 .8rem; }
+
+.profil-field--photo{ flex-direction:row; align-items:center; gap:1rem; }
+.profil-photo-drop{
+  flex:1; border:1.5px dashed var(--line-strong); border-radius:var(--radius-md);
+  padding:1.1rem; text-align:center; font-size:.78rem; color:var(--ink-faint);
+  background:var(--surface-alt);
+}
+
+.profil-radio-group{ display:flex; flex-direction:column; gap:.6rem; margin-bottom:1.1rem; }
+.profil-radio{ display:flex; align-items:center; gap:.6rem; font-size:.88rem; color:var(--ink); cursor:pointer; }
+.profil-fieldset{ border:none; padding:0; margin:0 0 1.1rem; }
 
 /* ---------------------------- NOTES / DIVERS ---------------------------- */
 .note-box{
@@ -285,13 +435,66 @@ body.block-mode .block-hint{ display:flex; }
 .toast-aps.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
 /* ---------------------------- FOOTER PORTAIL ---------------------------- */
-.portail-footer{ border-top:1px solid var(--line); padding:1.4rem 0; font-size:.8rem; color:var(--ink-faint); background:var(--surface); }
-.portail-footer .container-aps{ display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+/* portail-footer.jsx : carte médecin + nav + statut + portefeuille + mentions.
+   Rendu comme <footer> sous le contenu principal (pas dans la grille .portail-shell),
+   donc stylé ici en bandeau horizontal plutôt qu'en sidebar collante. */
+.portail-footer{
+  display:flex; align-items:center; flex-wrap:wrap; gap:1.4rem;
+  background:var(--surface); border-top:1px solid var(--line);
+  padding:1.1rem 1.5rem; margin-top:2rem;
+  font-size:.8rem; color:var(--ink-faint);
+}
 .portail-footer a{ color:var(--ink-soft); }
 
-/* ============================================================
-RESPONSIVE
-============================================================ */
+.portail-footer__doctor-card{ display:flex; align-items:center; gap:.7rem; flex:none; }
+.portail-footer__avatar{
+  width:42px; height:42px; min-width:42px; border-radius:50%;
+  background:var(--primary-tint); color:var(--primary-dark);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-display); font-weight:800; font-size:.95rem;
+}
+.portail-footer__doctor-info{ display:flex; flex-direction:column; line-height:1.35; }
+.portail-footer__doctor-name{ font-family:var(--font-display); font-weight:800; color:var(--ink); font-size:.88rem; }
+.portail-footer__doctor-speciality{ font-size:.74rem; color:var(--ink-faint); }
+.portail-footer__verified{
+  align-self:flex-start; margin-top:.2rem;
+  background:var(--teal-tint); color:var(--teal-dark);
+  border-radius:var(--radius-pill); padding:.1rem .55rem;
+  font-size:.66rem; font-weight:700;
+}
+
+.portail-footer__nav{ display:flex; align-items:center; gap:.2rem; flex-wrap:wrap; flex:1; }
+.portail-footer__link{
+  position:relative; padding:.5rem .8rem; border-radius:var(--radius-md);
+  font-weight:600; font-size:.82rem; color:var(--ink-soft);
+  background:transparent; border:none; cursor:pointer; white-space:nowrap;
+}
+.portail-footer__link:hover{ background:var(--surface-alt); color:var(--primary); }
+.portail-footer__link--active{ background:var(--primary-tint); color:var(--primary-dark); }
+.portail-footer__badge{
+  margin-left:.35rem; background:var(--urgence); color:#fff;
+  font-size:.64rem; font-weight:700; border-radius:var(--radius-pill); padding:.05rem .4rem;
+}
+
+.portail-footer__status{ display:flex; flex-direction:column; gap:.15rem; flex:none; font-size:.76rem; }
+.portail-footer__availability{ color:var(--teal-dark); font-weight:700; }
+.portail-footer__visibility{ color:var(--ink-faint); }
+
+.portail-footer__wallet{
+  display:flex; flex-direction:column; align-items:flex-end; gap:.1rem; flex:none;
+  padding-left:1rem; border-left:1px solid var(--line);
+}
+.portail-footer__wallet-label{ font-size:.7rem; color:var(--ink-faint); }
+.portail-footer__wallet-amount{ font-family:var(--font-mono); font-weight:700; color:var(--primary-dark); font-size:.95rem; }
+
+.portail-footer__legal{
+  flex-basis:100%; display:flex; justify-content:space-between; flex-wrap:wrap; gap:.5rem;
+  padding-top:.9rem; margin-top:.3rem; border-top:1px solid var(--line);
+  font-size:.72rem; color:var(--ink-faint);
+}
+.portail-footer__legal p{ margin:0; color:inherit; }
+.portail-footer__legal-links{ display:flex; gap:1rem; }
+
 /* ============================================================
 RESPONSIVE
 ============================================================ */
@@ -335,10 +538,28 @@ RESPONSIVE
 
   .stat-row{ grid-template-columns:repeat(2,1fr); margin-bottom:1.3rem; }
   .portail-head h1{ font-size:1.5rem; }
+
+  .profil-grid{ grid-template-columns:1fr; }
 }
 
 /* ---------- ≤ 768px ---------- */
 @media (max-width:768px){
+
+  /* --- Navbar portail : logo + nav scrollable + actions en dessous --- */
+  .portail-navbar{ flex-wrap:wrap; padding:.8rem 1rem; gap:.6rem; }
+  .portail-navbar__nav{ order:3; flex-basis:100%; overflow-x:auto; scrollbar-width:none; }
+  .portail-navbar__nav::-webkit-scrollbar{ display:none; }
+  .portail-navbar__actions{ margin-left:auto; }
+
+  /* --- Footer portail : bandeau empilé --- */
+  .portail-footer{ flex-direction:column; align-items:stretch; gap:.9rem; padding:1.1rem; }
+  .portail-footer__nav{ order:2; }
+  .portail-footer__status{ order:3; flex-direction:row; justify-content:space-between; }
+  .portail-footer__wallet{ order:4; align-items:flex-start; padding-left:0; border-left:none; border-top:1px solid var(--line); padding-top:.7rem; width:100%; }
+  .portail-footer__legal{ order:5; }
+
+  .profil-section{ padding:1.2rem 1.1rem; }
+  .profil-field--photo{ flex-direction:column; align-items:stretch; }
 
   /* --- Toolbar agenda : 3 rangées propres --- */
   .agenda-toolbar{ flex-direction:column; align-items:stretch; gap:.7rem; }
@@ -433,10 +654,10 @@ RESPONSIVE
   /* --- Cartes RDV --- */
   .rdv-item{ padding:1rem 1.1rem; gap:.8rem; }
   .rdv-time{ min-width:58px; }
-  .patient-avatar{ width:38px; height:38px; min-width:38px; font-size:.72rem; }
-  .rdv-status{ order:4; flex-direction:row; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:.5rem; }
-  .rdv-actions{ order:5; flex-basis:100%; }
   .rdv-meta{ font-size:.76rem; }
+  .rdv-modal{ padding:1.3rem 1.2rem 1.2rem; }
+  .rdv-modal-actions{ flex-direction:column-reverse; }
+  .rdv-modal-actions .btn{ width:100%; justify-content:center; }
 }
 
 /* ---------- ≤ 640px ---------- */

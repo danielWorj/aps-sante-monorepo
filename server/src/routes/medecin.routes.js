@@ -41,6 +41,7 @@ import {
   creerMedecin,
   listerMedecins,
   obtenirMedecin,
+  obtenirMonProfil,
   modifierMedecin,
   supprimerMedecin,
   publierMedecin,
@@ -70,6 +71,7 @@ import {
   obtenirRendezVous,
   creerRendezVous,
   modifierRendezVous,
+  changerStatutRendezVous,
   supprimerRendezVous,
   // Ordonnances
   listerOrdonnances,
@@ -109,6 +111,16 @@ router.post("/medecins", gererTeleversementMedecin, creerMedecin);
 // "Tous les médecins"). Voir selectionUtilisateurSelonRole dans le
 // contrôleur.
 router.get("/medecins", authentifierOptionnel, listerMedecins);
+
+// AUTHENTIFIÉ — Récupère le profil complet du médecin connecté
+// (utilisateur_id déduit du token) avec toutes ses relations.
+// DOIT être déclarée AVANT router.get("/medecins/:id", ...) : Express
+// matche les routes dans l'ordre de déclaration, donc si elle vient
+// après, "/medecins/mon-profil" est capturé par ":id" avec
+// id="mon-profil", ce qui plante Prisma (P2007 : "mon-profil" n'est
+// pas un UUID valide).
+router.get("/medecins/mon-profil", authentifier, obtenirMonProfil);
+
 router.get("/medecins/:id", authentifierOptionnel, obtenirMedecin);
 
 // Le médecin propriétaire (utilisateur_id déduit du token) ou
@@ -213,6 +225,13 @@ router.get("/rendez-vous", authentifier, listerRendezVous);
 router.get("/rendez-vous/:id", authentifier, obtenirRendezVous);
 router.post("/rendez-vous", authentifier, creerRendezVous);
 router.put("/rendez-vous/:id", authentifier, modifierRendezVous);
+
+// Action dédiée au changement de statut (confirmation, annulation,
+// passage en salle d'attente, issue de consultation, contestation) —
+// contrôle fin des transitions par rôle géré dans le contrôleur (voir
+// TRANSITIONS_AUTORISEES dans rendezVous.controller.js), contrairement
+// au PUT générique ci-dessus qui accepte "statut" sans ce contrôle.
+router.patch("/rendez-vous/:id/statut", authentifier, changerStatutRendezVous);
 
 // Suppression physique réservée à admin/superadmin — un rendez-vous
 // s'annule normalement via PUT (statut="annule").

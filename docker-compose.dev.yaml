@@ -1,0 +1,55 @@
+version: "3.9"
+
+# Fichier de SURCOUCHE pour le dev en local avec hot-reload.
+# Ne remplace pas docker-compose.yaml : il vient s'ajouter par-dessus.
+#
+# Usage :
+#   docker-compose -f docker-compose.yaml -f docker-compose.dev.yaml up --build
+#
+# Ce que ça change par rapport à la prod :
+# - client-plateform / client-backoffice : on s'arrête au stage "build" du
+#   Dockerfile (celui qui a node + npm), on monte le code en volume, et on
+#   lance "npm run dev" (Vite) au lieu de servir le build statique via nginx.
+#   -> Vite fait du Hot Module Replacement : les changements de code/CSS
+#   s'appliquent dans le navigateur sans rebuild d'image ni refresh manuel.
+# - server : on monte le code en volume et on relance "npm start" (nodemon
+#   est déjà en dépendance) au lieu du "prisma migrate deploy && node index.js"
+#   figé de prod.
+#
+# Dans les deux cas, "node_modules" est isolé dans un volume anonyme
+# (- /app/node_modules) pour ne PAS être écrasé par ton dossier local monté
+# par-dessus (surtout utile si tu n'as pas fait "npm install" en dehors de
+# Docker, ou si tu es sur un OS différent de l'image Linux du conteneur).
+
+services:
+  client-plateform:
+    build:
+      target: build
+    volumes:
+      - ./client-plateform:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=${VITE_API_URL_PLATEFORM}
+    command: sh -c "npm run dev -- --host 0.0.0.0 --port 8080"
+    ports:
+      - "8080:8080"
+
+  client-backoffice:
+    build:
+      target: build
+    volumes:
+      - ./client-backoffice/back-office-app:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=${VITE_API_URL_BACKOFFICE}
+    command: sh -c "npm run dev -- --host 0.0.0.0 --port 8081"
+    ports:
+      - "8081:8081"
+
+  server:
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    command: npm start
+    ports:
+      - "3000:3000"

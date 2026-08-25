@@ -21,6 +21,8 @@ import FicheAssurance from './pages/FicheAssurance';
 import PortailLayout from './Layouts/PortailLayout';
 import MedecinAgenda from './components/portails/components/medecin-agenda';
 import RequireAuth from './routes/RequireAuth';
+import MedecinProfil from './components/portails/components/medecin-profil.jsx';
+import MedecinRdv from './components/portails/components/medecin-rdv';
 
 export const router = createBrowserRouter([
   {
@@ -51,6 +53,8 @@ export const router = createBrowserRouter([
         element:<PortailLayout />,
         children:[
           { path: '/portail/medecin-agenda', element: <MedecinAgenda /> },
+          { path: '/portail/medecin-rdv', element: <MedecinRdv /> },
+          { path: '/portail/medecin-profil', element: <MedecinProfil /> },
           // { path: '/portail/medecin-rdv', element: <MedecinAgenda /> },
           // { path: '/portail/medecin-agenda', element: <MedecinAgenda /> },
           // { path: '/portail/medecin-agenda', element: <MedecinAgenda /> },
