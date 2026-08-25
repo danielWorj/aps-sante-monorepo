@@ -14,6 +14,7 @@ import publiciteRoutes from "./src/routes/publicite.routes.js";
 import assuranceRoutes from "./src/routes/assurance.routes.js";
 import urgencesRoutes from "./src/routes/urgences.routes.js";
 import medecinRoutes from "./src/routes/medecin.routes.js";
+import patientRoutes from "./src/routes/patient.routes.js";
 import moyenPaiementRoutes from "./src/routes/moyenPaiement.routes.js";
 import visioRoutes from "./src/routes/visio.routes.js";
 
@@ -82,6 +83,7 @@ app.use("/api", publiciteRoutes);
 app.use("/api", assuranceRoutes);
 app.use("/api", urgencesRoutes);
 app.use("/api", medecinRoutes);
+app.use("/api", patientRoutes);
 app.use("/api", moyenPaiementRoutes);
 app.use("/api", visioRoutes);
 // ─── Gestion d'erreurs centralisée ─────────────────────────────

@@ -19,11 +19,17 @@ import FicheAssurance from './pages/FicheAssurance';
 //PORTAIL 
 
 import PortailLayout from './Layouts/PortailLayout';
+import PortailParentLayout from './Layouts/PortailPatientLayout.jsx';
+
+
 import MedecinAgenda from './components/portails/components/medecin-agenda';
 import RequireAuth from './routes/RequireAuth';
 import MedecinProfil from './components/portails/components/medecin-profil.jsx';
 import MedecinRdv from './components/portails/components/medecin-rdv';
 import Teleconsultation from './pages/Teleconsultation';
+
+//PORTAIL PATIENT
+import PatientRdv from './components/portails/components/patient-rdv';
 
 export const router = createBrowserRouter([
   {
@@ -59,6 +65,24 @@ export const router = createBrowserRouter([
           // { path: '/portail/medecin-rdv', element: <MedecinAgenda /> },
           // { path: '/portail/medecin-agenda', element: <MedecinAgenda /> },
           // { path: '/portail/medecin-agenda', element: <MedecinAgenda /> },
+        ]
+      },
+      // Hors PortailLayout volontairement : page plein écran (pas de
+      // navbar/sidebar/footer) pour l'appel vidéo, tout en restant
+      // protégée par RequireAuth ci-dessus.
+      { path: '/portail/consultation/:id', element: <Teleconsultation /> },
+    ],
+
+  },
+  ,
+  {
+    element:<RequireAuth />,
+    children:[
+      {
+        element:<PortailParentLayout />,
+        children:[
+          { path: '/portail/patient-rdv', element: <PatientRdv /> },
+          //{ path: '/portail/patient-profil', element: <PatientProfil /> },
         ]
       },
       // Hors PortailLayout volontairement : page plein écran (pas de
