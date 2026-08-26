@@ -12,6 +12,7 @@ import {
   TYPES_RENDEZ_VOUS,
 } from "./../../../services/medecinService";
 import { useAuth } from "./../../../context/AuthContext";
+import { categoriserRdv } from "./../../../utils/rdv";
 
 // ─── Helpers de formatage ─────────────────────────────────────
 const TYPE_RDV_LABEL = {
@@ -78,37 +79,6 @@ function nomPatient(rdv) {
     return `${rdv.patient.prenom} ${rdv.patient.nom}`;
   if (rdv.patient_id) return `Patient #${String(rdv.patient_id).slice(0, 8)}`;
   return "Patient inconnu";
-}
-
-/**
- * Répartit un rendez-vous dans une catégorie d'onglet selon son statut
- * et sa date.
- *   - 'cree'            → attente (le médecin doit accepter/refuser)
- *   - 'confirme'        → avenir (si date future) / passes (si passée)
- *   - 'en_attente_presence' → avenir (le RDV est confirmé, en cours)
- *   - 'honore' / 'non_honore' → passes
- *   - 'annule'          → annules
- *   - 'conteste'        → annules (avec mention spéciale)
- */
-function categoriserRdv(rdv) {
-  const date = rdv.date_creneau ? new Date(rdv.date_creneau) : null;
-  const estPasse = date && date < new Date();
-
-  switch (rdv.statut) {
-    case "cree":
-      return "attente";
-    case "confirme":
-    case "en_attente_presence":
-      return estPasse ? "passes" : "avenir";
-    case "honore":
-    case "non_honore":
-      return "passes";
-    case "annule":
-    case "conteste":
-      return "annules";
-    default:
-      return "avenir";
-  }
 }
 
 const MedecinRdv = () => {
