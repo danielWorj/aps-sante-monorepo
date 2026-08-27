@@ -176,6 +176,41 @@ enum StatutRendezVous {
 }
 
 // -----------------------------------------------------------------
+// Enums — Agenda médecin
+// -----------------------------------------------------------------
+
+enum JourSemaine {
+  lundi
+  mardi
+  mercredi
+  jeudi
+  vendredi
+  samedi
+  dimanche
+}
+
+// "bloque" est prévu pour une future gestion des indisponibilités
+// ponctuelles (congé, urgence) même si ce n'est pas branché tout de
+// suite : le créneau concret peut déjà porter ce statut sans
+// changement de structure.
+enum StatutCreneauAgenda {
+  disponible
+  reserve
+  bloque
+}
+
+// Trace si un créneau concret vient de la génération automatique à
+// partir du gabarit (DisponibiliteMedecin) ou d'une action manuelle
+// du médecin pour cette semaine précise (ajout hors gabarit, ou
+// modification d'un créneau généré). Sert notamment à permettre côté
+// UI un bouton "réinitialiser cette semaine au gabarit" sans écraser
+// les ajouts/retraits volontaires du médecin.
+enum OrigineCreneauAgenda {
+  genere
+  manuel
+}
+
+// -----------------------------------------------------------------
 // Référentiel géographique
 // -----------------------------------------------------------------
 
@@ -421,6 +456,13 @@ model Medecin {
   // Module transverse : Moyens de paiement du médecin
   mobile_moneys       MobileMoney[]
   comptes_bancaires   CompteBancaire[]
+
+  // Module transverse : Agenda du médecin — voir plus bas dans ce
+  // fichier. disponibilites porte le gabarit récurrent (jour de la
+  // semaine + horaire), creneaux_agenda porte les instances
+  // concrètes par date réelle, générées à partir du gabarit.
+  disponibilites  DisponibiliteMedecin[]
+  creneaux_agenda CreneauAgenda[]
 
   @@index([specialite_id])
   @@index([pays_exercice_id])
@@ -1271,6 +1313,11 @@ model RendezVous {
 
   ordonnances Ordonnance[]
 
+  // Créneau d'agenda occupé par ce rendez-vous (voir CreneauAgenda
+  // plus bas). Nullable : un rendez-vous historique ou créé avant le
+  // module Agenda peut ne pas être rattaché à un créneau.
+  creneau_agenda CreneauAgenda?
+
   @@index([patient_id])
   @@index([medecin_id])
   @@index([structure_id])
@@ -1306,6 +1353,97 @@ model Ordonnance {
   @@index([patient_id])
   @@index([pays_emission_id])
   @@map("ordonnance")
+}
+
+// =====================================================================
+// APS — Module transverse : Agenda du médecin
+//
+// Deux niveaux, comme pour les autres relations N-N du fichier
+// (cf. ForfaitAbonnementMedecin) :
+//   - DisponibiliteMedecin : le GABARIT récurrent — "ce médecin
+//     reçoit tous les lundis sur ce créneau". Table de jointure N-N
+//     entre Medecin et Horaire, portant en plus le jour de la
+//     semaine.
+//   - CreneauAgenda : les instances CONCRÈTES par date réelle,
+//     générées côté application à partir du gabarit (job récurrent
+//     ou génération à la volée). C'est cette table qui porte le
+//     statut réel du créneau et qui se rattache, le cas échéant, au
+//     rendez-vous qui l'occupe.
+//
+// La gestion des indisponibilités ponctuelles (congé, urgence) n'est
+// pas encore branchée : StatutCreneauAgenda prévoit déjà la valeur
+// "bloque" pour ça, il n'y aura pas de migration de structure à
+// prévoir le jour où on l'active.
+// =====================================================================
+
+// -----------------------------------------------------------------
+// Horaire : référentiel des tranches de 30 minutes (ex. 07h00-07h30,
+// 07h30-08h00, ..., jusqu'à 20h00). Une seule fois pour tous les
+// médecins, réutilisée par DisponibiliteMedecin et CreneauAgenda.
+// -----------------------------------------------------------------
+model Horaire {
+  horaire_id String @id @default(uuid()) @db.Uuid
+
+  heure_debut DateTime @db.Time
+  heure_fin   DateTime @db.Time
+
+  disponibilites  DisponibiliteMedecin[]
+  creneaux_agenda CreneauAgenda[]
+
+  @@unique([heure_debut, heure_fin])
+  @@map("horaire")
+}
+
+// -----------------------------------------------------------------
+// DisponibiliteMedecin : table de jointure N-N medecin <-> horaire,
+// portant en plus jour_semaine. C'est le gabarit récurrent déclaré
+// par le médecin (ex. "disponible le lundi de 09h00 à 09h30"). La
+// contrainte unique empêche une déclaration en double du même
+// créneau, le même jour, pour le même médecin.
+// -----------------------------------------------------------------
+model DisponibiliteMedecin {
+  disponibilite_id String @id @default(uuid()) @db.Uuid
+
+  medecin_id   String      @db.Uuid
+  horaire_id   String      @db.Uuid
+  jour_semaine JourSemaine
+
+  medecin Medecin @relation(fields: [medecin_id], references: [medecin_id])
+  horaire Horaire @relation(fields: [horaire_id], references: [horaire_id])
+
+  @@unique([medecin_id, horaire_id, jour_semaine])
+  @@index([medecin_id])
+  @@index([horaire_id])
+  @@map("disponibilite_medecin")
+}
+
+// -----------------------------------------------------------------
+// CreneauAgenda : instance concrète d'un créneau pour une date
+// précise, générée à partir de DisponibiliteMedecin. C'est cette
+// table qui répond à la question "le médecin X est-il libre le 6
+// octobre à 14h ?" et qui se rattache au rendez-vous qui l'occupe le
+// cas échéant (rendez_vous, relation 1-1 optionnelle portée par
+// RendezVous.creneau_agenda plus haut).
+// -----------------------------------------------------------------
+model CreneauAgenda {
+  creneau_id String @id @default(uuid()) @db.Uuid
+
+  medecin_id String                @db.Uuid
+  horaire_id String                @db.Uuid
+  date       DateTime              @db.Date
+  statut     StatutCreneauAgenda   @default(disponible)
+  origine    OrigineCreneauAgenda  @default(genere)
+  rdv_id     String?               @unique @db.Uuid
+
+  medecin     Medecin     @relation(fields: [medecin_id], references: [medecin_id])
+  horaire     Horaire     @relation(fields: [horaire_id], references: [horaire_id])
+  rendez_vous RendezVous? @relation(fields: [rdv_id], references: [rdv_id])
+
+  @@unique([medecin_id, horaire_id, date])
+  @@index([medecin_id])
+  @@index([horaire_id])
+  @@index([date])
+  @@map("creneau_agenda")
 }
 
 // =====================================================================

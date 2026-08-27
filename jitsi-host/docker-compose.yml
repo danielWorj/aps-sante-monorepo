@@ -11,10 +11,10 @@ services:
             - '${HTTP_PORT}:8000'
             - '${HTTPS_PORT}:8443'
         volumes:
-            - ${CONFIG}/web:/config:Z
-            - ${CONFIG}/storage/web:/storage:Z
-            - ${CONFIG}/storage/transcripts:/usr/share/jitsi-meet/transcripts:ro,z
-            - ${CONFIG}/tmp/web-load-test:/usr/share/jitsi-meet/load-test:Z
+            - web-config:/config:Z
+            - web-storage:/storage:Z
+            - transcripts:/usr/share/jitsi-meet/transcripts:ro,z
+            - web-load-test:/usr/share/jitsi-meet/load-test:Z
         labels:
             service: "jitsi-web"
         environment:
@@ -213,9 +213,9 @@ services:
         labels:
             service: "jitsi-prosody"
         volumes:
-            - ${CONFIG}/prosody/config:/config:Z
-            - ${CONFIG}/prosody/prosody-plugins-custom:/prosody-plugins-custom:Z
-            - ${CONFIG}/storage/prosody:/var/lib/prosody:Z
+            - prosody-config:/config:Z
+            - prosody-plugins-custom:/prosody-plugins-custom:Z
+            - prosody-storage:/var/lib/prosody:Z
         environment:
             - AUTH_TYPE
             - DISABLE_POLLS
@@ -368,7 +368,7 @@ services:
         ports:
             - '127.0.0.1:${JICOFO_REST_PORT:-8888}:8888'
         volumes:
-            - ${CONFIG}/jicofo:/config:Z
+            - jicofo-config:/config:Z
         labels:
             service: "jitsi-jicofo"
         environment:
@@ -470,7 +470,7 @@ services:
             - '${JVB_PORT:-10000}:${JVB_PORT:-10000}/udp'
             - '127.0.0.1:${JVB_COLIBRI_PORT:-8080}:8080'
         volumes:
-            - ${CONFIG}/jvb:/config:Z
+            - jvb-config:/config:Z
         labels:
             service: "jitsi-jvb"
         environment:
@@ -528,3 +528,16 @@ services:
 # Custom network so all services can communicate using a FQDN
 networks:
     meet.jitsi:
+
+# Named Docker volumes instead of Windows bind mounts, so container
+# permissions (uid 1000) work correctly regardless of the host OS.
+volumes:
+    web-config:
+    web-storage:
+    transcripts:
+    web-load-test:
+    prosody-config:
+    prosody-plugins-custom:
+    prosody-storage:
+    jicofo-config:
+    jvb-config:
