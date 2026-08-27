@@ -19,4 +19,5 @@ server/guide
 .DS_Store
 # -- Deploiement --
 ./deploiement
+./deploiement/deploy.md
 ./accessjitsi-host/jitsi-meet-cfg/

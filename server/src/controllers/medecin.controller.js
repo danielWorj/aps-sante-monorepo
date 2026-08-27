@@ -96,6 +96,27 @@ export {
   supprimerOrdonnance,
 } from "./rendezVous.controller.js";
 
+// Agenda du médecin (Horaire référentiel + DisponibiliteMedecin gabarit
+// + CreneauAgenda instances concrètes) — voir schema.prisma, section
+// "APS — Module transverse : Agenda du médecin", et l'en-tête de
+// agenda.controller.js pour le détail des règles d'accès (gestion
+// réservée au médecin propriétaire/admin, consultation publique).
+export {
+  listerHoraires,
+  obtenirHoraire,
+  creerHoraire,
+  supprimerHoraire,
+  listerDisponibilitesMedecin,
+  creerDisponibiliteMedecin,
+  supprimerDisponibiliteMedecin,
+  listerCreneauxAgenda,
+  obtenirCreneauAgenda,
+  genererCreneauxAgenda,
+  creerCreneauAgenda,
+  modifierCreneauAgenda,
+  supprimerCreneauAgenda,
+} from "./agenda.controller.js";
+
 // Doit rester synchronisé avec l'enum StatutVerificationMedecin du
 // schema.prisma : non_publie / en_cours / publie.
 const STATUTS_VERIFICATION_MEDECIN = ["non_publie", "en_cours", "publie"];
