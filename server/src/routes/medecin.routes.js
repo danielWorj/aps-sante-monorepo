@@ -1,14 +1,14 @@
 // src/routes/medecin.routes.js
 // Point d'entrée UNIQUE du module transverse "Gestion des médecins".
 //
-// Comme expliqué en tête de medecin.controller.js, les 28 handlers de
-// ce module sont répartis dans 4 fichiers contrôleurs distincts mais
+// Comme expliqué en tête de medecin.controller.js, les 41 handlers de
+// ce module sont répartis dans 5 fichiers contrôleurs distincts mais
 // tous importés ici depuis un seul chemin :
 //   "../controllers/medecin.controller.js"
 // (qui ré-exporte lui-même avis.controller.js / abonnementMedecin.
-// controller.js / rendezVous.controller.js). Ce fichier de routes ne
-// connaît donc pas ce découpage interne — un seul routeur, monté une
-// seule fois dans l'app (ex. app.use("/api", medecinRoutes)).
+// controller.js / rendezVous.controller.js / agenda.controller.js). Ce
+// fichier de routes ne connaît donc pas ce découpage interne — un seul
+// routeur, monté une seule fois dans l'app (ex. app.use("/api", medecinRoutes)).
 //
 // Middlewares utilisés (chemins réels du projet) :
 //   - authentifier            (auth.middleware.js)        : exige un
@@ -29,6 +29,16 @@
 //                                ware d'upload (multer) qui place
 //                                cni / attestation dans req.files
 //                                avant creerMedecin / modifierMedecin.
+//
+// Module Agenda (Horaire / DisponibiliteMedecin / CreneauAgenda) :
+// aucun nouveau middleware, mais un patron d'accès particulier — la
+// CONSULTATION (listerDisponibilitesMedecin, listerCreneauxAgenda,
+// obtenirCreneauAgenda, listerHoraires, obtenirHoraire) est PUBLIQUE
+// sans authentification (ni même authentifierOptionnel : il n'y a pas
+// de vue "enrichie" ici), tandis que la GESTION (créer/modifier/
+// supprimer une disponibilité ou un créneau) exige authentifier, la
+// vérification fine médecin-propriétaire-vs-admin étant faite à
+// l'intérieur de chaque handler (voir agenda.controller.js).
 
 import { Router } from "express";
 import { authentifier } from "../middlewares/auth.middleware.js";
@@ -87,6 +97,22 @@ import {
   creerSpecialite,
   modifierSpecialite,
   supprimerSpecialite,
+  // Agenda du médecin — Horaire (référentiel partagé)
+  listerHoraires,
+  obtenirHoraire,
+  creerHoraire,
+  supprimerHoraire,
+  // Agenda du médecin — DisponibiliteMedecin (gabarit récurrent)
+  listerDisponibilitesMedecin,
+  creerDisponibiliteMedecin,
+  supprimerDisponibiliteMedecin,
+  // Agenda du médecin — CreneauAgenda (instances concrètes)
+  listerCreneauxAgenda,
+  obtenirCreneauAgenda,
+  genererCreneauxAgenda,
+  creerCreneauAgenda,
+  modifierCreneauAgenda,
+  supprimerCreneauAgenda,
 } from "../controllers/medecin.controller.js";
 
 const router = Router();
@@ -151,6 +177,52 @@ router.patch("/medecins/:id/reactiver", authentifier, autoriser("admin", "supera
 // Volontairement PUBLIQUE (pas de authentifier) : utile en amont de
 // POST /medecins, avant même la création d'un compte.
 router.post("/medecins/verifier-ordre", verifierAppartenanceOrdre);
+
+/* ===================================================================
+ * Agenda du médecin
+ * ===================================================================
+ * Trois niveaux (voir schema.prisma et agenda.controller.js) :
+ *   - Horaire              : référentiel PARTAGÉ des tranches, lecture
+ *                            publique / écriture admin-superadmin
+ *                            (même patron que /specialites plus bas).
+ *   - DisponibiliteMedecin : gabarit récurrent du médecin (jour de la
+ *                            semaine + horaire) — géré par le médecin
+ *                            propriétaire ou un admin/superadmin,
+ *                            consultable publiquement.
+ *   - CreneauAgenda         : instances datées concrètes, générées à
+ *                            partir du gabarit ou ajoutées à la main —
+ *                            même règle d'accès, consultable
+ *                            publiquement (c'est cette liste qu'un
+ *                            patient regarde avant de prendre
+ *                            rendez-vous).
+ */
+
+// -- Horaire (référentiel partagé) ----------------------------------
+router.get("/horaires", listerHoraires);
+router.get("/horaires/:id", obtenirHoraire);
+router.post("/horaires", authentifier, autoriser("admin", "superadmin"), creerHoraire);
+router.delete("/horaires/:id", authentifier, autoriser("superadmin"), supprimerHoraire);
+
+// -- DisponibiliteMedecin (gabarit récurrent) ------------------------
+// Consultation PUBLIQUE ; gestion réservée au médecin propriétaire ou
+// à admin/superadmin (vérifié dans le contrôleur, comme pour PUT
+// /medecins/:id).
+router.get("/medecins/:medecinId/disponibilites", listerDisponibilitesMedecin);
+router.post("/medecins/:medecinId/disponibilites", authentifier, creerDisponibiliteMedecin);
+router.delete("/disponibilites/:disponibiliteId", authentifier, supprimerDisponibiliteMedecin);
+
+// -- CreneauAgenda (instances concrètes) -----------------------------
+// Consultation PUBLIQUE : c'est la route que la prise de rendez-vous
+// interroge pour savoir quels créneaux sont réellement libres, sans
+// exiger de compte patient. Gestion (génération depuis le gabarit,
+// ajout manuel, changement de statut, suppression) réservée au médecin
+// propriétaire ou à admin/superadmin.
+router.get("/medecins/:medecinId/agenda", listerCreneauxAgenda);
+router.get("/creneaux-agenda/:id", obtenirCreneauAgenda);
+router.post("/medecins/:medecinId/agenda/generer", authentifier, genererCreneauxAgenda);
+router.post("/medecins/:medecinId/agenda", authentifier, creerCreneauAgenda);
+router.put("/creneaux-agenda/:id", authentifier, modifierCreneauAgenda);
+router.delete("/creneaux-agenda/:id", authentifier, supprimerCreneauAgenda);
 
 /* ===================================================================
  * Avis médecin
