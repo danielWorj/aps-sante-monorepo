@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APS — Écrans mobiles principaux</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --green-900:#0F3A2B;
+    --green-700:#1E8A63;
+    --green-600:#279A6E;
+    --green-500:#2FAB7B;
+    --green-100:#E4F3EC;
+    --green-50:#F1F8F4;
+    --coral-500:#E1604A;
+    --coral-600:#C94E3A;
+    --coral-100:#FBE7E2;
+    --amber-500:#DD9A2E;
+    --amber-100:#FBF0DC;
+    --ink:#16241F;
+    --ink-soft:#5B6B64;
+    --ink-faint:#93A39C;
+    --paper:#F5F8F6;
+    --card:#FFFFFF;
+    --line:#E5ECE8;
+    --line-strong:#D3DFD9;
+    --radius-lg:26px;
+    --radius-md:18px;
+    --radius-sm:12px;
+    --shadow-soft:0 1px 2px rgba(16,36,28,0.04), 0 8px 20px -10px rgba(16,36,28,0.10);
+    --shadow-card:0 1px 1px rgba(16,36,28,0.03), 0 4px 12px -6px rgba(16,36,28,0.08);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    font-family:'Inter',sans-serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.display{font-family:'Sora',sans-serif;}
+  .mono{font-family:'IBM Plex Mono',monospace; letter-spacing:0.01em;}
+  .icon{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;display:block;}
+
+  /* ============ INTRO ============ */
+  .intro{ max-width:1180px; margin:0 auto; padding:56px 32px 30px; }
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:'Sora',sans-serif; font-weight:600; font-size:12px;
+    letter-spacing:0.14em; text-transform:uppercase;
+    color:var(--green-700); background:var(--green-100);
+    padding:6px 14px; border-radius:100px; margin-bottom:18px;
+  }
+  .intro h1{ font-size:34px; font-weight:700; line-height:1.15; margin:0 0 12px; letter-spacing:-0.02em; max-width:760px; }
+  .intro p.lede{ font-size:15px; line-height:1.6; color:var(--ink-soft); max-width:660px; margin:0; }
+
+  .rule-grid{ display:flex; gap:14px; flex-wrap:wrap; margin-top:26px; }
+  .rule-card{ flex:1 1 260px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:16px; box-shadow:var(--shadow-card); }
+  .rule-card p{ font-size:12.5px; line-height:1.55; color:var(--ink-soft); margin:0; }
+  .rule-tag{ display:inline-flex; align-items:center; gap:6px; font-family:'Sora',sans-serif; font-weight:700; font-size:11px; letter-spacing:0.02em; padding:4px 10px; border-radius:100px; margin-bottom:10px; }
+  .rule-tag .icon{width:13px;height:13px;}
+  .rule-tag.ok{ background:var(--green-100); color:var(--green-700); }
+  .rule-tag.warn{ background:var(--amber-100); color:var(--amber-500); }
+  .rule-tag.off{ background:var(--coral-100); color:var(--coral-600); }
+
+  /* ============ GALLERY LAYOUT ============ */
+  .section-head{ max-width:1180px; margin:56px auto 22px; padding:0 32px; display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+  .section-head h2{font-size:21px; margin:0; font-weight:700;}
+  .section-head span{color:var(--ink-faint); font-size:13px;}
+  .idx{
+    font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--green-700); background:var(--green-100);
+    padding:3px 9px; border-radius:100px; font-weight:600; flex-shrink:0;
+  }
+
+  /* ============ BOOTSTRAP-LIKE GRID (row / col-md-4) ============ */
+  .container-grid{ max-width:1180px; margin:0 auto; padding:0 32px 60px; }
+  .row{ display:flex; flex-wrap:wrap; margin:0 -16px; row-gap:48px; }
+  .col-md-4{ flex:0 0 33.3333%; max-width:33.3333%; padding:0 16px; box-sizing:border-box; display:flex; }
+  @media (max-width:980px){ .col-md-4{ flex:0 0 50%; max-width:50%; } }
+  @media (max-width:640px){ .col-md-4{ flex:0 0 100%; max-width:100%; } }
+
+  .gallery{ max-width:1180px; margin:0 auto; padding:0 32px 12px; display:flex; flex-wrap:wrap; gap:40px 32px; }
+  .device-block{display:flex; flex-direction:column; align-items:center; gap:16px; width:100%;}
+  .device-label{ font-family:'Sora',sans-serif; font-weight:600; font-size:13px; color:var(--ink); display:flex; align-items:center; justify-content:center; gap:8px; text-align:center;}
+  .device-label .dot{width:6px;height:6px;border-radius:50%; background:var(--green-500); flex-shrink:0;}
+  .device-label small{display:block; font-weight:500; color:var(--ink-faint); font-size:11px; margin-top:2px;}
+
+  /* ============ PHONE FRAME ============ */
+  .device{ width:342px; background:#0C1512; border-radius:46px; padding:9px; box-shadow:0 1px 1px rgba(16,36,28,0.05), 0 30px 50px -22px rgba(16,36,28,0.32); }
+  .screen{ position:relative; width:100%; height:718px; background:var(--paper); border-radius:38px; overflow:hidden; display:flex; flex-direction:column; }
+  .island{ position:absolute; top:14px; left:50%; transform:translateX(-50%); width:96px; height:26px; background:#0C1512; border-radius:16px; z-index:20; }
+  .statusbar{ height:46px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:0 26px; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:var(--ink); }
+  .statusbar .icons{display:flex; align-items:center; gap:5px;}
+  .statusbar svg{width:15px;height:11px;}
+
+  .content{ flex:1; overflow-y:auto; padding:2px 18px 96px; scrollbar-width:none; }
+  .content::-webkit-scrollbar{display:none;}
+
+  /* ============ BOTTOM NAV ============ */
+  .bottomnav{ position:absolute; left:10px; right:10px; bottom:10px; height:66px; background:rgba(255,255,255,0.92); backdrop-filter:blur(6px); border:1px solid var(--line); border-radius:22px; display:flex; align-items:center; justify-content:space-around; box-shadow:0 10px 24px -14px rgba(16,36,28,0.28); z-index:15; }
+  .navitem{ display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--ink-faint); font-size:10.5px; font-weight:600; font-family:'Sora',sans-serif; width:56px; }
+  .navitem .icon{width:20px;height:20px;}
+  .navitem.active{color:var(--green-700);}
+  .navitem.active .icon-wrap{ background:var(--green-100); border-radius:12px; padding:5px 14px; margin-bottom:1px; }
+  .navitem .icon-wrap{padding:5px 14px; margin-bottom:1px;}
+  .navitem-fab{ width:48px;height:48px; border-radius:16px; background:var(--green-700); display:flex; align-items:center; justify-content:center; color:#fff; box-shadow:0 8px 16px -6px rgba(30,138,99,0.55); margin-top:-22px; }
+  .navitem-fab .icon{width:22px;height:22px; stroke-width:2;}
+
+  /* ============ SHARED COMPONENTS ============ */
+  .row-between{display:flex; align-items:center; justify-content:space-between;}
+  .search-field{ display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-sm); padding:11px 13px; margin-bottom:10px; }
+  .search-field .icon{color:var(--ink-faint); width:18px;height:18px; flex-shrink:0;}
+  .search-field .txt{font-size:13px; color:var(--ink-soft);}
+  .search-field .txt.filled{color:var(--ink); font-weight:500;}
+
+  .btn-primary{ display:flex; align-items:center; justify-content:center; gap:8px; background:var(--green-700); color:#fff; border:none; border-radius:var(--radius-sm); font-family:'Sora',sans-serif; font-weight:600; font-size:14px; padding:13px; width:100%; }
+  .btn-secondary{ display:flex; align-items:center; justify-content:center; gap:8px; background:var(--card); color:var(--ink); border:1px solid var(--line-strong); border-radius:var(--radius-sm); font-family:'Sora',sans-serif; font-weight:600; font-size:13.5px; padding:11px; }
+
+  .page-title{padding:14px 2px 4px;}
+  .page-title .eyebrow-sm{ font-size:10.5px; text-transform:uppercase; letter-spacing:0.1em; color:var(--green-700); font-weight:700; font-family:'Sora',sans-serif; }
+  .page-title h3{font-size:18px; margin:6px 0 4px; font-weight:700;}
+  .page-title p{font-size:12.5px; color:var(--ink-soft); margin:0; line-height:1.5;}
+
+  .filter-chips{display:flex; gap:8px; margin-bottom:14px; overflow-x:auto; padding-bottom:2px;}
+  .chip{ flex-shrink:0; display:flex; align-items:center; gap:6px; padding:8px 13px; border-radius:100px; font-size:12px; font-weight:600; font-family:'Sora',sans-serif; border:1px solid var(--line-strong); color:var(--ink-soft); background:var(--card); white-space:nowrap; }
+  .chip.active{background:var(--green-700); border-color:var(--green-700); color:#fff;}
+  .chip .icon{width:13px;height:13px;}
+
+  .badge{ display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:600; padding:3px 9px; border-radius:100px; font-family:'Sora',sans-serif; }
+  .badge.green{background:var(--green-100); color:var(--green-700);}
+  .badge.amber{background:var(--amber-100); color:var(--amber-500);}
+  .badge.coral{background:var(--coral-100); color:var(--coral-500);}
+  .badge.outline{background:var(--paper); color:var(--ink-soft); border:1px solid var(--line-strong); font-family:'IBM Plex Mono',monospace; font-weight:500;}
+  .badge .icon{width:11px;height:11px;}
+
+  .list-card{ display:flex; gap:12px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:12px; margin-bottom:12px; box-shadow:var(--shadow-card); }
+  .avatar{ width:56px;height:56px; border-radius:14px; background:var(--green-100); color:var(--green-700); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-family:'Sora',sans-serif; font-weight:700; font-size:16px; overflow:hidden;}
+  .avatar img{width:100%;height:100%;object-fit:cover;}
+  .list-card .info{flex:1; min-width:0;}
+  .list-card .info .name{font-size:14px; font-weight:700; font-family:'Sora',sans-serif; margin:0 0 2px;}
+  .list-card .info .meta{font-size:11.5px; color:var(--ink-soft); margin:0 0 6px; display:flex; align-items:center; gap:4px;}
+  .list-card .badges{display:flex; gap:5px; margin-bottom:9px; flex-wrap:wrap;}
+  .list-card .foot{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .price{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13px; color:var(--ink);}
+  .price .cur{font-size:9.5px; color:var(--ink-faint); font-family:'Sora',sans-serif; font-weight:600;}
+  .mini-btn{ background:var(--green-700); color:#fff; border:none; border-radius:9px; padding:7px 12px; font-size:11.5px; font-weight:600; font-family:'Sora',sans-serif; display:inline-flex; align-items:center; gap:5px; white-space:nowrap;}
+  .mini-btn.coral{background:var(--coral-500);}
+  .mini-btn.outline{background:var(--card); color:var(--ink); border:1px solid var(--line-strong);}
+  .mini-btn .icon{width:12px;height:12px;}
+  .foot-actions{display:flex; gap:6px;}
+
+  .result-count{font-size:12px; color:var(--ink-soft); font-weight:600; margin-bottom:10px; display:block;}
+
+  /* ============ AD CARD (with real photo) ============ */
+  .ad-mobile{background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); overflow:hidden; box-shadow:var(--shadow-card); margin:2px 0 16px;}
+  .ad-mobile .ad-tag{display:flex; align-items:center; gap:5px; font-size:9px; text-transform:uppercase; letter-spacing:0.1em; font-weight:700; color:var(--ink-faint); padding:10px 12px 0; font-family:'Sora',sans-serif;}
+  .ad-mobile .ad-tag .icon{width:11px;height:11px;}
+  .ad-mobile .ad-photo{ margin:8px 12px 0; border-radius:12px; overflow:hidden; background:var(--paper); }
+  .ad-mobile .ad-photo img{width:100%; display:block; object-fit:cover;}
+  .ad-mobile .ad-photo.h-tall img{height:150px;}
+  .ad-mobile .ad-photo.h-wide img{height:96px;}
+  .ad-mobile .ad-media{ height:72px; display:flex; align-items:center; justify-content:center; margin:8px 12px 0; border-radius:12px; position:relative; overflow:hidden; }
+  .ad-mobile .ad-media .icon{width:22px;height:22px; color:#fff; position:relative; z-index:2;}
+  .ad-media.tint-blue{background:linear-gradient(135deg,#1E6E8A 0%,#123A4A 100%);}
+  .ad-media.tint-blue::before{ content:""; position:absolute; inset:0; opacity:0.5; background-image:radial-gradient(circle at 20% 20%, rgba(255,255,255,0.18) 0, transparent 45%), radial-gradient(circle at 85% 80%, rgba(255,255,255,0.12) 0, transparent 40%); }
+  .ad-mobile .ad-body{padding:10px 12px 12px;}
+  .ad-mobile h4{font-size:12.5px; font-weight:700; font-family:'Sora',sans-serif; margin:0 0 4px;}
+  .ad-mobile p{font-size:10.5px; line-height:1.5; color:var(--ink-soft); margin:0 0 9px;}
+  .ad-mobile .ad-link{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:var(--green-700); font-family:'Sora',sans-serif;}
+  .ad-mobile .ad-link .icon{width:12px;height:12px;}
+  .ad-mobile .ad-disclosure{font-size:9px; color:var(--ink-faint); text-align:center; padding:0 12px 10px;}
+
+  /* Ad placed ABOVE lists/results — more visible: label + subtle highlight border */
+  .ad-mobile.ad-top{ border:1px solid var(--green-100); box-shadow:0 1px 1px rgba(16,36,28,0.03), 0 6px 16px -8px rgba(30,138,99,0.18); margin:0 0 18px; }
+  .ad-mobile.ad-top .ad-tag{ color:var(--green-700); }
+
+  /* ============ HOME — HORIZONTAL AD CAROUSEL ============ */
+  .home-hero{ background:linear-gradient(135deg, var(--green-700) 0%, var(--green-900) 100%); border-radius:var(--radius-md); padding:18px 16px; margin:12px 0 18px; color:#fff; }
+  .home-hero p.hi{ font-family:'Sora',sans-serif; font-weight:700; font-size:15px; margin:0 0 3px; }
+  .home-hero p.sub{ font-size:11.5px; color:rgba(255,255,255,0.78); margin:0; }
+  .quick-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:14px 0 20px; }
+  .quick-tile{ display:flex; flex-direction:column; align-items:center; gap:6px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px 4px; box-shadow:var(--shadow-card); }
+  .quick-tile .ic{ width:34px;height:34px; border-radius:10px; background:var(--green-100); color:var(--green-700); display:flex; align-items:center; justify-content:center; }
+  .quick-tile .ic svg{width:17px;height:17px;}
+  .quick-tile.coral .ic{ background:var(--coral-100); color:var(--coral-500); }
+  .quick-tile span.lbl{font-size:9.5px; font-weight:600; font-family:'Sora',sans-serif; text-align:center; color:var(--ink);}
+
+  .carousel-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px; }
+  .carousel-head h3{ font-size:14px; margin:0; font-family:'Sora',sans-serif; font-weight:700; }
+  .carousel-head span{ font-size:10.5px; color:var(--ink-faint); }
+  .ad-carousel{ display:flex; gap:12px; overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:none; margin:0 -18px; padding:0 18px 6px; }
+  .ad-carousel::-webkit-scrollbar{display:none;}
+  .ad-slide{ flex:0 0 76%; scroll-snap-align:start; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); overflow:hidden; box-shadow:var(--shadow-card); }
+  .ad-slide .ad-tag{display:flex; align-items:center; gap:5px; font-size:9px; text-transform:uppercase; letter-spacing:0.1em; font-weight:700; color:var(--ink-faint); padding:10px 12px 0; font-family:'Sora',sans-serif;}
+  .ad-slide .ad-tag .icon{width:11px;height:11px;}
+  .ad-slide .ad-photo{ margin:8px 12px 0; border-radius:12px; overflow:hidden; }
+  .ad-slide .ad-photo img{width:100%; height:128px; object-fit:cover; display:block;}
+  .ad-slide .ad-body{padding:10px 12px 12px;}
+  .ad-slide h4{font-size:12px; font-weight:700; font-family:'Sora',sans-serif; margin:0 0 3px;}
+  .ad-slide p{font-size:10px; line-height:1.45; color:var(--ink-soft); margin:0;}
+  .carousel-dots{ display:flex; align-items:center; justify-content:center; gap:5px; margin:10px 0 4px; }
+  .carousel-dots span{ width:5px;height:5px; border-radius:50%; background:var(--line-strong); }
+  .carousel-dots span.active{ width:14px; border-radius:100px; background:var(--green-600); }
+  .swipe-hint{ display:flex; align-items:center; justify-content:center; gap:5px; font-size:9.5px; color:var(--ink-faint); margin:0 0 18px; }
+  .swipe-hint svg{width:12px;height:12px;}
+
+  /* doctor / structure profile */
+  .profile-hero{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-lg); padding:20px 16px; margin:14px 0 16px; text-align:center; box-shadow:var(--shadow-card); }
+  .profile-hero .avatar{margin:0 auto 12px; width:72px;height:72px; border-radius:20px; font-size:22px;}
+  .profile-hero .name{font-size:17px; font-weight:700; font-family:'Sora',sans-serif; margin:0 0 3px;}
+  .profile-hero .spec{font-size:12.5px; color:var(--ink-soft); margin:0 0 12px;}
+  .profile-hero .badges{display:flex; justify-content:center; gap:6px; margin-bottom:16px; flex-wrap:wrap;}
+  .stat-row{display:flex; border-top:1px solid var(--line); padding-top:14px;}
+  .stat-row .stat{flex:1; text-align:center;}
+  .stat-row .stat b{display:block; font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:600;}
+  .stat-row .stat span{font-size:10px; color:var(--ink-faint); font-weight:600;}
+
+  .tab-row{display:flex; gap:22px; border-bottom:1px solid var(--line); margin-bottom:16px;}
+  .tab{ font-size:12.5px; font-weight:600; font-family:'Sora',sans-serif; color:var(--ink-faint); padding-bottom:10px; position:relative; }
+  .tab.active{color:var(--green-700);}
+  .tab.active::after{content:'';position:absolute; left:0; right:0; bottom:-1px; height:2px; background:var(--green-700); border-radius:2px;}
+
+  .info-block{margin-bottom:18px;}
+  .info-block h4{font-size:12px; font-weight:700; font-family:'Sora',sans-serif; margin:0 0 8px; color:var(--ink); display:flex; align-items:center; gap:6px;}
+  .info-block h4 .icon{width:14px;height:14px; color:var(--green-700);}
+  .info-block p{font-size:12px; line-height:1.6; color:var(--ink-soft); margin:0;}
+  .pill-row{display:flex; flex-wrap:wrap; gap:6px;}
+  .pill{font-size:11px; font-weight:600; font-family:'Sora',sans-serif; color:var(--ink-soft); background:var(--paper); border:1px solid var(--line-strong); padding:6px 11px; border-radius:100px;}
+  .hours-row{display:flex; justify-content:space-between; font-size:11.5px; padding:6px 0; border-bottom:1px dashed var(--line);}
+  .hours-row span:first-child{color:var(--ink-soft); font-weight:600;}
+  .hours-row span:last-child{font-family:'IBM Plex Mono',monospace; font-weight:600;}
+  .hours-row.off span:last-child{color:var(--ink-faint);}
+
+  .date-strip{display:flex; gap:8px; overflow-x:auto; margin-bottom:16px; padding-bottom:2px;}
+  .date-pill{ flex-shrink:0; width:52px; padding:10px 0; border-radius:14px; text-align:center; border:1px solid var(--line-strong); background:var(--card); }
+  .date-pill .d{font-size:10px; color:var(--ink-faint); font-weight:600; display:block;}
+  .date-pill .n{font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:600; display:block; margin-top:2px;}
+  .date-pill.active{background:var(--green-700); border-color:var(--green-700);}
+  .date-pill.active .d, .date-pill.active .n{color:#fff;}
+
+  .slot-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:18px;}
+  .slot{ text-align:center; padding:9px 0; border-radius:11px; border:1px solid var(--line-strong); font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-weight:600; color:var(--ink-soft); background:var(--card); }
+  .slot.active{background:var(--green-700); color:#fff; border-color:var(--green-700);}
+  .slot.taken{color:var(--ink-faint); background:var(--paper); text-decoration:line-through; border-style:dashed;}
+
+  .info-note{ display:flex; gap:10px; background:var(--green-50); border:1px solid var(--green-100); border-radius:var(--radius-sm); padding:12px; font-size:11.5px; color:var(--green-900); line-height:1.5; margin-bottom:16px; }
+  .info-note .icon{color:var(--green-700); flex-shrink:0; margin-top:1px;}
+
+  .sticky-cta{ position:sticky; bottom:0; background:var(--paper); padding:12px 0 4px; display:flex; align-items:center; gap:12px; margin-top:6px; }
+  .sticky-cta .amount{flex-shrink:0;}
+  .sticky-cta .amount b{display:block; font-family:'IBM Plex Mono',monospace; font-size:16px;}
+  .sticky-cta .amount span{font-size:10px; color:var(--ink-faint); font-weight:600;}
+
+  /* profile / menu */
+  .menu-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); overflow:hidden; box-shadow:var(--shadow-card); margin-bottom:16px;}
+  .menu-item{ display:flex; align-items:center; gap:12px; padding:13px 14px; border-bottom:1px solid var(--line); }
+  .menu-item:last-child{border-bottom:none;}
+  .menu-item .ic{width:32px;height:32px; border-radius:9px; background:var(--paper); display:flex; align-items:center; justify-content:center; color:var(--ink-soft); flex-shrink:0;}
+  .menu-item .lbl{flex:1; font-size:13px; font-weight:600; font-family:'Sora',sans-serif;}
+  .menu-item .sub{font-size:10.5px; color:var(--ink-faint); font-weight:500; font-family:'Inter',sans-serif;}
+  .menu-item .chev{color:var(--ink-faint); flex-shrink:0;}
+
+  .profile-card{ background:var(--green-900); border-radius:var(--radius-lg); padding:20px; margin:14px 0 18px; color:#fff; position:relative; overflow:hidden; }
+  .profile-card .avatar{background:rgba(255,255,255,0.14); color:#fff; width:52px;height:52px; border-radius:16px; font-size:17px;}
+  .profile-card .row-between{align-items:center;}
+  .profile-card .name{font-size:16px; font-weight:700; font-family:'Sora',sans-serif; margin:0 0 2px;}
+  .profile-card .mail{font-size:11.5px; opacity:0.65;}
+  .profile-card .edit{ background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.18); color:#fff; border-radius:9px; padding:7px 11px; font-size:11px; font-weight:600; font-family:'Sora',sans-serif; }
+
+  .section-title{display:flex; align-items:center; justify-content:space-between; margin:4px 0 12px;}
+  .section-title h3{font-size:14px; margin:0; font-weight:700;}
+  .section-title .see-all{font-size:11.5px; color:var(--green-700); font-weight:600; font-family:'Sora',sans-serif;}
+
+  .guard-dot{width:7px;height:7px; border-radius:50%; background:var(--green-500); display:inline-block; margin-right:5px; position:relative; top:-1px;}
+  .guard-dot.off{background:var(--ink-faint);}
+
+  .notice-chip{ display:flex; gap:8px; align-items:flex-start; background:var(--green-50); border:1px solid var(--green-100); color:var(--green-900); border-radius:var(--radius-sm); padding:10px 12px; font-size:11px; line-height:1.5; margin:2px 0 16px; }
+  .notice-chip .icon{width:14px;height:14px; color:var(--green-600); flex-shrink:0; margin-top:1px; stroke-width:2;}
+
+  .insurer-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:14px; margin-bottom:12px; box-shadow:var(--shadow-card);}
+  .insurer-top{display:flex; align-items:center; gap:11px; margin-bottom:10px;}
+  .insurer-logo{width:42px;height:42px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-family:'Sora',sans-serif; font-weight:800; font-size:12.5px; flex-shrink:0;}
+  .insurer-info .name{font-size:13.5px; font-weight:700; font-family:'Sora',sans-serif; margin:0 0 2px;}
+  .insurer-info .meta{font-size:10.5px; color:var(--ink-soft);}
+  .insurer-badges{display:flex; gap:5px; margin-bottom:9px; flex-wrap:wrap;}
+  .insurer-desc{font-size:11px; line-height:1.55; color:var(--ink-soft); margin:0 0 12px;}
+  .insurer-foot{display:flex; justify-content:flex-end;}
+
+  /* structure card (clinics/hospitals) */
+  .struct-thumb{width:56px;height:56px; border-radius:14px; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
+
+  /* ============ URGENCE ============ */
+  .sos-wrap{display:flex; flex-direction:column; align-items:center; padding:18px 0 8px;}
+  .sos-btn{
+    width:150px;height:150px; border-radius:50%;
+    background:radial-gradient(circle at 32% 28%, #F0806A 0%, var(--coral-500) 55%, var(--coral-600) 100%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff;
+    box-shadow:0 0 0 8px rgba(225,96,74,0.12), 0 18px 30px -12px rgba(193,60,40,0.55);
+    position:relative;
+  }
+  .sos-btn .icon{width:34px;height:34px; stroke-width:2; margin-bottom:6px;}
+  .sos-btn b{font-family:'Sora',sans-serif; font-size:17px; letter-spacing:0.02em;}
+  .sos-btn span{font-size:9.5px; opacity:0.85; font-weight:600; margin-top:2px;}
+  .sos-caption{font-size:11.5px; color:var(--ink-soft); text-align:center; margin:14px 0 20px; line-height:1.5; max-width:230px;}
+  .sos-caption b{color:var(--ink);}
+
+  .type-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:18px;}
+  .type-tile{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:11px 4px; display:flex; flex-direction:column; align-items:center; gap:6px; box-shadow:var(--shadow-card); }
+  .type-tile .ic{width:30px;height:30px;border-radius:9px; display:flex; align-items:center; justify-content:center; background:var(--coral-100); color:var(--coral-500);}
+  .type-tile .ic .icon{width:15px;height:15px;}
+  .type-tile .lbl{font-size:9.5px; text-align:center; color:var(--ink-soft); font-weight:600; line-height:1.2;}
+
+  .emergency-row{ display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:12px; margin-bottom:9px; box-shadow:var(--shadow-card); }
+  .emergency-row .ic{width:38px;height:38px; border-radius:11px; background:var(--green-100); color:var(--green-700); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .emergency-row .ic.official{background:var(--coral-100); color:var(--coral-500);}
+  .emergency-row .txt{flex:1; min-width:0;}
+  .emergency-row .txt b{display:block; font-size:12.5px; font-weight:700; font-family:'Sora',sans-serif;}
+  .emergency-row .txt span{font-size:10.5px; color:var(--ink-faint);}
+  .emergency-row .num{font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:var(--ink-soft); margin-right:2px;}
+
+  .offline-note{ display:flex; gap:9px; align-items:flex-start; background:var(--paper); border:1px dashed var(--line-strong); border-radius:var(--radius-sm); padding:11px; font-size:10.5px; color:var(--ink-soft); line-height:1.5; margin:14px 0 8px; }
+  .offline-note .icon{width:14px;height:14px; color:var(--ink-faint); flex-shrink:0; margin-top:1px;}
+
+  .footer-credit{ max-width:1180px; margin:14px auto 80px; padding:0 32px; color:var(--ink-faint); font-size:12px; }
+
+  /* ============ 10. FICHE ASSURANCE (détail) ============ */
+  .ins-hero{ background:var(--green-50); border:1px solid var(--green-100); border-radius:var(--radius-md); padding:16px; margin-bottom:14px; }
+  .ins-hero-top{display:flex; align-items:flex-start; gap:12px; margin-bottom:12px;}
+  .ins-hero-logo{width:56px;height:56px; border-radius:14px; overflow:hidden; flex-shrink:0; box-shadow:var(--shadow-card);}
+  .ins-hero-logo svg{width:100%;height:100%; display:block;}
+  .ins-hero-name{font-size:17px; font-weight:700; margin:0 0 3px; font-family:'Sora',sans-serif;}
+  .ins-hero-meta{display:flex; align-items:center; gap:5px; font-size:11.5px; color:var(--ink-soft); margin:0 0 8px;}
+  .ins-hero-meta .icon{width:12px;height:12px; color:var(--ink-faint);}
+  .ins-hero-badges{display:flex; gap:6px; flex-wrap:wrap;}
+  .ins-hero-actions{display:flex; gap:8px;}
+  .ins-btn-mise{flex:1; display:flex; align-items:center; justify-content:center; gap:7px; background:var(--green-700); color:#fff; border:none; border-radius:11px; font-family:'Sora',sans-serif; font-weight:600; font-size:13px; padding:11px; cursor:pointer;}
+  .ins-btn-mise .icon{width:14px;height:14px;}
+  .ins-btn-phone{width:42px;height:42px; border-radius:11px; border:1px solid var(--line-strong); background:#fff; display:flex; align-items:center; justify-content:center; color:var(--ink-soft); flex-shrink:0;}
+  .ins-btn-phone .icon{width:16px;height:16px;}
+
+  .ins-notice{display:flex; gap:8px; align-items:flex-start; background:var(--card); border:1px solid var(--line); color:var(--ink-soft); border-radius:var(--radius-sm); padding:11px 12px; font-size:11px; line-height:1.5; margin-bottom:16px;}
+  .ins-notice .icon{width:14px;height:14px; color:var(--green-600); flex-shrink:0; margin-top:1px;}
+
+  .ins-tab-row{display:flex; gap:18px; border-bottom:1px solid var(--line); margin-bottom:16px; overflow-x:auto;}
+  .ins-tab{background:none; border:none; padding:0 0 10px; font-size:12.5px; font-weight:600; font-family:'Sora',sans-serif; color:var(--ink-faint); position:relative; white-space:nowrap; cursor:pointer;}
+  .ins-tab.active{color:var(--green-700);}
+  .ins-tab.active::after{content:''; position:absolute; left:0; right:0; bottom:-1px; height:2px; background:var(--green-700); border-radius:2px;}
+  .ins-panel{display:none;}
+  .ins-panel.active{display:block;}
+
+  .ins-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:16px; box-shadow:var(--shadow-card); margin-bottom:14px;}
+  .ins-card h4{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; margin:0 0 12px; font-family:'Sora',sans-serif;}
+  .ins-card h4 .icon-wrap{width:24px;height:24px; border-radius:7px; background:var(--green-100); color:var(--green-700); display:flex; align-items:center; justify-content:center;}
+  .ins-card h4 .icon-wrap .icon{width:13px;height:13px;}
+  .ins-kv{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:9px 0; border-bottom:1px dashed var(--line);}
+  .ins-kv:last-child{border-bottom:none; padding-bottom:0;}
+  .ins-kv .lbl{font-size:11.5px; color:var(--ink-faint); font-weight:600; flex-shrink:0;}
+  .ins-kv .val{font-size:12.5px; font-weight:600; color:var(--ink); text-align:right;}
+  .ins-kv .val.link{color:var(--green-700);}
+  .ins-presentation p{font-size:12.5px; line-height:1.65; color:var(--ink-soft); margin:0;}
+
+  .ins-activity{padding:14px 0; border-bottom:1px solid var(--line);}
+  .ins-activity:last-child{border-bottom:none; padding-bottom:0;}
+  .ins-activity h5{font-size:13px; font-weight:700; margin:0 0 5px; font-family:'Sora',sans-serif;}
+  .ins-activity .target{font-size:11px; font-weight:600; color:var(--green-700); margin:0 0 6px;}
+  .ins-activity p{font-size:12px; line-height:1.6; color:var(--ink-soft); margin:0;}
+  .ins-footnote{display:flex; gap:7px; align-items:flex-start; font-size:10.5px; color:var(--ink-faint); margin-top:14px; padding-top:12px; border-top:1px dashed var(--line); line-height:1.5;}
+  .ins-footnote .icon{width:12px;height:12px; flex-shrink:0; margin-top:1px;}
+
+  .ins-agency-search{background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:14px; box-shadow:var(--shadow-card); margin-bottom:14px;}
+  .ins-agency-search h4{display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700; margin:0 0 12px; font-family:'Sora',sans-serif;}
+  .ins-agency-search h4 .icon{width:14px;height:14px; color:var(--ink-soft);}
+  .ins-field-label{font-size:11px; font-weight:600; color:var(--ink-soft); margin-bottom:6px; display:block;}
+  .ins-search-field{display:flex; align-items:center; gap:9px; background:var(--paper); border:1px solid var(--line-strong); border-radius:var(--radius-sm); padding:11px 12px; margin-bottom:10px;}
+  .ins-search-field input{border:none; background:none; outline:none; font-size:12.5px; font-family:'Inter',sans-serif; width:100%; color:var(--ink);}
+  .ins-search-field .icon{color:var(--ink-faint); flex-shrink:0; width:16px;height:16px;}
+  .ins-btn-loc{width:100%; display:flex; align-items:center; justify-content:center; gap:7px; background:var(--card); border:1px solid var(--line-strong); border-radius:var(--radius-sm); padding:10px; font-family:'Sora',sans-serif; font-weight:600; font-size:11.5px; color:var(--ink); cursor:pointer;}
+  .ins-btn-loc .icon{width:13px;height:13px;}
+
+  .ins-agency-card{display:flex; align-items:center; gap:11px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:13px; box-shadow:var(--shadow-card); margin-bottom:10px;}
+  .ins-agency-icon{width:42px;height:42px; border-radius:12px; background:var(--green-100); color:var(--green-700); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .ins-agency-icon .icon{width:19px;height:19px;}
+  .ins-agency-info{flex:1; min-width:0;}
+  .ins-agency-info .name{font-size:13px; font-weight:700; margin:0 0 3px; font-family:'Inter',sans-serif;}
+  .ins-agency-info .loc{display:flex; align-items:center; gap:4px; font-size:11px; color:var(--ink-soft); margin:0;}
+  .ins-agency-info .loc .icon{width:11px;height:11px; color:var(--ink-faint);}
+  .ins-agency-call{width:36px;height:36px; border-radius:10px; border:1px solid var(--line-strong); background:var(--card); display:flex; align-items:center; justify-content:center; color:var(--green-700); flex-shrink:0;}
+  .ins-agency-call .icon{width:15px;height:15px;}
+
+  .ins-contact{background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:16px; box-shadow:var(--shadow-card); margin-top:6px;}
+  .ins-contact h4{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; margin:0 0 12px; font-family:'Sora',sans-serif;}
+  .ins-contact h4 .icon{width:14px;height:14px; color:var(--green-700);}
+  .ins-contact label{display:block; font-size:11.5px; font-weight:600; margin-bottom:7px;}
+  .ins-contact textarea{width:100%; min-height:80px; resize:vertical; border:1px solid var(--line-strong); border-radius:var(--radius-sm); padding:10px; font-family:'Inter',sans-serif; font-size:12.5px; color:var(--ink); outline:none; margin-bottom:12px;}
+  .ins-contact textarea:focus{border-color:var(--green-500);}
+  .ins-btn-send{width:100%; display:flex; align-items:center; justify-content:center; gap:7px; background:var(--green-700); color:#fff; border:none; border-radius:var(--radius-sm); font-family:'Sora',sans-serif; font-weight:600; font-size:13px; padding:12px; cursor:pointer;}
+  .ins-btn-send .icon{width:14px;height:14px;}
+  .ins-contact-foot{display:flex; gap:7px; align-items:flex-start; font-size:10.5px; color:var(--ink-faint); line-height:1.5; margin-top:11px;}
+  .ins-contact-foot .icon{width:12px;height:12px; flex-shrink:0; margin-top:1px;}
+</style>
+</head>
+<body>
+
+<!-- ============ INTRO ============ -->
+<div class="intro">
+  <span class="eyebrow">APS Santé · Écrans mobiles principaux</span>
+  <h1>Les 10 écrans clés du parcours patient — alignés en grille <span class="mono">row / col-md-4</span>, construits sur le système d'interface APS.</h1>
+  <p class="lede">Accueil · Médecins · Structures de santé · Pharmacies · Assurances · Urgence · Profil · Fiche médecin · Prise de rendez-vous · Fiche assurance. Chaque publicité reprend un visuel réel de la campagne web et se place toujours au-dessus des listes et des cartes, jamais glissée entre les éléments. Sur l'écran d'accueil, les publicités défilent dans un carrousel horizontal glissable.</p>
+
+  <div class="rule-grid">
+    <div class="rule-card">
+      <span class="rule-tag ok"><svg class="icon" viewBox="0 0 24 24"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>Autorisé</span>
+      <p>Assureurs, courtiers, ambulances, pompes funèbres et produits grand public validés (OTC) — publicité classique, toujours sous les résultats, badge « Publicité » non masquable.</p>
+    </div>
+    <div class="rule-card">
+      <span class="rule-tag warn"><svg class="icon" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Exclu du boost</span>
+      <p>Médecins, paramédicaux, cliniques, hôpitaux, pharmacies : jamais de mise en avant payante de leur propre fiche — seule une présence forfaitaire neutre (sans badge) est possible.</p>
+    </div>
+    <div class="rule-card">
+      <span class="rule-tag off"><svg class="icon" viewBox="0 0 24 24"><path d="M1 1l22 22M16.7 16.7A9.6 9.6 0 0 1 12 18c-3.9 0-7.3-2.2-9-5.5a10.1 10.1 0 0 1 2.6-3.4M8 3.3A10 10 0 0 1 21 12"/></svg>Zéro publicité</span>
+      <p>Écran Urgence et fiches de garde active : aucun contenu commercial, sous aucune forme — la santé publique prime toujours sur la logique commerciale (§12 du cahier des charges).</p>
+    </div>
+  </div>
+</div>
+
+<div class="container-grid">
+<div class="row">
+
+<!-- ============ 1. ACCUEIL ============ -->
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">1</span> Accueil<small>Carrousel de publicités — glissement horizontal</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+        <div class="home-hero">
+          <p class="hi">Bonjour, Fabrice 👋</p>
+          <p class="sub">Douala, Cameroun · que recherchez-vous aujourd'hui ?</p>
+        </div>
+
+        <div class="search-field" style="margin-bottom:6px;">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span class="txt">Médecin, pharmacie, structure…</span>
+        </div>
+
+        <div class="quick-grid">
+          <div class="quick-tile"><div class="ic"><svg class="icon" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div><span class="lbl">Médecins</span></div>
+          <div class="quick-tile"><div class="ic"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="7" rx="3"/><line x1="12" y1="10" x2="12" y2="17"/></svg></div><span class="lbl">Pharmacie</span></div>
+          <div class="quick-tile"><div class="ic"><svg class="icon" viewBox="0 0 24 24"><path d="M3 21v-4a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v4"/><path d="M8 13V7a4 4 0 0 1 8 0v6"/></svg></div><span class="lbl">Structures</span></div>
+          <div class="quick-tile coral"><div class="ic"><svg class="icon" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg></div><span class="lbl">Urgence</span></div>
+        </div>
+
+        <div class="carousel-head"><h3>Offres &amp; actualités partenaires</h3><span>5 · Publicité</span></div>
+        <div class="ad-carousel">
+          <div class="ad-slide">
+            <span class="ad-tag"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>Publicité</span>
+            <div class="ad-photo"><img src="assets/pub6.jpg" alt="Tourisme médical"></div>
+            <div class="ad-body"><h4>Tourisme médical</h4><p>Soins à l'étranger, voyage inclus.</p></div>
+          </div>
+          <div class="ad-slide">
+            <span class="ad-tag"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>Publicité</span>
+            <div class="ad-photo"><img src="assets/pub3.jpg" alt="AXA Assurances"></div>
+            <div class="ad-body"><h4>AXA Assurances</h4><p>Professionnalisme, proximité, expertise.</p></div>
+          </div>
+          <div class="ad-slide">
+            <span class="ad-tag"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>Publicité</span>
+            <div class="ad-photo"><img src="assets/pub4.jpg" alt="Journée internationale des infirmières"></div>
+            <div class="ad-body"><h4>Journée des infirmières</h4><p>12 mai — Croix-Rouge du Wouri.</p></div>
+          </div>
+          <div class="ad-slide">
+            <span class="ad-tag"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>Publicité</span>
+            <div class="ad-photo"><img src="assets/pub5.jpg" alt="Nourishka Greenlife"></div>
+            <div class="ad-body"><h4>Nourishka Greenlife</h4><p>Le collagène peau, cheveux, articulations.</p></div>
+          </div>
+          <div class="ad-slide">
+            <span class="ad-tag"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>Publicité</span>
+            <div class="ad-photo"><img src="assets/pub2.jpg" alt="MTN Unbeatable Bonuses"></div>
+            <div class="ad-body"><h4>MTN — Bonus imbattables</h4><p>Plus de data, plus d'appels dès 237 FCFA.</p></div>
+          </div>
+        </div>
+        <div class="carousel-dots"><span class="active"></span><span></span><span></span><span></span><span></span></div>
+        <p class="swipe-hint"><svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>Glissez vers la gauche pour voir plus d'offres</p>
+
+        <div class="section-title"><h3>Pharmacies de garde</h3><span class="see-all">Voir tout</span></div>
+        <div class="list-card">
+          <div class="struct-thumb" style="background:var(--amber-100); color:var(--amber-500);">
+            <svg class="icon" style="width:24px;height:24px;" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="7" rx="3"/><line x1="12" y1="10" x2="12" y2="17"/></svg>
+          </div>
+          <div class="info">
+            <p class="name">Pharmacie Soleil</p>
+            <p class="meta"><span class="guard-dot"></span>De garde — 1.2 km · Akwa Nord</p>
+            <div class="foot-actions" style="justify-content:flex-end;">
+              <button class="mini-btn coral"><svg class="icon" style="width:12px;height:12px;color:#fff;" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg>Appeler</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="bottomnav">
+        <div class="navitem active"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></div>Accueil</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Recherche</div>
+        <div class="navitem-fab"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 2.4"/></svg></div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>Messages</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
+      </div>
+    </div></div>
+  </div></div>
+
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">2</span> Rechercher un médecin<small>Filtre spécialité · ville · disponibilité</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+        <div class="page-title">
+          <span class="eyebrow-sm">Annuaire</span>
+          <h3>Médecins &amp; professionnels</h3>
+          <p>Douala, Yaoundé et au-delà — filtrez par spécialité et disponibilité.</p>
+        </div>
+        <div class="search-field" style="margin:14px 0;">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span class="txt filled">Cardiologue</span>
+        </div>
+        <div class="filter-chips">
+          <div class="chip active"><svg class="icon" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Douala</div>
+          <div class="chip"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>Disponible aujourd'hui</div>
+          <div class="chip"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M22 8l-6 4 6 4z"/></svg>Téléconsultation</div>
+        </div>
+        <!-- AD: placée au-dessus de la liste, jamais entre les fiches — visuel réel de la campagne Croix-Rouge -->
+        <div class="ad-mobile ad-top">
+          <span class="ad-tag"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>Publicité</span>
+          <div class="ad-photo h-tall"><img src="assets/pub4.jpg" alt="Journée internationale des infirmières — Croix-Rouge"></div>
+          <div class="ad-body">
+            <h4>Journée internationale des infirmières</h4>
+            <p>12 mai — Croix-Rouge, département du Wouri : merci aux infirmières, au cœur des soins.</p>
+            <span class="ad-link">En savoir plus<svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </div>
+          <p class="ad-disclosure">APS ne garantit pas les offres de ses annonceurs.</p>
+        </div>
+
+        <div class="row-between" style="margin-bottom:12px;">
+          <span class="result-count">9 professionnels trouvés</span>
+          <span style="font-size:12px; color:var(--green-700); font-weight:700; font-family:'Sora',sans-serif;">Trier ▾</span>
+        </div>
+
+        <div class="list-card">
+          <div class="avatar"><img src="data:image/jpeg;base64,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" alt="Dr. Landry Amari"></div>
+          <div class="info">
+            <p class="name">Dr. Landry Amari</p>
+            <p class="meta"><svg class="icon" style="width:11px;height:11px;color:var(--ink-faint);" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Cardiologie · Garoua</p>
+            <div class="badges">
+              <span class="badge green"><svg class="icon" viewBox="0 0 24 24"><path d="m9 12 2 2 4-4"/><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5Z"/></svg>Vérifié à l'Ordre</span>
+              <span class="badge amber"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M22 8l-6 4 6 4z"/></svg>Télé</span>
+            </div>
+            <div class="foot"><span class="price">12<span class="cur"> 000 FCFA</span></span>
+              <div class="foot-actions"><button class="mini-btn outline">Voir le profil</button><button class="mini-btn">Prendre RDV</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="list-card">
+          <div class="avatar"><img src="data:image/jpeg;base64,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" alt="Dr. Martin Ebodé"></div>
+          <div class="info">
+            <p class="name">Dr. Martin Ebodé</p>
+            <p class="meta"><svg class="icon" style="width:11px;height:11px;color:var(--ink-faint);" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Cardiologie · Douala</p>
+            <div class="badges"><span class="badge amber"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M22 8l-6 4 6 4z"/></svg>Télé dispo</span></div>
+            <div class="foot"><span class="price">10<span class="cur"> 000 FCFA</span></span>
+              <div class="foot-actions"><button class="mini-btn outline">Voir le profil</button><button class="mini-btn">Prendre RDV</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="bottomnav">
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></div>Accueil</div>
+        <div class="navitem active"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Recherche</div>
+        <div class="navitem-fab"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 2.4"/></svg></div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>Messages</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
+      </div>
+    </div></div>
+  </div></div>
+
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">3</span> Trouver une structure<small>Hôpitaux · cliniques · centres de santé</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+        <div class="page-title">
+          <span class="eyebrow-sm">Annuaire</span>
+          <h3>Trouver une structure de santé</h3>
+          <p>Hôpitaux, cliniques et centres de santé avec coordonnées, appel direct et itinéraire.</p>
+        </div>
+        <div class="filter-chips">
+          <div class="chip active"><svg class="icon" viewBox="0 0 24 24"><path d="M3 21v-4a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v4"/><path d="M8 13V7a4 4 0 0 1 8 0v6"/></svg>Tous les types</div>
+          <div class="chip">Cameroun</div>
+          <div class="chip">Toutes les villes</div>
+        </div>
+        <!-- AD: placée au-dessus de la liste, jamais entre les fiches — visuel réel "Tourisme médical" -->
+        <div class="ad-mobile ad-top">
+          <span class="ad-tag"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>Publicité</span>
+          <div class="ad-photo h-tall"><img src="assets/pub6.jpg" alt="Tourisme médical — soignez-vous, voyagez, revivez"></div>
+          <div class="ad-body">
+            <h4>Tourisme médical</h4>
+            <p>Soins de qualité à l'étranger, voyage et suivi post-soins inclus, jusqu'à -50% moins cher qu'en Europe.</p>
+            <span class="ad-link">En savoir plus<svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </div>
+          <p class="ad-disclosure">APS ne garantit pas les offres de ses annonceurs.</p>
+        </div>
+
+        <span class="result-count">4 structures trouvées</span>
+
+        <div class="list-card">
+          <div class="struct-thumb" style="background:var(--green-100); color:var(--green-700);">
+            <svg class="icon" style="width:24px;height:24px;" viewBox="0 0 24 24"><path d="M3 21v-4a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v4"/><path d="M8 13V7a4 4 0 0 1 8 0v6"/><path d="M3 21h18"/></svg>
+          </div>
+          <div class="info">
+            <p class="name">Centre de santé la Grâce</p>
+            <p class="meta"><svg class="icon" style="width:11px;height:11px;color:var(--ink-faint);" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Yaoundé · Cameroun</p>
+            <div class="badges">
+              <span class="badge outline">Hôpital</span>
+              <span class="badge green"><svg class="icon" viewBox="0 0 24 24"><path d="m9 12 2 2 4-4"/><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5Z"/></svg>Vérifiée</span>
+            </div>
+            <div class="foot-actions" style="justify-content:flex-end;">
+              <button class="mini-btn coral"><svg class="icon" style="width:12px;height:12px;color:#fff;" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg>Appeler</button>
+              <button class="mini-btn outline"><svg class="icon" style="width:12px;height:12px;" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Itinéraire</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="list-card">
+          <div class="struct-thumb" style="background:var(--coral-100); color:var(--coral-500);">
+            <svg class="icon" style="width:24px;height:24px;" viewBox="0 0 24 24"><path d="M3 21v-4a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v4"/><path d="M8 13V7a4 4 0 0 1 8 0v6"/><path d="M3 21h18"/></svg>
+          </div>
+          <div class="info">
+            <p class="name">Hôpital Bleu</p>
+            <p class="meta"><svg class="icon" style="width:11px;height:11px;color:var(--ink-faint);" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Douala · Cameroun</p>
+            <div class="badges">
+              <span class="badge outline">Hôpital</span>
+              <span class="badge green"><svg class="icon" viewBox="0 0 24 24"><path d="m9 12 2 2 4-4"/><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5Z"/></svg>Vérifiée</span>
+            </div>
+            <div class="foot-actions" style="justify-content:flex-end;">
+              <button class="mini-btn coral"><svg class="icon" style="width:12px;height:12px;color:#fff;" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg>Appeler</button>
+              <button class="mini-btn outline"><svg class="icon" style="width:12px;height:12px;" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Itinéraire</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="bottomnav">
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></div>Accueil</div>
+        <div class="navitem active"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Recherche</div>
+        <div class="navitem-fab"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 2.4"/></svg></div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>Messages</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
+      </div>
+    </div></div>
+  </div></div>
+
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">4</span> Trouver une pharmacie<small>Fiches vérifiées + garde en temps réel</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+        <div class="page-title">
+          <span class="eyebrow-sm">Annuaire</span>
+          <h3>Trouver une pharmacie</h3>
+          <p>Pharmacies vérifiées et pharmacies de garde près de chez vous, avec appel direct et itinéraire.</p>
+        </div>
+        <div class="filter-chips">
+          <div class="chip active"><span class="guard-dot"></span>De garde uniquement</div>
+          <div class="chip">Douala</div>
+          <div class="chip">Toutes les villes</div>
+        </div>
+        <!-- AD: placée au-dessus de la liste — produit OTC validé, ne masque jamais la pharmacie de garde active affichée juste en dessous -->
+        <div class="ad-mobile ad-top">
+          <span class="ad-tag"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>Publicité</span>
+          <div class="ad-photo h-tall"><img src="assets/pub5.jpg" alt="Nourishka Greenlife — Collagène"></div>
+          <div class="ad-body">
+            <h4>Nourishka Greenlife</h4>
+            <p>Le collagène de chez Nourishka Greenlife : peau, cheveux, os, articulations.</p>
+            <span class="ad-link">Contacter<svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </div>
+          <p class="ad-disclosure">APS ne garantit pas les offres de ses annonceurs.</p>
+        </div>
+
+        <span class="result-count">1 pharmacie trouvée</span>
+
+        <div class="list-card">
+          <div class="struct-thumb" style="background:var(--amber-100); color:var(--amber-500);">
+            <svg class="icon" style="width:24px;height:24px;" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="7" rx="3"/><line x1="12" y1="10" x2="12" y2="17"/></svg>
+          </div>
+          <div class="info">
+            <p class="name">Pharmacie Soleil</p>
+            <p class="meta"><span class="guard-dot"></span>Ouverte — Douala, Akwa Nord</p>
+            <div class="badges">
+              <span class="badge green"><svg class="icon" viewBox="0 0 24 24"><path d="m9 12 2 2 4-4"/><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5Z"/></svg>Fiche vérifiée</span>
+              <span class="badge outline">N° ordre RCM-002E</span>
+            </div>
+            <div class="foot"><span style="font-size:11px;color:var(--ink-faint);">1.2 km</span>
+              <div class="foot-actions">
+                <button class="mini-btn coral"><svg class="icon" style="width:12px;height:12px;color:#fff;" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg>Appeler</button>
+                <button class="mini-btn outline"><svg class="icon" style="width:12px;height:12px;" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Itinéraire</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="bottomnav">
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></div>Accueil</div>
+        <div class="navitem active"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Recherche</div>
+        <div class="navitem-fab"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 2.4"/></svg></div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>Messages</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
+      </div>
+    </div></div>
+  </div></div>
+
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">5</span> Annuaire assurances<small>Consultable sans compte</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+        <div class="page-title">
+          <span class="eyebrow-sm">Annuaire public</span>
+          <h3>Assurances</h3>
+          <p>Toutes les compagnies et courtiers santé référencés sur APS.</p>
+        </div>
+        <div class="notice-chip">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span>Présentation seulement : aucune souscription en ligne, aucune gestion de sinistre sur APS.</span>
+        </div>
+        <!-- AD: placée au-dessus de la liste — visuel réel de la campagne AXA -->
+        <div class="ad-mobile ad-top">
+          <span class="ad-tag"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>Publicité</span>
+          <div class="ad-photo h-wide"><img src="assets/pub3.jpg" alt="AXA — Choisissez le professionnalisme"></div>
+          <div class="ad-body">
+            <h4>AXA Assurances</h4>
+            <p>Professionnalisme, proximité et expertise — découvrez les offres santé AXA.</p>
+            <span class="ad-link">En savoir plus<svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </div>
+          <p class="ad-disclosure">APS ne garantit pas les offres de ses annonceurs.</p>
+        </div>
+
+        <div class="section-title"><h3>2 compagnies référencées</h3><span class="see-all">Filtrer</span></div>
+
+        <div class="insurer-card">
+          <div class="insurer-top">
+            <div class="insurer-logo" style="background:#EDF1FB; color:#0B2C9E;">AXA</div>
+            <div class="insurer-info"><p class="name">AXA</p><p class="meta">Compagnie d'assurance · Douala</p></div>
+          </div>
+          <div class="insurer-badges">
+            <span class="badge outline">RCM-07MEICOM</span>
+          </div>
+          <p class="insurer-desc">Leader mondial de l'assurance et de la gestion d'actifs, solutions santé pour particuliers et entreprises.</p>
+          <div class="insurer-foot"><button class="mini-btn">Voir la fiche</button></div>
+        </div>
+
+        <div class="insurer-card">
+          <div class="insurer-top">
+            <div class="insurer-logo" style="background:#F1E9F7; color:#6B2E8F;">BE</div>
+            <div class="insurer-info"><p class="name">BEDI</p><p class="meta">Compagnie d'assurance · Douala</p></div>
+          </div>
+          <div class="insurer-badges">
+            <span class="badge green"><svg class="icon" viewBox="0 0 24 24"><path d="m9 12 2 2 4-4"/><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5Z"/></svg>Vérifiée APS</span>
+            <span class="badge outline">REN-09032</span>
+          </div>
+          <p class="insurer-desc">Courtier régional dédié aux couvertures santé, adapté aux besoins locaux et régimes de prévoyance.</p>
+          <div class="insurer-foot"><button class="mini-btn">Voir la fiche</button></div>
+        </div>
+      </div>
+      <div class="bottomnav">
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></div>Accueil</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Recherche</div>
+        <div class="navitem-fab"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 2.4"/></svg></div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>Messages</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
+      </div>
+    </div></div>
+  </div></div>
+
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot" style="background:var(--coral-500);"></span><span class="idx">6</span> Bouton d'urgence<small>Géolocalisation + numéros officiels</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+        <div class="page-title">
+          <span class="eyebrow-sm" style="color:var(--coral-500);">Urgence</span>
+          <h3>Besoin d'aide maintenant ?</h3>
+          <p>Douala, Cameroun · localisation détectée automatiquement.</p>
+        </div>
+
+        <div class="sos-wrap">
+          <div class="sos-btn"><svg class="icon" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg><b>SOS</b><span>APPEL IMMÉDIAT</span></div>
+          <p class="sos-caption">Un geste suffit : <b>APS compose directement</b> le service le plus proche et envoie votre position par SMS à votre contact d'urgence.</p>
+        </div>
+
+        <div class="section-title"><h3>Type d'urgence</h3></div>
+        <div class="type-grid">
+          <div class="type-tile"><div class="ic"><svg class="icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div><span class="lbl">Médicale</span></div>
+          <div class="type-tile"><div class="ic"><svg class="icon" viewBox="0 0 24 24"><path d="M3 12h4l2-4 4 8 2-4h6"/><rect x="1" y="12" width="22" height="6" rx="2"/></svg></div><span class="lbl">Ambulance</span></div>
+          <div class="type-tile"><div class="ic"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="7" rx="3"/><line x1="12" y1="10" x2="12" y2="17"/></svg></div><span class="lbl">Garde nocturne</span></div>
+          <div class="type-tile"><div class="ic"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div><span class="lbl">Accouchement</span></div>
+          <div class="type-tile"><div class="ic"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5Z"/></svg></div><span class="lbl">Intoxication</span></div>
+          <div class="type-tile"><div class="ic"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><span class="lbl">Accident</span></div>
+        </div>
+
+        <div class="section-title"><h3>Services officiels — Cameroun</h3></div>
+        <div class="emergency-row">
+          <div class="ic official"><svg class="icon" viewBox="0 0 24 24"><path d="M3 12h4l2-4 4 8 2-4h6"/><rect x="1" y="12" width="22" height="6" rx="2"/></svg></div>
+          <div class="txt"><b>SAMU</b><span>Urgences médicales nationales</span></div>
+          <span class="num">1515</span>
+          <button class="mini-btn coral"><svg class="icon" style="width:12px;height:12px;color:#fff;" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg></button>
+        </div>
+        <div class="emergency-row">
+          <div class="ic official"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2 3 6v6c0 5.5 3.8 9.7 9 11 5.2-1.3 9-5.5 9-11V6z"/></svg></div>
+          <div class="txt"><b>Police secours</b><span>Intervention rapide</span></div>
+          <span class="num">117</span>
+          <button class="mini-btn coral"><svg class="icon" style="width:12px;height:12px;color:#fff;" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg></button>
+        </div>
+        <div class="emergency-row">
+          <div class="ic"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="7" rx="3"/><line x1="12" y1="10" x2="12" y2="17"/></svg></div>
+          <div class="txt"><b>Pharmacie Soleil</b><span>De garde — 1.2 km · Akwa Nord</span></div>
+          <button class="mini-btn coral"><svg class="icon" style="width:12px;height:12px;color:#fff;" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg></button>
+        </div>
+
+        <button class="btn-secondary" style="margin-top:6px;"><svg class="icon" style="width:16px;height:16px;" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Envoyer ma position à un contact d'urgence</button>
+
+        <div class="offline-note">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M1 1l22 22M16.7 16.7A9.6 9.6 0 0 1 12 18c-3.9 0-7.3-2.2-9-5.5a10.1 10.1 0 0 1 2.6-3.4M8 3.3A10 10 0 0 1 21 12"/></svg>
+          <span>Mode dégradé hors connexion : les numéros d'urgence restent accessibles même sans réseau. Bascule automatique sur les numéros du pays où vous vous trouvez.</span>
+        </div>
+      </div>
+      <div class="bottomnav">
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></div>Accueil</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Recherche</div>
+        <div class="navitem-fab" style="background:var(--coral-500);"><svg class="icon" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg></div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>Messages</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
+      </div>
+    </div></div>
+  </div></div>
+
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">7</span> Mon compte<small>Rendez-vous · paiements · sécurité</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+        <div class="page-title"><h3 style="margin-top:16px;">Mon compte</h3></div>
+
+        <div class="profile-card">
+          <div class="row-between">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div class="avatar">FN</div>
+              <div><p class="name">Fabrice Njoya</p><p class="mail">fabrice.n@exemple.com</p></div>
+            </div>
+            <button class="edit">Modifier</button>
+          </div>
+        </div>
+
+        <!-- AD: placée au-dessus des menus, jamais glissée entre deux options — visuel réel de la campagne MTN -->
+        <div class="ad-mobile ad-top">
+          <span class="ad-tag"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>Publicité</span>
+          <div class="ad-photo h-tall"><img src="assets/pub2.jpg" alt="MTN — More Data More Calls More Good Vibes"></div>
+          <div class="ad-body">
+            <h4>MTN — Unbeatable Bonuses</h4>
+            <p>Plus de data, plus d'appels, plus de bons plans à partir de 237 FCFA.</p>
+            <span class="ad-link">En savoir plus<svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </div>
+          <p class="ad-disclosure">APS ne garantit pas les offres de ses annonceurs.</p>
+        </div>
+
+        <div class="section-title"><h3>Santé</h3></div>
+        <div class="menu-card">
+          <div class="menu-item"><div class="ic"><svg class="icon" style="width:16px;height:16px;" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/></svg></div><span class="lbl">Mes rendez-vous</span><span class="sub">3 à venir</span><svg class="icon chev" style="width:15px;height:15px;" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg></div>
+          <div class="menu-item"><div class="ic"><svg class="icon" style="width:16px;height:16px;" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div><span class="lbl">Professionnels favoris</span><svg class="icon chev" style="width:15px;height:15px;" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg></div>
+        </div>
+
+        <div class="section-title"><h3>Compte</h3></div>
+        <div class="menu-card">
+          <div class="menu-item"><div class="ic"><svg class="icon" style="width:16px;height:16px;" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div><span class="lbl">Moyens de paiement</span><svg class="icon chev" style="width:15px;height:15px;" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg></div>
+          <div class="menu-item"><div class="ic"><svg class="icon" style="width:16px;height:16px;" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg></div><span class="lbl">Notifications</span><svg class="icon chev" style="width:15px;height:15px;" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg></div>
+          <div class="menu-item"><div class="ic"><svg class="icon" style="width:16px;height:16px;" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><span class="lbl">Sécurité &amp; données</span><svg class="icon chev" style="width:15px;height:15px;" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg></div>
+          <div class="menu-item"><div class="ic"><svg class="icon" style="width:16px;height:16px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2-3 4"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><span class="lbl">Aide / FAQ</span><svg class="icon chev" style="width:15px;height:15px;" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg></div>
+        </div>
+
+        <div class="menu-card">
+          <div class="menu-item" style="border:none;"><div class="ic" style="background:var(--coral-100); color:var(--coral-500);"><svg class="icon" style="width:16px;height:16px;" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></div><span class="lbl" style="color:var(--coral-500);">Se déconnecter</span></div>
+        </div>
+      </div>
+      <div class="bottomnav">
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></div>Accueil</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Recherche</div>
+        <div class="navitem-fab"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 2.4"/></svg></div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>Messages</div>
+        <div class="navitem active"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
+      </div>
+    </div></div>
+  </div></div>
+
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">8</span> Fiche du praticien<small>Onglet « Profil » — bio, Ordre, langues</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+        <div class="profile-hero">
+          <div class="avatar"><img src="data:image/jpeg;base64,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" alt="Dr. Landry Amari"></div>
+          <p class="name">Dr. Landry Amari</p>
+          <p class="spec">Cardiologie · Garoua, Cameroun</p>
+          <div class="badges">
+            <span class="badge green"><svg class="icon" viewBox="0 0 24 24"><path d="m9 12 2 2 4-4"/><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5Z"/></svg>Vérifié à l'Ordre</span>
+            <span class="badge amber"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M22 8l-6 4 6 4z"/></svg>Téléconsultation</span>
+          </div>
+          <div class="stat-row">
+            <div class="stat"><b>4.8</b><span>NOTE</span></div>
+            <div class="stat"><b>238</b><span>AVIS</span></div>
+            <div class="stat"><b>6 ans</b><span>ORDRE</span></div>
+          </div>
+        </div>
+
+        <div class="tab-row">
+          <div class="tab active">Profil</div>
+          <div class="tab">Disponibilités</div>
+          <div class="tab">Avis</div>
+        </div>
+
+        <div class="info-block">
+          <h4><svg class="icon" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>À propos</h4>
+          <p>Cardiologue diplômé, inscrit à l'Ordre des médecins du Cameroun depuis 6 ans. Prise en charge de l'hypertension, des troubles du rythme et suivi post-opératoire. Consultation au cabinet ou en téléconsultation.</p>
+        </div>
+
+        <div class="info-block">
+          <h4><svg class="icon" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Spécialités</h4>
+          <div class="pill-row">
+            <span class="pill">Hypertension</span><span class="pill">Troubles du rythme</span><span class="pill">Échographie cardiaque</span><span class="pill">Suivi post-opératoire</span>
+          </div>
+        </div>
+
+        <div class="info-block">
+          <h4><svg class="icon" viewBox="0 0 24 24"><path d="M5 8l6 6 6-6"/></svg>Langues parlées</h4>
+          <div class="pill-row"><span class="pill">Français</span><span class="pill">Anglais</span><span class="pill">Fulfulde</span></div>
+        </div>
+
+        <div class="info-block">
+          <h4><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>Horaires du cabinet</h4>
+          <div class="hours-row"><span>Lundi – Vendredi</span><span>08:00 – 17:00</span></div>
+          <div class="hours-row"><span>Samedi</span><span>09:00 – 13:00</span></div>
+          <div class="hours-row off"><span>Dimanche</span><span>Fermé</span></div>
+        </div>
+
+        <div class="info-block">
+          <h4><svg class="icon" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Adresse du cabinet</h4>
+          <p>Avenue de l'Indépendance, Garoua Centre, Cameroun</p>
+        </div>
+
+        <div class="sticky-cta">
+          <div class="amount"><b class="mono">12 000 FCFA</b><span>à partir de</span></div>
+          <button class="btn-primary">Prendre rendez-vous</button>
+        </div>
+      </div>
+      <div class="bottomnav">
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></div>Accueil</div>
+        <div class="navitem active"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Recherche</div>
+        <div class="navitem-fab"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 2.4"/></svg></div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>Messages</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
+      </div>
+    </div></div>
+  </div></div>
+
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">9</span> Réserver un créneau<small>Escrow — fonds bloqués jusqu'à la consultation</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+        <div class="page-title" style="padding-top:16px;">
+          <span class="eyebrow-sm">Dr. Landry Amari · Cardiologie</span>
+          <h3>Choisir un créneau</h3>
+          <p>Sélectionnez une date puis un horaire libre au cabinet de Garoua.</p>
+        </div>
+
+        <div class="tab-row" style="margin-top:14px;">
+          <div class="tab">Profil</div>
+          <div class="tab active">Disponibilités</div>
+          <div class="tab">Avis</div>
+        </div>
+
+        <div class="date-strip">
+          <div class="date-pill"><span class="d">MER</span><span class="n">27</span></div>
+          <div class="date-pill active"><span class="d">JEU</span><span class="n">28</span></div>
+          <div class="date-pill"><span class="d">VEN</span><span class="n">29</span></div>
+          <div class="date-pill"><span class="d">SAM</span><span class="n">30</span></div>
+          <div class="date-pill"><span class="d">DIM</span><span class="n">31</span></div>
+        </div>
+
+        <div class="slot-grid">
+          <div class="slot">09:00</div><div class="slot taken">10:00</div><div class="slot">11:30</div>
+          <div class="slot active">14:30</div><div class="slot">15:00</div><div class="slot">16:30</div>
+        </div>
+
+        <div class="info-note">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5Z"/><path d="m9 12 2 2 4-4"/></svg>
+          Paiement sous séquestre : les fonds restent bloqués jusqu'à la réalisation de la consultation. Vous recevrez un code unique et un QR code à présenter au cabinet.
+        </div>
+
+        <div class="sticky-cta">
+          <div class="amount"><b class="mono">12 000 FCFA</b><span>Créneau du 28 août</span></div>
+          <button class="btn-primary">Réserver ce créneau</button>
+        </div>
+      </div>
+      <div class="bottomnav">
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></div>Accueil</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Recherche</div>
+        <div class="navitem-fab"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 2.4"/></svg></div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>Messages</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
+      </div>
+    </div></div>
+  </div></div>
+
+<!-- ============ 10. FICHE ASSURANCE (détail) ============ -->
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">10</span> Fiche assurance<small>Onglets Siège / Activités / Agences</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+
+      <div class="content">
+
+        <!-- ---- HERO ---- -->
+        <div class="ins-hero">
+          <div class="ins-hero-top">
+            <div class="ins-hero-logo">
+              <svg viewBox="0 0 100 100"><rect width="100" height="100" fill="#0B1E63"/><path d="M0 100 L45 100 L100 0 L55 0 Z" fill="#E1604A"/><text x="50" y="60" font-family="Sora,sans-serif" font-weight="800" font-size="26" fill="#fff" text-anchor="middle">AXA</text></svg>
+            </div>
+            <div>
+              <p class="ins-hero-name">AXA</p>
+              <p class="ins-hero-meta">Compagnie d'assurance ·
+                <svg class="icon" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                Douala, Cameroun
+              </p>
+              <div class="ins-hero-badges">
+                <span class="badge green"><svg class="icon" viewBox="0 0 24 24"><path d="m9 12 2 2 4-4"/><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5Z"/></svg>Vérifiée APS</span>
+                <span class="badge outline">RCM-07MEICOM</span>
+              </div>
+            </div>
+          </div>
+          <div class="ins-hero-actions">
+            <button class="ins-btn-mise"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Mise en relation</button>
+            <button class="ins-btn-phone"><svg class="icon" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg></button>
+          </div>
+        </div>
+
+      
+
+        <!-- ---- TABS ---- -->
+        <div class="ins-tab-row">
+          <button class="ins-tab active" data-tab="ins-siege">Siège</button>
+          <button class="ins-tab" data-tab="ins-activites">Activités (2)</button>
+          <button class="ins-tab" data-tab="ins-agences">Agences (2)</button>
+        </div>
+
+        <!-- ---- TAB: SIÈGE ---- -->
+        <div class="ins-panel active" id="ins-siege">
+          <div class="ins-card">
+            <h4><span class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 21v-4a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v4"/><path d="M8 13V7a4 4 0 0 1 8 0v6"/></svg></span>Informations générales</h4>
+            <div class="ins-kv"><span class="lbl">Dénomination</span><span class="val">AXA</span></div>
+            <div class="ins-kv"><span class="lbl">Type d'acteur</span><span class="val">Compagnie d'assurance</span></div>
+            <div class="ins-kv"><span class="lbl">Agrément</span><span class="val mono">RCM-07MEICOM</span></div>
+            <div class="ins-kv"><span class="lbl">Localisation</span><span class="val">Douala, Cameroun</span></div>
+            <div class="ins-kv"><span class="lbl">Téléphone</span><span class="val mono">678453245</span></div>
+            <div class="ins-kv"><span class="lbl">Courriel</span><span class="val link">axamsg@gmail.com</span></div>
+          </div>
+
+          <div class="ins-card ins-presentation">
+            <h4><span class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>Présentation institutionnelle</h4>
+            <p>AXA Assurance est l'un des leaders mondiaux de l'assurance et de la gestion d'actifs, offrant des solutions de protection pour les particuliers et les entreprises. Le groupe propose une large gamme de produits en assurance auto, habitation, santé, prévoyance et épargne.</p>
+          </div>
+        </div>
+
+        <!-- ---- TAB: ACTIVITÉS ---- -->
+        <div class="ins-panel" id="ins-activites">
+          <div class="ins-card">
+            <h4><span class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>Activités &amp; produits</h4>
+
+            <div class="ins-activity">
+              <h5>Assurances Santé</h5>
+              <p class="target">Public cible : Malades chroniques</p>
+              <p>Assurance pour les maladies chroniques jusqu'à 25 ans.</p>
+            </div>
+
+            <div class="ins-activity">
+              <h5>Assurances Scolaire</h5>
+              <p class="target">Public cible : Parents</p>
+              <p>Assurance pour les études des enfants de la maternelle à l'enseignement supérieur.</p>
+            </div>
+
+            <div class="ins-footnote">
+              <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span>Informations présentées à titre informatif uniquement. Aucune comparaison, aucune souscription en ligne sur APS.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---- TAB: AGENCES ---- -->
+        <div class="ins-panel" id="ins-agences">
+          <div class="ins-agency-search">
+            <h4><svg class="icon" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/></svg>Rechercher une agence</h4>
+            <span class="ins-field-label">Localisation</span>
+            <div class="ins-search-field">
+              <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" placeholder="Ville, quartier…">
+            </div>
+            <button class="ins-btn-loc"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Agences les plus proches de moi</button>
+          </div>
+
+          <div class="ins-agency-card">
+            <div class="ins-agency-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M3 21v-4a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v4"/><path d="M8 13V7a4 4 0 0 1 8 0v6"/><path d="M3 21h18"/></svg></div>
+            <div class="ins-agency-info">
+              <p class="name">AXA BONABERI</p>
+              <p class="loc"><svg class="icon" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Bonaberi, Douala</p>
+            </div>
+            <button class="ins-agency-call"><svg class="icon" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg></button>
+          </div>
+
+          <div class="ins-agency-card">
+            <div class="ins-agency-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M3 21v-4a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v4"/><path d="M8 13V7a4 4 0 0 1 8 0v6"/><path d="M3 21h18"/></svg></div>
+            <div class="ins-agency-info">
+              <p class="name">AXA DAMAS</p>
+              <p class="loc"><svg class="icon" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Damas, Douala</p>
+            </div>
+            <button class="ins-agency-call"><svg class="icon" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg></button>
+          </div>
+        </div>
+
+        <!-- ---- MISE EN RELATION (toujours visible sous les onglets) ---- -->
+        <div class="ins-contact">
+          <h4><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Mise en relation</h4>
+          <label>Votre message</label>
+          <textarea placeholder="Décrivez votre besoin…"></textarea>
+          <button class="ins-btn-send"><svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Envoyer la demande</button>
+          <div class="ins-contact-foot">
+            <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>La demande est adressée directement au siège de AXA. Aucune souscription n'est effectuée sur APS.</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="bottomnav">
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></div>Accueil</div>
+        <div class="navitem active"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Recherche</div>
+        <div class="navitem-fab"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 2.4"/></svg></div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>Messages</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
+      </div>
+    </div></div>
+  </div></div>
+
+</div>
+</div>
+
+<p class="footer-credit">APS Santé — 10 écrans mobiles principaux, alignés en grille <span class="mono">row / col-md-4</span> (3 par ligne) · fond clair, un seul accent vert, hiérarchie par la typographie · publicité toujours placée au-dessus des listes et des cartes (jamais insérée entre les éléments), et totalement absente de l'écran Urgence (§ 12 — primauté de la santé publique).</p>
+
+<script>
+  document.querySelectorAll('.ins-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = btn.closest('.content');
+      row.querySelectorAll('.ins-tab').forEach(b => b.classList.remove('active'));
+      row.querySelectorAll('.ins-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      row.querySelector('#' + btn.dataset.tab).classList.add('active');
+    });
+  });
+</script>
+
+</body>
+</html>

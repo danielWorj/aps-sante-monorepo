@@ -30,6 +30,7 @@ import Teleconsultation from './pages/Teleconsultation';
 
 //PORTAIL PATIENT
 import PatientRdv from './components/portails/components/patient-rdv';
+import PatientProfil from './components/portails/components/patient-profil';
 
 export const router = createBrowserRouter([
   {
@@ -82,6 +83,7 @@ export const router = createBrowserRouter([
         element:<PortailParentLayout />,
         children:[
           { path: '/portail/patient-rdv', element: <PatientRdv /> },
+          { path: '/portail/patient-profil', element: <PatientProfil /> },
           //{ path: '/portail/patient-profil', element: <PatientProfil /> },
         ]
       },

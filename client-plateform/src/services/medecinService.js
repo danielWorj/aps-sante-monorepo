@@ -201,6 +201,250 @@ export async function verifierAppartenanceOrdre(numeroOrdre) {
 }
 
 /* ===================================================================
+ * Agenda du médecin (module transverse — voir agenda.routes /
+ * agenda.controller.js côté backend)
+ *
+ * Trois niveaux :
+ *   - Horaire              : référentiel PARTAGÉ des tranches de 30
+ *     minutes (07h00-07h30, ...), réutilisé par tous les médecins.
+ *     Lecture publique, écriture réservée à admin/superadmin (même
+ *     patron que Specialite).
+ *   - DisponibiliteMedecin : le GABARIT récurrent déclaré par le
+ *     médecin lui-même ("je reçois tous les lundis sur ce créneau").
+ *     Consultation publique, gestion réservée au médecin propriétaire
+ *     (utilisateur_id déduit du token) ou à admin/superadmin.
+ *   - CreneauAgenda         : les instances CONCRÈTES par date réelle,
+ *     générées à partir du gabarit (genererCreneauxAgenda) ou ajoutées
+ *     manuellement hors gabarit. Consultation publique (c'est cette
+ *     liste qu'un patient regarde avant de prendre rendez-vous),
+ *     gestion réservée au médecin propriétaire ou à admin/superadmin.
+ *
+ * ⚠️ statut "reserve" : jamais positionné à la main depuis ce module —
+ * c'est le module Rendez-vous (PATCH /rendez-vous/:id/statut) qui
+ * rattache/détache un créneau à un rendez-vous. modifierCreneauAgenda
+ * ci-dessous n'accepte donc que "disponible" ou "bloque", et le
+ * serveur renvoie 409 si le créneau visé est déjà occupé (rdv_id
+ * renseigné) — voir STATUTS_CRENEAU_AGENDA_MODIFIABLES.
+ * =================================================================== */
+
+// Jours de la semaine acceptés par jour_semaine (DisponibiliteMedecin).
+export const JOURS_SEMAINE_AGENDA = [
+  { valeur: 'lundi', libelle: 'Lundi' },
+  { valeur: 'mardi', libelle: 'Mardi' },
+  { valeur: 'mercredi', libelle: 'Mercredi' },
+  { valeur: 'jeudi', libelle: 'Jeudi' },
+  { valeur: 'vendredi', libelle: 'Vendredi' },
+  { valeur: 'samedi', libelle: 'Samedi' },
+  { valeur: 'dimanche', libelle: 'Dimanche' },
+];
+
+// Statuts possibles d'un CreneauAgenda en LECTURE. "reserve" n'est
+// jamais envoyable en écriture depuis ce module (voir plus haut).
+export const STATUTS_CRENEAU_AGENDA = [
+  { valeur: 'disponible', libelle: 'Disponible' },
+  { valeur: 'reserve', libelle: 'Réservé' },
+  { valeur: 'bloque', libelle: 'Bloqué' },
+];
+
+// Sous-ensemble de STATUTS_CRENEAU_AGENDA réellement acceptés par
+// creerCreneauAgenda / modifierCreneauAgenda côté serveur.
+export const STATUTS_CRENEAU_AGENDA_MODIFIABLES = ['disponible', 'bloque'];
+
+// Nombre de jours maximum accepté par genererCreneauxAgenda en un seul
+// appel (borne serveur — voir PLAGE_GENERATION_MAX_JOURS côté
+// agenda.controller.js).
+export const PLAGE_GENERATION_AGENDA_MAX_JOURS = 90;
+
+/* --- Horaire (référentiel partagé) -------------------------------- */
+
+/**
+ * GET /horaires
+ * Publique. Liste triée par heure de début côté serveur.
+ */
+export async function listerHoraires() {
+  const data = await apiFetch('/horaires');
+  return data.horaires;
+}
+
+/**
+ * GET /horaires/:id
+ * Publique.
+ */
+export async function obtenirHoraire(id) {
+  const data = await apiFetch(`/horaires/${id}`);
+  return data.horaire;
+}
+
+/**
+ * POST /horaires
+ * Réservé à admin/superadmin.
+ * @param {Object} donnees - { heure_debut, heure_fin } au format
+ *   "HH:mm".
+ */
+export async function creerHoraire(donnees) {
+  const data = await apiFetch('/horaires', {
+    method: 'POST',
+    body: donnees,
+  });
+  return data.horaire;
+}
+
+/**
+ * DELETE /horaires/:id
+ * Réservé à superadmin. Le serveur renvoie 409 si des disponibilités
+ * ou créneaux d'agenda référencent encore cet horaire.
+ */
+export async function supprimerHoraire(id) {
+  return apiFetch(`/horaires/${id}`, { method: 'DELETE' });
+}
+
+/* --- DisponibiliteMedecin (gabarit récurrent) ---------------------- */
+
+/**
+ * GET /medecins/:medecinId/disponibilites
+ * Publique — sert notamment à afficher "reçoit le lundi/mercredi de
+ * 9h à 12h" sur la fiche annuaire d'un médecin.
+ * @param {string} medecinId
+ * @param {Object} [filtres] - { jour_semaine? } - une valeur de
+ *   JOURS_SEMAINE_AGENDA.
+ * @returns {Promise<Array>} liste des disponibilités du gabarit
+ */
+export async function listerDisponibilitesMedecin(medecinId, filtres = {}) {
+  const data = await apiFetch(
+    `/medecins/${medecinId}/disponibilites${construireQueryString(filtres)}`
+  );
+  return data.disponibilites;
+}
+
+/**
+ * POST /medecins/:medecinId/disponibilites
+ * Médecin propriétaire (utilisateur_id déduit du token) ou
+ * admin/superadmin. Déclare une tranche récurrente. Ne crée AUCUN
+ * créneau concret : voir genererCreneauxAgenda pour matérialiser ce
+ * gabarit sur une période de dates réelles.
+ * @param {string} medecinId
+ * @param {Object} donnees - { horaire_id, jour_semaine } — requis,
+ *   jour_semaine doit être une valeur de JOURS_SEMAINE_AGENDA.
+ * @returns {Promise<Object>} la disponibilité créée
+ */
+export async function creerDisponibiliteMedecin(medecinId, donnees) {
+  const data = await apiFetch(`/medecins/${medecinId}/disponibilites`, {
+    method: 'POST',
+    body: donnees,
+  });
+  return data.disponibilite;
+}
+
+/**
+ * DELETE /disponibilites/:disponibiliteId
+ * Médecin propriétaire ou admin/superadmin. ⚠️ N'a aucun effet
+ * rétroactif sur les créneaux déjà générés (CreneauAgenda) : ils
+ * restent en base tels quels.
+ */
+export async function supprimerDisponibiliteMedecin(disponibiliteId) {
+  return apiFetch(`/disponibilites/${disponibiliteId}`, { method: 'DELETE' });
+}
+
+/* --- CreneauAgenda (instances concrètes) ---------------------------- */
+
+/**
+ * GET /medecins/:medecinId/agenda
+ * Publique — c'est cette route qu'un patient (connecté ou non)
+ * consulte pour voir les créneaux réellement libres avant de prendre
+ * rendez-vous. rdv_id n'est jamais exposé ici.
+ * @param {string} medecinId
+ * @param {Object} [filtres] - { date_debut?, date_fin?, statut? } -
+ *   bornes de date incluses (AAAA-MM-JJ), statut une valeur de
+ *   STATUTS_CRENEAU_AGENDA.
+ * @returns {Promise<Array>} liste des créneaux
+ */
+export async function listerCreneauxAgenda(medecinId, filtres = {}) {
+  const data = await apiFetch(
+    `/medecins/${medecinId}/agenda${construireQueryString(filtres)}`
+  );
+  return data.creneaux;
+}
+
+/**
+ * GET /creneaux-agenda/:id
+ * Publique.
+ */
+export async function obtenirCreneauAgenda(id) {
+  const data = await apiFetch(`/creneaux-agenda/${id}`);
+  return data.creneau;
+}
+
+/**
+ * POST /medecins/:medecinId/agenda/generer
+ * Médecin propriétaire ou admin/superadmin. Matérialise le gabarit
+ * (DisponibiliteMedecin) en créneaux concrets (origine="genere") sur
+ * une période [date_debut, date_fin] (bornes incluses,
+ * PLAGE_GENERATION_AGENDA_MAX_JOURS jours maximum). Idempotent :
+ * les créneaux déjà existants sont silencieusement ignorés côté
+ * serveur, donc rappelable sans risque pour étendre l'agenda semaine
+ * après semaine.
+ * @param {string} medecinId
+ * @param {Object} donnees - { date_debut, date_fin } au format
+ *   AAAA-MM-JJ.
+ * @returns {Promise<{message, nombre_crees}>}
+ */
+export async function genererCreneauxAgenda(medecinId, donnees) {
+  return apiFetch(`/medecins/${medecinId}/agenda/generer`, {
+    method: 'POST',
+    body: donnees,
+  });
+}
+
+/**
+ * POST /medecins/:medecinId/agenda
+ * Médecin propriétaire ou admin/superadmin. Ajoute un créneau ponctuel
+ * HORS gabarit (origine="manuel" — ex. ouverture exceptionnelle un
+ * jour normalement non couvert).
+ * @param {string} medecinId
+ * @param {Object} donnees - { horaire_id, date, statut? } — date au
+ *   format AAAA-MM-JJ, statut optionnel restreint à
+ *   STATUTS_CRENEAU_AGENDA_MODIFIABLES (par défaut "disponible").
+ * @returns {Promise<Object>} le créneau créé
+ */
+export async function creerCreneauAgenda(medecinId, donnees) {
+  const data = await apiFetch(`/medecins/${medecinId}/agenda`, {
+    method: 'POST',
+    body: donnees,
+  });
+  return data.creneau;
+}
+
+/**
+ * PUT /creneaux-agenda/:id
+ * Médecin propriétaire ou admin/superadmin. Ne permet de changer que
+ * le statut, entre "disponible" et "bloque" (voir
+ * STATUTS_CRENEAU_AGENDA_MODIFIABLES). Un créneau déjà occupé par un
+ * rendez-vous (statut "reserve") ne peut pas être modifié ici — le
+ * serveur renvoie 409 et il faut passer par PATCH
+ * /rendez-vous/:id/statut côté module Rendez-vous.
+ * @param {string} id
+ * @param {Object} donnees - { statut }
+ * @returns {Promise<Object>} le créneau mis à jour
+ */
+export async function modifierCreneauAgenda(id, donnees) {
+  const data = await apiFetch(`/creneaux-agenda/${id}`, {
+    method: 'PUT',
+    body: donnees,
+  });
+  return data.creneau;
+}
+
+/**
+ * DELETE /creneaux-agenda/:id
+ * Médecin propriétaire ou admin/superadmin. Refusé (409) si un
+ * rendez-vous est rattaché au créneau : il faut d'abord annuler le
+ * rendez-vous via le module Rendez-vous.
+ */
+export async function supprimerCreneauAgenda(id) {
+  return apiFetch(`/creneaux-agenda/${id}`, { method: 'DELETE' });
+}
+
+/* ===================================================================
  * Spécialités médicales (référentiel — /specialites, confirmé dans
  * medecin.routes.js)
  * =================================================================== */
@@ -684,6 +928,26 @@ export default {
   suspendreMedecin,
   reactiverMedecin,
   verifierAppartenanceOrdre,
+  // Agenda — Horaire (référentiel partagé)
+  JOURS_SEMAINE_AGENDA,
+  STATUTS_CRENEAU_AGENDA,
+  STATUTS_CRENEAU_AGENDA_MODIFIABLES,
+  PLAGE_GENERATION_AGENDA_MAX_JOURS,
+  listerHoraires,
+  obtenirHoraire,
+  creerHoraire,
+  supprimerHoraire,
+  // Agenda — DisponibiliteMedecin (gabarit récurrent)
+  listerDisponibilitesMedecin,
+  creerDisponibiliteMedecin,
+  supprimerDisponibiliteMedecin,
+  // Agenda — CreneauAgenda (instances concrètes)
+  listerCreneauxAgenda,
+  obtenirCreneauAgenda,
+  genererCreneauxAgenda,
+  creerCreneauAgenda,
+  modifierCreneauAgenda,
+  supprimerCreneauAgenda,
   // Spécialités
   listerSpecialites,
   obtenirSpecialite,
