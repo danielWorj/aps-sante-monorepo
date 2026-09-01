@@ -400,6 +400,104 @@
   .ins-btn-send .icon{width:14px;height:14px;}
   .ins-contact-foot{display:flex; gap:7px; align-items:flex-start; font-size:10.5px; color:var(--ink-faint); line-height:1.5; margin-top:11px;}
   .ins-contact-foot .icon{width:12px;height:12px; flex-shrink:0; margin-top:1px;}
+
+  /* ============ 11. INSCRIPTION MÉDECIN — PARCOURS EN 6 ÉTAPES ============ */
+  .step-topline{display:flex; align-items:center; gap:8px; margin:10px 0 14px;}
+  .step-topline .back-circle{width:28px;height:28px; border-radius:9px; border:1px solid var(--line-strong); background:var(--card); display:flex; align-items:center; justify-content:center; color:var(--ink-soft); flex-shrink:0;}
+  .step-topline .back-circle .icon{width:14px;height:14px;}
+  .step-topline .count{font-size:11px; font-weight:700; color:var(--ink-faint); font-family:'IBM Plex Mono',monospace;}
+
+  .stepper-mobile{display:flex; align-items:center; margin-bottom:16px;}
+  .stepper-mobile .step-circle{width:23px;height:23px; border-radius:50%; background:var(--card); border:1.5px solid var(--line-strong); color:var(--ink-faint); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; font-family:'Sora',sans-serif; flex-shrink:0;}
+  .stepper-mobile .step-circle.done{background:var(--green-600); border-color:var(--green-600); color:#fff;}
+  .stepper-mobile .step-circle.current{border-color:var(--green-600); color:var(--green-700); background:var(--green-50); box-shadow:0 0 0 3px var(--green-100);}
+  .stepper-mobile .step-line{flex:1; height:1.5px; background:var(--line-strong); margin:0 1px;}
+  .stepper-mobile .step-line.done{background:var(--green-600);}
+
+  .step-title-block{margin-bottom:18px;}
+  .step-title-block .eyebrow-sm{font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--green-700); font-weight:700; font-family:'Sora',sans-serif;}
+  .step-title-block h3{font-size:17px; margin:6px 0 5px; font-weight:800; font-family:'Sora',sans-serif; letter-spacing:-0.01em;}
+  .step-title-block p{font-size:12px; color:var(--ink-soft); margin:0; line-height:1.55;}
+
+  .form-group{margin-bottom:15px;}
+  .form-row-2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .form-label{display:flex; align-items:center; gap:4px; font-size:11.5px; font-weight:700; color:var(--ink); margin-bottom:7px; font-family:'Sora',sans-serif;}
+  .form-label .req{color:var(--coral-500); font-weight:700;}
+  .form-input, .form-select, .form-textarea{width:100%; border:1px solid var(--line-strong); border-radius:var(--radius-sm); padding:12px 13px; font-size:12.5px; font-family:'Inter',sans-serif; color:var(--ink); outline:none; background:var(--card); appearance:none;}
+  .form-input::placeholder, .form-textarea::placeholder{color:var(--ink-faint);}
+  .form-input:focus, .form-select:focus, .form-textarea:focus{border-color:var(--green-500);}
+  .form-select{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235B6B64' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>"); background-repeat:no-repeat; background-position:right 12px center; background-size:15px; padding-right:34px;}
+  .form-select.placeholder{color:var(--ink-faint);}
+  .form-select:disabled{background-color:var(--paper); color:var(--ink-faint);}
+  .form-textarea{min-height:118px; resize:vertical; line-height:1.55; font-family:'Inter',sans-serif;}
+  .form-hint{font-size:10.5px; color:var(--ink-faint); margin-top:6px; line-height:1.5;}
+  .form-hint.link-hint{color:var(--green-700); font-weight:600;}
+  .char-counter{display:flex; justify-content:flex-end; font-size:10px; color:var(--ink-faint); margin-top:5px; font-family:'IBM Plex Mono',monospace;}
+
+  .photo-upload{display:flex; align-items:center; gap:13px; margin-bottom:18px;}
+  .photo-circle{width:60px;height:60px; border-radius:50%; background:var(--green-100); display:flex; align-items:center; justify-content:center; position:relative; flex-shrink:0; border:1.5px dashed var(--green-500);}
+  .photo-circle .icon{color:var(--green-600); width:22px;height:22px;}
+  .photo-circle .add-badge{position:absolute; bottom:-2px; right:-2px; width:19px;height:19px; border-radius:50%; background:var(--green-700); display:flex; align-items:center; justify-content:center; border:2px solid var(--card);}
+  .photo-circle .add-badge .icon{width:9px;height:9px; color:#fff; stroke-width:3;}
+  .photo-upload .txt strong{display:block; font-size:12.5px; font-weight:700; font-family:'Sora',sans-serif; margin-bottom:2px;}
+  .photo-upload .txt span{font-size:10.5px; color:var(--ink-faint); line-height:1.4;}
+
+  .check-row{display:flex; align-items:center; gap:10px; padding:12px 13px; background:var(--paper); border:1px solid var(--line); border-radius:var(--radius-sm); margin-bottom:6px;}
+  .check-row .box{width:19px;height:19px; border-radius:6px; border:1.5px solid var(--line-strong); background:var(--card); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .check-row.checked .box{background:var(--green-600); border-color:var(--green-600);}
+  .check-row.checked .box .icon{width:12px;height:12px; color:#fff; stroke-width:3;}
+  .check-row span.lbl{font-size:12px; font-weight:600; color:var(--ink); font-family:'Sora',sans-serif;}
+
+  .upload-zone{border:1.5px dashed var(--line-strong); border-radius:var(--radius-md); padding:20px 14px; text-align:center; background:var(--paper); margin-bottom:14px;}
+  .upload-zone .up-ic{width:38px;height:38px; border-radius:11px; background:var(--card); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; margin:0 auto 10px; color:var(--ink-soft);}
+  .upload-zone .up-ic .icon{width:17px;height:17px;}
+  .upload-zone strong{display:block; font-size:12px; font-weight:700; color:var(--ink); margin-bottom:3px; font-family:'Sora',sans-serif;}
+  .upload-zone span{font-size:10.5px; color:var(--ink-faint);}
+  .upload-zone.done{border-style:solid; border-color:var(--green-500); background:var(--green-50); display:flex; align-items:center; gap:11px; text-align:left; padding:13px 14px;}
+  .upload-zone.done .up-ic{margin:0; background:var(--green-100); border:none; color:var(--green-700); flex-shrink:0;}
+  .upload-zone.done .file-info{flex:1; min-width:0;}
+  .upload-zone.done .file-info strong{color:var(--ink);}
+  .upload-zone.done .file-info span{color:var(--green-700); font-weight:600;}
+  .upload-zone.done .rm{color:var(--ink-faint); flex-shrink:0;}
+  .upload-zone.done .rm .icon{width:15px;height:15px;}
+
+  .pay-options{display:flex; flex-direction:column; gap:9px; margin-bottom:16px;}
+  .pay-opt{display:flex; align-items:center; gap:11px; border:1.5px solid var(--line-strong); border-radius:var(--radius-sm); padding:12px 13px; background:var(--card);}
+  .pay-opt.selected{border-color:var(--green-500); background:var(--green-50);}
+  .pay-opt .ic{width:34px;height:34px; border-radius:10px; background:var(--paper); color:var(--ink-soft); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .pay-opt.selected .ic{background:var(--green-100); color:var(--green-700);}
+  .pay-opt .ic .icon{width:16px;height:16px;}
+  .pay-opt .lbl{font-size:12.5px; font-weight:700; font-family:'Sora',sans-serif; flex:1; color:var(--ink);}
+  .pay-opt .radio{width:18px;height:18px; border-radius:50%; border:1.8px solid var(--line-strong); flex-shrink:0; position:relative;}
+  .pay-opt.selected .radio{border-color:var(--green-600);}
+  .pay-opt.selected .radio::after{content:''; position:absolute; inset:3px; border-radius:50%; background:var(--green-600);}
+
+  .treasury-fields{background:var(--paper); border:1px solid var(--line); border-radius:var(--radius-md); padding:14px; margin-bottom:14px;}
+
+  .step-actions{display:flex; gap:9px; margin-top:6px;}
+  .step-actions .btn-secondary{flex:0 0 auto; padding:13px 18px;}
+  .step-actions .btn-primary{flex:1;}
+  .btn-primary .icon{width:15px;height:15px;}
+
+  /* ---- Confirmation / success screen ---- */
+  .success-wrap{display:flex; flex-direction:column; align-items:center; text-align:center; padding-top:28px;}
+  .success-badge{width:82px;height:82px; border-radius:50%; background:var(--green-100); display:flex; align-items:center; justify-content:center; margin-bottom:20px; position:relative;}
+  .success-badge::before{content:''; position:absolute; inset:-9px; border-radius:50%; border:2px dashed var(--green-500); opacity:0.35;}
+  .success-badge .icon{width:36px;height:36px; color:var(--green-700); stroke-width:2.3;}
+  .success-title{font-size:19px; font-weight:800; font-family:'Sora',sans-serif; margin:0 0 8px; letter-spacing:-0.01em;}
+  .success-text{font-size:12.5px; color:var(--ink-soft); line-height:1.65; max-width:250px; margin:0 0 22px;}
+  .success-card{width:100%; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:15px; text-align:left; box-shadow:var(--shadow-card); margin-bottom:14px;}
+  .success-card .sc-top{display:flex; align-items:center; gap:11px; padding-bottom:12px; border-bottom:1px dashed var(--line); margin-bottom:10px;}
+  .success-card .sc-top .avatar{width:44px;height:44px; border-radius:12px;}
+  .success-card .sc-top .name{font-size:13.5px; font-weight:700; font-family:'Sora',sans-serif; margin:0 0 2px;}
+  .success-card .sc-top .spec{font-size:11px; color:var(--ink-soft); margin:0;}
+  .success-next{width:100%; text-align:left; margin-bottom:20px;}
+  .success-next .sn-item{display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px dashed var(--line);}
+  .success-next .sn-item:last-child{border-bottom:none;}
+  .success-next .sn-ic{width:26px;height:26px; border-radius:8px; background:var(--green-100); color:var(--green-700); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .success-next .sn-ic .icon{width:13px;height:13px;}
+  .success-next .sn-txt strong{display:block; font-size:11.5px; font-weight:700; font-family:'Sora',sans-serif; margin-bottom:2px;}
+  .success-next .sn-txt span{font-size:11px; color:var(--ink-soft); line-height:1.5;}
 </style>
 </head>
 <body>
@@ -1197,7 +1295,535 @@
 </div>
 </div>
 
-<p class="footer-credit">APS Santé — 10 écrans mobiles principaux, alignés en grille <span class="mono">row / col-md-4</span> (3 par ligne) · fond clair, un seul accent vert, hiérarchie par la typographie · publicité toujours placée au-dessus des listes et des cartes (jamais insérée entre les éléments), et totalement absente de l'écran Urgence (§ 12 — primauté de la santé publique).</p>
+<!-- ============ SECTION : INSCRIPTION MÉDECIN (ESPACE PROFESSIONNEL) ============ -->
+<div class="section-head">
+  <h2>Créer mon compte médecin — parcours en 6 étapes</h2>
+  <span>Même logique que la version web : Informations → Spécialité &amp; Ordre → Biographie → Justificatifs → Trésorerie → Confirmation</span>
+</div>
+
+<div class="container-grid">
+<div class="row">
+
+<!-- ============ P1. INFORMATIONS ============ -->
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">P1</span> Créer un compte médecin<small>Étape 1/6 — Informations</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+
+        <div class="step-topline">
+          <div class="back-circle"><svg class="icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></div>
+          <span class="count">ÉTAPE 1 / 6</span>
+        </div>
+
+        <div class="stepper-mobile">
+          <div class="step-circle current">1</div><div class="step-line"></div>
+          <div class="step-circle">2</div><div class="step-line"></div>
+          <div class="step-circle">3</div><div class="step-line"></div>
+          <div class="step-circle">4</div><div class="step-line"></div>
+          <div class="step-circle">5</div><div class="step-line"></div>
+          <div class="step-circle">6</div>
+        </div>
+
+        <div class="step-title-block">
+          <span class="eyebrow-sm">Espace professionnel</span>
+          <h3>Vos informations</h3>
+          <p>Vos coordonnées et votre pays/ville d'exercice. Quelques minutes suffisent.</p>
+        </div>
+
+        <div class="photo-upload">
+          <div class="photo-circle">
+            <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+            <div class="add-badge"><svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+          </div>
+          <div class="txt"><strong>Photo de profil</strong><span>JPG, PNG — visage bien visible, fond neutre (facultatif)</span></div>
+        </div>
+
+        <div class="form-group">
+          <span class="form-label">Nom <span class="req">*</span></span>
+          <input class="form-input" type="text" placeholder="Ex. Mbarga">
+        </div>
+        <div class="form-group">
+          <span class="form-label">Prénom <span class="req">*</span></span>
+          <input class="form-input" type="text" placeholder="Ex. Sandrine">
+        </div>
+        <div class="form-group">
+          <span class="form-label">Adresse e-mail professionnelle <span class="req">*</span></span>
+          <input class="form-input" type="email" placeholder="vous@cabinet.cm">
+        </div>
+        <div class="form-group">
+          <span class="form-label">Téléphone</span>
+          <input class="form-input" type="tel" placeholder="+237 6 XX XX XX XX">
+        </div>
+        <div class="form-group">
+          <span class="form-label">Pays <span class="req">*</span></span>
+          <select class="form-select placeholder"><option>Sélectionner…</option></select>
+        </div>
+        <div class="form-group">
+          <span class="form-label">Ville d'exercice <span class="req">*</span></span>
+          <select class="form-select" disabled><option>Choisissez d'abord un pays</option></select>
+          <p class="form-hint">Votre pays de résidence et d'exercice.</p>
+        </div>
+
+        <div class="step-actions">
+          <button class="btn-primary">Continuer<svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+        </div>
+
+      </div>
+    </div></div>
+  </div></div>
+
+<!-- ============ P2. SPÉCIALITÉ & ORDRE ============ -->
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">P2</span> Créer un compte médecin<small>Étape 2/6 — Spécialité &amp; Ordre</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+
+        <div class="step-topline">
+          <div class="back-circle"><svg class="icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></div>
+          <span class="count">ÉTAPE 2 / 6</span>
+        </div>
+
+        <div class="stepper-mobile">
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle current">2</div><div class="step-line"></div>
+          <div class="step-circle">3</div><div class="step-line"></div>
+          <div class="step-circle">4</div><div class="step-line"></div>
+          <div class="step-circle">5</div><div class="step-line"></div>
+          <div class="step-circle">6</div>
+        </div>
+
+        <div class="step-title-block">
+          <span class="eyebrow-sm">Espace professionnel</span>
+          <h3>Spécialité &amp; Ordre</h3>
+          <p>Votre domaine d'exercice et votre numéro d'inscription à l'Ordre.</p>
+        </div>
+
+        <div class="form-group">
+          <span class="form-label">Spécialité <span class="req">*</span></span>
+          <select class="form-select placeholder"><option>Sélectionner…</option></select>
+        </div>
+        <div class="form-group">
+          <span class="form-label">Numéro d'inscription à l'Ordre <span class="req">*</span></span>
+          <input class="form-input" type="text" placeholder="Ex. ONMC-2024-0451">
+          <p class="form-hint link-hint">Vérifié automatiquement auprès de la source officielle de votre pays.</p>
+        </div>
+        <div class="form-group">
+          <span class="form-label">Tarif de consultation indicatif (FCFA) <span class="req">*</span></span>
+          <input class="form-input" type="text" placeholder="Ex. 15 000">
+        </div>
+
+        <div class="check-row checked">
+          <div class="box"><svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <span class="lbl">J'active la téléconsultation</span>
+        </div>
+
+        <div class="step-actions" style="margin-top:16px;">
+          <button class="btn-secondary">Retour</button>
+          <button class="btn-primary">Continuer<svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+        </div>
+
+      </div>
+    </div></div>
+  </div></div>
+
+<!-- ============ P3. BIOGRAPHIE ============ -->
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">P3</span> Créer un compte médecin<small>Étape 3/6 — Biographie</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+
+        <div class="step-topline">
+          <div class="back-circle"><svg class="icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></div>
+          <span class="count">ÉTAPE 3 / 6</span>
+        </div>
+
+        <div class="stepper-mobile">
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle current">3</div><div class="step-line"></div>
+          <div class="step-circle">4</div><div class="step-line"></div>
+          <div class="step-circle">5</div><div class="step-line"></div>
+          <div class="step-circle">6</div>
+        </div>
+
+        <div class="step-title-block">
+          <span class="eyebrow-sm">Espace professionnel</span>
+          <h3>Biographie</h3>
+          <p>Une présentation courte, visible sur votre fiche publique.</p>
+        </div>
+
+        <div class="form-group">
+          <span class="form-label">Présentation <span class="req">*</span></span>
+          <textarea class="form-textarea" placeholder="Décrivez votre parcours, vos domaines d'expertise, votre approche des patients…">Médecin généraliste diplômé de la Faculté de Médecine de Yaoundé, j'exerce depuis 8 ans avec une attention particulière portée aux maladies chroniques et au suivi familial.</textarea>
+          <div class="char-counter">214 / 600</div>
+          <p class="form-hint">Visible sur votre fiche publique — 600 caractères maximum recommandés.</p>
+        </div>
+
+        <div class="step-actions" style="margin-top:26px;">
+          <button class="btn-secondary">Retour</button>
+          <button class="btn-primary">Continuer<svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+        </div>
+
+      </div>
+    </div></div>
+  </div></div>
+
+<!-- ============ P4. JUSTIFICATIFS ============ -->
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">P4</span> Créer un compte médecin<small>Étape 4/6 — Justificatifs</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+
+        <div class="step-topline">
+          <div class="back-circle"><svg class="icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></div>
+          <span class="count">ÉTAPE 4 / 6</span>
+        </div>
+
+        <div class="stepper-mobile">
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle current">4</div><div class="step-line"></div>
+          <div class="step-circle">5</div><div class="step-line"></div>
+          <div class="step-circle">6</div>
+        </div>
+
+        <div class="step-title-block">
+          <span class="eyebrow-sm">Espace professionnel</span>
+          <h3>Justificatifs</h3>
+          <p>Pièces à télécharger pour vérification par notre équipe.</p>
+        </div>
+
+        <div class="form-group">
+          <span class="form-label">Pièce d'identité (CNI) <span class="req">*</span></span>
+          <div class="upload-zone done">
+            <div class="up-ic"><svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <div class="file-info"><strong>CNI_recto_verso.pdf</strong><span>✓ Téléversé — 1.4 Mo</span></div>
+            <div class="rm"><svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <span class="form-label">Attestation d'inscription à l'Ordre <span class="req">*</span></span>
+          <div class="upload-zone">
+            <div class="up-ic"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+            <strong>Glissez le fichier ici</strong>
+            <span>PDF, JPG — 5 Mo max</span>
+          </div>
+        </div>
+
+        <div class="step-actions" style="margin-top:10px;">
+          <button class="btn-secondary">Retour</button>
+          <button class="btn-primary">Continuer<svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+        </div>
+
+      </div>
+    </div></div>
+  </div></div>
+
+<!-- ============ P5. TRÉSORERIE ============ -->
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">P5</span> Créer un compte médecin<small>Étape 5/6 — Trésorerie</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+
+        <div class="step-topline">
+          <div class="back-circle"><svg class="icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></div>
+          <span class="count">ÉTAPE 5 / 6</span>
+        </div>
+
+        <div class="stepper-mobile">
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle current">5</div><div class="step-line"></div>
+          <div class="step-circle">6</div>
+        </div>
+
+        <div class="step-title-block">
+          <span class="eyebrow-sm">Espace professionnel</span>
+          <h3>Trésorerie</h3>
+          <p>Comment souhaitez-vous recevoir vos paiements ? (facultatif — configurable plus tard)</p>
+        </div>
+
+        <div class="pay-options">
+          <div class="pay-opt">
+            <div class="ic"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <span class="lbl">Plus tard</span>
+            <div class="radio"></div>
+          </div>
+          <div class="pay-opt">
+            <div class="ic"><svg class="icon" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="10" y1="18" x2="14" y2="18"/></svg></div>
+            <span class="lbl">Mobile Money</span>
+            <div class="radio"></div>
+          </div>
+          <div class="pay-opt selected">
+            <div class="ic"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
+            <span class="lbl">Compte bancaire</span>
+            <div class="radio"></div>
+          </div>
+        </div>
+
+        <div class="treasury-fields">
+          <div class="form-group" style="margin-bottom:12px;">
+            <span class="form-label">Nom de la banque <span class="req">*</span></span>
+            <input class="form-input" type="text" placeholder="Ex. Afriland First Bank">
+          </div>
+          <div class="form-group" style="margin-bottom:12px;">
+            <span class="form-label">Titulaire du compte <span class="req">*</span></span>
+            <input class="form-input" type="text" placeholder="Nom complet">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <span class="form-label">Numéro de compte / IBAN <span class="req">*</span></span>
+            <input class="form-input" type="text" placeholder="CM21 XXXX XXXX XXXX XXXX">
+          </div>
+        </div>
+
+        <p class="form-hint">Vos informations de trésorerie sont chiffrées et servent uniquement au versement de vos revenus après chaque consultation. Vous pouvez aussi les renseigner plus tard depuis votre espace médecin.</p>
+
+        <div class="step-actions" style="margin-top:14px;">
+          <button class="btn-secondary">Retour</button>
+          <button class="btn-primary">Continuer<svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+        </div>
+
+      </div>
+    </div></div>
+  </div></div>
+
+<!-- ============ P6. CONFIRMATION ============ -->
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">P6</span> Créer un compte médecin<small>Étape 6/6 — Confirmation</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+
+        <div class="stepper-mobile" style="margin-top:10px;">
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-line done"></div>
+          <div class="step-circle done"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3;color:#fff;"><polyline points="20 6 9 17 4 12"/></svg></div>
+        </div>
+
+        <div class="success-wrap">
+          <div class="success-badge">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <h3 class="success-title">Compte créé avec succès 🎉</h3>
+          <p class="success-text">Merci Dr Mbarga ! Votre demande a bien été envoyée. Votre fiche sera mise en ligne dès validation de votre inscription à l'Ordre et de vos justificatifs.</p>
+
+          <div class="success-card">
+            <div class="sc-top">
+              <div class="avatar"><svg class="icon" viewBox="0 0 24 24" style="width:20px;height:20px;"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>
+              <div><p class="name">Dr Sandrine Mbarga</p><p class="spec">Médecine générale · Douala, Cameroun</p></div>
+            </div>
+            <div class="ins-kv"><span class="lbl">Numéro d'Ordre</span><span class="val mono">ONMC-2024-0451</span></div>
+            <div class="ins-kv"><span class="lbl">Statut du compte</span><span class="badge amber">En attente de validation</span></div>
+          </div>
+
+          <div class="success-next">
+            <div class="sn-item">
+              <div class="sn-ic"><svg class="icon" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><polyline points="4 6 12 13 20 6"/></svg></div>
+              <div class="sn-txt"><strong>E-mail de confirmation envoyé</strong><span>Un récapitulatif vous a été envoyé à votre adresse professionnelle.</span></div>
+            </div>
+            <div class="sn-item">
+              <div class="sn-ic"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+              <div class="sn-txt"><strong>Vérification sous 48h</strong><span>Notre équipe contrôle votre inscription à l'Ordre et vos justificatifs.</span></div>
+            </div>
+            <div class="sn-item">
+              <div class="sn-ic"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+              <div class="sn-txt"><strong>Notification à la mise en ligne</strong><span>Vous serez averti dès que votre fiche sera visible publiquement.</span></div>
+            </div>
+          </div>
+
+          <div class="step-actions" style="width:100%;">
+            <button class="btn-primary">Aller à mon espace médecin<svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+          </div>
+          <button class="btn-secondary" style="width:100%; margin-top:9px;">Retour à l'accueil</button>
+        </div>
+
+      </div>
+      <div class="bottomnav">
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></div>Accueil</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Recherche</div>
+        <div class="navitem-fab"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 2.4"/></svg></div>
+        <div class="navitem active"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
+      </div>
+    </div></div>
+  </div></div>
+
+</div>
+</div>
+
+<!-- ============ SECTION : INSCRIPTION PATIENT ============ -->
+<div class="section-head">
+  <h2>Créer mon compte patient — parcours en 1 étape</h2>
+  <span>Formulaire léger : inscrirePatient() n'attend que nom, prénom, e-mail, téléphone (facultatif), mot de passe, pays, date de naissance — pas de ville, pas de justificatifs</span>
+</div>
+
+<div class="container-grid">
+<div class="row">
+
+<!-- ============ Q1. INFORMATIONS ============ -->
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">Q1</span> Créer un compte patient<small>Étape unique — Vos informations</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+
+        <div class="step-topline">
+          <div class="back-circle"><svg class="icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></div>
+          <span class="count">COMPTE PATIENT</span>
+        </div>
+
+        <div class="step-title-block">
+          <span class="eyebrow-sm">Espace patient</span>
+          <h3>Créez votre compte</h3>
+          <p>Ces informations servent à vous identifier et à instruire vos demandes de rendez-vous. Ça prend moins d'une minute.</p>
+        </div>
+
+        <div class="form-group">
+          <span class="form-label">Prénom <span class="req">*</span></span>
+          <input class="form-input" type="text" placeholder="Ex. Aïcha">
+        </div>
+        <div class="form-group">
+          <span class="form-label">Nom <span class="req">*</span></span>
+          <input class="form-input" type="text" placeholder="Ex. Talla">
+        </div>
+        <div class="form-group">
+          <span class="form-label">E-mail <span class="req">*</span></span>
+          <input class="form-input" type="email" placeholder="vous@exemple.cm">
+        </div>
+        <div class="form-group">
+          <span class="form-label">Téléphone <span style="color:var(--ink-faint); font-weight:500;">(facultatif)</span></span>
+          <input class="form-input" type="tel" placeholder="+237 6 XX XX XX XX">
+        </div>
+        <div class="form-group">
+          <span class="form-label">Mot de passe <span class="req">*</span></span>
+          <input class="form-input" type="password" placeholder="8 caractères minimum">
+          <p class="form-hint">Au moins 8 caractères. Vous vous en servirez pour vous reconnecter.</p>
+        </div>
+        <div class="form-group">
+          <span class="form-label">Date de naissance <span class="req">*</span></span>
+          <input class="form-input" type="date">
+        </div>
+        <div class="form-group">
+          <span class="form-label">Pays <span class="req">*</span></span>
+          <select class="form-select placeholder"><option>Sélectionner…</option></select>
+        </div>
+
+        <div class="check-row checked" style="margin-top:2px;">
+          <div class="box"><svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <span class="lbl">J'accepte les conditions d'utilisation et la politique de confidentialité</span>
+        </div>
+
+        <div class="step-actions" style="margin-top:16px;">
+          <button class="btn-primary">Créer mon compte<svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+        </div>
+
+        <p class="form-hint" style="text-align:center; margin-top:12px; font-size:11.5px;">Déjà un compte ? <span style="color:var(--green-700); font-weight:700;">Connectez-vous</span></p>
+
+      </div>
+    </div></div>
+  </div></div>
+
+<!-- ============ Q2. CONFIRMATION ============ -->
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">Q2</span> Créer un compte patient<small>Confirmation</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+
+        <div class="success-wrap" style="margin-top:36px;">
+          <div class="success-badge">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <h3 class="success-title">Bienvenue sur APS 🎉</h3>
+          <p class="success-text">Merci Aïcha ! Votre compte patient est prêt. Vous pouvez dès maintenant chercher un médecin, réserver un créneau et suivre vos rendez-vous.</p>
+
+          <div class="success-card">
+            <div class="sc-top">
+              <div class="avatar"><svg class="icon" viewBox="0 0 24 24" style="width:20px;height:20px;"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>
+              <div><p class="name">Aïcha Talla</p><p class="spec">Compte patient · Yaoundé, Cameroun</p></div>
+            </div>
+            <div class="ins-kv"><span class="lbl">E-mail</span><span class="val mono">aicha.talla@exemple.cm</span></div>
+            <div class="ins-kv"><span class="lbl">Statut du compte</span><span class="badge" style="background:var(--green-100); color:var(--green-700);">Actif</span></div>
+          </div>
+
+          <div class="success-next">
+            <div class="sn-item">
+              <div class="sn-ic"><svg class="icon" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><polyline points="4 6 12 13 20 6"/></svg></div>
+              <div class="sn-txt"><strong>E-mail de bienvenue envoyé</strong><span>Un récapitulatif vous a été envoyé à votre adresse.</span></div>
+            </div>
+            <div class="sn-item">
+              <div class="sn-ic"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+              <div class="sn-txt"><strong>Cherchez un médecin</strong><span>Filtrez par spécialité, ville ou disponibilité.</span></div>
+            </div>
+            <div class="sn-item">
+              <div class="sn-ic"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/></svg></div>
+              <div class="sn-txt"><strong>Réservez un créneau</strong><span>Vos futurs rendez-vous utiliseront directement ce profil.</span></div>
+            </div>
+          </div>
+
+          <div class="step-actions" style="width:100%;">
+            <button class="btn-primary">Aller à mon espace patient<svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+          </div>
+          <button class="btn-secondary" style="width:100%; margin-top:9px;">Retour à l'accueil</button>
+        </div>
+
+      </div>
+      <div class="bottomnav">
+        <div class="navitem active"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></div>Accueil</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Recherche</div>
+        <div class="navitem-fab"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 2.4"/></svg></div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
+      </div>
+    </div></div>
+  </div></div>
+
+</div>
+</div>
+
+<p class="footer-credit">APS Santé — 10 écrans du parcours patient + 6 écrans du parcours d'inscription médecin + 2 écrans d'inscription patient, alignés en grille <span class="mono">row / col-md-4</span> (3 par ligne) · fond clair, un seul accent vert, hiérarchie par la typographie · publicité toujours placée au-dessus des listes et des cartes (jamais insérée entre les éléments), et totalement absente de l'écran Urgence (§ 12 — primauté de la santé publique).</p>
 
 <script>
   document.querySelectorAll('.ins-tab').forEach(btn => {

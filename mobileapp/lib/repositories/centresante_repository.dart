@@ -1,0 +1,281 @@
+// lib/repositories/centresante_repository.dart
+//
+// Repository du composant "annuaire — centre de santé".
+//
+// Responsabilités (et seulement celles-ci — la logique métier serveur
+// reste côté API) :
+//   - construire les requêtes HTTP vers /centres-sante (chemins,
+//     query params, corps multipart) via ApiClient ;
+//   - mapper les réponses JSON vers les modèles de
+//     centresante_models.dart ;
+//   - traduire toute ApiException en exception métier typée, pour que
+//     la couche UI n'ait jamais à connaître un code HTTP.
+//
+// Alignement avec centreSante.routes.js :
+//   - lister / obtenir  -> GET, PUBLIC (token optionnel, pas requis).
+//   - creer             -> POST, authentifié (tout rôle), multipart,
+//                          3 fichiers requis.
+//   - modifier          -> PUT, authentifié (tout rôle), multipart,
+//                          fichiers optionnels.
+//   - supprimer         -> DELETE, authentifié + superadmin (contrôle
+//                          de rôle fait côté serveur ; ce repository
+//                          relaie un éventuel 401/403 sous forme
+//                          d'exception).
+//
+// Même patron que medecin_repository.dart : aucun état applicatif
+// (pas de cache, pas de notification UI), token fourni requête par
+// requête, fichiers en octets bruts via [FichierMultipart] pour rester
+// compatible Flutter Web.
+
+import '../models/centresante_models.dart';
+import '../utils/api_client.dart';
+
+// ─────────────────────────────────────────────────────────────────
+// Exceptions métier
+// ─────────────────────────────────────────────────────────────────
+
+/// Base commune à toutes les erreurs du module centre de santé.
+/// L'UI peut faire un `switch` exhaustif sur les sous-types (classe
+/// scellée) plutôt que d'inspecter un code HTTP.
+sealed class CentreSanteException implements Exception {
+  final String message;
+  const CentreSanteException(this.message);
+
+  @override
+  String toString() => message;
+}
+
+/// 400 — payload invalide : champ manquant, pays_id/ville_id
+/// incohérents (ville n'appartenant pas au pays), agent_email
+/// invalide, géolocalisation incomplète (une seule des deux
+/// coordonnées), etc. `message` reprend le message serveur, déjà
+/// explicite pour l'utilisateur.
+class CentreSanteValidationException extends CentreSanteException {
+  const CentreSanteValidationException(super.message);
+}
+
+/// 404 — centre de santé introuvable (obtenir / modifier / supprimer
+/// un `structureId` qui n'existe pas ou plus).
+class CentreSanteIntrouvableException extends CentreSanteException {
+  const CentreSanteIntrouvableException(super.message);
+}
+
+/// 409 — conflit métier : ex. le compte agent a déjà un centre de
+/// santé à charge, ou suppression bloquée par des agents encore
+/// rattachés à la structure.
+class CentreSanteConflitException extends CentreSanteException {
+  const CentreSanteConflitException(super.message);
+}
+
+/// 401/403 — non authentifié, ou rôle insuffisant (typiquement DELETE
+/// hors superadmin).
+class CentreSanteAccesRefuseException extends CentreSanteException {
+  const CentreSanteAccesRefuseException(super.message);
+}
+
+/// 5xx, ou tout autre code HTTP non couvert ci-dessus.
+class CentreSanteServeurException extends CentreSanteException {
+  final int? statutCode;
+  const CentreSanteServeurException(super.message, {this.statutCode});
+}
+
+/// Aucune réponse HTTP obtenue (réseau coupé, timeout, DNS...).
+class CentreSanteReseauException extends CentreSanteException {
+  const CentreSanteReseauException(super.message);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Repository
+// ─────────────────────────────────────────────────────────────────
+
+class CentreSanteRepository {
+  final ApiClient _client;
+
+  CentreSanteRepository(this._client);
+
+  // ── Lecture (publique, token optionnel) ─────────────────────────
+
+  /// GET /centres-sante — liste, filtrable via [filtre]
+  /// (pays_id, ville_id, type_structure, statut_verification,
+  /// recherche). [token] optionnel : voir authentifierOptionnel côté
+  /// routes si un jour la liste s'enrichit pour un utilisateur connu.
+  Future<List<CentreSante>> lister({
+    CentresSanteFiltre? filtre,
+    String? token,
+  }) async {
+    final donnees = await _executer(() => _client.get(
+      ApiEndpoints.centresSante,
+      query: filtre?.toQueryParameters(),
+      token: token,
+    ));
+    return CentresSanteListeReponse.fromJson(
+      donnees as Map<String, dynamic>,
+    ).centresSante;
+  }
+
+  /// GET /centres-sante/:id — détail d'une fiche.
+  /// Lève [CentreSanteIntrouvableException] si l'id n'existe pas.
+  Future<CentreSante> obtenir(String structureId, {String? token}) async {
+    final donnees = await _executer(() => _client.get(
+      ApiEndpoints.centreSante(structureId),
+      token: token,
+    ));
+    return CentreSanteDetailReponse.fromJson(
+      donnees as Map<String, dynamic>,
+    ).centreSante;
+  }
+
+  // ── Écriture (authentifiée) ─────────────────────────────────────
+
+  /// POST /centres-sante — crée le centre ET l'agent qui en a la
+  /// charge, dans la même transaction côté serveur. Ouvert à tout
+  /// utilisateur authentifié, quel que soit son rôle. Les 3 pièces
+  /// jointes sont obligatoires ; fournies en octets bruts pour rester
+  /// compatible Flutter Web (voir [FichierMultipart]).
+  ///
+  /// ⚠️ La réponse contient
+  /// `reponse.agent.motDePasseTemporaire` EN CLAIR, transmis une seule
+  /// fois par le serveur : à afficher immédiatement à l'auteur de la
+  /// soumission puis à ne jamais journaliser ni persister au-delà de
+  /// cet écran.
+  ///
+  /// Erreurs possibles : [CentreSanteValidationException] (400 —
+  /// champ manquant, pays/ville incohérents, email invalide),
+  /// [CentreSanteConflitException] (409 — le compte agent a déjà un
+  /// centre à charge), [CentreSanteAccesRefuseException] (pas
+  /// authentifié).
+  Future<CentreSanteCreationReponse> creer({
+    required CentreSanteCreationRequete requete,
+    required List<int> imageStructureOctets,
+    required String imageStructureNomFichier,
+    required List<int> pieceIdentiteOctets,
+    required String pieceIdentiteNomFichier,
+    required List<int> documentAgrementOctets,
+    required String documentAgrementNomFichier,
+    required String token,
+  }) async {
+    final fichiers = <FichierMultipart>[
+      FichierMultipart(
+        champ: ChampsFichiersCentreSante.imageStructure,
+        octets: imageStructureOctets,
+        nomFichier: imageStructureNomFichier,
+      ),
+      FichierMultipart(
+        champ: ChampsFichiersCentreSante.pieceIdentite,
+        octets: pieceIdentiteOctets,
+        nomFichier: pieceIdentiteNomFichier,
+      ),
+      FichierMultipart(
+        champ: ChampsFichiersCentreSante.documentAgrement,
+        octets: documentAgrementOctets,
+        nomFichier: documentAgrementNomFichier,
+      ),
+    ];
+
+    final donnees = await _executer(() => _client.postMultipart(
+      ApiEndpoints.centresSante,
+      champs: requete.toChampsTexte(),
+      fichiers: fichiers,
+      token: token,
+    ));
+
+    return CentreSanteCreationReponse.fromJson(
+      donnees as Map<String, dynamic>,
+    );
+  }
+
+  /// PUT /centres-sante/:id — modification partielle. Tout
+  /// utilisateur authentifié peut modifier n'importe quelle fiche
+  /// (voir centreSante.routes.js) ; seuls admin/superadmin voient leur
+  /// `requete.statutVerification` pris en compte tel quel côté
+  /// serveur — pour tout autre profil la fiche repasse en
+  /// `en_cours`.
+  ///
+  /// Les 3 fichiers sont optionnels : ne fournir que ceux à
+  /// remplacer. `null` == ne pas toucher au document existant.
+  Future<CentreSante> modifier({
+    required String structureId,
+    required CentreSanteMiseAJourRequete requete,
+    required String token,
+    List<int>? imageStructureOctets,
+    String? imageStructureNomFichier,
+    List<int>? pieceIdentiteOctets,
+    String? pieceIdentiteNomFichier,
+    List<int>? documentAgrementOctets,
+    String? documentAgrementNomFichier,
+  }) async {
+    final fichiers = <FichierMultipart>[
+      if (imageStructureOctets != null && imageStructureNomFichier != null)
+        FichierMultipart(
+          champ: ChampsFichiersCentreSante.imageStructure,
+          octets: imageStructureOctets,
+          nomFichier: imageStructureNomFichier,
+        ),
+      if (pieceIdentiteOctets != null && pieceIdentiteNomFichier != null)
+        FichierMultipart(
+          champ: ChampsFichiersCentreSante.pieceIdentite,
+          octets: pieceIdentiteOctets,
+          nomFichier: pieceIdentiteNomFichier,
+        ),
+      if (documentAgrementOctets != null && documentAgrementNomFichier != null)
+        FichierMultipart(
+          champ: ChampsFichiersCentreSante.documentAgrement,
+          octets: documentAgrementOctets,
+          nomFichier: documentAgrementNomFichier,
+        ),
+    ];
+
+    final donnees = await _executer(() => _client.putMultipart(
+      ApiEndpoints.centreSante(structureId),
+      champs: requete.toChampsTexte(),
+      fichiers: fichiers,
+      token: token,
+    ));
+
+    return CentreSanteMiseAJourReponse.fromJson(
+      donnees as Map<String, dynamic>,
+    ).centreSante;
+  }
+
+  /// DELETE /centres-sante/:id — réservé à superadmin côté serveur ;
+  /// tout autre appelant reçoit [CentreSanteAccesRefuseException].
+  /// Retourne le message de confirmation serveur.
+  Future<String> supprimer(String structureId, {required String token}) async {
+    final donnees = await _executer(() => _client.delete(
+      ApiEndpoints.centreSante(structureId),
+      token: token,
+    ));
+    return MessageReponse.fromJson(donnees as Map<String, dynamic>).message;
+  }
+
+  // ── Aides internes ──────────────────────────────────────────────
+
+  /// Exécute un appel [ApiClient] et traduit toute [ApiException] en
+  /// exception métier du module — point unique de mapping statut ->
+  /// type, pour ne pas le dupliquer dans chaque méthode publique.
+  Future<dynamic> _executer(Future<dynamic> Function() appel) async {
+    try {
+      return await appel();
+    } on ApiException catch (e) {
+      throw _traduire(e);
+    }
+  }
+
+  CentreSanteException _traduire(ApiException e) {
+    switch (e.statusCode) {
+      case 400:
+        return CentreSanteValidationException(e.message);
+      case 401:
+      case 403:
+        return CentreSanteAccesRefuseException(e.message);
+      case 404:
+        return CentreSanteIntrouvableException(e.message);
+      case 409:
+        return CentreSanteConflitException(e.message);
+      case null:
+        return CentreSanteReseauException(e.message);
+      default:
+        return CentreSanteServeurException(e.message, statutCode: e.statusCode);
+    }
+  }
+}

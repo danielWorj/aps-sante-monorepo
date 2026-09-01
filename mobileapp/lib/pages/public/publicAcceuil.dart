@@ -1,24 +1,45 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-// Adaptez ce chemin d'import selon l'emplacement réel du dossier
-// `components/` dans votre projet (ex: 'package:aps/components/components.dart').
+// Adaptez ces chemins selon l'emplacement réel des fichiers dans votre
+// projet (ex: 'package:aps/components/components.dart',
+// 'package:aps/screens/Medecinpage.dart', etc.). Les 4 écrans ci-dessous
+// sont ceux fournis dans le projet (Médecins, Pharmacie, Structures,
+// Assurances) et sont ici branchés sur de VRAIES navigations
+// (`Navigator.push`), pas de simples callbacks vides.
 import '../../components/components.dart';
+import 'Medecinpage.dart';
+import 'Pharmaciepage.dart';
+import 'Centresantepage.dart';
+import 'Assurancepage.dart';
 
 /// Écran d'accueil public de l'application APS Santé.
 ///
 /// Reproduit fidèlement l'écran « 1. Accueil » de la maquette `ui-mobile.html` :
 /// - bandeau de bienvenue (hero) avec salutation + localisation,
-/// - champ de recherche (lecture seule, ouvre l'écran de recherche),
+/// - champ de recherche (ouvre un choix rapide Médecins / Pharmacie / Structures),
 /// - raccourcis rapides (Médecins, Pharmacie, Structures, Urgence),
 /// - carrousel horizontal de publicités/actualités partenaires,
 /// - section « Pharmacies de garde »,
 /// - barre de navigation basse flottante avec bouton « Rendez-vous ».
 ///
-/// Cette page ne contient aucune logique réseau : les données (pharmacies,
-/// publicités, nom de l'utilisateur...) sont injectables via le constructeur,
-/// et toutes les actions sont exposées sous forme de callbacks à brancher
-/// depuis la couche de navigation/données de l'application (ex: `go_router`,
-/// providers, etc.).
+/// Contrairement à la version de démonstration initiale, cet écran ne se
+/// contente plus de callbacks vides : il pousse directement les vrais
+/// écrans du projet via `Navigator.push` :
+/// - « Médecins »   -> [MedecinPage]      (Medecinpage.dart)
+/// - « Pharmacie »  -> [PharmaciePage]    (Pharmaciepage.dart)
+/// - « Structures » -> [CentreSantePage]  (Centresantepage.dart)
+/// - rubrique basse « Assurance »  -> [AssurancePage] (Assurancepage.dart)
+/// - « Urgence »    -> feuille modale avec les vrais numéros officiels
+///   (SAMU 1515, Police secours 117), appelés en direct via `url_launcher`
+///   (`tel:`). Aucune page `UrgencePage.dart` dédiée n'a été fournie dans
+///   le projet : dès qu'elle existera, remplacez `_ouvrirUrgence` par un
+///   `Navigator.push(context, MaterialPageRoute(builder: (_) => const UrgencePage()))`.
+///
+/// Chaque action reste malgré tout surchargeable depuis l'extérieur via les
+/// callbacks du constructeur (`onMedecinsTap`, `onPharmaciesTap`, ...) : si
+/// vous fournissez un callback, il est utilisé à la place de la navigation
+/// par défaut (utile pour brancher `go_router`, un routing nommé, etc.).
 class PublicAcceuilPage extends StatefulWidget {
   const PublicAcceuilPage({
     super.key,
@@ -51,31 +72,44 @@ class PublicAcceuilPage extends StatefulWidget {
   /// de démonstration est utilisée.
   final List<HomePharmacieItem> pharmaciesDeGarde;
 
-  /// Tap sur le champ de recherche → ouvrir l'écran de recherche globale.
+  /// Tap sur le champ de recherche. Par défaut, ouvre une feuille de choix
+  /// rapide (Médecins / Pharmacie / Structures) qui pousse le vrai écran
+  /// correspondant.
   final VoidCallback? onSearchTap;
 
-  /// Tap sur le raccourci « Médecins ».
+  /// Tap sur le raccourci « Médecins ». Par défaut : `Navigator.push` vers
+  /// [MedecinPage].
   final VoidCallback? onMedecinsTap;
 
-  /// Tap sur le raccourci « Pharmacie ».
+  /// Tap sur le raccourci « Pharmacie ». Par défaut : `Navigator.push` vers
+  /// [PharmaciePage].
   final VoidCallback? onPharmaciesTap;
 
-  /// Tap sur le raccourci « Structures ».
+  /// Tap sur le raccourci « Structures ». Par défaut : `Navigator.push` vers
+  /// [CentreSantePage].
   final VoidCallback? onStructuresTap;
 
-  /// Tap sur le raccourci « Urgence ».
+  /// Tap sur le raccourci « Urgence ». Par défaut : ouvre la feuille des
+  /// numéros officiels (SAMU / Police), avec appel réel via `tel:`.
   final VoidCallback? onUrgenceTap;
 
-  /// Tap sur « Voir tout » (section Pharmacies de garde).
+  /// Tap sur « Voir tout » (section Pharmacies de garde). Par défaut :
+  /// `Navigator.push` vers [PharmaciePage].
   final VoidCallback? onVoirToutesPharmacies;
 
   /// Tap sur une carte de publicité du carrousel.
   final ValueChanged<HomeAdItem>? onAdTap;
 
   /// Tap sur une rubrique de la barre de navigation basse (0 à 3).
+  /// Par défaut : 0=Accueil (reste sur place), 1=Médecin -> [MedecinPage],
+  /// 2=Assurance -> [AssurancePage], 3=À propos -> aucun écran fourni pour
+  /// l'instant (un message le signale).
   final ValueChanged<int>? onBottomNavTap;
 
-  /// Tap sur le bouton flottant central « Rendez-vous ».
+  /// Tap sur le bouton flottant central « Rendez-vous ». Par défaut, ouvre
+  /// [MedecinPage] : c'est cet écran qui, une fois un médecin choisi,
+  /// pousse lui-même l'écran de prise de rendez-vous (voir la docstring de
+  /// `MedecinPage`).
   final VoidCallback? onRdvPressed;
 
   @override
@@ -88,14 +122,181 @@ class _PublicAcceuilPageState extends State<PublicAcceuilPage> {
   int _navIndex = 0;
 
   late final List<HomeAdItem> _ads =
-      widget.ads.isNotEmpty ? widget.ads : _demoAds;
+  widget.ads.isNotEmpty ? widget.ads : _demoAds;
   late final List<HomePharmacieItem> _pharmacies =
-      widget.pharmaciesDeGarde.isNotEmpty ? widget.pharmaciesDeGarde : _demoPharmacies;
+  widget.pharmaciesDeGarde.isNotEmpty ? widget.pharmaciesDeGarde : _demoPharmacies;
 
   @override
   void dispose() {
     _adController.dispose();
     super.dispose();
+  }
+
+  // =========================================================
+  // NAVIGATION RÉELLE — écrans du projet
+  // =========================================================
+
+  void _ouvrirMedecins() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const MedecinPage()));
+  }
+
+  void _ouvrirPharmacies() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const PharmaciePage()));
+  }
+
+  void _ouvrirStructures() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const CentreSantePage()));
+  }
+
+  void _ouvrirAssurances() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const AssurancePage()));
+  }
+
+  /// Feuille de choix rapide ouverte depuis le champ de recherche : la
+  /// maquette ne propose pas d'écran de recherche globale dédié, donc on
+  /// oriente directement vers l'un des 3 vrais annuaires.
+  void _ouvrirRecherche() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.lineStrong,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                  ),
+                ),
+                const Text('Que recherchez-vous ?', style: AppTextStyles.cardTitle),
+                const SizedBox(height: 12),
+                _SearchChoiceTile(
+                  icon: Icons.medical_services_outlined,
+                  label: 'Un médecin',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _ouvrirMedecins();
+                  },
+                ),
+                _SearchChoiceTile(
+                  icon: Icons.medication_outlined,
+                  label: 'Une pharmacie',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _ouvrirPharmacies();
+                  },
+                ),
+                _SearchChoiceTile(
+                  icon: Icons.local_hospital_outlined,
+                  label: 'Une structure de santé',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _ouvrirStructures();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Ouvre la feuille « Urgence » avec les vrais numéros officiels du
+  /// Cameroun (SAMU, Police secours) + la pharmacie de garde la plus
+  /// proche, chacun avec un bouton d'appel réel (`tel:` via `url_launcher`).
+  /// Conforme à l'écran 6 de la maquette (§12 : aucun contenu commercial).
+  void _ouvrirUrgence() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => _UrgenceSheet(
+        pharmacieDeGarde: _pharmacies.isNotEmpty ? _pharmacies.first : null,
+        onAppelerPharmacie: _appelerPharmacie,
+      ),
+    );
+  }
+
+  /// Compose un numéro d'urgence officiel (SAMU: 1515, Police: 117...).
+  Future<void> _appelerNumero(String numero) async {
+    final uri = Uri(scheme: 'tel', path: numero);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else if (mounted) {
+      _showSnack("Impossible de lancer l'appel.");
+    }
+  }
+
+  /// Appelle une pharmacie de la liste « Pharmacies de garde », si un
+  /// numéro réel est renseigné sur l'item.
+  Future<void> _appelerPharmacie(HomePharmacieItem p) async {
+    final numero = p.telephone?.trim();
+    if (numero == null || numero.isEmpty) {
+      _showSnack('Numéro non disponible pour cette pharmacie.');
+      return;
+    }
+    await _appelerNumero(numero);
+  }
+
+  /// Ouvre l'itinéraire Google Maps réel vers une pharmacie de la liste :
+  /// coordonnées GPS si connues, sinon recherche par nom + quartier.
+  Future<void> _itinerairePharmacie(HomePharmacieItem p) async {
+    final Uri uri;
+    if (p.latitude != null && p.longitude != null) {
+      uri = Uri.parse(
+        'https://www.google.com/maps/search/?api=1&query=${p.latitude},${p.longitude}',
+      );
+    } else {
+      final query = Uri.encodeComponent('${p.nom}, ${p.quartier}');
+      uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+    }
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (mounted) {
+      _showSnack("Impossible d'ouvrir l'itinéraire.");
+    }
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _onBottomNavTap(int index) {
+    setState(() => _navIndex = index);
+    if (widget.onBottomNavTap != null) {
+      widget.onBottomNavTap!(index);
+      return;
+    }
+    switch (index) {
+      case 0: // Accueil : déjà sur cet écran.
+        break;
+      case 1: // Médecin
+        _ouvrirMedecins();
+        break;
+      case 2: // Assurance
+        _ouvrirAssurances();
+        break;
+      case 3: // À propos — aucun écran fourni pour l'instant.
+        _showSnack('Écran « À propos » bientôt disponible.');
+        break;
+    }
   }
 
   @override
@@ -114,11 +315,8 @@ class _PublicAcceuilPageState extends State<PublicAcceuilPage> {
               bottom: 10,
               child: AppBottomNav(
                 currentIndex: _navIndex,
-                onTap: (i) {
-                  setState(() => _navIndex = i);
-                  widget.onBottomNavTap?.call(i);
-                },
-                onRdvPressed: widget.onRdvPressed ?? () {},
+                onTap: _onBottomNavTap,
+                onRdvPressed: widget.onRdvPressed ?? _ouvrirMedecins,
               ),
             ),
           ],
@@ -134,13 +332,13 @@ class _PublicAcceuilPageState extends State<PublicAcceuilPage> {
       children: [
         _HomeHero(prenom: widget.prenomUtilisateur, localisation: widget.localisation),
         const SizedBox(height: 6),
-        _SearchField(onTap: widget.onSearchTap),
+        _SearchField(onTap: widget.onSearchTap ?? _ouvrirRecherche),
         const SizedBox(height: 8),
         _QuickActionsGrid(
-          onMedecinsTap: widget.onMedecinsTap,
-          onPharmaciesTap: widget.onPharmaciesTap,
-          onStructuresTap: widget.onStructuresTap,
-          onUrgenceTap: widget.onUrgenceTap,
+          onMedecinsTap: widget.onMedecinsTap ?? _ouvrirMedecins,
+          onPharmaciesTap: widget.onPharmaciesTap ?? _ouvrirPharmacies,
+          onStructuresTap: widget.onStructuresTap ?? _ouvrirStructures,
+          onUrgenceTap: widget.onUrgenceTap ?? _ouvrirUrgence,
         ),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -168,7 +366,7 @@ class _PublicAcceuilPageState extends State<PublicAcceuilPage> {
         const SizedBox(height: 8),
         _SectionTitle(
           title: 'Pharmacies de garde',
-          onVoirTout: widget.onVoirToutesPharmacies,
+          onVoirTout: widget.onVoirToutesPharmacies ?? _ouvrirPharmacies,
         ),
         for (final pharmacie in _pharmacies)
           CardPharmacie(
@@ -178,8 +376,8 @@ class _PublicAcceuilPageState extends State<PublicAcceuilPage> {
             verifiee: pharmacie.verifiee,
             numeroOrdre: pharmacie.numeroOrdre,
             distanceKm: pharmacie.distanceKm,
-            onAppeler: pharmacie.onAppeler ?? () {},
-            onItineraire: pharmacie.onItineraire ?? () {},
+            onAppeler: pharmacie.onAppeler ?? () => _appelerPharmacie(pharmacie),
+            onItineraire: pharmacie.onItineraire ?? () => _itinerairePharmacie(pharmacie),
           ),
       ],
     );
@@ -221,6 +419,9 @@ class HomePharmacieItem {
     this.verifiee = true,
     this.numeroOrdre,
     this.distanceKm,
+    this.telephone,
+    this.latitude,
+    this.longitude,
     this.onAppeler,
     this.onItineraire,
   });
@@ -231,6 +432,17 @@ class HomePharmacieItem {
   final bool verifiee;
   final String? numeroOrdre;
   final double? distanceKm;
+
+  /// Numéro réel de la pharmacie (format `tel:`, ex: `+237679001122`).
+  /// Utilisé par l'action « Appeler » par défaut si `onAppeler` n'est pas
+  /// fourni.
+  final String? telephone;
+
+  /// Coordonnées GPS réelles, utilisées par l'action « Itinéraire » par
+  /// défaut (sinon recherche Google Maps par nom + quartier).
+  final double? latitude;
+  final double? longitude;
+
   final VoidCallback? onAppeler;
   final VoidCallback? onItineraire;
 }
@@ -281,6 +493,7 @@ const List<HomePharmacieItem> _demoPharmacies = [
     verifiee: true,
     numeroOrdre: 'RCM-002E',
     distanceKm: 1.2,
+    telephone: '+237679001122',
   ),
 ];
 
@@ -335,7 +548,8 @@ class _HomeHero extends StatelessWidget {
   }
 }
 
-/// Champ de recherche en lecture seule — `.search-field`.
+/// Champ de recherche — `.search-field`. Ouvre par défaut la feuille de
+/// choix rapide (voir `_ouvrirRecherche` sur l'écran parent).
 class _SearchField extends StatelessWidget {
   const _SearchField({this.onTap});
 
@@ -568,10 +782,10 @@ class _AdSlide extends StatelessWidget {
                   width: double.infinity,
                   child: ad.imageUrl != null
                       ? Image.network(
-                          ad.imageUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _AdPlaceholder(ad: ad),
-                        )
+                    ad.imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _AdPlaceholder(ad: ad),
+                  )
                       : _AdPlaceholder(ad: ad),
                 ),
               ),
@@ -697,6 +911,189 @@ class _SectionTitle extends StatelessWidget {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Une ligne de choix dans la feuille de recherche rapide.
+class _SearchChoiceTile extends StatelessWidget {
+  const _SearchChoiceTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.green100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 18, color: AppColors.green700),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(label, style: AppTextStyles.body.copyWith(fontSize: 13.5)),
+            ),
+            const Icon(Icons.chevron_right, size: 18, color: AppColors.inkFaint),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Feuille modale « Urgence » — numéros officiels réels (Cameroun) +
+/// pharmacie de garde la plus proche, chacun avec un bouton d'appel réel.
+/// Conforme à l'écran 6 de la maquette : aucun contenu commercial ici
+/// (§12 — primauté de la santé publique).
+class _UrgenceSheet extends StatelessWidget {
+  const _UrgenceSheet({
+    required this.pharmacieDeGarde,
+    required this.onAppelerPharmacie,
+  });
+
+  final HomePharmacieItem? pharmacieDeGarde;
+  final ValueChanged<HomePharmacieItem> onAppelerPharmacie;
+
+  Future<void> _appeler(BuildContext context, String numero) async {
+    final uri = Uri(scheme: 'tel', path: numero);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Impossible de lancer l'appel.")));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.lineStrong,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                const Icon(Icons.call, color: AppColors.coral500, size: 18),
+                const SizedBox(width: 8),
+                const Text('Besoin d\'aide maintenant ?', style: AppTextStyles.cardTitle),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Services officiels — Cameroun',
+              style: AppTextStyles.cardMeta.copyWith(color: AppColors.inkFaint),
+            ),
+            const SizedBox(height: 12),
+            _UrgenceRow(
+              titre: 'SAMU',
+              soustitre: 'Urgences médicales nationales',
+              numero: '1515',
+              onAppeler: () => _appeler(context, '1515'),
+            ),
+            _UrgenceRow(
+              titre: 'Police secours',
+              soustitre: 'Intervention rapide',
+              numero: '117',
+              onAppeler: () => _appeler(context, '117'),
+            ),
+            if (pharmacieDeGarde != null)
+              _UrgenceRow(
+                titre: pharmacieDeGarde!.nom,
+                soustitre: 'De garde — ${pharmacieDeGarde!.quartier}',
+                numero: null,
+                onAppeler: () => onAppelerPharmacie(pharmacieDeGarde!),
+              ),
+            const SizedBox(height: 4),
+            AppAlert(
+              type: AppAlertType.secondary,
+              message: 'Les numéros d\'urgence restent accessibles même hors connexion.',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UrgenceRow extends StatelessWidget {
+  const _UrgenceRow({
+    required this.titre,
+    required this.soustitre,
+    required this.numero,
+    required this.onAppeler,
+  });
+
+  final String titre;
+  final String soustitre;
+  final String? numero;
+  final VoidCallback onAppeler;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: AppColors.coral100,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(Icons.local_hospital_outlined, size: 17, color: AppColors.coral500),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(titre, style: AppTextStyles.cardTitle.copyWith(fontSize: 12.5)),
+                Text(soustitre, style: AppTextStyles.cardMeta),
+              ],
+            ),
+          ),
+          if (numero != null) ...[
+            Text(
+              numero!,
+              style: AppTextStyles.price.copyWith(fontSize: 13, color: AppColors.ink),
+            ),
+            const SizedBox(width: 8),
+          ],
+          CallButton(onPressed: onAppeler),
         ],
       ),
     );
