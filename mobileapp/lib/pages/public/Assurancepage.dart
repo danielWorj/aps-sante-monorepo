@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../components/components.dart';
+import '../../controllers/assurance_controller.dart';
+import '../../models/assurance_models.dart';
+import './utils/DetailAssurance.dart'; // ⚠️ adapter ce chemin à l'emplacement réel du fichier dans le projet.
 
 /// Écran public — **Annuaire des assurances** (`5 · Annuaire assurances`
 /// dans la maquette `ui-mobile.html`).
 ///
 /// Consultable sans compte. Liste les compagnies et courtiers santé
-/// référencés sur APS, avec recherche, filtres (ville / vérifiées APS)
-/// et accès à la fiche détaillée de chaque assureur.
+/// référencés sur APS (via GET /api/services-assurance, route publique —
+/// voir [listeServicesAssuranceControllerProvider]), avec recherche,
+/// filtres (ville / vérifiées APS) et accès à la fiche détaillée de
+/// chaque assureur ([AssuranceDetailPage]).
 ///
 /// ```dart
 /// Navigator.push(
@@ -14,14 +21,14 @@ import '../../components/components.dart';
 ///   MaterialPageRoute(builder: (_) => const AssurancePage()),
 /// );
 /// ```
-class AssurancePage extends StatefulWidget {
+class AssurancePage extends ConsumerStatefulWidget {
   const AssurancePage({super.key});
 
   @override
-  State<AssurancePage> createState() => _AssurancePageState();
+  ConsumerState<AssurancePage> createState() => _AssurancePageState();
 }
 
-class _AssurancePageState extends State<AssurancePage> {
+class _AssurancePageState extends ConsumerState<AssurancePage> {
   int _navIndex = 2; // 0=Accueil, 1=Médecin, 2=Assurance, 3=À propos
 
   final TextEditingController _searchController = TextEditingController();
@@ -29,84 +36,46 @@ class _AssurancePageState extends State<AssurancePage> {
   String _villeSelectionnee = 'Toutes les villes';
   bool _verifieesUniquement = false;
 
-  // ---------------------------------------------------------------
-  // Données de démonstration — à remplacer par un appel API réel
-  // (ex: InsuranceRepository.fetchAll()) branché depuis un provider
-  // ou un FutureBuilder autour de ce même contenu de liste.
-  // ---------------------------------------------------------------
-  final List<_Insurer> _insurers = const [
-    _Insurer(
-      nom: 'AXA',
-      sigle: 'AXA',
-      ville: 'Douala',
-      description:
-      "Leader mondial de l'assurance et de la gestion d'actifs, solutions santé pour particuliers et entreprises.",
-      numeroAgrement: 'RCM-07MEICOM',
-      verifieeAps: false,
-      couleurLogo: Color(0xFF0B2C9E),
-      fondLogo: Color(0xFFEDF1FB),
-    ),
-    _Insurer(
-      nom: 'BEDI',
-      sigle: 'BE',
-      ville: 'Douala',
-      description:
-      'Courtier régional dédié aux couvertures santé, adapté aux besoins locaux et régimes de prévoyance.',
-      numeroAgrement: 'REN-09032',
-      verifieeAps: true,
-      couleurLogo: Color(0xFF6B2E8F),
-      fondLogo: Color(0xFFF1E9F7),
-    ),
-    _Insurer(
-      nom: 'Activa Assurances',
-      sigle: 'AC',
-      ville: 'Yaoundé',
-      description:
-      'Compagnie panafricaine proposant des couvertures santé individuelles et collectives.',
-      numeroAgrement: 'RCM-11ACT',
-      verifieeAps: true,
-      couleurLogo: Color(0xFF1E8A63),
-      fondLogo: Color(0xFFE4F3EC),
-    ),
-    _Insurer(
-      nom: 'Chanas Assurances',
-      sigle: 'CH',
-      ville: 'Yaoundé',
-      description:
-      "Courtier historique au Cameroun, spécialisé dans les régimes de prévoyance et l'assurance maladie.",
-      numeroAgrement: 'RCM-04CHA',
-      verifieeAps: false,
-      couleurLogo: Color(0xFFC94E3A),
-      fondLogo: Color(0xFFFBE7E2),
-    ),
-  ];
-
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
-  List<String> get _villes => [
-    'Toutes les villes',
-    ...{for (final a in _insurers) a.ville}
-  ];
+  /// Villes réellement présentes dans les fiches chargées, déduites de
+  /// `ServiceAssurance.ville` (inclus par le backend sur cette route).
+  List<String> _villesDisponibles(List<ServiceAssurance> services) {
+    final noms = <String>{
+      for (final s in services)
+        if ((s.ville?.nom ?? '').isNotEmpty) s.ville!.nom,
+    }.toList()
+      ..sort();
+    return ['Toutes les villes', ...noms];
+  }
 
-  List<_Insurer> get _filtres {
-    return _insurers.where((a) {
+  /// Filtrage client (recherche + ville + « vérifiées APS ») sur la liste
+  /// déjà récupérée du backend. « Vérifiée APS » correspond au statut
+  /// `StatutVerificationAssurance.publie`.
+  List<ServiceAssurance> _filtrer(List<ServiceAssurance> services) {
+    return services.where((s) {
+      final ville = s.ville?.nom ?? '';
+      final description = s.description ?? '';
       final matchRecherche = _query.isEmpty ||
-          a.nom.toLowerCase().contains(_query.toLowerCase()) ||
-          a.ville.toLowerCase().contains(_query.toLowerCase()) ||
-          a.description.toLowerCase().contains(_query.toLowerCase());
-      final matchVille =
-          _villeSelectionnee == 'Toutes les villes' || a.ville == _villeSelectionnee;
-      final matchVerifiee = !_verifieesUniquement || a.verifieeAps;
+          s.nom.toLowerCase().contains(_query.toLowerCase()) ||
+          ville.toLowerCase().contains(_query.toLowerCase()) ||
+          description.toLowerCase().contains(_query.toLowerCase());
+      final matchVille = _villeSelectionnee == 'Toutes les villes' ||
+          ville == _villeSelectionnee;
+      final matchVerifiee = !_verifieesUniquement ||
+          s.statutVerification == StatutVerificationAssurance.publie;
       return matchRecherche && matchVille && matchVerifiee;
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
+    final servicesAsync = ref.watch(listeServicesAssuranceControllerProvider);
+
     return Scaffold(
       backgroundColor: AppColors.paper,
       extendBody: true,
@@ -118,7 +87,12 @@ class _AssurancePageState extends State<AssurancePage> {
       ),
       body: Stack(
         children: [
-          _buildContent(context),
+          RefreshIndicator(
+            onRefresh: () => ref
+                .read(listeServicesAssuranceControllerProvider.notifier)
+                .rafraichir(),
+            child: _buildContent(context, servicesAsync),
+          ),
           Positioned(
             left: 10,
             right: 10,
@@ -136,9 +110,10 @@ class _AssurancePageState extends State<AssurancePage> {
     );
   }
 
-  Widget _buildContent(BuildContext context) {
-    final resultats = _filtres;
-
+  Widget _buildContent(
+      BuildContext context,
+      AsyncValue<List<ServiceAssurance>> servicesAsync,
+      ) {
     return ListView(
       // padding bas augmenté pour ne pas passer sous la barre flottante
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 110),
@@ -180,26 +155,35 @@ class _AssurancePageState extends State<AssurancePage> {
         const SizedBox(height: 10),
         SizedBox(
           height: 34,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              for (final ville in _villes)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _FilterChip(
-                    label: ville,
-                    icon: ville == 'Toutes les villes' ? Icons.place_outlined : null,
-                    active: _villeSelectionnee == ville,
-                    onTap: () => setState(() => _villeSelectionnee = ville),
+          child: servicesAsync.when(
+            data: (services) => ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final ville in _villesDisponibles(services))
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _FilterChip(
+                      label: ville,
+                      icon: ville == 'Toutes les villes'
+                          ? Icons.place_outlined
+                          : null,
+                      active: _villeSelectionnee == ville,
+                      onTap: () => setState(() => _villeSelectionnee = ville),
+                    ),
                   ),
+                _FilterChip(
+                  label: 'Vérifiées APS',
+                  icon: Icons.verified_outlined,
+                  active: _verifieesUniquement,
+                  onTap: () =>
+                      setState(() => _verifieesUniquement = !_verifieesUniquement),
                 ),
-              _FilterChip(
-                label: 'Vérifiées APS',
-                icon: Icons.verified_outlined,
-                active: _verifieesUniquement,
-                onTap: () => setState(() => _verifieesUniquement = !_verifieesUniquement),
-              ),
-            ],
+              ],
+            ),
+            // Filtres non disponibles tant que la liste n'a pas répondu au
+            // moins une fois — on évite un flash de puces vides.
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
           ),
         ),
         const SizedBox(height: 14),
@@ -216,6 +200,29 @@ class _AssurancePageState extends State<AssurancePage> {
         const _InsuranceAdBanner(),
 
         // ---- Résultats ------------------------------------------------
+        servicesAsync.when(
+          data: (services) => _buildResultats(services),
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (erreur, _) => _ErrorState(
+            message: "Impossible de charger l'annuaire des assurances.",
+            onRetry: () => ref
+                .read(listeServicesAssuranceControllerProvider.notifier)
+                .rafraichir(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildResultats(List<ServiceAssurance> services) {
+    final resultats = _filtrer(services);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -249,51 +256,89 @@ class _AssurancePageState extends State<AssurancePage> {
             }),
           )
         else
-          for (final assureur in resultats)
-            CardAssurance(
-              nom: assureur.nom,
-              sigle: assureur.sigle,
-              ville: assureur.ville,
-              description: assureur.description,
-              numeroAgrement: assureur.numeroAgrement,
-              verifieeAps: assureur.verifieeAps,
-              couleurLogo: assureur.couleurLogo,
-              fondLogo: assureur.fondLogo,
-              onVoirFiche: () {
-                // Brancher ici la navigation vers la fiche assurance
-                // (ex: Navigator.push(context, MaterialPageRoute(
-                //   builder: (_) => AssuranceFichePage(id: assureur.nom))));
-              },
-            ),
+          for (final service in resultats) _buildCarte(service),
       ],
+    );
+  }
+
+  Widget _buildCarte(ServiceAssurance service) {
+    final couleurs = _couleursPour(service.serviceAssuranceId);
+    final sigle = _sigleAssurance(service.nom);
+    final verifiee =
+        service.statutVerification == StatutVerificationAssurance.publie;
+
+    return CardAssurance(
+      nom: service.nom,
+      sigle: sigle,
+      ville: service.ville?.nom ?? '',
+      description: service.description ?? '',
+      numeroAgrement: service.agrement,
+      verifieeAps: verifiee,
+      couleurLogo: couleurs.logo,
+      fondLogo: couleurs.fond,
+      onVoirFiche: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AssuranceDetailPage(
+              serviceAssuranceId: service.serviceAssuranceId,
+              // Jeton de l'utilisateur connecté (`null` si personne n'est
+              // connecté) — sans lui, le bouton « Envoyer la demande » de
+              // la fiche de détail resterait bloqué même pour un
+              // utilisateur authentifié.
+              authToken: ref.read(authTokenProvider),
+              // Aperçu utilisé pour afficher immédiatement l'en-tête de la
+              // fiche pendant que le détail complet se charge.
+              apercu: ApercuAssurance(
+                nom: service.nom,
+                sigle: sigle,
+                ville: service.ville?.nom ?? '',
+                pays: service.pays?.nom ?? '',
+                verifieeAps: verifiee,
+                couleurLogo: couleurs.logo,
+                fondLogo: couleurs.fond,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
 
-/// Modèle local minimal représentant un assureur dans la liste.
-/// À remplacer par le modèle de données réel de l'application
-/// (ex: issu d'un repository / d'une réponse API).
-class _Insurer {
-  const _Insurer({
-    required this.nom,
-    required this.sigle,
-    required this.ville,
-    required this.description,
-    required this.numeroAgrement,
-    required this.verifieeAps,
-    required this.couleurLogo,
-    required this.fondLogo,
-  });
-
-  final String nom;
-  final String sigle;
-  final String ville;
-  final String description;
-  final String numeroAgrement;
-  final bool verifieeAps;
-  final Color couleurLogo;
-  final Color fondLogo;
+/// Deux premières initiales du nom, utilisées comme « logo » textuel
+/// (`CardAssurance.sigle`) tant qu'aucune image dédiée n'est affichée.
+String _sigleAssurance(String nom) {
+  final mots =
+  nom.trim().split(RegExp(r'\s+')).where((m) => m.isNotEmpty).toList();
+  if (mots.isEmpty) return '?';
+  if (mots.length == 1) {
+    final mot = mots.first;
+    return mot.substring(0, mot.length >= 2 ? 2 : 1).toUpperCase();
+  }
+  return (mots[0][0] + mots[1][0]).toUpperCase();
 }
+
+/// Couleur de logo + couleur de fond associées à une fiche.
+class _PaletteCouleur {
+  const _PaletteCouleur(this.logo, this.fond);
+  final Color logo;
+  final Color fond;
+}
+
+const List<_PaletteCouleur> _paletteLogos = [
+  _PaletteCouleur(Color(0xFF0B2C9E), Color(0xFFEDF1FB)),
+  _PaletteCouleur(Color(0xFF6B2E8F), Color(0xFFF1E9F7)),
+  _PaletteCouleur(Color(0xFF1E8A63), Color(0xFFE4F3EC)),
+  _PaletteCouleur(Color(0xFFC94E3A), Color(0xFFFBE7E2)),
+  _PaletteCouleur(Color(0xFF9A6A1D), Color(0xFFF6ECDD)),
+  _PaletteCouleur(Color(0xFF1F6F8B), Color(0xFFE3F1F5)),
+];
+
+/// Couleur déterministe (dérivée de l'id) tant que le backend ne fournit
+/// pas de couleur de marque dédiée pour `service_assurance`.
+_PaletteCouleur _couleursPour(String serviceAssuranceId) =>
+    _paletteLogos[serviceAssuranceId.hashCode.abs() % _paletteLogos.length];
 
 /// Champ de recherche — `.search-field` / `.ins-search-field` de la maquette.
 class _SearchField extends StatelessWidget {
@@ -498,6 +543,36 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           AppOutlineButton(label: 'Réinitialiser', onPressed: onReset, icon: Icons.refresh),
+        ],
+      ),
+    );
+  }
+}
+
+/// État d'erreur réseau/API — affiché quand le chargement de l'annuaire
+/// échoue (ex: backend indisponible).
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+      alignment: Alignment.center,
+      child: Column(
+        children: [
+          const Icon(Icons.wifi_off_rounded, size: 30, color: AppColors.inkFaint),
+          const SizedBox(height: 10),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.cardTitle.copyWith(fontSize: 13.5),
+          ),
+          const SizedBox(height: 12),
+          AppOutlineButton(label: 'Réessayer', onPressed: onRetry, icon: Icons.refresh),
         ],
       ),
     );

@@ -22,6 +22,8 @@ docker compose up
 # 4- Inspecter la BD
 docker compose exec db psql -U <postgres_user> -d <postgres_db>
 
+docker compose exec db psql -U <postgres_user> -d <postgres_db>
+
 # 5- Roles et Referentiels , Specialite  
 cf seed_referentiel.sql   / cf seed_specialite.sql
 
