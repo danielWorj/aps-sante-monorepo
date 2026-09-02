@@ -15,6 +15,7 @@ server/guide
 
 # --- commun ---
 .env
+.env.prod
 *.log
 .DS_Store
 # # -- Deploiement --
