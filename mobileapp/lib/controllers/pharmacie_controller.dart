@@ -12,8 +12,8 @@
 // uniquement sur [PharmacieRepository], qui traduit déjà toute erreur
 // réseau en [ApiException].
 //
-// Règle du token : identique à [ApiClient]/[PharmacieRepository], le
-// token n'est JAMAIS conservé de façon persistante ici. Contrairement à
+// Règle du token : identique à [PharmacieRepository], le token n'est
+// JAMAIS conservé de façon persistante ici. Contrairement à
 // [ListeCentresSanteController] / `ListeMedecinsController`, aucun des
 // 3 controllers de liste ci-dessous n'a de `definirToken` : les GET de
 // ce module sont publics et n'ont, contrairement à listerMedecins, pas
@@ -29,30 +29,19 @@ import 'package:riverpod/riverpod.dart';
 
 import '../models/pharmacie_models.dart';
 import '../repositories/pharmacie_repository.dart';
-import '../utils/api_client.dart';
 
 /* =========================================================================
  * Dépendances partagées
  * ========================================================================= */
 
-/// Instance unique d'[ApiClient] pour toute l'app.
-///
-/// ⚠️ Si un `apiClientProvider` existe déjà ailleurs dans le projet
-/// (ex: déclaré dans centresante_controller.dart, medecin_controller.dart
-/// ou dans un fichier partagé), SUPPRIMER cette déclaration et importer
-/// l'existant à la place — ce provider n'est redéclaré ici que pour que
-/// ce fichier compile de façon autonome. Adapter `baseUrl` à la
-/// configuration réelle (ex: variable d'environnement / flavor).
-final apiClientProvider = Provider<ApiClient>((ref) {
-  final client = ApiClient(baseUrl: 'http://localhost:3000/api');
-  ref.onDispose(client.close);
-  return client;
-});
-
 /// Repository ré-exposé ici pour que les widgets n'aient jamais besoin
 /// d'importer pharmacie_repository.dart directement.
+///
+/// [PharmacieRepository] parle HTTP directement (via le package `http`)
+/// et ne prend plus de dépendance en paramètre : pas besoin d'
+/// [ApiClient] ici (voir medecin_controller.dart pour le même patron).
 final pharmacieRepositoryProvider = Provider<PharmacieRepository>((ref) {
-  return PharmacieRepository(ref.watch(apiClientProvider));
+  return PharmacieRepository();
 });
 
 /* =========================================================================

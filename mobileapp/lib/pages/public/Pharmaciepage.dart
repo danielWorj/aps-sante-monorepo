@@ -28,6 +28,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../components/components.dart';
 import '../../controllers/pharmacie_controller.dart';
 import '../../models/pharmacie_models.dart';
+import 'publicAcceuil.dart';
+import 'Assurancepage.dart';
 
 /// `AsyncValue.valueOrNull` n'existe qu'à partir de riverpod 2.3.0 ; la
 /// version résolue par ce projet (voir l'import direct de
@@ -165,6 +167,34 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
         : texte.replaceFirst('ApiException: ', '');
   }
 
+  /// Gère un tap sur la barre de navigation basse : met à jour l'index actif
+  /// ET navigue réellement vers l'écran correspondant. Ici les rubriques
+  /// sont : 0=Accueil, 1=Pharmacies [écran courant], 2=Assurance, 3=Profil.
+  void _onBottomNavTap(int index) {
+    setState(() => _navIndex = index);
+    switch (index) {
+      case 0: // Accueil
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PublicAcceuilPage()),
+        );
+        break;
+      case 1: // Pharmacies — déjà sur cet écran.
+        break;
+      case 2: // Assurance
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AssurancePage()),
+        );
+        break;
+      case 3: // Profil — TODO: brancher vers l'écran Profil dès qu'il existera.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Écran « Profil » bientôt disponible.')),
+        );
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pharmaciesAsync = ref.watch(listePharmaciesControllerProvider);
@@ -183,7 +213,7 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
             child: AppBottomNav(
               items: _navItems,
               currentIndex: _navIndex,
-              onTap: (i) => setState(() => _navIndex = i),
+              onTap: _onBottomNavTap,
               onRdvPressed: () {
                 // Brancher ici la navigation vers la prise de RDV.
               },

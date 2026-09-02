@@ -3,16 +3,23 @@
 // Repository de consommation des APIs du module "annuaire — assurance"
 // (service_assurance, mise_en_relation, catalogue activite /
 // option_activite, agence), en miroir de src/routes/assurance.routes.js
-// et src/controllers/assurance.controller.js côté backend.
+// et src/controllers/assurance.controller.js côté backend, et dans le
+// même esprit que medecin_repository.dart (version web de ce même
+// module).
 //
-// Comme [MedecinRepository] / [ApiClient], ce fichier ne porte AUCUN état
-// applicatif (pas de cache, pas de notification UI) : il ne fait que
-// parler HTTP et mapper JSON <-> modèles Dart (assurance_models.dart). La
-// gestion d'état (chargement, erreurs, sélection courante) appartient à
-// un AssuranceController dédié, qui s'appuie sur ce repository.
+// Version "simple" : comme [MedecinRepository], ce repository parle
+// DIRECTEMENT en HTTP via le package `http`, sans passer par ApiClient
+// (voir api_client.dart) ni par ApiEndpoints. Toutes les routes viennent
+// de ApiRealEndpoints (endpoint.dart).
 //
-// Le token d'authentification suit la même règle que [ApiClient] : fourni
-// requête par requête (paramètre `token`), jamais stocké ici.
+// Comme [MedecinRepository], ce fichier ne porte AUCUN état applicatif
+// (pas de cache, pas de notification UI) : il ne fait que parler HTTP et
+// mapper JSON <-> modèles Dart (assurance_models.dart). La gestion
+// d'état (chargement, erreurs, sélection courante) appartient à un
+// AssuranceController dédié, qui s'appuie sur ce repository.
+//
+// Le token d'authentification est fourni requête par requête (paramètre
+// `token`), jamais stocké ici.
 //
 // Rappel des règles d'accès (voir assurance.routes.js — reprises ici pour
 // que chaque méthode documente qui peut légitimement l'appeler ; la
@@ -31,17 +38,164 @@
 //                            admin/superadmin.
 //
 // Toute erreur (HTTP >= 400, réseau, parsing) remonte sous forme
-// d'[ApiException] homogène — voir [ApiClient]. Les erreurs "il n'y a
-// rien à envoyer" (mise à jour vide) sont levées ici même, avant l'appel
-// réseau, sur le même modèle que [MedecinRepository.modifierMedecin].
+// d'[ApiException] homogène — voir [MedecinRepository]. Les erreurs "il
+// n'y a rien à envoyer" (mise à jour vide) sont levées ici même, avant
+// l'appel réseau, sur le même modèle que
+// [MedecinRepository.modifierMedecin].
+
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
 
 import '../models/assurance_models.dart';
-import '../utils/api_client.dart';
+import '../utils/endpoint.dart';
+
+/// Erreur levée quand une requête HTTP échoue (statut hors 2xx) ou
+/// quand un appel est mal formé côté client (ex. rien à mettre à
+/// jour). Remplace l'ApiException de api_client.dart pour ce
+/// repository, qui ne dépend plus de ce fichier.
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+
+  const ApiException(this.message, {this.statusCode});
+
+  @override
+  String toString() => message;
+}
+
+/// Description d'un fichier à envoyer en multipart (image_assurance,
+/// ...).
+class FichierMultipart {
+  final String champ;
+  final List<int> octets;
+  final String nomFichier;
+
+  const FichierMultipart({
+    required this.champ,
+    required this.octets,
+    required this.nomFichier,
+  });
+}
 
 class AssuranceRepository {
-  final ApiClient _client;
+  static const Duration _timeout = Duration(seconds: 10);
 
-  AssuranceRepository(this._client);
+  /* ===================================================================
+   * Aides HTTP internes (remplacent ApiClient)
+   * =================================================================== */
+
+  Map<String, String> _entetes({String? token, bool avecJson = true}) {
+    final entetes = <String, String>{};
+    if (avecJson) entetes['Content-Type'] = 'application/json';
+    if (token != null) entetes['Authorization'] = 'Bearer $token';
+    return entetes;
+  }
+
+  /// Décode le corps de la réponse et lève [ApiException] si le
+  /// statut n'est pas un succès (2xx).
+  dynamic _decoder(http.Response reponse) {
+    if (reponse.statusCode < 200 || reponse.statusCode >= 300) {
+      String message = 'Erreur ${reponse.statusCode}: ${reponse.body}';
+      try {
+        final corps = jsonDecode(reponse.body);
+        if (corps is Map && corps['message'] is String) {
+          message = corps['message'] as String;
+        }
+      } catch (_) {
+        // Corps non-JSON : on garde le message par défaut.
+      }
+      throw ApiException(message, statusCode: reponse.statusCode);
+    }
+    if (reponse.body.isEmpty) return null;
+    return jsonDecode(reponse.body);
+  }
+
+  Future<dynamic> _get(
+      String url, {
+        String? token,
+        Map<String, dynamic>? query,
+      }) async {
+    var uri = Uri.parse(url);
+    if (query != null && query.isNotEmpty) {
+      final queryString = {
+        for (final entry in query.entries)
+          if (entry.value != null) entry.key: entry.value.toString(),
+      };
+      if (queryString.isNotEmpty) {
+        uri = uri.replace(
+          queryParameters: {...uri.queryParameters, ...queryString},
+        );
+      }
+    }
+    final reponse = await http
+        .get(uri, headers: _entetes(token: token, avecJson: false))
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _post(
+      String url, {
+        Map<String, dynamic>? body,
+        String? token,
+      }) async {
+    final reponse = await http
+        .post(
+      Uri.parse(url),
+      headers: _entetes(token: token),
+      body: jsonEncode(body ?? const {}),
+    )
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _put(
+      String url, {
+        Map<String, dynamic>? body,
+        String? token,
+      }) async {
+    final reponse = await http
+        .put(
+      Uri.parse(url),
+      headers: _entetes(token: token),
+      body: jsonEncode(body ?? const {}),
+    )
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _delete(String url, {String? token}) async {
+    final reponse = await http
+        .delete(Uri.parse(url), headers: _entetes(token: token, avecJson: false))
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _multipart(
+      String methode,
+      String url, {
+        Map<String, dynamic> champs = const {},
+        List<FichierMultipart> fichiers = const [],
+        String? token,
+      }) async {
+    final requete = http.MultipartRequest(methode, Uri.parse(url));
+    if (token != null) {
+      requete.headers['Authorization'] = 'Bearer $token';
+    }
+    champs.forEach((cle, valeur) {
+      if (valeur != null) requete.fields[cle] = valeur.toString();
+    });
+    for (final fichier in fichiers) {
+      requete.files.add(http.MultipartFile.fromBytes(
+        fichier.champ,
+        fichier.octets,
+        filename: fichier.nomFichier,
+      ));
+    }
+    final flux = await requete.send().timeout(_timeout);
+    final reponse = await http.Response.fromStream(flux);
+    return _decoder(reponse);
+  }
 
   /* ===================================================================
    * Services d'assurance
@@ -52,8 +206,8 @@ class AssuranceRepository {
   Future<List<ServiceAssurance>> listerServicesAssurance({
     ServicesAssuranceFiltre? filtres,
   }) async {
-    final donnees = await _client.get(
-      ApiEndpoints.servicesAssurance,
+    final donnees = await _get(
+      ApiRealEndpoints.servicesAssurance,
       query: filtres?.toQueryParameters(),
     );
     return ServicesAssuranceListeReponse.fromJson(
@@ -64,8 +218,7 @@ class AssuranceRepository {
   /// GET /services-assurance/:id
   /// Publique.
   Future<ServiceAssurance> obtenirServiceAssurance(String id) async {
-    final donnees =
-    await _client.get(ApiEndpoints.serviceAssurance(id));
+    final donnees = await _get(ApiRealEndpoints.serviceAssurance(id));
     return ServiceAssuranceDetailReponse.fromJson(
       donnees as Map<String, dynamic>,
     ).serviceAssurance;
@@ -83,8 +236,9 @@ class AssuranceRepository {
     required String imageNomFichier,
     required String token,
   }) async {
-    final donnees = await _client.postMultipart(
-      ApiEndpoints.servicesAssurance,
+    final donnees = await _multipart(
+      'POST',
+      ApiRealEndpoints.servicesAssurance,
       champs: requete.toChampsTexte(),
       fichiers: [
         FichierMultipart(
@@ -128,8 +282,9 @@ class AssuranceRepository {
       throw const ApiException('Aucune donnée valide à mettre à jour.');
     }
 
-    final donnees = await _client.putMultipart(
-      ApiEndpoints.serviceAssurance(id),
+    final donnees = await _multipart(
+      'PUT',
+      ApiRealEndpoints.serviceAssurance(id),
       champs: champs,
       fichiers: fichiers,
       token: token,
@@ -147,8 +302,8 @@ class AssuranceRepository {
       String id, {
         required String token,
       }) async {
-    final donnees = await _client.delete(
-      ApiEndpoints.serviceAssurance(id),
+    final donnees = await _delete(
+      ApiRealEndpoints.serviceAssurance(id),
       token: token,
     );
     return _messageOu(donnees, 'Service d\'assurance supprimé.');
@@ -166,8 +321,8 @@ class AssuranceRepository {
     required String serviceAssuranceId,
     required String token,
   }) async {
-    final donnees = await _client.get(
-      ApiEndpoints.misesEnRelationAssurance,
+    final donnees = await _get(
+      ApiRealEndpoints.misesEnRelationAssurance,
       query: MisesEnRelationFiltre(
         serviceAssuranceId: serviceAssuranceId,
       ).toQueryParameters(),
@@ -186,8 +341,8 @@ class AssuranceRepository {
     required MiseEnRelationCreationRequete requete,
     required String token,
   }) async {
-    final donnees = await _client.post(
-      ApiEndpoints.misesEnRelationAssurance,
+    final donnees = await _post(
+      ApiRealEndpoints.misesEnRelationAssurance,
       body: requete.toJson(),
       token: token,
     );
@@ -203,8 +358,8 @@ class AssuranceRepository {
       String id, {
         required String token,
       }) async {
-    final donnees = await _client.delete(
-      ApiEndpoints.miseEnRelationAssurance(id),
+    final donnees = await _delete(
+      ApiRealEndpoints.miseEnRelationAssurance(id),
       token: token,
     );
     return _messageOu(donnees, 'Mise en relation supprimée.');
@@ -220,8 +375,8 @@ class AssuranceRepository {
   Future<List<Activite>> listerActivites({
     ActivitesFiltre? filtre,
   }) async {
-    final donnees = await _client.get(
-      ApiEndpoints.activites,
+    final donnees = await _get(
+      ApiRealEndpoints.activites,
       query: filtre?.toQueryParameters(),
     );
     return ActivitesListeReponse.fromJson(
@@ -232,7 +387,7 @@ class AssuranceRepository {
   /// GET /activites/:id
   /// Publique.
   Future<Activite> obtenirActivite(String id) async {
-    final donnees = await _client.get(ApiEndpoints.activite(id));
+    final donnees = await _get(ApiRealEndpoints.activite(id));
     return ActiviteDetailReponse.fromJson(
       donnees as Map<String, dynamic>,
     ).activite;
@@ -245,8 +400,8 @@ class AssuranceRepository {
     required ActiviteCreationRequete requete,
     required String token,
   }) async {
-    final donnees = await _client.post(
-      ApiEndpoints.activites,
+    final donnees = await _post(
+      ApiRealEndpoints.activites,
       body: requete.toJson(),
       token: token,
     );
@@ -268,8 +423,8 @@ class AssuranceRepository {
     if (corps.isEmpty) {
       throw const ApiException('Aucune donnée valide à mettre à jour.');
     }
-    final donnees = await _client.put(
-      ApiEndpoints.activite(id),
+    final donnees = await _put(
+      ApiRealEndpoints.activite(id),
       body: corps,
       token: token,
     );
@@ -286,7 +441,7 @@ class AssuranceRepository {
         required String token,
       }) async {
     final donnees =
-    await _client.delete(ApiEndpoints.activite(id), token: token);
+    await _delete(ApiRealEndpoints.activite(id), token: token);
     return _messageOu(donnees, 'Activité supprimée.');
   }
 
@@ -301,8 +456,8 @@ class AssuranceRepository {
   Future<List<OptionActivite>> listerOptionsActivite({
     required String activiteId,
   }) async {
-    final donnees = await _client.get(
-      ApiEndpoints.optionsActivite,
+    final donnees = await _get(
+      ApiRealEndpoints.optionsActivite,
       query: {'activite_id': activiteId},
     );
     return OptionsActiviteListeReponse.fromJson(
@@ -313,7 +468,7 @@ class AssuranceRepository {
   /// GET /options-activite/:id
   /// Publique.
   Future<OptionActivite> obtenirOptionActivite(String id) async {
-    final donnees = await _client.get(ApiEndpoints.optionActivite(id));
+    final donnees = await _get(ApiRealEndpoints.optionActivite(id));
     return OptionActiviteDetailReponse.fromJson(
       donnees as Map<String, dynamic>,
     ).optionActivite;
@@ -327,8 +482,8 @@ class AssuranceRepository {
     required OptionActiviteCreationRequete requete,
     required String token,
   }) async {
-    final donnees = await _client.post(
-      ApiEndpoints.optionsActivite,
+    final donnees = await _post(
+      ApiRealEndpoints.optionsActivite,
       body: requete.toJson(),
       token: token,
     );
@@ -350,8 +505,8 @@ class AssuranceRepository {
     if (corps.isEmpty) {
       throw const ApiException('Aucune donnée valide à mettre à jour.');
     }
-    final donnees = await _client.put(
-      ApiEndpoints.optionActivite(id),
+    final donnees = await _put(
+      ApiRealEndpoints.optionActivite(id),
       body: corps,
       token: token,
     );
@@ -366,8 +521,8 @@ class AssuranceRepository {
       String id, {
         required String token,
       }) async {
-    final donnees = await _client.delete(
-      ApiEndpoints.optionActivite(id),
+    final donnees = await _delete(
+      ApiRealEndpoints.optionActivite(id),
       token: token,
     );
     return _messageOu(donnees, 'Option d\'activité supprimée.');
@@ -381,8 +536,8 @@ class AssuranceRepository {
   /// Publique. Filtre optionnel par `service_assurance_id` — sans filtre,
   /// retourne l'ensemble des agences.
   Future<List<Agence>> listerAgences({AgencesFiltre? filtre}) async {
-    final donnees = await _client.get(
-      ApiEndpoints.agences,
+    final donnees = await _get(
+      ApiRealEndpoints.agences,
       query: filtre?.toQueryParameters(),
     );
     return AgencesListeReponse.fromJson(
@@ -393,7 +548,7 @@ class AssuranceRepository {
   /// GET /agences/:id
   /// Publique.
   Future<Agence> obtenirAgence(String id) async {
-    final donnees = await _client.get(ApiEndpoints.agence(id));
+    final donnees = await _get(ApiRealEndpoints.agence(id));
     return AgenceDetailReponse.fromJson(
       donnees as Map<String, dynamic>,
     ).agence;
@@ -406,8 +561,8 @@ class AssuranceRepository {
     required AgenceCreationRequete requete,
     required String token,
   }) async {
-    final donnees = await _client.post(
-      ApiEndpoints.agences,
+    final donnees = await _post(
+      ApiRealEndpoints.agences,
       body: requete.toJson(),
       token: token,
     );
@@ -431,8 +586,8 @@ class AssuranceRepository {
     if (corps.isEmpty) {
       throw const ApiException('Aucune donnée valide à mettre à jour.');
     }
-    final donnees = await _client.put(
-      ApiEndpoints.agence(id),
+    final donnees = await _put(
+      ApiRealEndpoints.agence(id),
       body: corps,
       token: token,
     );
@@ -448,7 +603,7 @@ class AssuranceRepository {
         required String token,
       }) async {
     final donnees =
-    await _client.delete(ApiEndpoints.agence(id), token: token);
+    await _delete(ApiRealEndpoints.agence(id), token: token);
     return _messageOu(donnees, 'Agence supprimée.');
   }
 

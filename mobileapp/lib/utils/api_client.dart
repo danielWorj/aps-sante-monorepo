@@ -14,13 +14,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:riverpod/riverpod.dart';
 
 /// Regroupe tous les chemins d'API exposés par le backend Express.
 /// Garder les endpoints ici évite de disperser des chaînes de
 /// caractères "en dur" dans les repositories.
 class ApiEndpoints {
   ApiEndpoints._();
-
   // ─── Authentification (module transverse "authentification") ────
   // Voir authentification.routes.js / authentification.controller.js.
   //   - register, login, refresh                : publiques.
@@ -198,6 +198,36 @@ class FichierMultipart {
   });
 }
 
+/// Regroupe la configuration réseau (URL de base de l'API).
+/// Centraliser cette valeur ici évite de la dupliquer/hardcoder dans
+/// plusieurs fichiers (repositories, main.dart, tests...).
+///
+/// ⚠️ Adapte cette valeur à ton environnement :
+///   - Émulateur Android : http://10.0.2.2:3000
+///   - Simulateur iOS / Web / Desktop : http://localhost:3000
+///   - Appareil physique (ou émulateur qui ne route pas 10.0.2.2) :
+///     http://<IP_DE_TA_MACHINE_SUR_LE_RESEAU_LOCAL>:3000
+///
+/// 10.0.2.2 est un alias spécial UNIQUEMENT valable depuis un
+/// émulateur Android standard (AVD) — il pointe vers le localhost de
+/// la machine hôte. Sur un appareil physique (ou tout environnement
+/// qui n'est pas cet émulateur précis), cette adresse n'est pas
+/// joignable : chaque requête échoue silencieusement en
+/// SocketException/timeout, capturée et transformée en [ApiException]
+/// par [ApiClient._envoyer] — d'où l'impression que "ApiClient bug"
+/// alors que c'est simplement la mauvaise adresse réseau.
+///
+/// Ici on utilise l'IP réelle de la machine hôte sur le réseau local
+/// (celle avec laquelle l'appel direct http.get() fonctionnait).
+class ApiConfig {
+  ApiConfig._();
+
+  /// URL de base du serveur Express, SANS slash final et SANS le
+  /// préfixe des routes (les chemins dans [ApiEndpoints] commencent
+  /// déjà par '/', ex: '/auth/login').
+  static const String baseUrl = 'http://10.0.2.2:3000/api';
+}
+
 /// Client HTTP minimal, sans dépendance à un état global : le token
 /// d'authentification est fourni requête par requête (via [token])
 /// plutôt que stocké ici, pour que ce fichier reste un simple
@@ -205,17 +235,30 @@ class FichierMultipart {
 /// (ex: un AuthController / middleware d'auth).
 class ApiClient {
   /// URL de base de l'API, sans slash final.
-  /// Ex: http://localhost:3000/api
+  /// Ex: http://localhost:3000
   final String baseUrl;
 
-  final http.Client _httpClient;
   final Duration timeout;
 
+  /// Client HTTP optionnel (tests/mock). Quand il est fourni, TOUTES les
+  /// requêtes (y compris multipart) passent par lui. Quand il est
+  /// `null` (cas normal en prod), les requêtes get/post/put/delete/
+  /// patch utilisent les fonctions de package `http.get()`, `http.post()`,
+  /// etc. — EXACTEMENT comme l'appel qui fonctionne dans
+  /// `listerMedecins()`. Ces fonctions de package gèrent elles-mêmes la
+  /// création/fermeture d'un client par requête ; elles ne passent PAS
+  /// par un `http.Client()` explicite. Seul le multipart, qui n'a pas
+  /// d'équivalent au niveau package, crée encore un `http.Client()` à la
+  /// volée (voir [_envoyerMultipart]).
+  final http.Client? _httpClientInjecte;
+
   ApiClient({
-    required this.baseUrl,
+    this.baseUrl = ApiConfig.baseUrl,
     http.Client? httpClient,
     this.timeout = const Duration(seconds: 15),
-  }) : _httpClient = httpClient ?? http.Client();
+  }) : _httpClientInjecte = httpClient;
+
+  http.Client _creerClient() => _httpClientInjecte ?? http.Client();
 
   Uri _uri(String path, [Map<String, dynamic>? query]) {
     final cleanBase = baseUrl.endsWith('/')
@@ -253,9 +296,11 @@ class ApiClient {
         Map<String, dynamic>? query,
         String? token,
       }) {
-    return _envoyer(() => _httpClient
-        .get(_uri(path, query), headers: _headers(token: token))
-        .timeout(timeout));
+    final uri = _uri(path, query);
+    final headers = _headers(token: token);
+    return _envoyer(() => _httpClientInjecte != null
+        ? _httpClientInjecte.get(uri, headers: headers).timeout(timeout)
+        : http.get(uri, headers: headers).timeout(timeout));
   }
 
   /// POST avec corps JSON.
@@ -264,13 +309,14 @@ class ApiClient {
         Map<String, dynamic>? body,
         String? token,
       }) {
-    return _envoyer(() => _httpClient
-        .post(
-      _uri(path),
-      headers: _headers(token: token, withBody: true),
-      body: jsonEncode(body ?? {}),
-    )
-        .timeout(timeout));
+    final uri = _uri(path);
+    final headers = _headers(token: token, withBody: true);
+    final corps = jsonEncode(body ?? {});
+    return _envoyer(() => _httpClientInjecte != null
+        ? _httpClientInjecte
+        .post(uri, headers: headers, body: corps)
+        .timeout(timeout)
+        : http.post(uri, headers: headers, body: corps).timeout(timeout));
   }
 
   /// PUT avec corps JSON.
@@ -279,20 +325,23 @@ class ApiClient {
         Map<String, dynamic>? body,
         String? token,
       }) {
-    return _envoyer(() => _httpClient
-        .put(
-      _uri(path),
-      headers: _headers(token: token, withBody: true),
-      body: jsonEncode(body ?? {}),
-    )
-        .timeout(timeout));
+    final uri = _uri(path);
+    final headers = _headers(token: token, withBody: true);
+    final corps = jsonEncode(body ?? {});
+    return _envoyer(() => _httpClientInjecte != null
+        ? _httpClientInjecte
+        .put(uri, headers: headers, body: corps)
+        .timeout(timeout)
+        : http.put(uri, headers: headers, body: corps).timeout(timeout));
   }
 
   /// DELETE.
   Future<dynamic> delete(String path, {String? token}) {
-    return _envoyer(() => _httpClient
-        .delete(_uri(path), headers: _headers(token: token))
-        .timeout(timeout));
+    final uri = _uri(path);
+    final headers = _headers(token: token);
+    return _envoyer(() => _httpClientInjecte != null
+        ? _httpClientInjecte.delete(uri, headers: headers).timeout(timeout)
+        : http.delete(uri, headers: headers).timeout(timeout));
   }
 
   /// PATCH avec corps JSON optionnel (ex: changements de statut ciblés
@@ -302,13 +351,14 @@ class ApiClient {
         Map<String, dynamic>? body,
         String? token,
       }) {
-    return _envoyer(() => _httpClient
-        .patch(
-      _uri(path),
-      headers: _headers(token: token, withBody: true),
-      body: jsonEncode(body ?? {}),
-    )
-        .timeout(timeout));
+    final uri = _uri(path);
+    final headers = _headers(token: token, withBody: true);
+    final corps = jsonEncode(body ?? {});
+    return _envoyer(() => _httpClientInjecte != null
+        ? _httpClientInjecte
+        .patch(uri, headers: headers, body: corps)
+        .timeout(timeout)
+        : http.patch(uri, headers: headers, body: corps).timeout(timeout));
   }
 
   /// POST multipart/form-data (champs texte/bool + fichiers). Utilisé
@@ -345,6 +395,7 @@ class ApiClient {
         List<FichierMultipart>? fichiers,
         String? token,
       }) async {
+    final client = _creerClient();
     try {
       final requete = http.MultipartRequest(methode, _uri(path));
       requete.headers.addAll(_headers(token: token));
@@ -363,7 +414,7 @@ class ApiClient {
         ));
       }
 
-      final flux = await _httpClient.send(requete).timeout(timeout);
+      final flux = await client.send(requete).timeout(timeout);
       final reponse = await http.Response.fromStream(flux);
       return _traiter(reponse);
     } on TimeoutException {
@@ -374,12 +425,22 @@ class ApiClient {
       rethrow;
     } catch (e) {
       throw ApiException('Erreur inattendue : $e');
+    } finally {
+      client.close();
     }
   }
 
   /// Exécute la requête, décode la réponse JSON et lève une
   /// [ApiException] homogène en cas d'erreur (HTTP, réseau, parsing).
-  Future<dynamic> _envoyer(Future<http.Response> Function() requete) async {
+  ///
+  /// [requete] appelle directement une fonction de package (`http.get()`,
+  /// `http.post()`, etc.) — comme [listerMedecins] côté repository — ou
+  /// le client injecté en test. Il n'y a plus de `http.Client()` créé et
+  /// fermé manuellement ici pour les appels JSON simples : c'était
+  /// suspecté d'être la source des `SocketException` observées sur
+  /// certains appareils/réseaux alors que l'appel direct fonctionnait.
+  Future<dynamic> _envoyer(
+      Future<http.Response> Function() requete) async {
     try {
       final reponse = await requete();
       return _traiter(reponse);
@@ -413,5 +474,22 @@ class ApiClient {
     throw ApiException(message, statusCode: reponse.statusCode);
   }
 
-  void close() => _httpClient.close();
+  /// Ne fait plus rien : il n'y a plus de client HTTP persistant à
+  /// fermer, chaque requête crée puis ferme le sien (voir
+  /// [_creerClient]). Conservée pour ne pas casser un éventuel appel
+  /// existant (`apiClient.close()`) ailleurs dans l'app.
+  void close() {}
 }
+
+/// Instance unique d'[ApiClient] partagée par tous les modules qui en
+/// ont besoin (Authentification, Rendez-vous, ...). Déclarée ici — au
+/// même endroit que la classe [ApiClient] — plutôt que dans l'un des
+/// controllers, pour que ceux-ci n'aient pas à se pointer les uns vers
+/// les autres : chacun importe simplement `api_client.dart`.
+///
+/// ⚠️ [MedecinRepository] (medecin_repository.dart) ne dépend PAS de ce
+/// provider : il parle HTTP directement via `package:http`, sans passer
+/// par [ApiClient]. Ce provider ne sert donc qu'aux modules qui, comme
+/// [AuthentificationRepository] et [RendezVousRepository], prennent
+/// encore un [ApiClient] en paramètre de leur constructeur.
+final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());

@@ -39,33 +39,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/assurance_models.dart';
 import '../repositories/assurance_repository.dart';
-import '../utils/api_client.dart';
 
 /* =========================================================================
  * Dépendances partagées
  * ========================================================================= */
 
-/// Instance unique d'[ApiClient] pour toute l'app.
-///
-/// ⚠️ Si un `apiClientProvider` existe déjà ailleurs dans le projet
-/// (fichier partagé entre tous les modules, ex: medecin_controller.dart),
-/// SUPPRIMER cette déclaration et importer l'existant à la place — ce
-/// provider n'est redéclaré ici que pour que ce fichier compile de
-/// façon autonome. Adapter `baseUrl` à la configuration réelle (ex:
-/// variable d'environnement / flavor).
-final apiClientProvider = Provider<ApiClient>((ref) {
-  final client = ApiClient(baseUrl: 'http://localhost:3000/api');
-  ref.onDispose(client.close);
-  return client;
-});
-
 /// Repository ré-exposé ici pour que les widgets n'aient jamais besoin
 /// d'importer assurance_repository.dart directement.
+///
+/// [AssuranceRepository] parle HTTP directement (via le package `http`)
+/// et ne prend plus de dépendance en paramètre : pas besoin d'
+/// [ApiClient] ici, en miroir de medecin_controller.dart /
+/// [MedecinRepository].
 final assuranceRepositoryProvider = Provider<AssuranceRepository>((ref) {
-  return AssuranceRepository(ref.watch(apiClientProvider));
+  return AssuranceRepository();
 });
 
-/// ⚠️ Même remarque que pour [apiClientProvider] : si un
+/// ⚠️ Si un
 /// `authTokenProvider` global existe déjà ailleurs dans le projet (issu de
 /// l'AuthController de l'app), SUPPRIMER cette déclaration et importer
 /// l'existant à la place — ce provider n'est redéclaré ici que pour que ce

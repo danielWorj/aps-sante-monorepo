@@ -38,6 +38,22 @@ T? _lire<T>(Map<String, dynamic> json, String cle) {
   return null;
 }
 
+/// Lit un champ censé être une String obligatoire, sans jamais planter :
+/// si la valeur est absente/`null`/d'un autre type, renvoie [repli] (par
+/// défaut chaîne vide) et log un avertissement en debug pour repérer
+/// facilement quel champ backend est en cause (ex: un `numero_ordre` ou
+/// un `pays_exercice_id` non renseigné en base pour cette fiche).
+String _lireStr(Map<String, dynamic> json, String cle, {String repli = ''}) {
+  final valeur = json[cle];
+  if (valeur is String) return valeur;
+  // ignore: avoid_print
+  print(
+      '[medecin_models] Champ "$cle" attendu en String mais reçu: '
+          '${valeur == null ? 'null' : '${valeur.runtimeType} ($valeur)'} '
+          '— valeur de repli "$repli" utilisée.');
+  return repli;
+}
+
 /// Miroir de l'enum Prisma `StatutVerificationMedecin`.
 enum StatutVerificationMedecin {
   nonPublie,
@@ -106,8 +122,8 @@ class Specialite {
 
   factory Specialite.fromJson(Map<String, dynamic> json) {
     return Specialite(
-      specialiteId: json['specialite_id'] as String,
-      nom: json['nom'] as String,
+      specialiteId: _lireStr(json, 'specialite_id'),
+      nom: _lireStr(json, 'nom'),
       description: _lire<String>(json, 'description'),
     );
   }
@@ -182,8 +198,8 @@ class VilleExerciceRef {
 
   factory VilleExerciceRef.fromJson(Map<String, dynamic> json) {
     return VilleExerciceRef(
-      villeId: json['ville_id'] as String,
-      nom: json['nom'] as String,
+      villeId: _lireStr(json, 'ville_id'),
+      nom: _lireStr(json, 'nom'),
     );
   }
 
@@ -201,8 +217,8 @@ class PaysExerciceRef {
 
   factory PaysExerciceRef.fromJson(Map<String, dynamic> json) {
     return PaysExerciceRef(
-      paysId: json['pays_id'] as String,
-      nom: json['nom'] as String,
+      paysId: _lireStr(json, 'pays_id'),
+      nom: _lireStr(json, 'nom'),
     );
   }
 
@@ -247,8 +263,8 @@ class UtilisateurMedecin {
   factory UtilisateurMedecin.fromJson(Map<String, dynamic> json) {
     return UtilisateurMedecin(
       utilisateurId: _lire<String>(json, 'utilisateur_id'),
-      nom: json['nom'] as String,
-      prenom: json['prenom'] as String,
+      nom: _lireStr(json, 'nom'),
+      prenom: _lireStr(json, 'prenom'),
       email: _lire<String>(json, 'email'),
       telephone: _lire<String>(json, 'telephone'),
       paysId: _lire<String>(json, 'pays_id'),
@@ -558,20 +574,20 @@ class Medecin {
 
   factory Medecin.fromJson(Map<String, dynamic> json) {
     return Medecin(
-      medecinId: json['medecin_id'] as String,
-      utilisateurId: json['utilisateur_id'] as String,
-      specialiteId: json['specialite_id'] as String,
-      numeroOrdre: json['numero_ordre'] as String,
+      medecinId: _lireStr(json, 'medecin_id'),
+      utilisateurId: _lireStr(json, 'utilisateur_id'),
+      specialiteId: _lireStr(json, 'specialite_id'),
+      numeroOrdre: _lireStr(json, 'numero_ordre'),
       statutVerification:
       StatutVerificationMedecin.fromApi(json['statut_verification'] as String?),
-      paysExerciceId: json['pays_exercice_id'] as String,
-      villeExerciceId: json['ville_exercice_id'] as String,
+      paysExerciceId: _lireStr(json, 'pays_exercice_id'),
+      villeExerciceId: _lireStr(json, 'ville_exercice_id'),
       teleconsultationActivee: json['teleconsultation_activee'] == true,
       tarifIndicatif: _lireDecimal(json['tarif_indicatif']),
       biographie: json['biographie'] as String? ?? '',
       linkedInUrl: _lire<String>(json, 'linkedInUrl'),
-      cniUrl: json['cni_url'] as String,
-      attestationUrl: json['attestation_url'] as String,
+      cniUrl: _lireStr(json, 'cni_url'),
+      attestationUrl: _lireStr(json, 'attestation_url'),
       cvUrl: _lire<String>(json, 'cv_url'),
       photoUrl: _lire<String>(json, 'photo_url'),
       dateCreation: json['date_creation'] is String

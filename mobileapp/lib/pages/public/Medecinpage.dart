@@ -8,6 +8,8 @@ import 'package:riverpod/riverpod.dart';
 import '../../components/components.dart';
 import '../../controllers/medecin_controller.dart';
 import '../../models/medecin_models.dart';
+import 'publicAcceuil.dart';
+import 'Assurancepage.dart';
 // ⚠️ Chemin à ajuster à l'emplacement réel de Rendezvous.dart dans votre
 // arborescence : ce fichier (Medecinpage.dart) importe `components.dart`
 // avec 2 niveaux ('../../'), tandis que Rendezvous.dart en utilise 3
@@ -256,6 +258,34 @@ class _MedecinPageState extends State<MedecinPage> {
         .rafraichir();
   }
 
+  /// Gère un tap sur la barre de navigation basse : met à jour l'index actif
+  /// ET navigue réellement vers l'écran correspondant (0=Accueil,
+  /// 1=Médecin [écran courant], 2=Assurance, 3=À propos).
+  void _onBottomNavTap(int index) {
+    setState(() => _navIndex = index);
+    switch (index) {
+      case 0: // Accueil
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PublicAcceuilPage()),
+        );
+        break;
+      case 1: // Médecin — déjà sur cet écran.
+        break;
+      case 2: // Assurance
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AssurancePage()),
+        );
+        break;
+      case 3: // À propos — aucun écran fourni pour l'instant.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Écran « À propos » bientôt disponible.')),
+        );
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -332,7 +362,7 @@ class _MedecinPageState extends State<MedecinPage> {
             bottom: 10,
             child: AppBottomNav(
               currentIndex: _navIndex,
-              onTap: (i) => setState(() => _navIndex = i),
+              onTap: _onBottomNavTap,
               onRdvPressed: () {
                 // TODO(nav): brancher la navigation vers la prise de
                 // rendez-vous générale (sans médecin présélectionné).

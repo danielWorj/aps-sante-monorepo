@@ -23,6 +23,9 @@
 
 import 'package:flutter/material.dart';
 import '../../components/components.dart';
+import 'publicAcceuil.dart';
+import 'Medecinpage.dart';
+import 'Assurancepage.dart';
 // import 'package:url_launcher/url_launcher.dart';
 
 
@@ -119,6 +122,38 @@ class _UrgencePageState extends State<UrgencePage> {
     debugPrint('Itinéraire vers $cible');
   }
 
+  /// Gère un tap sur la barre de navigation basse : cet écran n'a pas de
+  /// rubrique dédiée (`_navIndex = -1`), donc on navigue simplement vers
+  /// l'écran correspondant (0=Accueil, 1=Médecin, 2=Assurance, 3=À propos).
+  void _onBottomNavTap(int index) {
+    setState(() => _navIndex = index);
+    switch (index) {
+      case 0: // Accueil
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PublicAcceuilPage()),
+        );
+        break;
+      case 1: // Médecin
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MedecinPage()),
+        );
+        break;
+      case 2: // Assurance
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AssurancePage()),
+        );
+        break;
+      case 3: // À propos — aucun écran fourni pour l'instant.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Écran « À propos » bientôt disponible.')),
+        );
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -173,7 +208,7 @@ class _UrgencePageState extends State<UrgencePage> {
               bottom: 10,
               child: AppBottomNav(
                 currentIndex: _navIndex,
-                onTap: (i) => setState(() => _navIndex = i),
+                onTap: _onBottomNavTap,
                 onRdvPressed: () {
                   // Brancher ici la navigation vers l'écran de prise de RDV.
                 },

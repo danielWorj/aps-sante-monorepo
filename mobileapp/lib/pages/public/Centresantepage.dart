@@ -44,6 +44,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../components/components.dart';
 import '../../controllers/centresante_controller.dart';
 import '../../models/centresante_models.dart';
+import 'publicAcceuil.dart';
+import 'Medecinpage.dart';
+import 'Assurancepage.dart';
 import '../../repositories/centresante_repository.dart';
 
 
@@ -114,6 +117,39 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
   String _query = '';
   TypeStructure? _selectedType; // null = « Tous les types »
   String? _selectedVilleId; // null = « Toutes les villes »
+
+  /// Comportement PAR DÉFAUT de la barre de navigation basse, utilisé
+  /// uniquement si l'écran parent n'a pas fourni `widget.onBottomNavTap`
+  /// (ex: quand [CentreSantePage] est ouverte directement via
+  /// `Navigator.push`, hors d'un shell de navigation). Sans ce fallback,
+  /// `widget.onBottomNavTap ?? (_) {}` ne faisait strictement rien au tap.
+  void _defaultOnBottomNavTap(int index) {
+    switch (index) {
+      case 0: // Accueil
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PublicAcceuilPage()),
+        );
+        break;
+      case 1: // Médecin
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MedecinPage()),
+        );
+        break;
+      case 2: // Assurance
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AssurancePage()),
+        );
+        break;
+      case 3: // À propos — aucun écran fourni pour l'instant.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Écran « À propos » bientôt disponible.')),
+        );
+        break;
+    }
+  }
 
   @override
   void initState() {
@@ -198,7 +234,7 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
               bottom: 10,
               child: AppBottomNav(
                 currentIndex: widget.bottomNavIndex,
-                onTap: widget.onBottomNavTap ?? (_) {},
+                onTap: widget.onBottomNavTap ?? _defaultOnBottomNavTap,
                 onRdvPressed: widget.onRdvPressed ?? () {},
               ),
             ),

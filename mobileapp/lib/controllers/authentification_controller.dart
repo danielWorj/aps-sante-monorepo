@@ -29,11 +29,10 @@
 //     supprimer [_StockageSession] et se contenter de l'état mémoire
 //     (perte de session au redémarrage).
 //
-// ⚠️ Comme dans medecin_controller.dart : si un `apiClientProvider`
-// partagé existe déjà ailleurs dans le projet, importer celui-là (ici
-// on réutilise celui déclaré dans medecin_controller.dart, exactement
-// comme le fait rendez_vous_controller.dart) plutôt que d'en
-// redéclarer un.
+// ⚠️ Réutilise l'`apiClientProvider` partagé déclaré dans
+// api_client.dart (exactement comme le fait rendez_vous_controller.dart)
+// plutôt que d'en redéclarer un ici : deux ApiClient distincts
+// casseraient le partage d'état HTTP entre les modules.
 
 import 'dart:async';
 
@@ -43,11 +42,7 @@ import 'package:riverpod/riverpod.dart';
 
 import '../models/authentification_models.dart';
 import '../repositories/authentification_repository.dart';
-// Réutilise l'apiClientProvider déjà déclaré pour les autres modules
-// (voir sa doc dans medecin_controller.dart). Ne PAS le redéclarer ici
-// pour éviter deux ApiClient distincts qui casseraient le partage du
-// cookie de session côté web / du pot de cookies côté mobile.
-import 'medecin_controller.dart' show apiClientProvider;
+import '../utils/api_client.dart' show apiClientProvider;
 
 /* =========================================================================
  * Dépendances
