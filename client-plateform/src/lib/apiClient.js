@@ -93,7 +93,7 @@ export async function apiFetch(
   const estFormData = typeof FormData !== 'undefined' && body instanceof FormData;
 
   const doFetch = (token) =>
-    fetch(`${API_BASE_URL}${path}`, {
+    fetch(`${API_BASE_URL}/api/${path}`, {
       ...options,
       credentials: 'include',
       headers: {
