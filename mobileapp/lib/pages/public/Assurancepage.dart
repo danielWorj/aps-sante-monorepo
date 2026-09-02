@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../components/components.dart';
 import '../../controllers/assurance_controller.dart';
+import '../../controllers/publicite_controller.dart';
 import '../../models/assurance_models.dart';
+import '../../models/publicite_models.dart';
+import '../../repositories/publicite_repository.dart' show PublicitesParPageResultat;
 import './utils/DetailAssurance.dart'; // ⚠️ adapter ce chemin à l'emplacement réel du fichier dans le projet.
 import 'publicAcceuil.dart';
 import 'Medecinpage.dart';
@@ -226,8 +229,8 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
         ),
         const SizedBox(height: 16),
 
-        // ---- Publicité (visuel réel de la campagne, placée au-dessus de la liste) ----
-        const _InsuranceAdBanner(),
+        // ---- Publicité (encart réel de PAGE_ASSURANCES, placé au-dessus de la liste) ----
+        _InsuranceAdBanner(token: ref.read(authTokenProvider)),
 
         // ---- Résultats ------------------------------------------------
         servicesAsync.when(
@@ -458,11 +461,59 @@ class _FilterChip extends StatelessWidget {
 
 /// Bandeau publicitaire — `.ad-mobile.ad-top` de la maquette.
 ///
-/// Contenu illustratif uniquement : brancher ici le module de régie
-/// publicitaire réel de l'application (image, lien, désactivable selon
-/// l'écran — jamais affiché sur l'écran Urgence).
-class _InsuranceAdBanner extends StatelessWidget {
-  const _InsuranceAdBanner();
+/// Publicité RÉELLE de l'emplacement `PAGE_ASSURANCES`, récupérée via
+/// GET /publicites/par-page/PAGE_ASSURANCES
+/// ([publicitesParCodePageProvider] — voir publicite_controller.dart /
+/// publicite_repository.dart). Affiche la première publicité "validee"
+/// renvoyée par le backend pour cette page ; si aucune publicité n'est
+/// active (ou en cas d'erreur réseau), le bandeau ne s'affiche
+/// simplement pas — un encart vide serait plus perturbant que son
+/// absence.
+///
+/// [token] permet à un admin/superadmin connecté de voir aussi les
+/// publicités non "validee" de cet emplacement (mêmes règles de
+/// visibilité que côté backend, voir listerPublicitesParCodePage) ;
+/// laisser à `null` pour le comportement public standard.
+class _InsuranceAdBanner extends ConsumerWidget {
+  const _InsuranceAdBanner({this.token});
+
+  /// Code de l'emplacement publicitaire correspondant à l'écran
+  /// Assurances (voir GET /emplacements-publicitaires : PAGE_ASSURANCES
+  /// = « Garanties de page »).
+  static const String _codePage = 'PAGE_ASSURANCES';
+
+  final String? token;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final resultatAsync = ref.watch(
+      publicitesParCodePageProvider(
+        (codePage: _codePage, paysId: null, token: token),
+      ),
+    );
+
+    return resultatAsync.when(
+      data: (resultat) {
+        if (resultat.publicites.isEmpty) return const SizedBox.shrink();
+        return _CartePublicite(publicite: resultat.publicites.first);
+      },
+      // Chargement/erreur silencieux : un simple encart publicitaire
+      // secondaire ne doit ni afficher de skeleton bruyant, ni faire
+      // échouer l'écran (le reste de la page — recherche, filtres,
+      // annuaire — reste utilisable indépendamment de la pub).
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+}
+
+/// Carte d'affichage d'une [Publicite] réelle : visuel Cloudinary
+/// ([Publicite.visuelUrl], déjà prêt à l'emploi côté backend) + titre
+/// saisi par l'annonceur.
+class _CartePublicite extends StatelessWidget {
+  const _CartePublicite({required this.publicite});
+
+  final Publicite publicite;
 
   @override
   Widget build(BuildContext context) {
@@ -498,37 +549,45 @@ class _InsuranceAdBanner extends StatelessWidget {
           Container(
             margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             height: 96,
+            width: double.infinity,
             decoration: BoxDecoration(
               color: AppColors.paper,
               borderRadius: BorderRadius.circular(12),
             ),
+            clipBehavior: Clip.antiAlias,
             alignment: Alignment.center,
-            child: const Icon(Icons.image_outlined, size: 28, color: AppColors.inkFaint),
+            child: Image.network(
+              publicite.visuelUrl,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: 96,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return const Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                );
+              },
+              // Visuel Cloudinary indisponible (lien cassé, hors-ligne...) :
+              // on retombe sur le pictogramme neutre plutôt que de casser
+              // la carte.
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.image_outlined,
+                size: 28,
+                color: AppColors.inkFaint,
+              ),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('AXA Assurances', style: AppTextStyles.cardTitle),
-                const SizedBox(height: 4),
-                Text(
-                  'Professionnalisme, proximité et expertise — découvrez les offres santé AXA.',
-                  style: AppTextStyles.body.copyWith(fontSize: 10.5),
-                ),
-                const SizedBox(height: 9),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'En savoir plus',
-                      style: AppTextStyles.buttonLabel.copyWith(fontSize: 11, color: AppColors.green700),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.arrow_forward, size: 12, color: AppColors.green700),
-                  ],
-                ),
-              ],
+            child: Text(
+              publicite.titre,
+              style: AppTextStyles.cardTitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           Padding(

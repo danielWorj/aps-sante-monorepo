@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Adaptez ces chemins selon l'emplacement réel des fichiers dans votre
@@ -8,6 +9,8 @@ import 'package:url_launcher/url_launcher.dart';
 // Assurances) et sont ici branchés sur de VRAIES navigations
 // (`Navigator.push`), pas de simples callbacks vides.
 import '../../components/components.dart';
+import '../../controllers/publicite_controller.dart';
+import '../../models/publicite_models.dart' show Publicite;
 import 'Medecinpage.dart';
 import 'Pharmaciepage.dart';
 import 'Centresantepage.dart';
@@ -40,7 +43,7 @@ import 'Assurancepage.dart';
 /// callbacks du constructeur (`onMedecinsTap`, `onPharmaciesTap`, ...) : si
 /// vous fournissez un callback, il est utilisé à la place de la navigation
 /// par défaut (utile pour brancher `go_router`, un routing nommé, etc.).
-class PublicAcceuilPage extends StatefulWidget {
+class PublicAcceuilPage extends ConsumerStatefulWidget {
   const PublicAcceuilPage({
     super.key,
     this.prenomUtilisateur = 'Fabrice',
@@ -64,8 +67,19 @@ class PublicAcceuilPage extends StatefulWidget {
   /// Ville / pays affiché sous la salutation.
   final String localisation;
 
-  /// Publicités / actualités partenaires du carrousel. Si vide, une liste
-  /// de démonstration est utilisée pour ne jamais afficher un écran vide.
+  /// Publicités / actualités partenaires du carrousel.
+  ///
+  /// Par défaut (liste vide, cas normal), l'écran charge lui-même
+  /// TOUTES les publicités depuis l'API via
+  /// [listePublicitesControllerProvider] (module « Présence, publicité
+  /// & boost commercial », voir publicite_controller.dart) — sans
+  /// filtre d'emplacement ni de période de diffusion, l'API publique
+  /// ne renvoyant déjà que les publicités "validee". Ne renseignez ce
+  /// paramètre que pour forcer un contenu précis (ex : prévisualisation
+  /// admin, tests) — il prend alors le pas sur l'API. Si l'API ne
+  /// renvoie encore rien (chargement, erreur réseau, aucune publicité
+  /// en base pour le moment), une liste de démonstration est utilisée
+  /// pour ne jamais afficher un écran vide.
   final List<HomeAdItem> ads;
 
   /// Pharmacies de garde à afficher sous le carrousel. Si vide, une entrée
@@ -113,18 +127,64 @@ class PublicAcceuilPage extends StatefulWidget {
   final VoidCallback? onRdvPressed;
 
   @override
-  State<PublicAcceuilPage> createState() => _PublicAcceuilPageState();
+  ConsumerState<PublicAcceuilPage> createState() => _PublicAcceuilPageState();
 }
 
-class _PublicAcceuilPageState extends State<PublicAcceuilPage> {
+class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
   final PageController _adController = PageController(viewportFraction: 0.78);
   int _adIndex = 0;
   int _navIndex = 0;
 
-  late final List<HomeAdItem> _ads =
-  widget.ads.isNotEmpty ? widget.ads : _demoAds;
   late final List<HomePharmacieItem> _pharmacies =
   widget.pharmaciesDeGarde.isNotEmpty ? widget.pharmaciesDeGarde : _demoPharmacies;
+
+  /// Résout la liste des publicités à afficher dans le carrousel :
+  /// - si `widget.ads` a été fourni explicitement, il est prioritaire ;
+  /// - sinon, on affiche TOUTES les publicités renvoyées par l'API
+  ///   ([listePublicitesControllerProvider]), sans filtre d'emplacement
+  ///   ni de fenêtre de diffusion — l'API publique ne renvoie déjà que
+  ///   les publicités "validee" (voir publicite_repository.dart) ;
+  /// - si l'API n'a encore rien à montrer (chargement, erreur, aucune
+  ///   publicité en base), on retombe sur la liste de démonstration
+  ///   pour ne jamais afficher un carrousel vide.
+  List<HomeAdItem> _resoudreAds() {
+    if (widget.ads.isNotEmpty) return widget.ads;
+
+    final publicites = ref
+        .watch(listePublicitesControllerProvider)
+        .maybeWhen(
+      data: (data) => data,
+      orElse: () => const <Publicite>[],
+    );
+
+    // Demande explicite : TOUTES les publicités renvoyées par l'API
+    // doivent apparaître, sans filtre d'emplacement ni de fenêtre de
+    // diffusion (l'API publique filtre déjà sur "validee" côté
+    // backend — voir publicite_repository.dart). On ne retombe sur la
+    // liste de démonstration que si l'API n'a encore rien à montrer
+    // (chargement initial, erreur réseau, aucune publicité en base).
+    if (publicites.isEmpty) return _demoAds;
+    return publicites.map(_adDepuisPublicite).toList();
+  }
+
+  /// Convertit une [Publicite] de l'API en [HomeAdItem] pour le carrousel.
+  /// `visuelUrl` (posé par le backend, Cloudinary) alimente directement
+  /// l'image réelle ; la description affichée reprend la période de
+  /// diffusion, seule information textuelle secondaire portée par le
+  /// modèle `Publicite` (pas de champ "description" côté API).
+  HomeAdItem _adDepuisPublicite(Publicite p) {
+    return HomeAdItem(
+      titre: p.titre,
+      description: 'Offre valable jusqu\'au ${_formaterDateCourte(p.dateFin)}',
+      imageUrl: p.visuelUrl,
+    );
+  }
+
+  String _formaterDateCourte(DateTime d) {
+    final jj = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    return '$jj/$mm/${d.year}';
+  }
 
   @override
   void dispose() {
@@ -326,60 +386,82 @@ class _PublicAcceuilPageState extends State<PublicAcceuilPage> {
   }
 
   Widget _buildContent(BuildContext context) {
-    return ListView(
-      // Padding bas généreux pour ne pas passer sous la barre flottante.
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
-      children: [
-        _HomeHero(prenom: widget.prenomUtilisateur, localisation: widget.localisation),
-        const SizedBox(height: 6),
-        _SearchField(onTap: widget.onSearchTap ?? _ouvrirRecherche),
-        const SizedBox(height: 8),
-        _QuickActionsGrid(
-          onMedecinsTap: widget.onMedecinsTap ?? _ouvrirMedecins,
-          onPharmaciesTap: widget.onPharmaciesTap ?? _ouvrirPharmacies,
-          onStructuresTap: widget.onStructuresTap ?? _ouvrirStructures,
-          onUrgenceTap: widget.onUrgenceTap ?? _ouvrirUrgence,
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            const Text('Offres & actualités partenaires', style: AppTextStyles.cardTitle),
-            Text(
-              '${_ads.length} · Publicité',
-              style: AppTextStyles.cardMeta.copyWith(fontSize: 10.5),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _PartnerAdsCarousel(
-          controller: _adController,
-          ads: _ads,
-          onPageChanged: (i) => setState(() => _adIndex = i),
-          onAdTap: widget.onAdTap,
-        ),
-        const SizedBox(height: 10),
-        _CarouselDots(count: _ads.length, activeIndex: _adIndex),
-        const SizedBox(height: 4),
-        const _SwipeHint(),
-        const SizedBox(height: 8),
-        _SectionTitle(
-          title: 'Pharmacies de garde',
-          onVoirTout: widget.onVoirToutesPharmacies ?? _ouvrirPharmacies,
-        ),
-        for (final pharmacie in _pharmacies)
-          CardPharmacie(
-            nom: pharmacie.nom,
-            quartier: pharmacie.quartier,
-            deGarde: pharmacie.deGarde,
-            verifiee: pharmacie.verifiee,
-            numeroOrdre: pharmacie.numeroOrdre,
-            distanceKm: pharmacie.distanceKm,
-            onAppeler: pharmacie.onAppeler ?? () => _appelerPharmacie(pharmacie),
-            onItineraire: pharmacie.onItineraire ?? () => _itinerairePharmacie(pharmacie),
+    // Recalculé à chaque build : `ref.watch` dans `_resoudreAds()` fait que
+    // ce widget se reconstruit automatiquement dès que l'API renvoie les
+    // publicités (fin de chargement, rafraîchissement, invalidation...).
+    final ads = _resoudreAds();
+
+    return RefreshIndicator(
+      color: AppColors.green700,
+      onRefresh: () async {
+        // Ne rafraîchit l'appel API que si on affiche bien les vraies
+        // publicités (pas une liste `ads` imposée explicitement au widget).
+        if (widget.ads.isEmpty) {
+          await Future.wait([
+            ref
+                .read(listePublicitesControllerProvider.notifier)
+                .rafraichir(),
+            ref
+                .read(listeEmplacementsPublicitairesControllerProvider.notifier)
+                .rafraichir(),
+          ]);
+        }
+      },
+      child: ListView(
+        // Padding bas généreux pour ne pas passer sous la barre flottante.
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
+        children: [
+          _HomeHero(prenom: widget.prenomUtilisateur, localisation: widget.localisation),
+          const SizedBox(height: 6),
+          _SearchField(onTap: widget.onSearchTap ?? _ouvrirRecherche),
+          const SizedBox(height: 8),
+          _QuickActionsGrid(
+            onMedecinsTap: widget.onMedecinsTap ?? _ouvrirMedecins,
+            onPharmaciesTap: widget.onPharmaciesTap ?? _ouvrirPharmacies,
+            onStructuresTap: widget.onStructuresTap ?? _ouvrirStructures,
+            onUrgenceTap: widget.onUrgenceTap ?? _ouvrirUrgence,
           ),
-      ],
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              const Text('Offres & actualités partenaires', style: AppTextStyles.cardTitle),
+              Text(
+                '${ads.length} · Publicité',
+                style: AppTextStyles.cardMeta.copyWith(fontSize: 10.5),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _PartnerAdsCarousel(
+            controller: _adController,
+            ads: ads,
+            onPageChanged: (i) => setState(() => _adIndex = i),
+            onAdTap: widget.onAdTap,
+          ),
+          const SizedBox(height: 10),
+          _CarouselDots(count: ads.length, activeIndex: _adIndex),
+          const SizedBox(height: 4),
+          const _SwipeHint(),
+          const SizedBox(height: 8),
+          _SectionTitle(
+            title: 'Pharmacies de garde',
+            onVoirTout: widget.onVoirToutesPharmacies ?? _ouvrirPharmacies,
+          ),
+          for (final pharmacie in _pharmacies)
+            CardPharmacie(
+              nom: pharmacie.nom,
+              quartier: pharmacie.quartier,
+              deGarde: pharmacie.deGarde,
+              verifiee: pharmacie.verifiee,
+              numeroOrdre: pharmacie.numeroOrdre,
+              distanceKm: pharmacie.distanceKm,
+              onAppeler: pharmacie.onAppeler ?? () => _appelerPharmacie(pharmacie),
+              onItineraire: pharmacie.onItineraire ?? () => _itinerairePharmacie(pharmacie),
+            ),
+        ],
+      ),
     );
   }
 }

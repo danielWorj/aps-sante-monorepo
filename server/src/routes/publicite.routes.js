@@ -74,6 +74,7 @@ import {
   supprimerLigneForfait,
   listerPublicites,
   obtenirPublicite,
+  rechercherPublicitesParCodePage,
   creerPublicite,
   modifierPublicite,
   supprimerPublicite,
@@ -106,6 +107,10 @@ router.delete("/lignes-forfait-publicitaire/:ligneId", authentifier, autoriser("
 
 // ─── Publicités ───────────────────────────────────────────────────
 router.get("/publicites", authentifierOptionnel, listerPublicites);
+// Route dédiée par code d'emplacement (code de la page), déclarée AVANT
+// "/publicites/:id" pour éviter que "par-page" ne soit capturé comme
+// un :id.
+router.get("/publicites/par-page/:code", authentifierOptionnel, rechercherPublicitesParCodePage);
 router.get("/publicites/:id", authentifierOptionnel, obtenirPublicite);
 
 router.post("/publicites", authentifier, gererTeleversementPublicite, creerPublicite);
