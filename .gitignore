@@ -17,7 +17,14 @@ server/guide
 .env
 *.log
 .DS_Store
+# # -- Deploiement --
+
+# ./deploiement
+# ./deploiement/deploy.md
+# ./accessjitsi-host/jitsi-meet-cfg/
+
 # -- Deploiement --
-./deploiement
-./deploiement/deploy.md
-./accessjitsi-host/jitsi-meet-cfg/
+deploiement/
+
+# -- Access --
+access/
