@@ -7,7 +7,11 @@ import 'package:riverpod/riverpod.dart';
 // remplacez les lignes ci-dessous par les équivalents package:aps/...
 import '../../components/components.dart';
 import '../../controllers/medecin_controller.dart';
+import '../../controllers/publicite_controller.dart';
 import '../../models/medecin_models.dart';
+import '../../models/publicite_models.dart';
+import '../../repositories/publicite_repository.dart'
+    show PublicitesParPageResultat;
 import 'publicAcceuil.dart';
 import 'Assurancepage.dart';
 // ⚠️ Chemin à ajuster à l'emplacement réel de Rendezvous.dart dans votre
@@ -34,6 +38,14 @@ import './utils/Rendezvous.dart';
 /// à la place — la valeur ci-dessous ne sert que de repli pour que ce
 /// fichier compile de façon autonome.
 final ProviderContainer medecinProviderContainer = ProviderContainer();
+
+/// Code de l'emplacement publicitaire de cet écran (voir table
+/// EmplacementPublicitaire / GET /emplacements-publicitaires) — celui
+/// vu sur la maquette d'admin sous « PAGE_MEDECIN » / « Page Médecine ».
+/// Utilisé pour récupérer, via [publicitesParCodePageProvider], la
+/// publicité réellement diffusée sur cette page (POST/validée côté
+/// admin), à la place du contenu illustratif précédent.
+const String _codePagePublicitaireMedecin = 'PAGE_MEDECIN';
 
 /// Pousse [RendezVousPage] pour [medecin], liée à son vrai `medecin_id`
 /// (jamais un autre) — comportement par défaut de « Prendre rendez-vous »
@@ -142,6 +154,17 @@ class _MedecinPageState extends State<MedecinPage> {
   late ProviderSubscription<AsyncValue<List<Medecin>>> _medecinsSub;
   AsyncValue<List<Medecin>> _medecinsState = const AsyncLoading();
 
+  /// Publicité(s) réellement diffusée(s) sur cette page
+  /// ([_codePagePublicitaireMedecin]), remontée(s) via
+  /// [publicitesParCodePageProvider] (GET /publicites/par-page/:code).
+  /// `late` : la souscription dépend de [_container] et de
+  /// [widget.token], donc initialisée dans [initState] comme
+  /// [_medecinsSub].
+  late ProviderSubscription<AsyncValue<PublicitesParPageResultat>>
+  _publicitesSub;
+  AsyncValue<PublicitesParPageResultat> _publicitesState =
+  const AsyncLoading();
+
   /// Index de la rubrique active dans [AppBottomNav] (1 = Médecin).
   int _navIndex = 1;
 
@@ -172,11 +195,31 @@ class _MedecinPageState extends State<MedecinPage> {
             .definirToken(widget.token);
       });
     }
+
+    // Récupère la publicité réelle de cette page (GET
+    // /publicites/par-page/PAGE_MEDECIN) — remplace le bandeau
+    // illustratif statique précédent ([_MedecinAdBanner]). [widget.token]
+    // est transmis tel quel : sans lui, seules les publicités "validee"
+    // sont renvoyées ; avec un token admin/superadmin, la vue enrichie
+    // (non "validee" incluses) est utilisée (voir repository).
+    _publicitesSub = _container
+        .listen<AsyncValue<PublicitesParPageResultat>>(
+      publicitesParCodePageProvider(
+        (
+        codePage: _codePagePublicitaireMedecin,
+        paysId: null,
+        token: widget.token,
+        ),
+      ),
+          (previous, next) => setState(() => _publicitesState = next),
+      fireImmediately: true,
+    );
   }
 
   @override
   void dispose() {
     _medecinsSub.close();
+    _publicitesSub.close();
     _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
@@ -325,7 +368,14 @@ class _MedecinPageState extends State<MedecinPage> {
                       ),
                       const SizedBox(height: 4),
                       _buildFilterChips(villes),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 14),
+
+                      // ---- Publicité (même emplacement/format que sur
+                      // l'annuaire des assurances) — contenu réel de
+                      // l'emplacement PAGE_MEDECIN, voir
+                      // [_publicitesState] / [publicitesParCodePageProvider].
+                      _buildPublicites(),
+
                       _buildResultHeader(resultats.length),
                       if (resultats.isEmpty)
                         _buildEmptyState()
@@ -371,6 +421,32 @@ class _MedecinPageState extends State<MedecinPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Construit le bandeau publicitaire de la page à partir de
+  /// [_publicitesState] (GET /publicites/par-page/PAGE_MEDECIN).
+  ///
+  /// - Chargement : bandeau silencieux (aucun flash de contenu
+  ///   illustratif) — l'annuaire ne doit pas attendre la pub.
+  /// - Erreur ou aucune publicité active : rien n'est affiché (une pub
+  ///   manquante ne doit jamais bloquer/casser l'écran).
+  /// - Données : une [_MedecinAdBanner] par publicité renvoyée (en
+  ///   pratique le backend n'en retourne généralement qu'une par page,
+  ///   mais rien n'empêche plusieurs campagnes actives simultanément).
+  Widget _buildPublicites() {
+    return _publicitesState.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (resultat) {
+        if (resultat.publicites.isEmpty) return const SizedBox.shrink();
+        return Column(
+          children: [
+            for (final publicite in resultat.publicites)
+              _MedecinAdBanner(publicite: publicite),
+          ],
+        );
+      },
     );
   }
 
@@ -835,6 +911,143 @@ class _FilterChip extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Bandeau publicitaire — même gabarit que `_InsuranceAdBanner`
+/// (Assurancepage.dart) : badge « PUBLICITÉ », visuel, titre, description,
+/// CTA « En savoir plus » et mention légale.
+///
+/// Affiche désormais une [Publicite] réellement remontée par l'API
+/// (GET /publicites/par-page/PAGE_MEDECIN — voir
+/// [_MedecinPageState._buildPublicites]) : `titre` et `visuelUrl`
+/// viennent directement du modèle. [Publicite] ne porte pas de champ
+/// description libre côté backend ; on affiche à la place la période
+/// de diffusion (`date_debut` → `date_fin`), utile pour l'utilisateur
+/// comme pour l'annonceur. Placée entre les puces de filtre et le
+/// compteur de résultats, comme sur la maquette `ui-mobile.html`.
+class _MedecinAdBanner extends StatelessWidget {
+  const _MedecinAdBanner({
+    required this.publicite,
+    this.onEnSavoirPlus,
+  });
+
+  /// Publicité à afficher, telle que renvoyée par
+  /// GET /publicites/par-page/PAGE_MEDECIN.
+  final Publicite publicite;
+
+  /// Callback au tap sur « En savoir plus ». Laissé injectable pour que
+  /// l'app hôte ouvre le lien réel de l'annonceur (navigateur, deep link…)
+  /// — [Publicite] ne porte pas d'URL de destination dédiée, seulement
+  /// son visuel ([Publicite.visuelUrl]).
+  final VoidCallback? onEnSavoirPlus;
+
+  /// Formatte une date en `jj/mm/aaaa` sans dépendance externe (pas de
+  /// package `intl` supposé disponible ici).
+  static String _formatDate(DateTime date) {
+    final jour = date.day.toString().padLeft(2, '0');
+    final mois = date.month.toString().padLeft(2, '0');
+    return '$jour/$mois/${date.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final titre = publicite.titre;
+    final description =
+        'Du ${_formatDate(publicite.dateDebut)} au ${_formatDate(publicite.dateFin)}';
+    final imageUrl = publicite.visuelUrl;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 18),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.green100),
+        boxShadow: AppColors.shadowCard,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline, size: 11, color: AppColors.green700),
+                const SizedBox(width: 5),
+                Text(
+                  'PUBLICITÉ',
+                  style: AppTextStyles.badge.copyWith(
+                    fontSize: 9,
+                    letterSpacing: 1.0,
+                    color: AppColors.green700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            height: 110,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: AppColors.paper,
+              borderRadius: BorderRadius.circular(12),
+              // [Publicite.visuelUrl] est toujours renseignée côté API
+              // (posée par le backend à la création, jamais saisie
+              // librement — voir publicite_models.dart) ; on garde
+              // néanmoins un repli neutre si jamais elle était vide.
+              image: imageUrl.isNotEmpty
+                  ? DecorationImage(image: NetworkImage(imageUrl), fit: BoxFit.cover)
+                  : null,
+            ),
+            alignment: Alignment.center,
+            child: imageUrl.isEmpty
+                ? const Icon(Icons.image_outlined, size: 28, color: AppColors.inkFaint)
+                : null,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(titre, style: AppTextStyles.cardTitle),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: AppTextStyles.body.copyWith(fontSize: 10.5),
+                ),
+                const SizedBox(height: 9),
+                GestureDetector(
+                  onTap: onEnSavoirPlus,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'En savoir plus',
+                        style: AppTextStyles.buttonLabel
+                            .copyWith(fontSize: 11, color: AppColors.green700),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.arrow_forward, size: 12, color: AppColors.green700),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Center(
+              child: Text(
+                'APS ne garantit pas les offres de ses annonceurs.',
+                style: AppTextStyles.badge.copyWith(fontSize: 9, color: AppColors.inkFaint),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

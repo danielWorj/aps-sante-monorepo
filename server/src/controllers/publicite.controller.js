@@ -572,6 +572,48 @@ export async function obtenirPublicite(req, res, next) {
 }
 
 /**
+ * GET /api/publicites/par-page/:code
+ * Recherche les publicités d'un emplacement (une "page"), identifié
+ * par son code (ex. "accueil_bandeau"), plutôt que par son UUID
+ * technique emplacement_publicitaire_id — pratique pour un frontend
+ * qui connaît le code de la page où afficher l'encart mais pas l'ID
+ * interne.
+ * Filtre optionnel : ?pays_id=...
+ * Même filtrage de visibilité que listerPublicites : un visiteur
+ * public (ou un utilisateur authentifié qui n'est pas admin/superadmin)
+ * ne reçoit que les publicités "validee" ; un admin/superadmin voit
+ * tout.
+ */
+export async function rechercherPublicitesParCodePage(req, res, next) {
+  try {
+    const { code } = req.params;
+    const { pays_id } = req.query;
+
+    const emplacement = await prisma.emplacementPublicitaire.findUnique({
+      where: { code },
+    });
+    if (!emplacement) {
+      return res.status(404).json({ message: "Aucun emplacement publicitaire ne correspond à ce code." });
+    }
+
+    const where = { emplacement_publicitaire_id: emplacement.emplacement_publicitaire_id };
+    if (pays_id) where.pays_id = pays_id;
+    if (!estAdmin(req.utilisateur)) {
+      where.statut_moderation = "validee";
+    }
+
+    const publicites = await prisma.publicite.findMany({
+      where,
+      orderBy: { date_debut: "desc" },
+    });
+
+    return res.status(200).json({ emplacement, publicites: publicites.map(avecUrlVisuel) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * POST /api/publicites
  * multipart/form-data — champ fichier "visuel" obligatoire
  * (voir publicite.routes.js, middleware gererTeleversementPublicite),

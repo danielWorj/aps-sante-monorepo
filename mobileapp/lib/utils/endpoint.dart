@@ -83,4 +83,45 @@ class ApiRealEndpoints {
   static const String gardesPharmacie = '${baseUrl}/gardes-pharmacie';
   static String gardePharmacie(String id) =>
       '${baseUrl}/gardes-pharmacie/$id';
+
+  // ─── Présence, publicité & boost commercial (module autonome) ────
+  // Voir publicite.routes.js :
+  //   - emplacements-publicitaires : GET publique ; POST/PUT
+  //     authentifié (admin/superadmin) ; DELETE superadmin uniquement.
+  //   - forfaits-publicitaires : GET publique ; POST/PUT authentifié
+  //     (admin/superadmin) ; DELETE superadmin uniquement. Sous-route
+  //     POST .../:id/lignes pour ajouter une ligne d'avantage.
+  //   - lignes-forfait-publicitaire : préfixe DÉDIÉ (distinct de
+  //     forfaits-publicitaires/:id) — PUT/DELETE authentifié
+  //     (admin/superadmin).
+  //   - publicites : GET publique (authentification optionnelle,
+  //     filtrage de visibilité côté backend) ; POST authentifié (tout
+  //     rôle), multipart avec fichier "visuel" obligatoire ; PUT
+  //     authentifié, multipart avec "visuel" optionnel (auteur tant
+  //     que "en_attente", ou admin/superadmin pour statut_moderation) ;
+  //     DELETE auteur ou admin/superadmin.
+  static const String emplacementsPublicitaires =
+      '${baseUrl}/emplacements-publicitaires';
+  static String emplacementPublicitaire(String id) =>
+      '${baseUrl}/emplacements-publicitaires/$id';
+
+  static const String forfaitsPublicitaires =
+      '${baseUrl}/forfaits-publicitaires';
+  static String forfaitPublicitaire(String id) =>
+      '${baseUrl}/forfaits-publicitaires/$id';
+  static String ajouterLigneForfaitPublicitaire(String forfaitId) =>
+      '${baseUrl}/forfaits-publicitaires/$forfaitId/lignes';
+
+  static const String lignesForfaitPublicitaire =
+      '${baseUrl}/lignes-forfait-publicitaire';
+  static String ligneForfaitPublicitaire(String ligneId) =>
+      '${baseUrl}/lignes-forfait-publicitaire/$ligneId';
+
+  static const String publicites = '${baseUrl}/publicites';
+  static String publicite(String id) => '${baseUrl}/publicites/$id';
+  // Route dédiée par code d'emplacement (ex. "PAGE_ACCUEIL") : déclarée
+  // côté backend AVANT /publicites/:id pour éviter que "par-page" ne
+  // soit capturé comme un :id — voir publicite.routes.js.
+  static String publicitesParCodePage(String code) =>
+      '${baseUrl}/publicites/par-page/$code';
 }
