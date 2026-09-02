@@ -9,7 +9,8 @@ services:
     ports:
       - "8080:80"
     depends_on:
-      - server
+      server:
+        condition: service_started   
     restart: unless-stopped
 
   client-backoffice:
