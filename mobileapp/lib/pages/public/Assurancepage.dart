@@ -10,6 +10,7 @@ import '../../repositories/publicite_repository.dart' show PublicitesParPageResu
 import './utils/DetailAssurance.dart'; // ⚠️ adapter ce chemin à l'emplacement réel du fichier dans le projet.
 import 'publicAcceuil.dart';
 import 'Medecinpage.dart';
+import 'apropos.dart';
 
 /// Écran public — **Annuaire des assurances** (`5 · Annuaire assurances`
 /// dans la maquette `ui-mobile.html`).
@@ -97,9 +98,10 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
         break;
       case 2: // Assurance — déjà sur cet écran.
         break;
-      case 3: // À propos — aucun écran fourni pour l'instant.
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Écran « À propos » bientôt disponible.')),
+      case 3: // À propos
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AProposPage()),
         );
         break;
     }

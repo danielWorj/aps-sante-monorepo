@@ -14,6 +14,7 @@ import '../../repositories/publicite_repository.dart'
     show PublicitesParPageResultat;
 import 'publicAcceuil.dart';
 import 'Assurancepage.dart';
+import 'apropos.dart';
 // ⚠️ Chemin à ajuster à l'emplacement réel de Rendezvous.dart dans votre
 // arborescence : ce fichier (Medecinpage.dart) importe `components.dart`
 // avec 2 niveaux ('../../'), tandis que Rendezvous.dart en utilise 3
@@ -321,9 +322,10 @@ class _MedecinPageState extends State<MedecinPage> {
           MaterialPageRoute(builder: (_) => const AssurancePage()),
         );
         break;
-      case 3: // À propos — aucun écran fourni pour l'instant.
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Écran « À propos » bientôt disponible.')),
+      case 3: // À propos
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AProposPage()),
         );
         break;
     }

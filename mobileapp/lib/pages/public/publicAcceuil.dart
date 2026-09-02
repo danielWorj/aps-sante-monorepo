@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobileapp/pages/public/apropos.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Adaptez ces chemins selon l'emplacement réel des fichiers dans votre
@@ -212,6 +213,10 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const AssurancePage()));
   }
 
+  void _ouvrirAPropos() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const AProposPage()));
+  }
+
   /// Feuille de choix rapide ouverte depuis le champ de recherche : la
   /// maquette ne propose pas d'écran de recherche globale dédié, donc on
   /// oriente directement vers l'un des 3 vrais annuaires.
@@ -353,8 +358,8 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
       case 2: // Assurance
         _ouvrirAssurances();
         break;
-      case 3: // À propos — aucun écran fourni pour l'instant.
-        _showSnack('Écran « À propos » bientôt disponible.');
+      case 3: // À propos
+        _ouvrirAPropos();
         break;
     }
   }
