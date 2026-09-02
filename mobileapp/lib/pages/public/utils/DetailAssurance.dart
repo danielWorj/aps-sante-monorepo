@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../components/components.dart';
 import '../../../controllers/assurance_controller.dart';
 import '../../../models/assurance_models.dart';
+import '../publicAcceuil.dart';
+import '../Medecinpage.dart';
+import '../Assurancepage.dart';
 
 /// Écran public — **Fiche assurance** (`10 · Fiche assurance` dans la
 /// maquette `ui-mobile.html`).
@@ -94,6 +97,39 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
     super.dispose();
   }
 
+  /// Gère un tap sur la barre de navigation basse : met à jour l'index actif
+  /// ET navigue réellement vers l'écran correspondant (0=Accueil,
+  /// 1=Médecin, 2=Assurance [annuaire], 3=À propos). Cette fiche détail
+  /// n'a pas d'onglet dédié : le tap sur "Assurance" revient à l'annuaire.
+  void _onBottomNavTap(int index) {
+    setState(() => _navIndex = index);
+    switch (index) {
+      case 0: // Accueil
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PublicAcceuilPage()),
+        );
+        break;
+      case 1: // Médecin
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MedecinPage()),
+        );
+        break;
+      case 2: // Assurance — retour à l'annuaire.
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AssurancePage()),
+        );
+        break;
+      case 3: // À propos — aucun écran fourni pour l'instant.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Écran « À propos » bientôt disponible.')),
+        );
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final detailAsync =
@@ -117,7 +153,7 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
             bottom: 10,
             child: AppBottomNav(
               currentIndex: _navIndex,
-              onTap: (i) => setState(() => _navIndex = i),
+              onTap: _onBottomNavTap,
               onRdvPressed: () {
                 // Brancher ici la navigation vers le flux de prise de RDV.
               },

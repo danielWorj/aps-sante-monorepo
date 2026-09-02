@@ -12,6 +12,11 @@
 // d'état (chargement, erreurs, sélection courante) appartient à un
 // éventuel PharmacieController, qui s'appuie sur ce repository.
 //
+// Version "simple" : comme MedecinRepository (voir son en-tête), ce
+// repository parle DIRECTEMENT en HTTP via le package `http`, sans
+// passer par ApiClient (voir api_client.dart) ni par ApiEndpoints.
+// Toutes les routes viennent de ApiRealEndpoints (endpoint.dart).
+//
 // Le token d'authentification suit la même règle que [MedecinRepository] :
 // fourni requête par requête (paramètre `token`), jamais stocké ici.
 // Les 3 routes de lecture (GET pharmacies, GET plannings-garde, GET
@@ -26,8 +31,43 @@
 // pharmacie est hors périmètre de ce fichier (aucune route dédiée
 // exposée par pharmacie.routes.js pour l'instant).
 
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
 import '../models/pharmacie_models.dart';
-import '../utils/api_client.dart';
+import '../utils/endpoint.dart';
+
+/// Erreur levée quand une requête HTTP échoue (statut hors 2xx) ou
+/// quand un appel est mal formé côté client (ex. rien à mettre à
+/// jour). Remplace l'ApiException de api_client.dart pour ce
+/// repository, qui ne dépend plus de ce fichier.
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+
+  const ApiException(this.message, {this.statusCode});
+
+  /// Vrai si l'échec vient d'une absence/expiration d'authentification.
+  bool get estNonAutorise => statusCode == 401 || statusCode == 403;
+
+  @override
+  String toString() => message;
+}
+
+/// Description d'un fichier à envoyer en multipart (image_pharmacie,
+/// piece_identite, document_agrement).
+class FichierMultipart {
+  final String champ;
+  final List<int> octets;
+  final String nomFichier;
+
+  const FichierMultipart({
+    required this.champ,
+    required this.octets,
+    required this.nomFichier,
+  });
+}
 
 /// ─────────────────────────────────────────────────────────────────
 /// PharmacieCreationResultat
@@ -63,9 +103,115 @@ class PharmacieCreationResultat {
 }
 
 class PharmacieRepository {
-  final ApiClient _client;
+  static const Duration _timeout = Duration(seconds: 10);
 
-  PharmacieRepository(this._client);
+  /* ===================================================================
+   * Aides HTTP internes (remplacent ApiClient)
+   * =================================================================== */
+
+  Map<String, String> _entetes({String? token, bool avecJson = true}) {
+    final entetes = <String, String>{};
+    if (avecJson) entetes['Content-Type'] = 'application/json';
+    if (token != null) entetes['Authorization'] = 'Bearer $token';
+    return entetes;
+  }
+
+  /// Décode le corps de la réponse et lève [ApiException] si le
+  /// statut n'est pas un succès (2xx).
+  dynamic _decoder(http.Response reponse) {
+    if (reponse.statusCode < 200 || reponse.statusCode >= 300) {
+      String message = 'Erreur ${reponse.statusCode}: ${reponse.body}';
+      try {
+        final corps = jsonDecode(reponse.body);
+        if (corps is Map && corps['message'] is String) {
+          message = corps['message'] as String;
+        }
+      } catch (_) {
+        // Corps non-JSON : on garde le message par défaut.
+      }
+      throw ApiException(message, statusCode: reponse.statusCode);
+    }
+    if (reponse.body.isEmpty) return null;
+    return jsonDecode(reponse.body);
+  }
+
+  Future<dynamic> _get(
+      String url, {
+        String? token,
+        Map<String, String>? query,
+      }) async {
+    var uri = Uri.parse(url);
+    if (query != null && query.isNotEmpty) {
+      uri = uri.replace(queryParameters: {...uri.queryParameters, ...query});
+    }
+    final reponse = await http
+        .get(uri, headers: _entetes(token: token, avecJson: false))
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _post(
+      String url, {
+        Map<String, dynamic>? body,
+        String? token,
+      }) async {
+    final reponse = await http
+        .post(
+      Uri.parse(url),
+      headers: _entetes(token: token),
+      body: jsonEncode(body ?? const {}),
+    )
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _put(
+      String url, {
+        Map<String, dynamic>? body,
+        String? token,
+      }) async {
+    final reponse = await http
+        .put(
+      Uri.parse(url),
+      headers: _entetes(token: token),
+      body: jsonEncode(body ?? const {}),
+    )
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _delete(String url, {String? token}) async {
+    final reponse = await http
+        .delete(Uri.parse(url), headers: _entetes(token: token, avecJson: false))
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _multipart(
+      String methode,
+      String url, {
+        Map<String, dynamic> champs = const {},
+        List<FichierMultipart> fichiers = const [],
+        String? token,
+      }) async {
+    final requete = http.MultipartRequest(methode, Uri.parse(url));
+    if (token != null) {
+      requete.headers['Authorization'] = 'Bearer $token';
+    }
+    champs.forEach((cle, valeur) {
+      if (valeur != null) requete.fields[cle] = valeur.toString();
+    });
+    for (final fichier in fichiers) {
+      requete.files.add(http.MultipartFile.fromBytes(
+        fichier.champ,
+        fichier.octets,
+        filename: fichier.nomFichier,
+      ));
+    }
+    final flux = await requete.send().timeout(_timeout);
+    final reponse = await http.Response.fromStream(flux);
+    return _decoder(reponse);
+  }
 
   /* ===================================================================
    * Pharmacies (fiche Annuaire)
@@ -81,8 +227,8 @@ class PharmacieRepository {
     StatutVerificationPharmacie? statutVerification,
     String? recherche,
   }) async {
-    final donnees = await _client.get(
-      ApiEndpoints.pharmacies,
+    final donnees = await _get(
+      ApiRealEndpoints.pharmacies,
       query: {
         if (paysId != null) 'pays_id': paysId,
         if (villeId != null) 'ville_id': villeId,
@@ -103,7 +249,7 @@ class PharmacieRepository {
   /// GET /pharmacies/:id
   /// Publique, sans authentification.
   Future<Pharmacie> obtenirPharmacie(String id) async {
-    final donnees = await _client.get(ApiEndpoints.pharmacie(id));
+    final donnees = await _get(ApiRealEndpoints.pharmacie(id));
     return Pharmacie.fromJson(donnees['pharmacie'] as Map<String, dynamic>);
   }
 
@@ -191,8 +337,9 @@ class PharmacieRepository {
       ),
     ];
 
-    final donnees = await _client.postMultipart(
-      ApiEndpoints.pharmacies,
+    final donnees = await _multipart(
+      'POST',
+      ApiRealEndpoints.pharmacies,
       champs: champs,
       fichiers: fichiers,
       token: token,
@@ -282,8 +429,9 @@ class PharmacieRepository {
       throw const ApiException('Aucune donnée valide à mettre à jour.');
     }
 
-    final donnees = await _client.putMultipart(
-      ApiEndpoints.pharmacie(id),
+    final donnees = await _multipart(
+      'PUT',
+      ApiRealEndpoints.pharmacie(id),
       champs: champs,
       fichiers: fichiers,
       token: token,
@@ -296,7 +444,7 @@ class PharmacieRepository {
   /// (via [ApiException], statusCode 409) si des agents sont encore
   /// rattachés à cette pharmacie.
   Future<String> supprimerPharmacie(String id, {required String token}) async {
-    final donnees = await _client.delete(ApiEndpoints.pharmacie(id), token: token);
+    final donnees = await _delete(ApiRealEndpoints.pharmacie(id), token: token);
     return (donnees is Map && donnees['message'] is String)
         ? donnees['message'] as String
         : 'Pharmacie supprimée.';
@@ -315,8 +463,8 @@ class PharmacieRepository {
     String? paysId,
     StatutPlanningGarde? statut,
   }) async {
-    final donnees = await _client.get(
-      ApiEndpoints.planningsGarde,
+    final donnees = await _get(
+      ApiRealEndpoints.planningsGarde,
       query: {
         if (paysId != null) 'pays_id': paysId,
         if (statut != null) 'statut': statut.toApi(),
@@ -334,7 +482,7 @@ class PharmacieRepository {
   /// Publique. `gardes` n'est peuplé que par cet appel de détail
   /// (`include: { gardes: true }` côté backend) — voir PlanningGarde.
   Future<PlanningGarde> obtenirPlanningGarde(String id) async {
-    final donnees = await _client.get(ApiEndpoints.planningGarde(id));
+    final donnees = await _get(ApiRealEndpoints.planningGarde(id));
     return PlanningGarde.fromJson(donnees['planning'] as Map<String, dynamic>);
   }
 
@@ -348,8 +496,8 @@ class PharmacieRepository {
     required DateTime periodeDebut,
     required DateTime periodeFin,
   }) async {
-    final donnees = await _client.post(
-      ApiEndpoints.planningsGarde,
+    final donnees = await _post(
+      ApiRealEndpoints.planningsGarde,
       body: {
         'pays_id': paysId,
         'statut': statut.toApi(),
@@ -381,8 +529,8 @@ class PharmacieRepository {
       throw const ApiException('Aucune donnée valide à mettre à jour.');
     }
 
-    final donnees = await _client.put(
-      ApiEndpoints.planningGarde(id),
+    final donnees = await _put(
+      ApiRealEndpoints.planningGarde(id),
       body: body,
       token: token,
     );
@@ -396,7 +544,7 @@ class PharmacieRepository {
   Future<String> supprimerPlanningGarde(String id,
       {required String token}) async {
     final donnees =
-    await _client.delete(ApiEndpoints.planningGarde(id), token: token);
+    await _delete(ApiRealEndpoints.planningGarde(id), token: token);
     return (donnees is Map && donnees['message'] is String)
         ? donnees['message'] as String
         : 'Planning de garde supprimé.';
@@ -420,8 +568,8 @@ class PharmacieRepository {
     String? pharmacieId,
     DateTime? instant,
   }) async {
-    final donnees = await _client.get(
-      ApiEndpoints.gardesPharmacie,
+    final donnees = await _get(
+      ApiRealEndpoints.gardesPharmacie,
       query: {
         if (villeId != null) 'ville_id': villeId,
         if (planningGardeId != null) 'planning_garde_id': planningGardeId,
@@ -440,7 +588,7 @@ class PharmacieRepository {
   /// GET /gardes-pharmacie/:id
   /// Publique.
   Future<GardePharmacie> obtenirGardePharmacie(String id) async {
-    final donnees = await _client.get(ApiEndpoints.gardePharmacie(id));
+    final donnees = await _get(ApiRealEndpoints.gardePharmacie(id));
     return GardePharmacie.fromJson(donnees['garde'] as Map<String, dynamic>);
   }
 
@@ -460,8 +608,8 @@ class PharmacieRepository {
       throw const ApiException('date_debut doit être antérieure à date_fin.');
     }
 
-    final donnees = await _client.post(
-      ApiEndpoints.gardesPharmacie,
+    final donnees = await _post(
+      ApiRealEndpoints.gardesPharmacie,
       body: {
         'planning_garde_id': planningGardeId,
         'pharmacie_id': pharmacieId,
@@ -495,8 +643,8 @@ class PharmacieRepository {
       throw const ApiException('Aucune donnée valide à mettre à jour.');
     }
 
-    final donnees = await _client.put(
-      ApiEndpoints.gardePharmacie(id),
+    final donnees = await _put(
+      ApiRealEndpoints.gardePharmacie(id),
       body: body,
       token: token,
     );
@@ -508,7 +656,7 @@ class PharmacieRepository {
   Future<String> supprimerGardePharmacie(String id,
       {required String token}) async {
     final donnees =
-    await _client.delete(ApiEndpoints.gardePharmacie(id), token: token);
+    await _delete(ApiRealEndpoints.gardePharmacie(id), token: token);
     return (donnees is Map && donnees['message'] is String)
         ? donnees['message'] as String
         : 'Garde supprimée.';

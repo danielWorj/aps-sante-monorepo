@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:riverpod/riverpod.dart';
@@ -6,10 +8,14 @@ import 'package:riverpod/riverpod.dart';
 // remplacez la ligne ci-dessous par :
 // import 'package:aps/components/components.dart';
 import '../.././../components/components.dart';
+import './Confirmationrdv.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/authentification_models.dart';
 import '../../../models/rendez_vous_models.dart';
+import '../../../models/referentiel_models.dart';
+import '../../../repositories/referentiel_repository.dart';
+import '../../../utils/api_client.dart';
 
 /// Container Riverpod utilisé par cet écran.
 ///
@@ -86,13 +92,14 @@ class CreneauJour {
 /// Option affichée dans le sélecteur « Pays » du formulaire de création
 /// de compte intégré à [RendezVousPage] (voir [RendezVousPage.paysDisponibles]).
 ///
-/// [id] doit correspondre au `pays_id` attendu par POST /auth/register
-/// (référentiel pays côté backend, voir [InscriptionPayload.paysId]) —
-/// [_paysDemo] ci-dessous n'a que des libellés de démonstration, sans
-/// identifiants réels : à remplacer par la vraie liste du référentiel
-/// pays (probablement déjà chargée ailleurs dans l'app, ex. l'écran
-/// `CreerPatientPage`) via [RendezVousPage.paysDisponibles] dès qu'elle
-/// est disponible.
+/// [id] doit correspondre au `pays_id` (UUID) attendu par
+/// POST /auth/register (référentiel pays côté backend, voir
+/// [InscriptionPayload.paysId]) — l'écran charge désormais la vraie
+/// liste via [ReferentielRepository.listerPays] dans
+/// [_RendezVousPageState._chargerPaysDisponibles] ; [_paysDemo]
+/// ci-dessous ne sert plus que de repli visuel pendant le chargement
+/// initial ou en cas d'échec réseau (ses `id` NE SONT PAS des UUID
+/// valides et ne doivent jamais être envoyés tels quels au backend).
 class PaysOption {
   const PaysOption({required this.id, required this.libelle});
 
@@ -100,7 +107,9 @@ class PaysOption {
   final String libelle;
 }
 
-/// Jeu de données de démonstration — à remplacer par le référentiel réel.
+/// Jeu de données de secours (repli UI uniquement, voir doc ci-dessus) —
+/// jamais transmis au backend : [_RendezVousPageState._onPaysConfirme]
+/// bloque la soumission tant que le référentiel réel n'a pas répondu.
 const List<PaysOption> _paysDemo = [
   PaysOption(id: 'cm', libelle: 'Cameroun'),
   PaysOption(id: 'td', libelle: 'Tchad'),
@@ -210,6 +219,8 @@ class RendezVousPage extends StatefulWidget {
     this.onVoirAvis,
     this.paysDisponibles = _paysDemo,
     this.onSeConnecter,
+    this.onVoirMesRendezVous,
+    this.onRetourAccueil,
   });
 
   /// Container Riverpod à utiliser (idéalement le même que celui déjà
@@ -286,6 +297,17 @@ class RendezVousPage extends StatefulWidget {
   /// si ce callback est fourni.
   final VoidCallback? onSeConnecter;
 
+  /// Callback appelé depuis le bouton « Voir mes rendez-vous » de
+  /// [ConfirmationRdvPage] (écran affiché après une réservation réussie —
+  /// voir [_afficherConfirmation]). Si `null`, l'écran de confirmation
+  /// se contente de dépiler la pile jusqu'à la première route.
+  final VoidCallback? onVoirMesRendezVous;
+
+  /// Callback appelé depuis le bouton « Retour à l'accueil » de
+  /// [ConfirmationRdvPage]. Si `null`, même repli que
+  /// [onVoirMesRendezVous] (retour à la première route de la pile).
+  final VoidCallback? onRetourAccueil;
+
   @override
   State<RendezVousPage> createState() => _RendezVousPageState();
 }
@@ -295,6 +317,55 @@ enum _Etat { chargement, pret, erreur }
 class _RendezVousPageState extends State<RendezVousPage> {
   late final ProviderContainer _container =
       widget.container ?? rendezVousProviderContainer;
+
+  // ---------------------------------------------------------------------
+  // Référentiel Pays (GET /referentiels/pays — lecture publique, aucun
+  // token requis) — alimente le sélecteur « Pays » du formulaire de
+  // création de compte avec les vrais `pays_id` (UUID) au lieu des codes
+  // ISO2 de démonstration ([_paysDemo]), qui provoquaient une erreur
+  // Prisma « invalid input value ... for type uuid » lors de l'inscription.
+  //
+  // Instancié directement avec un [ApiClient] autonome : cette route est
+  // publique, elle n'a pas besoin de partager la session du [_container]
+  // riverpod (voir [ReferentielRepository]). Si votre projet expose déjà
+  // un `apiClientProvider` Riverpod partagé, vous pouvez remplacer la
+  // ligne ci-dessous par `_container.read(apiClientProvider)` pour
+  // réutiliser la même instance HTTP que le reste de l'écran.
+  late final ReferentielRepository _referentielRepository =
+  ReferentielRepository(ApiClient());
+
+  List<PaysOption> _paysCharges = [];
+  bool _chargementPays = false;
+  String? _erreurPays;
+
+  /// Pays réellement proposés dans le sélecteur : le référentiel chargé
+  /// depuis l'API dès qu'il est disponible, sinon
+  /// [RendezVousPage.paysDisponibles] (par défaut [_paysDemo]) comme
+  /// simple repli d'affichage pendant le chargement ou après un échec
+  /// réseau — voir [_onPaysConfirme] qui empêche toute soumission tant
+  /// que le référentiel réel n'a pas répondu.
+  List<PaysOption> get _paysAffiches =>
+      _paysCharges.isNotEmpty ? _paysCharges : widget.paysDisponibles;
+
+  Future<void> _chargerPaysDisponibles() async {
+    setState(() => _chargementPays = true);
+    try {
+      final liste = await _referentielRepository.listerPays(
+        statutActivation: StatutActivationPays.actif,
+      );
+      if (!mounted) return;
+      setState(() {
+        _paysCharges =
+            liste.map((p) => PaysOption(id: p.paysId, libelle: p.nom)).toList();
+        _erreurPays = null;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _erreurPays = e.message);
+    } finally {
+      if (mounted) setState(() => _chargementPays = false);
+    }
+  }
 
   final TextEditingController _motifController = TextEditingController();
 
@@ -342,6 +413,7 @@ class _RendezVousPageState extends State<RendezVousPage> {
   void initState() {
     super.initState();
     _charger();
+    _chargerPaysDisponibles();
   }
 
   @override
@@ -421,6 +493,21 @@ class _RendezVousPageState extends State<RendezVousPage> {
       }
       if (_paysId == null) {
         _afficherErreur('Merci de sélectionner votre pays.');
+        return;
+      }
+      // Garde-fou : si le référentiel réel n'a pas encore chargé (ou a
+      // échoué) et que la sélection provient encore de _paysDemo, son
+      // `id` n'est PAS un UUID valide (ex. "cm") et ferait échouer
+      // POST /auth/register côté backend (Prisma "invalid input value
+      // ... for type uuid"). On bloque ici plutôt que de laisser
+      // partir un appel voué à l'échec.
+      if (_paysCharges.isEmpty || !_paysCharges.any((p) => p.id == _paysId)) {
+        _afficherErreur(
+          _chargementPays
+              ? 'Chargement de la liste des pays en cours, merci de patienter.'
+              : 'Liste des pays indisponible, merci de réessayer.',
+        );
+        if (!_chargementPays) unawaited(_chargerPaysDisponibles());
         return;
       }
       if (!_accepteConditions) {
@@ -588,38 +675,38 @@ class _RendezVousPageState extends State<RendezVousPage> {
     return DateTime(date.year, date.month, date.day, heures, minutes);
   }
 
+  /// Remplace l'ancien popup muet par un véritable écran de confirmation
+  /// ([ConfirmationRdvPage]), poussé au-dessus de cet écran de réservation.
+  /// Les boutons de [ConfirmationRdvPage] retombent par défaut sur
+  /// [RendezVousPage.onVoirMesRendezVous] / [RendezVousPage.onRetourAccueil]
+  /// si fournis, sinon sur un simple retour à la première route de la pile
+  /// (l'utilisateur ne doit pas pouvoir revenir en arrière sur l'écran de
+  /// réservation lui-même après une réservation réussie).
   void _afficherConfirmation(
       CreneauJour jour,
       CreneauHoraire creneau,
       RendezVous? rdv, {
         bool compteVientDetreCree = false,
       }) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgRadius),
-        title: Text(
-          compteVientDetreCree
-              ? 'Compte créé et rendez-vous confirmé'
-              : 'Rendez-vous confirmé',
-          style: AppTextStyles.h3,
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ConfirmationRdvPage(
+          medecinNom: widget.medecinNom,
+          medecinSpecialite: widget.medecinSpecialite,
+          medecinVille: widget.medecinVille,
+          dateRdv: jour.date,
+          heure: creneau.heure,
+          typeRdvLabel: _typeChoisi == TypeRdv.teleconsultation
+              ? 'Téléconsultation'
+              : 'Au cabinet',
+          tarifFcfa: widget.tarifFcfa,
+          codeUnique: rdv?.codeUnique,
+          compteVientDetreCree: compteVientDetreCree,
+          patientPrenom:
+          compteVientDetreCree ? _prenomCtrl.text.trim() : null,
+          onVoirMesRendezVous: widget.onVoirMesRendezVous,
+          onRetourAccueil: widget.onRetourAccueil,
         ),
-        content: Text(
-          '${compteVientDetreCree ? 'Votre compte patient a été créé et vous êtes '
-              'maintenant connecté(e).\n\n' : ''}'
-              'Créneau du ${_formaterDate(jour.date)} à ${creneau.heure} avec '
-              '${widget.medecinNom}.\n\nLes fonds restent bloqués sous séquestre '
-              "jusqu'à la consultation."
-              '${rdv != null ? '\n\nCode unique : ${rdv.codeUnique}' : ' Un code unique et un QR code viennent de vous être envoyés.'}',
-          style: AppTextStyles.body,
-        ),
-        actions: [
-          AppOutlineButton(
-            label: 'OK',
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
       ),
     );
   }
@@ -1080,27 +1167,72 @@ class _RendezVousPageState extends State<RendezVousPage> {
             ),
             _champCompte(
               label: 'Pays',
-              enfant: DropdownButtonFormField<String>(
-                value: _paysId,
-                isExpanded: true,
-                icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.inkFaint),
-                decoration: _decorationChamp(hint: 'Sélectionner…'),
-                hint: Text(
-                  'Sélectionner…',
-                  style: AppTextStyles.body
-                      .copyWith(color: AppColors.inkFaint, fontSize: 13),
-                ),
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.ink,
-                  fontWeight: FontWeight.w600,
-                ),
-                items: widget.paysDisponibles
-                    .map((p) =>
-                    DropdownMenuItem(value: p.id, child: Text(p.libelle)))
-                    .toList(),
-                onChanged: (v) => setState(() => _paysId = v),
+              enfant: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<String>(
+                    // `value` doit exister dans `items` : si le référentiel
+                    // réel a fini de charger et ne contient pas le pays
+                    // encore sélectionné depuis la liste de repli
+                    // (_paysDemo), on réinitialise plutôt qu'un crash Flutter.
+                    value: _paysAffiches.any((p) => p.id == _paysId)
+                        ? _paysId
+                        : null,
+                    isExpanded: true,
+                    icon: _chargementPays
+                        ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.keyboard_arrow_down_rounded,
+                        color: AppColors.inkFaint),
+                    decoration: _decorationChamp(
+                      hint: _chargementPays
+                          ? 'Chargement des pays…'
+                          : 'Sélectionner…',
+                    ),
+                    hint: Text(
+                      _chargementPays
+                          ? 'Chargement des pays…'
+                          : 'Sélectionner…',
+                      style: AppTextStyles.body
+                          .copyWith(color: AppColors.inkFaint, fontSize: 13),
+                    ),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.ink,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    items: _paysAffiches
+                        .map((p) =>
+                        DropdownMenuItem(value: p.id, child: Text(p.libelle)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _paysId = v),
+                  ),
+                  if (_erreurPays != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Liste des pays indisponible ($_erreurPays).',
+                              style: AppTextStyles.body.copyWith(
+                                color: Colors.redAccent,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _chargerPaysDisponibles,
+                            child: const Text('Réessayer',
+                                style: TextStyle(fontSize: 11)),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
             ),
             const SizedBox(height: 2),

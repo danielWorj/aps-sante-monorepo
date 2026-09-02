@@ -6,20 +6,20 @@
 // src/controllers/medecin.controller.js côté backend, et dans le même
 // esprit que medecinService.js (version web de ce même module).
 //
-// Comme [ApiClient], ce fichier ne porte AUCUN état applicatif (pas de
-// cache, pas de notification UI) : il ne fait que parler HTTP et
-// mapper JSON <-> modèles Dart (medecin_models.dart). La gestion
-// d'état (chargement, erreurs, sélection courante) appartient à
-// MedecinController (lib/controllers/medecin_controller.dart), qui
-// s'appuie sur ce repository.
+// Version "simple" : ce repository parle DIRECTEMENT en HTTP via le
+// package `http`, sans passer par ApiClient (voir api_client.dart) ni
+// par ApiEndpoints. Toutes les routes viennent de
+// ApiRealEndpoints (endpoint.dart).
 //
-// Le token d'authentification suit la même règle que [ApiClient] :
-// fourni requête par requête (paramètre `token`), jamais stocké ici.
-// Les routes publiques (listerMedecins, obtenirMedecin,
-// verifierAppartenanceOrdre, le référentiel Specialites en lecture)
-// acceptent un `token` optionnel : s'il est fourni et valide, le
-// backend enrichit la réponse (ex. email/téléphone visibles pour un
-// admin/superadmin connecté) — voir authentifierOptionnel côté routes.
+// Comme dans la version précédente, ce fichier ne porte AUCUN état
+// applicatif (pas de cache, pas de notification UI) : il ne fait que
+// parler HTTP et mapper JSON <-> modèles Dart (medecin_models.dart).
+// La gestion d'état (chargement, erreurs, sélection courante)
+// appartient à MedecinController (lib/controllers/medecin_controller.dart),
+// qui s'appuie sur ce repository.
+//
+// Le token d'authentification est fourni requête par requête
+// (paramètre `token`), jamais stocké ici.
 //
 // ⚠️ Périmètre volontairement limité à la fiche médecin elle-même +
 // au référentiel Spécialités, en miroir de medecin_models.dart (voir
@@ -27,13 +27,158 @@
 // Ordonnances, Agenda sont hors périmètre de ce fichier — à traiter
 // dans des repositories dédiés suivant le même patron.
 
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
 import '../models/medecin_models.dart';
-import '../utils/api_client.dart';
+import '../utils/endpoint.dart';
+
+/// Erreur levée quand une requête HTTP échoue (statut hors 2xx) ou
+/// quand un appel est mal formé côté client (ex. rien à mettre à
+/// jour). Remplace l'ApiException de api_client.dart pour ce
+/// repository, qui ne dépend plus de ce fichier.
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+
+  const ApiException(this.message, {this.statusCode});
+
+  @override
+  String toString() => message;
+}
+
+/// Description d'un fichier à envoyer en multipart (cni, attestation,
+/// photo, cv, ...).
+class FichierMultipart {
+  final String champ;
+  final List<int> octets;
+  final String nomFichier;
+
+  const FichierMultipart({
+    required this.champ,
+    required this.octets,
+    required this.nomFichier,
+  });
+}
 
 class MedecinRepository {
-  final ApiClient _client;
+  static const Duration _timeout = Duration(seconds: 10);
 
-  MedecinRepository(this._client);
+  /* ===================================================================
+   * Aides HTTP internes (remplacent ApiClient)
+   * =================================================================== */
+
+  Map<String, String> _entetes({String? token, bool avecJson = true}) {
+    final entetes = <String, String>{};
+    if (avecJson) entetes['Content-Type'] = 'application/json';
+    if (token != null) entetes['Authorization'] = 'Bearer $token';
+    return entetes;
+  }
+
+  /// Décode le corps de la réponse et lève [ApiException] si le
+  /// statut n'est pas un succès (2xx).
+  dynamic _decoder(http.Response reponse) {
+    if (reponse.statusCode < 200 || reponse.statusCode >= 300) {
+      String message = 'Erreur ${reponse.statusCode}: ${reponse.body}';
+      try {
+        final corps = jsonDecode(reponse.body);
+        if (corps is Map && corps['message'] is String) {
+          message = corps['message'] as String;
+        }
+      } catch (_) {
+        // Corps non-JSON : on garde le message par défaut.
+      }
+      throw ApiException(message, statusCode: reponse.statusCode);
+    }
+    if (reponse.body.isEmpty) return null;
+    return jsonDecode(reponse.body);
+  }
+
+  Future<dynamic> _get(
+      String url, {
+        String? token,
+        Map<String, String>? query,
+      }) async {
+    var uri = Uri.parse(url);
+    if (query != null && query.isNotEmpty) {
+      uri = uri.replace(queryParameters: {...uri.queryParameters, ...query});
+    }
+    final reponse = await http
+        .get(uri, headers: _entetes(token: token, avecJson: false))
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _post(
+      String url, {
+        Map<String, dynamic>? body,
+        String? token,
+      }) async {
+    final reponse = await http
+        .post(
+      Uri.parse(url),
+      headers: _entetes(token: token),
+      body: jsonEncode(body ?? const {}),
+    )
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _put(
+      String url, {
+        Map<String, dynamic>? body,
+        String? token,
+      }) async {
+    final reponse = await http
+        .put(
+      Uri.parse(url),
+      headers: _entetes(token: token),
+      body: jsonEncode(body ?? const {}),
+    )
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _patch(String url, {String? token}) async {
+    final reponse = await http
+        .patch(Uri.parse(url), headers: _entetes(token: token, avecJson: false))
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _delete(String url, {String? token}) async {
+    final reponse = await http
+        .delete(Uri.parse(url), headers: _entetes(token: token, avecJson: false))
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _multipart(
+      String methode,
+      String url, {
+        Map<String, dynamic> champs = const {},
+        List<FichierMultipart> fichiers = const [],
+        String? token,
+      }) async {
+    final requete = http.MultipartRequest(methode, Uri.parse(url));
+    if (token != null) {
+      requete.headers['Authorization'] = 'Bearer $token';
+    }
+    champs.forEach((cle, valeur) {
+      if (valeur != null) requete.fields[cle] = valeur.toString();
+    });
+    for (final fichier in fichiers) {
+      requete.files.add(http.MultipartFile.fromBytes(
+        fichier.champ,
+        fichier.octets,
+        filename: fichier.nomFichier,
+      ));
+    }
+    final flux = await requete.send().timeout(_timeout);
+    final reponse = await http.Response.fromStream(flux);
+    return _decoder(reponse);
+  }
 
   /* ===================================================================
    * Médecins (fiche Annuaire)
@@ -47,10 +192,11 @@ class MedecinRepository {
     MedecinFiltres? filtres,
     String? token,
   }) async {
-    final donnees = await _client.get(
-      ApiEndpoints.medecins,
-      query: filtres?.toQuery(),
+    final query = filtres?.toQuery();
+    final donnees = await _get(
+      ApiRealEndpoints.medecins,
       token: token,
+      query: query?.map((cle, valeur) => MapEntry(cle, valeur.toString())),
     );
     final liste = (donnees is Map && donnees['medecins'] is List)
         ? donnees['medecins'] as List<dynamic>
@@ -64,17 +210,25 @@ class MedecinRepository {
   /// Publique, authentification optionnelle (même règle que
   /// [listerMedecins]).
   Future<Medecin> obtenirMedecin(String id, {String? token}) async {
-    final donnees =
-    await _client.get(ApiEndpoints.medecin(id), token: token);
-    return Medecin.fromJson(donnees['medecin'] as Map<String, dynamic>);
+    final donnees = await _get(ApiRealEndpoints.medecin(id), token: token);
+
+    // Le backend renvoie parfois la fiche enveloppée sous la clé
+    // "medecin" (ex: { "medecin": { ...champs... } }), parfois les
+    // champs directement à la racine selon l'endpoint/la version.
+    // On tolère les deux formes pour éviter que tous les champs
+    // arrivent à `null` quand l'un des deux formats change.
+    final medecinJson = (donnees is Map && donnees['medecin'] is Map<String, dynamic>)
+        ? donnees['medecin'] as Map<String, dynamic>
+        : donnees as Map<String, dynamic>;
+
+    return Medecin.fromJson(medecinJson);
   }
 
   /// GET /medecins/mon-profil
   /// Authentifié — [token] obligatoire (le backend en déduit
   /// l'utilisateur_id, il n'y a pas d'id à fournir côté client).
   Future<MonProfilMedecin> obtenirMonProfil({required String token}) async {
-    final donnees =
-    await _client.get(ApiEndpoints.monProfilMedecin, token: token);
+    final donnees = await _get(ApiRealEndpoints.monProfilMedecin, token: token);
     return MonProfilMedecin.fromJson(donnees as Map<String, dynamic>);
   }
 
@@ -111,8 +265,9 @@ class MedecinRepository {
         ),
     ];
 
-    final donnees = await _client.postMultipart(
-      ApiEndpoints.medecins,
+    final donnees = await _multipart(
+      'POST',
+      ApiRealEndpoints.medecins,
       champs: payload.toChamps(),
       fichiers: fichiers,
     );
@@ -161,8 +316,9 @@ class MedecinRepository {
       throw const ApiException('Aucune donnée valide à mettre à jour.');
     }
 
-    final donnees = await _client.putMultipart(
-      ApiEndpoints.medecin(id),
+    final donnees = await _multipart(
+      'PUT',
+      ApiRealEndpoints.medecin(id),
       champs: champs,
       fichiers: fichiers,
       token: token,
@@ -175,8 +331,7 @@ class MedecinRepository {
   /// (via [ApiException]) si des avis/abonnements/rendez-vous/
   /// ordonnances référencent encore ce médecin.
   Future<String> supprimerMedecin(String id, {required String token}) async {
-    final donnees =
-    await _client.delete(ApiEndpoints.medecin(id), token: token);
+    final donnees = await _delete(ApiRealEndpoints.medecin(id), token: token);
     return (donnees is Map && donnees['message'] is String)
         ? donnees['message'] as String
         : 'Fiche médecin supprimée.';
@@ -189,8 +344,8 @@ class MedecinRepository {
       String id, {
         required String token,
       }) async {
-    final donnees = await _client
-        .patch(ApiEndpoints.publierMedecin(id), token: token);
+    final donnees =
+    await _patch(ApiRealEndpoints.publierMedecin(id), token: token);
     return MedecinActionResultat.fromJson(donnees as Map<String, dynamic>);
   }
 
@@ -203,8 +358,8 @@ class MedecinRepository {
       String id, {
         required String token,
       }) async {
-    final donnees = await _client
-        .patch(ApiEndpoints.suspendreMedecin(id), token: token);
+    final donnees =
+    await _patch(ApiRealEndpoints.suspendreMedecin(id), token: token);
     return MedecinActionResultat.fromJson(donnees as Map<String, dynamic>);
   }
 
@@ -214,8 +369,8 @@ class MedecinRepository {
   /// nécessaire. Le backend ne renvoie qu'un message ici, jamais de
   /// fiche medecin.
   Future<String> reactiverMedecin(String id, {required String token}) async {
-    final donnees = await _client
-        .patch(ApiEndpoints.reactiverMedecin(id), token: token);
+    final donnees =
+    await _patch(ApiRealEndpoints.reactiverMedecin(id), token: token);
     return (donnees is Map && donnees['message'] is String)
         ? donnees['message'] as String
         : 'Compte médecin réactivé.';
@@ -231,8 +386,8 @@ class MedecinRepository {
   Future<VerificationOrdreResultat> verifierAppartenanceOrdre(
       String numeroOrdre,
       ) async {
-    final donnees = await _client.post(
-      ApiEndpoints.verifierOrdreMedecin,
+    final donnees = await _post(
+      ApiRealEndpoints.verifierOrdreMedecin,
       body: {'numero_ordre': numeroOrdre},
     );
     return VerificationOrdreResultat.fromJson(donnees as Map<String, dynamic>);
@@ -248,8 +403,8 @@ class MedecinRepository {
   /// GET /specialites
   /// Publique. Filtre optionnel [recherche] (sur le nom).
   Future<List<Specialite>> listerSpecialites({String? recherche}) async {
-    final donnees = await _client.get(
-      ApiEndpoints.specialites,
+    final donnees = await _get(
+      ApiRealEndpoints.specialites,
       query: (recherche != null && recherche.trim().isNotEmpty)
           ? {'recherche': recherche}
           : null,
@@ -265,7 +420,7 @@ class MedecinRepository {
   /// GET /specialites/:id
   /// Publique.
   Future<Specialite> obtenirSpecialite(String id) async {
-    final donnees = await _client.get(ApiEndpoints.specialite(id));
+    final donnees = await _get(ApiRealEndpoints.specialite(id));
     return Specialite.fromJson(donnees['specialite'] as Map<String, dynamic>);
   }
 
@@ -277,8 +432,8 @@ class MedecinRepository {
     String? description,
     required String token,
   }) async {
-    final donnees = await _client.post(
-      ApiEndpoints.specialites,
+    final donnees = await _post(
+      ApiRealEndpoints.specialites,
       body: {
         'nom': nom,
         if (description != null) 'description': description,
@@ -298,8 +453,8 @@ class MedecinRepository {
     if (payload.estVide) {
       throw const ApiException('Aucune donnée valide à mettre à jour.');
     }
-    final donnees = await _client.put(
-      ApiEndpoints.specialite(id),
+    final donnees = await _put(
+      ApiRealEndpoints.specialite(id),
       body: payload.toJson(),
       token: token,
     );
@@ -314,7 +469,7 @@ class MedecinRepository {
         required String token,
       }) async {
     final donnees =
-    await _client.delete(ApiEndpoints.specialite(id), token: token);
+    await _delete(ApiRealEndpoints.specialite(id), token: token);
     return (donnees is Map && donnees['message'] is String)
         ? donnees['message'] as String
         : 'Spécialité supprimée.';

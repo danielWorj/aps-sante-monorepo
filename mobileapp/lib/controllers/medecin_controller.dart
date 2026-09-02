@@ -30,30 +30,19 @@ import 'package:riverpod/riverpod.dart';
 
 import '../models/medecin_models.dart';
 import '../repositories/medecin_repository.dart';
-import '../utils/api_client.dart';
 
 /* =========================================================================
  * Dépendances partagées
  * ========================================================================= */
 
-/// Instance unique d'[ApiClient] pour toute l'app.
-///
-/// ⚠️ Si un `apiClientProvider` existe déjà ailleurs dans le projet
-/// (fichier partagé entre tous les modules), SUPPRIMER cette
-/// déclaration et importer l'existant à la place — ce provider n'est
-/// redéclaré ici que pour que ce fichier compile de façon autonome.
-/// Adapter `baseUrl` à la configuration réelle (ex: variable
-/// d'environnement / flavor).
-final apiClientProvider = Provider<ApiClient>((ref) {
-  final client = ApiClient(baseUrl: 'http://localhost:3000/api');
-  ref.onDispose(client.close);
-  return client;
-});
-
 /// Repository ré-exposé ici pour que les widgets n'aient jamais besoin
 /// d'importer medecin_repository.dart directement.
+///
+/// [MedecinRepository] parle HTTP directement (via le package `http`)
+/// et ne prend plus de dépendance en paramètre : pas besoin d'
+/// [ApiClient] ici.
 final medecinRepositoryProvider = Provider<MedecinRepository>((ref) {
-  return MedecinRepository(ref.watch(apiClientProvider));
+  return MedecinRepository();
 });
 
 /* =========================================================================

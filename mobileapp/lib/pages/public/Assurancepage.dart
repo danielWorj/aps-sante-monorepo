@@ -5,6 +5,8 @@ import '../../components/components.dart';
 import '../../controllers/assurance_controller.dart';
 import '../../models/assurance_models.dart';
 import './utils/DetailAssurance.dart'; // ⚠️ adapter ce chemin à l'emplacement réel du fichier dans le projet.
+import 'publicAcceuil.dart';
+import 'Medecinpage.dart';
 
 /// Écran public — **Annuaire des assurances** (`5 · Annuaire assurances`
 /// dans la maquette `ui-mobile.html`).
@@ -72,6 +74,34 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
     }).toList();
   }
 
+  /// Gère un tap sur la barre de navigation basse : met à jour l'index actif
+  /// ET navigue réellement vers l'écran correspondant (0=Accueil,
+  /// 1=Médecin, 2=Assurance [écran courant], 3=À propos).
+  void _onBottomNavTap(int index) {
+    setState(() => _navIndex = index);
+    switch (index) {
+      case 0: // Accueil
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PublicAcceuilPage()),
+        );
+        break;
+      case 1: // Médecin
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MedecinPage()),
+        );
+        break;
+      case 2: // Assurance — déjà sur cet écran.
+        break;
+      case 3: // À propos — aucun écran fourni pour l'instant.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Écran « À propos » bientôt disponible.')),
+        );
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final servicesAsync = ref.watch(listeServicesAssuranceControllerProvider);
@@ -99,7 +129,7 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
             bottom: 10,
             child: AppBottomNav(
               currentIndex: _navIndex,
-              onTap: (i) => setState(() => _navIndex = i),
+              onTap: _onBottomNavTap,
               onRdvPressed: () {
                 // Brancher ici la navigation vers le flux de prise de RDV.
               },

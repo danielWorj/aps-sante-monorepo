@@ -2,10 +2,15 @@
 //
 // Repository du composant "annuaire — centre de santé".
 //
+// Version "simple" (même patron que medecin_repository.dart) : ce
+// repository parle DIRECTEMENT en HTTP via le package `http`, sans
+// passer par ApiClient (voir api_client.dart) ni par ApiEndpoints.
+// Toutes les routes viennent de ApiRealEndpoints (endpoint.dart).
+//
 // Responsabilités (et seulement celles-ci — la logique métier serveur
 // reste côté API) :
 //   - construire les requêtes HTTP vers /centres-sante (chemins,
-//     query params, corps multipart) via ApiClient ;
+//     query params, corps multipart) ;
 //   - mapper les réponses JSON vers les modèles de
 //     centresante_models.dart ;
 //   - traduire toute ApiException en exception métier typée, pour que
@@ -22,13 +27,53 @@
 //                          relaie un éventuel 401/403 sous forme
 //                          d'exception).
 //
-// Même patron que medecin_repository.dart : aucun état applicatif
-// (pas de cache, pas de notification UI), token fourni requête par
-// requête, fichiers en octets bruts via [FichierMultipart] pour rester
-// compatible Flutter Web.
+// Comme dans la version précédente, ce fichier ne porte AUCUN état
+// applicatif (pas de cache, pas de notification UI) : il ne fait que
+// parler HTTP et mapper JSON <-> modèles Dart. La gestion d'état
+// (chargement, erreurs, sélection courante) appartient à
+// CentreSanteController (lib/controllers/centresante_controller.dart),
+// qui s'appuie sur ce repository.
+//
+// Le token d'authentification est fourni requête par requête
+// (paramètre `token`), jamais stocké ici.
+
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
 
 import '../models/centresante_models.dart';
-import '../utils/api_client.dart';
+import '../utils/endpoint.dart';
+
+// ─────────────────────────────────────────────────────────────────
+// Aides HTTP internes (remplacent ApiClient)
+// ─────────────────────────────────────────────────────────────────
+
+/// Erreur levée quand une requête HTTP échoue (statut hors 2xx).
+/// Remplace l'ApiException de api_client.dart pour ce repository,
+/// qui ne dépend plus de ce fichier.
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+
+  const ApiException(this.message, {this.statusCode});
+
+  @override
+  String toString() => message;
+}
+
+/// Description d'un fichier à envoyer en multipart (image_structure,
+/// piece_identite, document_agrement).
+class FichierMultipart {
+  final String champ;
+  final List<int> octets;
+  final String nomFichier;
+
+  const FichierMultipart({
+    required this.champ,
+    required this.octets,
+    required this.nomFichier,
+  });
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Exceptions métier
@@ -89,9 +134,85 @@ class CentreSanteReseauException extends CentreSanteException {
 // ─────────────────────────────────────────────────────────────────
 
 class CentreSanteRepository {
-  final ApiClient _client;
+  static const Duration _timeout = Duration(seconds: 10);
 
-  CentreSanteRepository(this._client);
+  /* ===================================================================
+   * Aides HTTP internes (remplacent ApiClient)
+   * =================================================================== */
+
+  Map<String, String> _entetes({String? token, bool avecJson = true}) {
+    final entetes = <String, String>{};
+    if (avecJson) entetes['Content-Type'] = 'application/json';
+    if (token != null) entetes['Authorization'] = 'Bearer $token';
+    return entetes;
+  }
+
+  /// Décode le corps de la réponse et lève [ApiException] si le
+  /// statut n'est pas un succès (2xx).
+  dynamic _decoder(http.Response reponse) {
+    if (reponse.statusCode < 200 || reponse.statusCode >= 300) {
+      String message = 'Erreur ${reponse.statusCode}: ${reponse.body}';
+      try {
+        final corps = jsonDecode(reponse.body);
+        if (corps is Map && corps['message'] is String) {
+          message = corps['message'] as String;
+        }
+      } catch (_) {
+        // Corps non-JSON : on garde le message par défaut.
+      }
+      throw ApiException(message, statusCode: reponse.statusCode);
+    }
+    if (reponse.body.isEmpty) return null;
+    return jsonDecode(reponse.body);
+  }
+
+  Future<dynamic> _get(
+      String url, {
+        String? token,
+        Map<String, String>? query,
+      }) async {
+    var uri = Uri.parse(url);
+    if (query != null && query.isNotEmpty) {
+      uri = uri.replace(queryParameters: {...uri.queryParameters, ...query});
+    }
+    final reponse = await http
+        .get(uri, headers: _entetes(token: token, avecJson: false))
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _delete(String url, {String? token}) async {
+    final reponse = await http
+        .delete(Uri.parse(url), headers: _entetes(token: token, avecJson: false))
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _multipart(
+      String methode,
+      String url, {
+        Map<String, dynamic> champs = const {},
+        List<FichierMultipart> fichiers = const [],
+        String? token,
+      }) async {
+    final requete = http.MultipartRequest(methode, Uri.parse(url));
+    if (token != null) {
+      requete.headers['Authorization'] = 'Bearer $token';
+    }
+    champs.forEach((cle, valeur) {
+      if (valeur != null) requete.fields[cle] = valeur.toString();
+    });
+    for (final fichier in fichiers) {
+      requete.files.add(http.MultipartFile.fromBytes(
+        fichier.champ,
+        fichier.octets,
+        filename: fichier.nomFichier,
+      ));
+    }
+    final flux = await requete.send().timeout(_timeout);
+    final reponse = await http.Response.fromStream(flux);
+    return _decoder(reponse);
+  }
 
   // ── Lecture (publique, token optionnel) ─────────────────────────
 
@@ -103,10 +224,11 @@ class CentreSanteRepository {
     CentresSanteFiltre? filtre,
     String? token,
   }) async {
-    final donnees = await _executer(() => _client.get(
-      ApiEndpoints.centresSante,
-      query: filtre?.toQueryParameters(),
+    final query = filtre?.toQueryParameters();
+    final donnees = await _executer(() => _get(
+      ApiRealEndpoints.centresSante,
       token: token,
+      query: query?.map((cle, valeur) => MapEntry(cle, valeur.toString())),
     ));
     return CentresSanteListeReponse.fromJson(
       donnees as Map<String, dynamic>,
@@ -116,8 +238,8 @@ class CentreSanteRepository {
   /// GET /centres-sante/:id — détail d'une fiche.
   /// Lève [CentreSanteIntrouvableException] si l'id n'existe pas.
   Future<CentreSante> obtenir(String structureId, {String? token}) async {
-    final donnees = await _executer(() => _client.get(
-      ApiEndpoints.centreSante(structureId),
+    final donnees = await _executer(() => _get(
+      ApiRealEndpoints.centreSante(structureId),
       token: token,
     ));
     return CentreSanteDetailReponse.fromJson(
@@ -172,8 +294,9 @@ class CentreSanteRepository {
       ),
     ];
 
-    final donnees = await _executer(() => _client.postMultipart(
-      ApiEndpoints.centresSante,
+    final donnees = await _executer(() => _multipart(
+      'POST',
+      ApiRealEndpoints.centresSante,
       champs: requete.toChampsTexte(),
       fichiers: fichiers,
       token: token,
@@ -225,8 +348,9 @@ class CentreSanteRepository {
         ),
     ];
 
-    final donnees = await _executer(() => _client.putMultipart(
-      ApiEndpoints.centreSante(structureId),
+    final donnees = await _executer(() => _multipart(
+      'PUT',
+      ApiRealEndpoints.centreSante(structureId),
       champs: requete.toChampsTexte(),
       fichiers: fichiers,
       token: token,
@@ -241,8 +365,8 @@ class CentreSanteRepository {
   /// tout autre appelant reçoit [CentreSanteAccesRefuseException].
   /// Retourne le message de confirmation serveur.
   Future<String> supprimer(String structureId, {required String token}) async {
-    final donnees = await _executer(() => _client.delete(
-      ApiEndpoints.centreSante(structureId),
+    final donnees = await _executer(() => _delete(
+      ApiRealEndpoints.centreSante(structureId),
       token: token,
     ));
     return MessageReponse.fromJson(donnees as Map<String, dynamic>).message;
@@ -250,7 +374,7 @@ class CentreSanteRepository {
 
   // ── Aides internes ──────────────────────────────────────────────
 
-  /// Exécute un appel [ApiClient] et traduit toute [ApiException] en
+  /// Exécute un appel HTTP et traduit toute [ApiException] en
   /// exception métier du module — point unique de mapping statut ->
   /// type, pour ne pas le dupliquer dans chaque méthode publique.
   Future<dynamic> _executer(Future<dynamic> Function() appel) async {

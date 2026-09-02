@@ -32,13 +32,10 @@ import 'package:riverpod/riverpod.dart';
 import '../models/rendez_vous_models.dart';
 import '../repositories/rendez_vous_repository.dart';
 // Réutilise l'unique instance d'[ApiClient] déjà déclarée dans
-// medecin_controller.dart plutôt que d'en redéclarer une seconde ici
-// (deux `apiClientProvider` distincts casseraient le partage d'état
-// HTTP — timeout, `http.Client` sous-jacent — entre les modules).
-// ⚠️ Si aucun `apiClientProvider` n'existe encore dans le projet
-// (medecin_controller.dart absent), déclarer ici un provider
-// équivalent — voir son en-tête pour le modèle attendu.
-import 'medecin_controller.dart' show apiClientProvider;
+// api_client.dart plutôt que d'en redéclarer une seconde ici (deux
+// `apiClientProvider` distincts casseraient le partage d'état HTTP —
+// timeout, `http.Client` sous-jacent — entre les modules).
+import '../utils/api_client.dart' show apiClientProvider;
 
 /* =========================================================================
  * Dépendances partagées
