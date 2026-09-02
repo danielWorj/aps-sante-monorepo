@@ -47,6 +47,7 @@ import '../../models/centresante_models.dart';
 import 'publicAcceuil.dart';
 import 'Medecinpage.dart';
 import 'Assurancepage.dart';
+import 'apropos.dart';
 import '../../repositories/centresante_repository.dart';
 
 
@@ -143,9 +144,10 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
           MaterialPageRoute(builder: (_) => const AssurancePage()),
         );
         break;
-      case 3: // À propos — aucun écran fourni pour l'instant.
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Écran « À propos » bientôt disponible.')),
+      case 3: // À propos
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AProposPage()),
         );
         break;
     }

@@ -498,6 +498,65 @@
   .success-next .sn-ic .icon{width:13px;height:13px;}
   .success-next .sn-txt strong{display:block; font-size:11.5px; font-weight:700; font-family:'Sora',sans-serif; margin-bottom:2px;}
   .success-next .sn-txt span{font-size:11px; color:var(--ink-soft); line-height:1.5;}
+
+  /* ============ 12. À PROPOS ============ */
+  .ap-hero{ text-align:center; padding:6px 6px 4px; }
+  .ap-mark{ width:56px; height:56px; margin:0 auto 12px; border-radius:17px; background:linear-gradient(135deg, var(--green-600) 0%, var(--green-900) 100%); display:flex; align-items:center; justify-content:center; box-shadow:0 10px 20px -8px rgba(30,138,99,0.45); }
+  .ap-mark .icon{ width:27px; height:27px; color:#fff; stroke-width:1.8; }
+  .ap-hero h2{ font-size:19px; font-weight:800; margin:0 0 4px; letter-spacing:-0.01em; font-family:'Sora',sans-serif; }
+  .ap-hero .ver{ margin-bottom:11px; }
+  .ap-hero p{ font-size:12.5px; line-height:1.6; color:var(--ink-soft); margin:0 auto; max-width:250px; }
+
+  .ap-stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:18px 0; }
+  .ap-stat{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-sm); padding:11px 4px; text-align:center; box-shadow:var(--shadow-card); }
+  .ap-stat .num{ font-family:'Sora',sans-serif; font-weight:800; font-size:14px; color:var(--green-700); display:block; }
+  .ap-stat .lbl{ font-size:8.5px; color:var(--ink-soft); font-weight:600; line-height:1.35; display:block; margin-top:3px; }
+
+  .ap-section-head{ display:flex; align-items:center; gap:8px; margin:22px 0 12px; }
+  .ap-section-head .icon-wrap{ width:26px;height:26px; border-radius:8px; background:var(--green-100); color:var(--green-700); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .ap-section-head .icon-wrap .icon{ width:14px;height:14px; }
+  .ap-section-head h3{ font-size:13.5px; font-weight:700; margin:0; font-family:'Sora',sans-serif; }
+
+  .ap-feature{ display:flex; gap:11px; padding:11px 0; border-bottom:1px solid var(--line); }
+  .ap-feature:last-child{ border-bottom:none; padding-bottom:0; }
+  .ap-feature .fic{ width:34px;height:34px; border-radius:11px; background:var(--green-100); color:var(--green-700); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .ap-feature.coral .fic{ background:var(--coral-100); color:var(--coral-500); }
+  .ap-feature .fic .icon{ width:16px;height:16px; }
+  .ap-feature .ftxt h4{ font-size:12.5px; font-weight:700; margin:0 0 3px; font-family:'Sora',sans-serif; }
+  .ap-feature .ftxt p{ font-size:11px; line-height:1.55; color:var(--ink-soft); margin:0; }
+
+  .ap-values{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:14px; box-shadow:var(--shadow-card); }
+  .ap-value{ display:flex; gap:10px; align-items:flex-start; padding:9px 0; border-bottom:1px dashed var(--line); }
+  .ap-value:first-child{padding-top:0;}
+  .ap-value:last-child{ border-bottom:none; padding-bottom:0; }
+  .ap-value .vic{ width:22px;height:22px; border-radius:7px; background:var(--green-50); color:var(--green-700); display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+  .ap-value .vic .icon{ width:12px;height:12px; stroke-width:2; }
+  .ap-value .vtxt strong{ display:block; font-size:12px; font-weight:700; font-family:'Sora',sans-serif; margin-bottom:2px; }
+  .ap-value .vtxt span{ font-size:11px; color:var(--ink-soft); line-height:1.5; }
+
+  .ap-mission{ background:linear-gradient(135deg, var(--green-700) 0%, var(--green-900) 100%); border-radius:var(--radius-md); padding:17px 15px; color:#fff; margin:4px 0 2px; }
+  .ap-mission .tag{ display:inline-flex; align-items:center; gap:6px; font-size:9.5px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:rgba(255,255,255,0.75); margin-bottom:8px; }
+  .ap-mission p{ font-family:'Sora',sans-serif; font-size:13.5px; font-weight:600; line-height:1.5; margin:0; }
+
+  .ap-team{ display:flex; align-items:center; gap:11px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:13px; box-shadow:var(--shadow-card); }
+  .ap-team .flag{ width:38px;height:38px; border-radius:12px; background:var(--amber-100); color:var(--amber-500); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .ap-team .flag .icon{ width:18px;height:18px; }
+  .ap-team p{ font-size:11px; line-height:1.5; color:var(--ink-soft); margin:0; }
+  .ap-team strong{ color:var(--ink); }
+
+  .ap-links{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); overflow:hidden; box-shadow:var(--shadow-card); }
+  .ap-link-row{ display:flex; align-items:center; gap:10px; padding:13px 14px; border-bottom:1px solid var(--line); }
+  .ap-link-row:last-child{ border-bottom:none; }
+  .ap-link-row .lic{ color:var(--ink-soft); flex-shrink:0; }
+  .ap-link-row .lic .icon{ width:15px;height:15px; }
+  .ap-link-row span.txt{ flex:1; font-size:12px; font-weight:600; font-family:'Sora',sans-serif; }
+  .ap-link-row .chev{ color:var(--ink-faint); flex-shrink:0; }
+  .ap-link-row .chev .icon{ width:14px;height:14px; }
+
+  .ap-footer{ text-align:center; padding:20px 10px 4px; }
+  .ap-footer p{ font-size:10px; color:var(--ink-faint); line-height:1.6; margin:0; }
+  .ap-footer .heart{ color:var(--coral-500); display:inline-flex; vertical-align:-2px; }
+  .ap-footer .heart .icon{ width:11px;height:11px; }
 </style>
 </head>
 <body>
@@ -1288,6 +1347,139 @@
         <div class="navitem-fab"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 2.4"/></svg></div>
         <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>Messages</div>
         <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
+      </div>
+    </div></div>
+  </div></div>
+
+<!-- ============ 11. À PROPOS ============ -->
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">11</span> À propos<small>Mission, fonctionnalités &amp; engagements</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+
+        <div class="page-title"><h3 style="margin-top:16px;">À propos</h3></div>
+
+        <!-- HERO -->
+        <div class="ap-hero">
+          <div class="ap-mark">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 21s-6.7-4.3-9.3-8.6C.8 9 2 5 5.6 4.1c2-.5 4 .3 5.1 2C11.8 4.4 13.9 3.6 15.9 4.1 19.5 5 20.7 9 18.8 12.4 16.2 16.7 12 21 12 21z"/><path d="M9 12h1.5l1-2.2L13 14l1-2h1"/></svg>
+          </div>
+          <h2>APS Santé</h2>
+          <div class="ver"><span class="badge outline mono">Version 2.4.1</span></div>
+          <p>Trouver un médecin, une pharmacie de garde ou une assurance — et être aidé en urgence, partout au Cameroun.</p>
+        </div>
+
+        <!-- STATS -->
+        <div class="ap-stats">
+          <div class="ap-stat"><span class="num">2 300+</span><span class="lbl">médecins vérifiés</span></div>
+          <div class="ap-stat"><span class="num">640</span><span class="lbl">pharmacies suivies</span></div>
+          <div class="ap-stat"><span class="num">18</span><span class="lbl">villes couvertes</span></div>
+          <div class="ap-stat"><span class="num">120k</span><span class="lbl">patients inscrits</span></div>
+        </div>
+
+        <!-- MISSION -->
+        <div class="ap-mission">
+          <span class="tag">Notre mission</span>
+          <p>Rendre l'accès aux soins simple et digne de confiance, en donnant à chaque famille camerounaise les bons contacts au bon moment.</p>
+        </div>
+
+        <!-- FEATURES -->
+        <div class="ap-section-head">
+          <div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
+          <h3>Ce que vous pouvez faire</h3>
+        </div>
+        <div>
+          <div class="ap-feature">
+            <div class="fic"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+            <div class="ftxt"><h4>Trouver un médecin vérifié</h4><p>Filtrez par spécialité, ville ou disponibilité et réservez un créneau en quelques secondes.</p></div>
+          </div>
+          <div class="ap-feature">
+            <div class="fic"><svg class="icon" viewBox="0 0 24 24"><path d="M10.5 20.5 3 13a4.5 4.5 0 0 1 6.5-6.2L11 8.3l1.5-1.5A4.5 4.5 0 0 1 19 12"/><path d="M15 15h4"/></svg></div>
+            <div class="ftxt"><h4>Localiser une pharmacie de garde</h4><p>Fiches vérifiées et statut d'ouverture en temps réel, même la nuit et les jours fériés.</p></div>
+          </div>
+          <div class="ap-feature">
+            <div class="fic"><svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4.5 8-11.8V5l-8-3-8 3v5.2C4 17.5 12 22 12 22z"/></svg></div>
+            <div class="ftxt"><h4>Consulter l'annuaire des assurances</h4><p>Comparez les garanties santé et contactez une agence, sans créer de compte.</p></div>
+          </div>
+          <div class="ap-feature coral">
+            <div class="fic"><svg class="icon" viewBox="0 0 24 24"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="m10.3 3.9-8 13.9A1.7 1.7 0 0 0 3.7 20h16.6a1.7 1.7 0 0 0 1.4-2.2l-8-13.9a1.7 1.7 0 0 0-2.9 0z"/></svg></div>
+            <div class="ftxt"><h4>Alerter en cas d'urgence</h4><p>Un bouton unique, géolocalisé, relié aux numéros officiels — gratuit et sans publicité.</p></div>
+          </div>
+        </div>
+
+        <!-- ENGAGEMENTS -->
+        <div class="ap-section-head">
+          <div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 8.7 8 11 4.6-2.3 8-6 8-11V5z"/></svg></div>
+          <h3>Nos engagements</h3>
+        </div>
+        <div class="ap-values">
+          <div class="ap-value">
+            <div class="vic"><svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="vtxt"><strong>Professionnels vérifiés</strong><span>Chaque médecin est contrôlé auprès de l'Ordre national avant d'apparaître dans l'app.</span></div>
+          </div>
+          <div class="ap-value">
+            <div class="vic"><svg class="icon" viewBox="0 0 24 24"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg></div>
+            <div class="vtxt"><strong>Zéro publicité en urgence</strong><span>L'écran d'urgence reste toujours libre de toute publicité, sans exception.</span></div>
+          </div>
+          <div class="ap-value">
+            <div class="vic"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg></div>
+            <div class="vtxt"><strong>Paiement en séquestre</strong><span>Les fonds d'un rendez-vous sont bloqués et libérés uniquement après la consultation.</span></div>
+          </div>
+          <div class="ap-value">
+            <div class="vic"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+            <div class="vtxt"><strong>Données protégées</strong><span>Vos informations médicales et personnelles ne sont jamais revendues à des tiers.</span></div>
+          </div>
+        </div>
+
+        <!-- TEAM -->
+        <div class="ap-section-head">
+          <div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>
+          <h3>Qui est derrière APS</h3>
+        </div>
+        <div class="ap-team">
+          <div class="flag"><svg class="icon" viewBox="0 0 24 24"><path d="M3 4v16"/><path d="M3 4h11l-1.5 4L14 12H3"/></svg></div>
+          <p><strong>Une équipe basée à Yaoundé</strong>, en lien direct avec des médecins, pharmaciens et assureurs locaux, pour une information toujours à jour.</p>
+        </div>
+
+        <!-- LEGAL LINKS -->
+        <div class="ap-section-head">
+          <div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+          <h3>Informations légales</h3>
+        </div>
+        <div class="ap-links">
+          <div class="ap-link-row">
+            <div class="lic"><svg class="icon" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+            <span class="txt">Conditions d'utilisation</span>
+            <div class="chev"><svg class="icon" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          </div>
+          <div class="ap-link-row">
+            <div class="lic"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+            <span class="txt">Politique de confidentialité</span>
+            <div class="chev"><svg class="icon" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          </div>
+          <div class="ap-link-row">
+            <div class="lic"><svg class="icon" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+            <span class="txt">Nous contacter</span>
+            <div class="chev"><svg class="icon" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          </div>
+        </div>
+
+        <div class="ap-footer">
+          <p>Conçu <span class="heart"><svg class="icon" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg></span> au Cameroun · © 2026 APS Santé</p>
+        </div>
+
+      </div>
+      <div class="bottomnav">
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></div>Accueil</div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Recherche</div>
+        <div class="navitem-fab"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 2.4"/></svg></div>
+        <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>Messages</div>
+        <div class="navitem active"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
       </div>
     </div></div>
   </div></div>
