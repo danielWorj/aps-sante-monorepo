@@ -19,6 +19,7 @@
     --coral-100:#FBE7E2;
     --amber-500:#DD9A2E;
     --amber-100:#FBF0DC;
+    --amber-700:#8A5A00;
     --ink:#16241F;
     --ink-soft:#5B6B64;
     --ink-faint:#93A39C;
@@ -101,11 +102,12 @@
 
   /* ============ BOTTOM NAV ============ */
   .bottomnav{ position:absolute; left:10px; right:10px; bottom:10px; height:66px; background:rgba(255,255,255,0.92); backdrop-filter:blur(6px); border:1px solid var(--line); border-radius:22px; display:flex; align-items:center; justify-content:space-around; box-shadow:0 10px 24px -14px rgba(16,36,28,0.28); z-index:15; }
-  .navitem{ display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--ink-faint); font-size:10.5px; font-weight:600; font-family:'Sora',sans-serif; width:56px; }
+  .navitem{ display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--ink-faint); font-size:10.5px; font-weight:600; font-family:'Sora',sans-serif; width:56px; position:relative; }
   .navitem .icon{width:20px;height:20px;}
   .navitem.active{color:var(--green-700);}
   .navitem.active .icon-wrap{ background:var(--green-100); border-radius:12px; padding:5px 14px; margin-bottom:1px; }
-  .navitem .icon-wrap{padding:5px 14px; margin-bottom:1px;}
+  .navitem .icon-wrap{padding:5px 14px; margin-bottom:1px; position:relative;}
+  .navitem .bub{position:absolute; top:-2px; right:8px; background:var(--coral-500); color:#fff; font-size:8.5px; font-weight:700; min-width:15px; height:15px; border-radius:100px; display:flex; align-items:center; justify-content:center; padding:0 3px;}
   .navitem-fab{ width:48px;height:48px; border-radius:16px; background:var(--green-700); display:flex; align-items:center; justify-content:center; color:#fff; box-shadow:0 8px 16px -6px rgba(30,138,99,0.55); margin-top:-22px; }
   .navitem-fab .icon{width:22px;height:22px; stroke-width:2;}
 
@@ -585,6 +587,101 @@
   .ap-footer p{ font-size:10px; color:var(--ink-faint); line-height:1.6; margin:0; }
   .ap-footer .heart{ color:var(--coral-500); display:inline-flex; vertical-align:-2px; }
   .ap-footer .heart .icon{ width:11px;height:11px; }
+
+  .apsm-sec{ padding:40px 0; }
+  .apsm-head{max-width:780px;margin:0 auto 28px;text-align:center;padding:0 16px}
+  .apsm-head .kick{display:inline-block;font-family:'Sora',sans-serif;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--green-700);background:var(--green-100);padding:5px 12px;border-radius:100px;margin-bottom:12px}
+  .apsm-head h2{font-size:26px;font-weight:700;margin:0 0 8px;letter-spacing:-.01em}
+  .apsm-head p{color:var(--ink-soft);font-size:14px;line-height:1.6;margin:0 auto;max-width:640px}
+
+  /* Étiquette au-dessus du téléphone */
+  .apsm-label{max-width:378px;margin:0 auto 14px;text-align:center;font-size:13px;line-height:1.45;color:var(--ink-soft)}
+  .apsm-label b{color:var(--ink);font-size:14px}
+
+  /* Coque du téléphone (format plus grand, écran mis en avant) */
+  .apsm-phone{position:relative;width:378px;max-width:100%;margin:0 auto;background:#0C1512;border-radius:48px;padding:11px;box-shadow:0 30px 55px -22px rgba(16,36,28,.38)}
+  .apsm-screen{position:relative;width:100%;height:772px;background:var(--paper);border-radius:38px;overflow:hidden;display:flex;flex-direction:column}
+  .apsm-island{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:96px;height:25px;background:#0C1512;border-radius:15px;z-index:20}
+  .apsm-status{height:44px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--ink)}
+  .apsm-status .apsm-icons{display:flex;align-items:center;gap:5px}
+  .apsm-status svg{width:15px;height:11px}
+  .apsm-scroll{flex:1;overflow-y:auto;padding:0 16px 100px;scrollbar-width:none}
+  .apsm-scroll::-webkit-scrollbar{display:none}
+
+  /* En-tête d'écran */
+  .apsm-appbar{padding:10px 2px 14px}
+  .apsm-eyebrow{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--green-700);font-weight:700;font-family:'Sora',sans-serif}
+  .apsm-appbar h1{font-size:22px;font-weight:700;margin:5px 0 0;letter-spacing:-.01em}
+
+  /* Carte praticien + disponibilité */
+  .apsm-doc{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-md);padding:12px 13px;box-shadow:var(--shadow-card);margin-bottom:10px}
+  .apsm-doc .apsm-av{width:40px;height:40px;border-radius:50%;background:var(--green-700);color:#fff;font-family:'Sora',sans-serif;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .apsm-doc .apsm-who{flex:1;min-width:0}
+  .apsm-doc h4{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:5px;margin:0}
+  .apsm-doc h4 svg{color:var(--green-600);width:14px;height:14px;flex-shrink:0}
+  .apsm-doc p{font-size:11.5px;color:var(--ink-soft);margin:2px 0 0}
+  .apsm-avail{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;font-family:'Sora',sans-serif;color:var(--green-700);background:var(--green-50);border:1px solid var(--green-100);padding:5px 9px 5px 7px;border-radius:100px;flex-shrink:0}
+  .apsm-avail .dot{width:7px;height:7px;border-radius:50%;background:var(--green-500)}
+
+  /* Ligne de statistiques */
+  .apsm-metrics{display:flex;align-items:center;gap:14px;padding:2px 4px 14px;font-size:12px;color:var(--ink-soft)}
+  .apsm-metrics b{font-family:'IBM Plex Mono',monospace;color:var(--ink);font-weight:600}
+  .apsm-metrics .sep{width:3px;height:3px;border-radius:50%;background:var(--line-strong)}
+
+  /* Onglets segmentés */
+  .apsm-tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:100px;padding:4px;margin-bottom:16px;box-shadow:var(--shadow-card)}
+  .apsm-tab{flex:1;border:0;background:transparent;font-family:'Sora',sans-serif;font-size:11.5px;font-weight:600;padding:8px 4px;border-radius:100px;color:var(--ink-soft);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap}
+  .apsm-tab.active{background:var(--green-700);color:#fff}
+  .apsm-tab em{font-style:normal;font-size:9.5px;background:var(--green-100);color:var(--green-700);border-radius:100px;padding:1px 6px;font-weight:700}
+  .apsm-tab.active em{background:rgba(255,255,255,.22);color:#fff}
+
+  .apsm-panel{display:none}
+  .apsm-panel.active{display:block}
+
+  /* Têtes de liste */
+  .apsm-lh{display:flex;justify-content:space-between;align-items:baseline;margin:4px 2px 9px;font-size:11px;font-weight:700;font-family:'Sora',sans-serif;color:var(--ink-soft)}
+  .apsm-lh a{color:var(--green-700);font-size:11.5px;font-weight:600;text-decoration:none}
+
+  /* Bandeau d'information escrow */
+  .apsm-notice{display:flex;gap:9px;align-items:flex-start;background:var(--green-50);border:1px solid var(--green-100);color:var(--green-900);font-size:12px;line-height:1.5;border-radius:var(--radius-sm);padding:11px 12px;margin-bottom:14px}
+  .apsm-notice svg{color:var(--green-600);flex-shrink:0;margin-top:1px}
+  .apsm-notice b{font-weight:700}
+
+  /* Cartes rendez-vous */
+  .apsm-rdv{display:grid;grid-template-columns:46px 1fr;gap:11px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-md);padding:13px;box-shadow:var(--shadow-card);margin-bottom:10px}
+  .apsm-rdv.apsm-urgent{border-left:3px solid var(--amber-500)}
+  .apsm-rdv.apsm-past{opacity:.85}
+  .apsm-when{display:flex;flex-direction:column;align-items:center;padding-top:1px}
+  .apsm-when b{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--ink)}
+  .apsm-when span{font-size:10px;color:var(--ink-faint);font-weight:600;margin-top:2px}
+  .apsm-rtop{display:flex;align-items:center;gap:8px}
+  .apsm-av-sm{width:26px;height:26px;border-radius:50%;background:var(--green-100);color:var(--green-700);font-family:'Sora',sans-serif;font-weight:700;font-size:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .apsm-rdv h4{font-size:13.5px;font-weight:700;flex:1;min-width:0;margin:0}
+  .apsm-sub{font-size:11.5px;color:var(--ink-soft);margin:5px 0 9px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+  .apsm-sub .apsm-dotsep{width:2.5px;height:2.5px;border-radius:50%;background:var(--ink-faint);flex-shrink:0}
+  .apsm-frow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+
+  /* Badges */
+  .apsm-badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;padding:4px 9px;border-radius:100px;font-family:'Sora',sans-serif;line-height:1.3}
+  .apsm-badge svg{width:10px;height:10px;flex-shrink:0}
+  .apsm-badge.green{background:var(--green-100);color:var(--green-700)}
+  .apsm-badge.amber{background:var(--amber-100);color:var(--amber-700)}
+  .apsm-badge.gray{background:var(--paper);color:var(--ink-soft);border:1px solid var(--line-strong)}
+
+  /* Boutons */
+  .apsm-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:var(--radius-sm);font-family:'Sora',sans-serif;font-weight:600;font-size:12px;padding:8px 12px;border:1px solid transparent;cursor:pointer}
+  .apsm-btn svg{width:13px;height:13px}
+  .apsm-btn.pri{background:var(--green-700);color:#fff}
+  .apsm-btn.ghost{background:var(--card);color:var(--green-700);border-color:var(--line-strong)}
+  .apsm-btn.danger{background:var(--card);color:var(--coral-600);border-color:var(--coral-100)}
+  .apsm-actions{display:flex;gap:8px;margin-top:10px}
+  .apsm-actions .apsm-btn{flex:1}
+
+  .apsm-empty{display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;color:var(--ink-faint);text-align:center;margin:16px 0 4px}
+
+  /* Légende sous le téléphone */
+  .apsm-cap{max-width:378px;margin:16px auto 0;text-align:center;font-size:12.5px;color:var(--ink-soft);line-height:1.55}
+  .apsm-cap b{color:var(--ink)}
 </style>
 </head>
 <body>
@@ -2132,6 +2229,307 @@
 </div>
 </div>
 
+<section class="apsm-sec">
+  <div class="apsm-head">
+    <span class="kick">Espace médecin</span>
+    <h2>Gestion des rendez-vous</h2>
+    <p>Un seul écran à onglets — à venir, en attente, terminés, annulés — pour tout le quotidien du praticien : demandes à traiter, consultations confirmées sous séquestre et fonds libérés après chaque rendez-vous.</p>
+  </div>
+
+  <div class="apsm-label"><b>Rendez-vous · espace médecin</b><br>À venir · en attente · terminés · annulés</div>
+
+  <div class="apsm-phone">
+    <div class="apsm-screen">
+      <div class="apsm-island"></div>
+      <div class="apsm-status">
+        <span>9:41</span>
+        <span class="apsm-icons">
+          <svg viewBox="0 0 16 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.3" y="5" width="3" height="6" rx="1"/><rect x="8.6" y="2.5" width="3" height="8.5" rx="1"/><rect x="12.9" y="0" width="3" height="11" rx="1"/></svg>
+          <svg viewBox="0 0 24 18" fill="currentColor"><path d="M12 14.5a2 2 0 1 0 0 3.5 2 2 0 0 0 0-3.5zM12 9c-2.5 0-4.8 1-6.4 2.7l1.8 1.8A6.5 6.5 0 0 1 12 11.5c1.7 0 3.3.6 4.6 1.7l1.8-1.8A9 9 0 0 0 12 9zm0-5.5C8.2 3.5 4.7 5 2.1 7.6l1.8 1.8A11.4 11.4 0 0 1 12 6c3.1 0 6 1.2 8.1 3.3l1.8-1.8C19.3 5 15.8 3.5 12 3.5z"/></svg>
+          <svg viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="1.5" fill="currentColor"/><path d="M23.5 4v4a2 2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg>
+        </span>
+      </div>
+
+      <div class="apsm-scroll">
+
+        <div class="apsm-appbar">
+          <span class="apsm-eyebrow">Espace médecin</span>
+          <h1>Rendez-vous</h1>
+        </div>
+
+        <div class="apsm-doc">
+          <span class="apsm-av">EK</span>
+          <div class="apsm-who">
+            <h4>Dr Émile Kammogne
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.2 2.3 2.3 4.7-5"/></svg>
+            </h4>
+            <p>Médecine générale · Douala, Akwa</p>
+          </div>
+          <span class="apsm-avail"><span class="dot"></span>Disponible</span>
+        </div>
+
+        <div class="apsm-metrics">
+          <span><b>8</b> aujourd'hui</span>
+          <span class="sep"></span>
+          <span><b>32</b> cette semaine</span>
+          <span class="sep"></span>
+          <span><b>5</b> en visio</span>
+        </div>
+
+        <div class="apsm-tabs" role="tablist">
+          <button class="apsm-tab active" data-apsmtab="avenir">À venir <em>5</em></button>
+          <button class="apsm-tab" data-apsmtab="attente">En attente <em>3</em></button>
+          <button class="apsm-tab" data-apsmtab="termines">Terminés</button>
+          <button class="apsm-tab" data-apsmtab="annules">Annulés</button>
+        </div>
+
+        <!-- ===== À VENIR ===== -->
+        <div class="apsm-panel active" id="apsm-panel-avenir">
+          <div class="apsm-lh"><span>Aujourd'hui</span><a href="#">Agenda complet</a></div>
+
+          <article class="apsm-rdv">
+            <div class="apsm-when"><b>09:30</b><span>Auj.</span></div>
+            <div>
+              <div class="apsm-rtop"><span class="apsm-av-sm">MN</span><h4>Marie Ngo Bell</h4></div>
+              <p class="apsm-sub">Consultation générale<span class="apsm-dotsep"></span>Cabinet</p>
+              <div class="apsm-frow">
+                <span class="apsm-badge green">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+                  Payé · séquestre
+                </span>
+                <button class="apsm-btn ghost">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                  Dossier
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <article class="apsm-rdv">
+            <div class="apsm-when"><b>10:15</b><span>Auj.</span></div>
+            <div>
+              <div class="apsm-rtop"><span class="apsm-av-sm">JM</span><h4>Jean-Paul Mbarga</h4></div>
+              <p class="apsm-sub">Consultation générale<span class="apsm-dotsep"></span>Téléconsultation</p>
+              <div class="apsm-frow">
+                <span class="apsm-badge green">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+                  Payé · séquestre
+                </span>
+                <button class="apsm-btn pri">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="13" height="12" rx="2"/><path d="m15 10 6-3v10l-6-3"/></svg>
+                  Démarrer la visio
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <article class="apsm-rdv">
+            <div class="apsm-when"><b>14:00</b><span>Auj.</span></div>
+            <div>
+              <div class="apsm-rtop"><span class="apsm-av-sm">CE</span><h4>Clarisse Etoundi</h4></div>
+              <p class="apsm-sub">Consultation de suivi<span class="apsm-dotsep"></span>Cabinet</p>
+              <div class="apsm-frow">
+                <span class="apsm-badge green">Payé · séquestre</span>
+                <button class="apsm-btn ghost">Dossier</button>
+              </div>
+            </div>
+          </article>
+
+          <div class="apsm-lh" style="margin-top:18px;"><span>À venir</span></div>
+
+          <article class="apsm-rdv">
+            <div class="apsm-when"><b>09:00</b><span>Jeu 20</span></div>
+            <div>
+              <div class="apsm-rtop"><span class="apsm-av-sm">SN</span><h4>Serge Nkolo</h4></div>
+              <p class="apsm-sub">Consultation générale<span class="apsm-dotsep"></span>Téléconsultation</p>
+              <div class="apsm-frow">
+                <span class="apsm-badge green">Payé · séquestre</span>
+                <button class="apsm-btn ghost">Dossier</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="apsm-rdv">
+            <div class="apsm-when"><b>11:30</b><span>Ven 21</span></div>
+            <div>
+              <div class="apsm-rtop"><span class="apsm-av-sm">AD</span><h4>Aïcha Diallo</h4></div>
+              <p class="apsm-sub">Vaccination<span class="apsm-dotsep"></span>Cabinet</p>
+              <div class="apsm-frow">
+                <span class="apsm-badge green">Payé · séquestre</span>
+                <button class="apsm-btn ghost">Dossier</button>
+              </div>
+            </div>
+          </article>
+
+          <p class="apsm-empty">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            Fonds libérés après chaque consultation.
+          </p>
+        </div>
+
+        <!-- ===== EN ATTENTE ===== -->
+        <div class="apsm-panel" id="apsm-panel-attente">
+          <div class="apsm-notice">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M12 11.5V16"/></svg>
+            <span>Acceptez ou refusez chaque demande : les fonds sont capturés <b>après votre acceptation</b> uniquement.</span>
+          </div>
+
+          <div class="apsm-lh"><span>Demandes en attente</span></div>
+
+          <article class="apsm-rdv apsm-urgent">
+            <div class="apsm-when"><b>16:45</b><span>Auj.</span></div>
+            <div>
+              <div class="apsm-rtop"><span class="apsm-av-sm">PB</span><h4>Paul Biyong</h4></div>
+              <p class="apsm-sub">Consultation urgente<span class="apsm-dotsep"></span>Cabinet</p>
+              <span class="apsm-badge amber">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                Réponse avant 18:00
+              </span>
+              <div class="apsm-actions">
+                <button class="apsm-btn pri">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+                  Accepter
+                </button>
+                <button class="apsm-btn danger">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                  Refuser
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <article class="apsm-rdv">
+            <div class="apsm-when"><b>15:30</b><span>Jeu 20</span></div>
+            <div>
+              <div class="apsm-rtop"><span class="apsm-av-sm">FA</span><h4>Florence Abena</h4></div>
+              <p class="apsm-sub">Consultation générale<span class="apsm-dotsep"></span>Téléconsultation</p>
+              <span class="apsm-badge amber">Réponse avant demain 12:00</span>
+              <div class="apsm-actions">
+                <button class="apsm-btn pri">Accepter</button>
+                <button class="apsm-btn danger">Refuser</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="apsm-rdv">
+            <div class="apsm-when"><b>10:00</b><span>Sam 22</span></div>
+            <div>
+              <div class="apsm-rtop"><span class="apsm-av-sm">RT</span><h4>Rodrigue Temgoua</h4></div>
+              <p class="apsm-sub">Consultation générale<span class="apsm-dotsep"></span>Cabinet</p>
+              <span class="apsm-badge amber">Réponse avant vendredi 18:00</span>
+              <div class="apsm-actions">
+                <button class="apsm-btn pri">Accepter</button>
+                <button class="apsm-btn danger">Refuser</button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <!-- ===== TERMINÉS ===== -->
+        <div class="apsm-panel" id="apsm-panel-termines">
+          <div class="apsm-lh"><span>Terminés · fonds libérés</span></div>
+
+          <article class="apsm-rdv apsm-past">
+            <div class="apsm-when"><b>09:00</b><span>Mar 18</span></div>
+            <div>
+              <div class="apsm-rtop"><span class="apsm-av-sm">HM</span><h4>Hortense Manga</h4></div>
+              <p class="apsm-sub">Consultation de suivi<span class="apsm-dotsep"></span>Cabinet</p>
+              <div class="apsm-frow">
+                <span class="apsm-badge green">15 000 FCFA libérés</span>
+                <button class="apsm-btn ghost">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>
+                  Compte rendu
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <article class="apsm-rdv apsm-past">
+            <div class="apsm-when"><b>11:00</b><span>Mar 18</span></div>
+            <div>
+              <div class="apsm-rtop"><span class="apsm-av-sm">YK</span><h4>Yves Kouam</h4></div>
+              <p class="apsm-sub">Certificat médical<span class="apsm-dotsep"></span>Cabinet</p>
+              <div class="apsm-frow">
+                <span class="apsm-badge green">20 000 FCFA libérés</span>
+                <button class="apsm-btn ghost">Compte rendu</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="apsm-rdv apsm-past">
+            <div class="apsm-when"><b>10:30</b><span>Lun 17</span></div>
+            <div>
+              <div class="apsm-rtop"><span class="apsm-av-sm">SE</span><h4>Solange Epée</h4></div>
+              <p class="apsm-sub">Consultation générale<span class="apsm-dotsep"></span>Cabinet</p>
+              <div class="apsm-frow">
+                <span class="apsm-badge green">15 000 FCFA libérés</span>
+                <button class="apsm-btn ghost">Compte rendu</button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <!-- ===== ANNULÉS ===== -->
+        <div class="apsm-panel" id="apsm-panel-annules">
+          <div class="apsm-lh"><span>Annulés</span></div>
+
+          <article class="apsm-rdv apsm-past">
+            <div class="apsm-when"><b>15:00</b><span>Lun 17</span></div>
+            <div>
+              <div class="apsm-rtop"><span class="apsm-av-sm">DF</span><h4>Didier Fouda</h4></div>
+              <p class="apsm-sub">Consultation générale<span class="apsm-dotsep"></span>Annulé par le patient</p>
+              <div class="apsm-frow">
+                <span class="apsm-badge gray">Remboursement automatique</span>
+                <button class="apsm-btn ghost">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg>
+                  Reprogrammer
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <article class="apsm-rdv apsm-past">
+            <div class="apsm-when"><b>09:30</b><span>Sam 15</span></div>
+            <div>
+              <div class="apsm-rtop"><span class="apsm-av-sm">JM</span><h4>Justine Mvondo</h4></div>
+              <p class="apsm-sub">Consultation de suivi<span class="apsm-dotsep"></span>Annulé par vous</p>
+              <div class="apsm-frow">
+                <span class="apsm-badge gray">Annulé</span>
+                <button class="apsm-btn ghost">Reprogrammer</button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+      </div>
+
+      <nav class="bottomnav">
+        <div class="navitem active">
+          <span class="icon-wrap">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 15.5 2 2 4-4"/></svg>
+          </span>
+          Rendez-vous
+          <span class="bub">3</span>
+        </div>
+        <div class="navitem">
+          <span class="icon-wrap"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+          Agenda
+        </div>
+        <div class="navitem">
+          <span class="icon-wrap"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></span>
+          Profil
+        </div>
+        <div class="navitem">
+          <span class="icon-wrap"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.2 1-1.2 1.9"/><path d="M12 16.8h.01"/></svg></span>
+          Aide
+        </div>
+      </nav>
+    </div>
+  </div>
+  <p class="apsm-cap"><b>Rendez-vous · espace médecin</b> — un seul écran à onglets (à venir, en attente, terminés, annulés) au lieu de deux écrans distincts, avec la même hiérarchie visuelle que le reste du parcours APS.</p>
+
+</section>
+
 <p class="footer-credit">APS Santé — 10 écrans du parcours patient + 1 écran de connexion + 6 écrans du parcours d'inscription médecin + 2 écrans d'inscription patient, alignés en grille <span class="mono">row / col-md-4</span> (3 par ligne) · fond clair, un seul accent vert, hiérarchie par la typographie · publicité toujours placée au-dessus des listes et des cartes (jamais insérée entre les éléments), et totalement absente de l'écran Urgence (§ 12 — primauté de la santé publique).</p>
 
 <script>
@@ -2142,6 +2540,16 @@
       row.querySelectorAll('.ins-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       row.querySelector('#' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  document.querySelectorAll('.apsm-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const scroll = btn.closest('.apsm-scroll');
+      scroll.querySelectorAll('.apsm-tab').forEach(b => b.classList.remove('active'));
+      scroll.querySelectorAll('.apsm-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      scroll.querySelector('#apsm-panel-' + btn.dataset.apsmtab).classList.add('active');
     });
   });
 </script>
