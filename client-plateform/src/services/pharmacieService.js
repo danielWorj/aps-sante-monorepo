@@ -71,6 +71,45 @@ export function obtenirPharmacie(pharmacieId) {
 }
 
 /**
+ * GET /pharmacies/:id/images
+ * Route publique. Galerie de photos de la pharmacie (en plus de son
+ * image_pharmacie/image_url principale) — même contrat que
+ * listerImagesCentre côté structureSanteService.js.
+ * @returns {Promise<{ images: object[] }>}
+ */
+export function listerImagesPharmacie(pharmacieId) {
+  return apiFetch(`/pharmacies/${pharmacieId}/images`);
+}
+
+/**
+ * GET /pharmacies/:id/annonces
+ * Route publique. Annonces publiées par la pharmacie (promotions en
+ * cours, ruptures/réassorts, informations ponctuelles...), affichées
+ * sur l'onglet "Annonces" de la fiche.
+ * @returns {Promise<{ annonces: object[] }>} chaque annonce est
+ *   attendue sous la forme { annonce_id, titre, description,
+ *   date_publication, image_url? }
+ */
+export function listerAnnoncesPharmacie(pharmacieId) {
+  return apiFetch(`/pharmacies/${pharmacieId}/annonces`);
+}
+
+/**
+ * POST /pharmacies/:id/messages
+ * Route publique — formulaire de contact de la fiche pharmacie,
+ * utilisable par un visiteur non connecté.
+ * @param {Object} donnees - { email, message }
+ * @returns {Promise<{ message: string }>}
+ */
+export function envoyerMessagePharmacie(pharmacieId, donnees) {
+  return apiFetch(`/pharmacies/${pharmacieId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(donnees),
+  });
+}
+
+/**
  * POST /pharmacies — multipart/form-data.
  * Crée la pharmacie ET le compte agent qui en a la charge, dans la
  * même requête (voir pharmacie.controller.js).

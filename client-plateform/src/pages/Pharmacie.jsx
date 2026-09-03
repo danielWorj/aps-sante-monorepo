@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import pharmaPlaceholder from "../assets/img/pharma1.jpg";
 import pub5 from "../assets/img/ads/pub5.jpg";
@@ -29,34 +30,51 @@ function PharmacyCard({ pharmacy, enGarde }) {
 
   return (
     <div className="pharmacy-card">
-      <div className="pharmacy-photo">
-        <img src={pharmacy.image_url || pharmaPlaceholder} alt={pharmacy.nom} />
-      </div>
-      <div>
-        <span className={`pharmacy-status ${enGarde ? "is-garde" : "is-open"}`}>
-          <i className={enGarde ? "fa-solid fa-moon" : "fa-solid fa-circle-check"} />{" "}
-          {enGarde ? "De garde en ce moment" : "Fiche vérifiée"}
-        </span>
-        <h3>{pharmacy.nom}</h3>
-        <div className="practitioner-meta">
-          {localisation && (
-            <>
-              <span>
-                <i className="fa-solid fa-location-dot" /> {localisation}
-              </span>
-              <span>&middot;</span>
-            </>
-          )}
-          <span>
-            <i className="fa-solid fa-id-card" /> N° ordre {pharmacy.numero_ordre_titulaire}
-          </span>
+      {/* Zone cliquable : ouvre la fiche détaillée de la pharmacie.
+          display:contents pour que la photo et le bloc infos gardent
+          exactement la même disposition qu'avant (le lien n'ajoute pas
+          de boîte dans le flex du .pharmacy-card). */}
+      <Link
+        to={`/pharmacie/${pharmacy.pharmacie_id}`}
+        style={{ display: "contents", color: "inherit", textDecoration: "none" }}
+      >
+        <div className="pharmacy-photo">
+          <img src={pharmacy.image_url || pharmaPlaceholder} alt={pharmacy.nom} />
         </div>
-      </div>
+        <div>
+          <span className={`pharmacy-status ${enGarde ? "is-garde" : "is-open"}`}>
+            <i className={enGarde ? "fa-solid fa-moon" : "fa-solid fa-circle-check"} />{" "}
+            {enGarde ? "De garde en ce moment" : "Fiche vérifiée"}
+          </span>
+          <h3>{pharmacy.nom}</h3>
+          <div className="practitioner-meta">
+            {localisation && (
+              <>
+                <span>
+                  <i className="fa-solid fa-location-dot" /> {localisation}
+                </span>
+                <span>&middot;</span>
+              </>
+            )}
+            <span>
+              <i className="fa-solid fa-id-card" /> N° ordre {pharmacy.numero_ordre_titulaire}
+            </span>
+          </div>
+        </div>
+      </Link>
       <div className="practitioner-actions" style={{ marginLeft: "auto" }}>
-        <a href={`tel:${pharmacy.telephone}`} className="btn btn-urgence btn-sm-aps">
+        <a
+          href={`tel:${pharmacy.telephone}`}
+          className="btn btn-urgence btn-sm-aps"
+          onClick={(e) => e.stopPropagation()}
+        >
           <i className="fa-solid fa-phone" /> Appeler
         </a>
-        <a href="#" className="btn btn-outline-primary btn-sm-aps">
+        <a
+          href="#"
+          className="btn btn-outline-primary btn-sm-aps"
+          onClick={(e) => e.stopPropagation()}
+        >
           <i className="fa-solid fa-diamond-turn-right" /> Itinéraire
         </a>
       </div>

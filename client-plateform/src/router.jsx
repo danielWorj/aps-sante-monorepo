@@ -6,6 +6,8 @@ import CreationMedecin from './components/medecin/creationMedecin';
 
 
 import Pharmacie from './pages/Pharmacie';
+import FichePharmacie from './pages/FichePharmacie.jsx';
+
 import StructureSante from './pages/StructureSante';
 import FicheStructureSante from './pages/FicheStructureSante.jsx';
 
@@ -45,6 +47,7 @@ export const router = createBrowserRouter([
 
 
       { path: '/pharmacie', element: <Pharmacie /> },
+      { path: '/pharmacie/:id', element: <FichePharmacie /> },
       { path: '/structure-sante', element: <StructureSante /> },
       { path: '/structure-sante/:id', element: <FicheStructureSante /> },
       { path: '/profil/:id', element: <ProfilMedecin /> },
