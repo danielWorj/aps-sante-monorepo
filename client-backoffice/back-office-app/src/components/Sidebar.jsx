@@ -145,7 +145,9 @@ const APS_MENU = [
   {
     group: "Configuration",
     items: [
-      { key: "referentiel-pays", label: "Référentiel pays", icon: "fa-solid fa-earth-africa", to: "/referentiel" }
+      { key: "referentiel-pays", label: "Référentiel pays", icon: "fa-solid fa-earth-africa", to: "/referentiel" }, 
+      { key: "moyen-paiement", label: "Moyens de paiement", icon: "fa-solid fa-credit-card", to: "/moyen-paiement" }
+
       // { key: "parametrage-local", label: "Paramétrage local", icon: "fa-solid fa-sliders", to: "/parametrage-local" },
       // { key: "equipe-admin", label: "Équipe & rôles admin", icon: "fa-solid fa-user-shield", to: "/equipe-admin" }
     ]

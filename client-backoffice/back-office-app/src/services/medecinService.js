@@ -282,6 +282,49 @@ export function listerMedecins(filtres = {}) {
 }
 
 /**
+ * Recherche de médecins par nom, prénom ou numéro d'ordre — c'est la
+ * fonction attendue par Moyenpaiement.jsx pour permettre de retrouver
+ * un médecin sans connaître son medecin_id (UUID).
+ *
+ * S'appuie sur GET /api/medecins avec le filtre `recherche` (voir
+ * listerMedecins ci-dessus). Comme ce filtre n'est pas garanti d'être
+ * pris en compte côté serveur ("à confirmer" dans le commentaire de
+ * listerMedecins), on filtre en plus le résultat côté client sur
+ * nom/prenom/numero_ordre : ainsi la recherche par nom fonctionne
+ * quoi qu'il arrive, même si le backend renvoie la liste complète.
+ *
+ * @param {string} terme - nom, prénom (ou les deux) ou numéro d'ordre
+ *   tapé par l'utilisateur dans la barre de recherche.
+ * @param {Object} filtresSupplementaires - filtres additionnels
+ *   optionnels à combiner (pays_id, ville_id, specialite_id…).
+ * @returns {Promise<Array>} liste des médecins correspondants (nom/
+ *   prenom/email/telephone aplatis, voir normaliserMedecin).
+ */
+export function rechercherMedecins(terme, filtresSupplementaires = {}) {
+  const q = (terme ?? '').trim();
+  if (!q) return Promise.resolve([]);
+
+  return listerMedecins({ ...filtresSupplementaires, recherche: q }).then((medecins) => {
+    const qNorm = q.toLowerCase();
+    // Filet de sécurité côté client : si le backend ignore `recherche`
+    // et renvoie tout le monde, on ne garde que les correspondances
+    // réelles sur nom / prénom / nom complet / numéro d'ordre.
+    return medecins.filter((m) => {
+      const nom = (m.nom || '').toLowerCase();
+      const prenom = (m.prenom || '').toLowerCase();
+      const complet = `${prenom} ${nom}`.trim();
+      const numeroOrdre = (m.numero_ordre || '').toLowerCase();
+      return (
+        nom.includes(qNorm) ||
+        prenom.includes(qNorm) ||
+        complet.includes(qNorm) ||
+        numeroOrdre.includes(qNorm)
+      );
+    });
+  });
+}
+
+/**
  * GET /api/medecins/:id
  * PUBLIQUE, authentification optionnelle (mêmes règles que
  * listerMedecins ci-dessus).
@@ -823,6 +866,7 @@ const MedecinService = {
   // Médecins
   creerMedecin,
   listerMedecins,
+  rechercherMedecins,
   obtenirMedecin,
   modifierMedecin,
   supprimerMedecin,

@@ -17,6 +17,7 @@ import medecinRoutes from "./src/routes/medecin.routes.js";
 import patientRoutes from "./src/routes/patient.routes.js";
 import moyenPaiementRoutes from "./src/routes/moyenPaiement.routes.js";
 import visioRoutes from "./src/routes/visio.routes.js";
+import utilisateursRoutes from "./src/routes/utilisateurs.routes.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -86,6 +87,7 @@ app.use("/api", medecinRoutes);
 app.use("/api", patientRoutes);
 app.use("/api", moyenPaiementRoutes);
 app.use("/api", visioRoutes);
+app.use("/api/utilisateurs", utilisateursRoutes);
 // ─── Gestion d'erreurs centralisée ─────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error(err);

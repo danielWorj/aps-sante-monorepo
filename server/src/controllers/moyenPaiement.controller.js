@@ -100,6 +100,7 @@ export async function creerTypeMobileMoney(req, res, next) {
 
     const type = await prisma.typeMobileMoney.create({
       data: { pays_id, libelle },
+      include: { pays: SELECTION_PAYS_PUBLIC },
     });
     return res.status(201).json({ message: "Type de Mobile Money créé.", typeMobileMoney: type });
   } catch (err) {
@@ -137,6 +138,7 @@ export async function modifierTypeMobileMoney(req, res, next) {
     const typeMisAJour = await prisma.typeMobileMoney.update({
       where: { id: req.params.id },
       data: donnees,
+      include: { pays: SELECTION_PAYS_PUBLIC },
     });
     return res.status(200).json({ message: "Type de Mobile Money mis à jour.", typeMobileMoney: typeMisAJour });
   } catch (err) {

@@ -39,7 +39,7 @@ export const router = createBrowserRouter([
       { path: '/', element: <Home /> },
       { path: '/home', element: <Home /> },
       { path: '/medecin', element: <Medecin /> },
-      { path: '/create-medecin', element: <CreationMedecin /> },
+      { path: '/devenir-medecin', element: <CreationMedecin /> },
 
 
       { path: '/pharmacie', element: <Pharmacie /> },

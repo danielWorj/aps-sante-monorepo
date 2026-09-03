@@ -124,4 +124,9 @@ class ApiRealEndpoints {
   // soit capturé comme un :id — voir publicite.routes.js.
   static String publicitesParCodePage(String code) =>
       '${baseUrl}/publicites/par-page/$code';
+
+  // ─── Visio (téléconsultation Jitsi) ────────────────────────────────
+  // Voir visio.routes.js / visio.controller.js : authentifié, réservé
+  // au médecin ou au patient du rendez-vous concerné.
+  static const String visioToken = '/visio/token';
 }
