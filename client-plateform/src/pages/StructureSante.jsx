@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import structure1 from "../assets/img/structure1.jpg";
 import pub6 from "../assets/img/ads/pub6.jpg";
 import "./../assets/styles/StructureSante.css";
@@ -70,12 +71,31 @@ const ETAPES_MODAL = [
    Carte résultat de l'annuaire
 ===================================================================== */
 function StructureCard({ structure }) {
+  const navigate = useNavigate();
   const meta = TYPE_META[structure.type_structure] || { cls: "is-centre", icon: "fa-hospital" };
   const ville = structure.ville?.nom;
   const pays = structure.pays?.nom;
+  const structureId = structure.structure_id;
+
+  // Ouvre la fiche détaillée de la structure (route /structure-sante/:id).
+  function ouvrirFiche() {
+    if (structureId != null) navigate(`/structure-sante/${structureId}`);
+  }
 
   return (
-    <div className="structure-card">
+    <div
+      className="structure-card"
+      role="button"
+      tabIndex={0}
+      style={{ cursor: "pointer" }}
+      onClick={ouvrirFiche}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          ouvrirFiche();
+        }
+      }}
+    >
       <div className="structure-photo">
         <img src={structure.image_url || PHOTO_PAR_DEFAUT} alt={structure.nom} />
       </div>
@@ -99,7 +119,14 @@ function StructureCard({ structure }) {
           )}
         </div>
       </div>
-      <div className="practitioner-actions" style={{ marginLeft: "auto" }}>
+      {/* stopPropagation : ces boutons ont leur propre action (appel,
+          itinéraire externe) et ne doivent pas déclencher l'ouverture
+          de la fiche en plus. */}
+      <div
+        className="practitioner-actions"
+        style={{ marginLeft: "auto" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {structure.telephone && (
           <a href={`tel:${structure.telephone}`} className="btn btn-urgence btn-sm-aps">
             <i className="fa-solid fa-phone" /> Appeler
@@ -802,7 +829,7 @@ export default function StructureSante() {
               {!chargement && !erreur && structures.length > 0 && (
                 <div>
                   {structuresPage.map((s) => (
-                    <StructureCard key={s.structure_sante_id || s.id} structure={s} />
+                    <StructureCard key={s.structure_id} structure={s} />
                   ))}
                   {totalPages > 1 && (
                     <nav aria-label="Pagination des résultats" className="mt-4">

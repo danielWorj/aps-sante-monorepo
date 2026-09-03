@@ -128,6 +128,41 @@ export async function obtenirCentreSante(id) {
 }
 
 /**
+ * GET /centres-sante/:id/images
+ * Route publique. Galerie de photos du centre (en plus de son
+ * image_url principale).
+ * @returns {Promise<{images: Array}>}
+ */
+export async function listerImagesCentre(id) {
+  return apiFetch(`/centres-sante/${id}/images`);
+}
+
+/**
+ * GET /centres-sante/:id/examens
+ * Route publique. Liste des examens/actes réalisés dans ce centre.
+ * @returns {Promise<{examens: Array}>}
+ */
+export async function listerExamensCentre(id) {
+  return apiFetch(`/centres-sante/${id}/examens`);
+}
+
+/**
+ * POST /centres-sante/:id/messages
+ * Route publique — formulaire de contact de la fiche centre, utilisable
+ * par un visiteur non connecté (pas de compte requis pour écrire à un
+ * centre).
+ * @param {Object} donnees - { email, message }
+ * @returns {Promise<{message: string}>}
+ */
+export async function envoyerMessageCentre(id, donnees) {
+  return apiFetch(`/centres-sante/${id}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(donnees),
+  });
+}
+
+/**
  * POST /centres-sante
  * Ouvert à tout utilisateur authentifié. Crée en une seule transaction
  * le centre de santé ET le compte de l'agent qui en aura la charge.
@@ -205,6 +240,9 @@ export default {
   STATUTS_VERIFICATION_STRUCTURE,
   listerCentresSante,
   obtenirCentreSante,
+  listerImagesCentre,
+  listerExamensCentre,
+  envoyerMessageCentre,
   creerCentreSante,
   modifierCentreSante,
   supprimerCentreSante,

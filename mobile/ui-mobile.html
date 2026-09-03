@@ -512,6 +512,34 @@
   .ap-stat .num{ font-family:'Sora',sans-serif; font-weight:800; font-size:14px; color:var(--green-700); display:block; }
   .ap-stat .lbl{ font-size:8.5px; color:var(--ink-soft); font-weight:600; line-height:1.35; display:block; margin-top:3px; }
 
+  /* ============ CONNEXION ============ */
+  .brand-mark{ width:52px;height:52px; border-radius:16px; background:var(--green-700); display:flex; align-items:center; justify-content:center; margin:22px auto 20px; box-shadow:0 8px 16px -6px rgba(30,138,99,0.4); }
+  .brand-mark .icon{width:24px;height:24px; color:#fff; stroke-width:2.1;}
+  .login-title{font-size:22px; font-weight:700; margin:0 0 6px; letter-spacing:-0.01em; text-align:center;}
+  .login-sub{font-size:12.5px; color:var(--ink-soft); line-height:1.55; margin:0 0 26px; text-align:center;}
+  .input-wrap{position:relative;}
+  .form-input.has-icon{padding-right:40px;}
+  .input-icon-btn{position:absolute; right:11px; top:50%; transform:translateY(-50%); color:var(--ink-faint); display:flex; background:none; border:none; padding:2px;}
+  .input-icon-btn .icon{width:17px;height:17px;}
+  .remember{display:flex; align-items:center; gap:8px;}
+  .remember .box{width:17px;height:17px; border-radius:5px; border:1.5px solid var(--line-strong); background:var(--card); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .remember.checked .box{background:var(--green-600); border-color:var(--green-600);}
+  .remember.checked .box .icon{width:10px;height:10px; color:#fff; stroke-width:3;}
+  .remember span{font-size:11.5px; font-weight:600; color:var(--ink-soft); font-family:'Sora',sans-serif;}
+  .forgot{font-size:11.5px; font-weight:700; color:var(--green-700); font-family:'Sora',sans-serif; text-decoration:none;}
+  .divider{display:flex; align-items:center; gap:12px; margin:22px 0;}
+  .divider .line{flex:1; height:1px; background:var(--line-strong);}
+  .divider span{font-size:10.5px; font-weight:600; color:var(--ink-faint); font-family:'Sora',sans-serif; white-space:nowrap;}
+  .providers{display:flex; flex-direction:column; gap:9px; margin-bottom:20px;}
+  .provider-btn{ display:flex; align-items:center; justify-content:center; gap:10px; background:var(--card); color:var(--ink); border:1px solid var(--line-strong); border-radius:var(--radius-sm); font-family:'Sora',sans-serif; font-weight:600; font-size:12.5px; padding:11px; width:100%; }
+  .provider-btn .p-ic{width:18px;height:18px; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
+  .provider-btn .p-ic svg{width:18px;height:18px; display:block;}
+  .helper-note{ display:flex; align-items:flex-start; gap:9px; background:var(--green-50); border:1px solid var(--green-100); border-radius:var(--radius-sm); padding:11px 12px; margin-top:2px; margin-bottom:20px; }
+  .helper-note .icon{width:15px;height:15px; color:var(--green-700); flex-shrink:0; margin-top:1px;}
+  .helper-note span{font-size:10.5px; line-height:1.5; color:var(--green-900);}
+  .login-footer{text-align:center; font-size:11.5px; color:var(--ink-soft); padding-bottom:6px;}
+  .login-footer .link{color:var(--green-700); font-weight:700;}
+
   .ap-section-head{ display:flex; align-items:center; gap:8px; margin:22px 0 12px; }
   .ap-section-head .icon-wrap{ width:26px;height:26px; border-radius:8px; background:var(--green-100); color:var(--green-700); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   .ap-section-head .icon-wrap .icon{ width:14px;height:14px; }
@@ -1878,6 +1906,95 @@
 </div>
 </div>
 
+<!-- ============ SECTION : CONNEXION ============ -->
+<div class="section-head">
+  <h2>Connexion</h2>
+  <span>Écran d'accès à l'espace patient — e-mail / mot de passe, avec connexion via les providers en dessous</span>
+</div>
+
+<div class="container-grid">
+<div class="row">
+
+<!-- ============ R1. CONNEXION ============ -->
+<div class="col-md-4"><div class="device-block">
+    <div class="device-label"><span class="dot"></span><span class="idx">R1</span> Connexion<small>E-mail / mot de passe + providers</small></div>
+    <div class="device"><div class="screen">
+      <div class="island"></div>
+      <div class="statusbar"><span>9:41</span><div class="icons">
+        <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+        <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+      </div></div>
+      <div class="content">
+
+        <div class="brand-mark">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/></svg>
+        </div>
+
+        <h3 class="login-title">Accéder à votre espace</h3>
+        <p class="login-sub">Connectez-vous pour retrouver vos rendez-vous, vos médecins et votre suivi santé.</p>
+
+        <div class="form-group">
+          <span class="form-label">E-mail <span class="req">*</span></span>
+          <input class="form-input" type="email" placeholder="vous@exemple.cm">
+        </div>
+
+        <div class="form-group">
+          <span class="form-label">Mot de passe <span class="req">*</span></span>
+          <div class="input-wrap">
+            <input class="form-input has-icon" type="password" placeholder="Votre mot de passe">
+            <button class="input-icon-btn" type="button" aria-label="Afficher le mot de passe">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="row-between" style="margin:2px 0 20px;">
+          <div class="remember checked">
+            <div class="box"><svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <span>Se souvenir de moi</span>
+          </div>
+          <a class="forgot" href="#">Mot de passe oublié ?</a>
+        </div>
+
+        <button class="btn-primary">Se connecter<svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+
+        <div class="divider"><div class="line"></div><span>OU CONTINUER AVEC</span><div class="line"></div></div>
+
+        <div class="providers">
+          <button class="provider-btn google">
+            <span class="p-ic">
+              <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.5 0 10.4-1.9 14.3-5.1l-6.6-5.6C29.6 35 26.9 36 24 36c-5.3 0-9.6-3.4-11.2-8.1l-6.6 5.1C9.6 39.6 16.3 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.2 5.7l6.6 5.6C39.9 37.2 44 31.5 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
+            </span>
+            Continuer avec Google
+          </button>
+          <button class="provider-btn apple">
+            <span class="p-ic">
+              <svg viewBox="0 0 384 512"><path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5c0 26.2 4.8 53.3 14.4 81.2 12.8 37.5 59 129.3 107.2 127.8 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-84.1 102.6-121.7-65.2-30.7-61.7-90-61.7-92.1zM251.9 88.7c27-32.1 24.5-61.3 23.7-71.8-23.8 1.4-51.4 16.4-67.1 34.9-17.3 19.8-27.5 44.3-25.3 71.4 25.6 2 48.9-10.9 68.7-34.5z"/></svg>
+            </span>
+            Continuer avec Apple
+          </button>
+          <button class="provider-btn facebook">
+            <span class="p-ic">
+              <svg viewBox="0 0 24 24"><path fill="#1877F2" d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.09 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.7 4.53-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.95.93-1.95 1.89v2.26h3.32l-.53 3.49h-2.79V24C19.61 23.09 24 18.1 24 12.07Z"/></svg>
+            </span>
+            Continuer avec Facebook
+          </button>
+        </div>
+
+        <div class="helper-note">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span>Vos données de santé restent privées. Nous ne partageons jamais vos informations médicales avec des tiers.</span>
+        </div>
+
+        <p class="login-footer">Pas encore de compte ? <span style="color:var(--green-700); font-weight:700;">Créer un compte</span></p>
+
+      </div>
+    </div></div>
+  </div></div>
+
+</div>
+</div>
+
 <!-- ============ SECTION : INSCRIPTION PATIENT ============ -->
 <div class="section-head">
   <h2>Créer mon compte patient — parcours en 1 étape</h2>
@@ -2015,7 +2132,7 @@
 </div>
 </div>
 
-<p class="footer-credit">APS Santé — 10 écrans du parcours patient + 6 écrans du parcours d'inscription médecin + 2 écrans d'inscription patient, alignés en grille <span class="mono">row / col-md-4</span> (3 par ligne) · fond clair, un seul accent vert, hiérarchie par la typographie · publicité toujours placée au-dessus des listes et des cartes (jamais insérée entre les éléments), et totalement absente de l'écran Urgence (§ 12 — primauté de la santé publique).</p>
+<p class="footer-credit">APS Santé — 10 écrans du parcours patient + 1 écran de connexion + 6 écrans du parcours d'inscription médecin + 2 écrans d'inscription patient, alignés en grille <span class="mono">row / col-md-4</span> (3 par ligne) · fond clair, un seul accent vert, hiérarchie par la typographie · publicité toujours placée au-dessus des listes et des cartes (jamais insérée entre les éléments), et totalement absente de l'écran Urgence (§ 12 — primauté de la santé publique).</p>
 
 <script>
   document.querySelectorAll('.ins-tab').forEach(btn => {
