@@ -19,6 +19,7 @@ import RequireAuth from './routes/RequireAuth';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Referentiel from './pages/Referentiel';
+import MoyenPaiement from './pages/Moyenpaiement';
 import Pharmacie from './pages/Pharmacie';
 // PUBLICTE 
 import Publicite from './pages/Publicite';
@@ -65,6 +66,7 @@ export const router = createBrowserRouter([
           { path: '/', element: <Dashboard /> },
           { path: '/dashboard', element: <Dashboard /> },
           { path: '/referentiel', element: <Referentiel /> },
+          { path: '/moyen-paiement', element: <MoyenPaiement /> },
           { path: '/pharmacie', element: <Pharmacie /> },
           { path: '/avis-pharmacie', element: <AvisPharmacie /> },
           { path: '/utilisateurs', element: <Utilisateurs /> },

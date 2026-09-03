@@ -161,6 +161,11 @@ class ApiEndpoints {
 
   static const String gardesPharmacie = '/gardes-pharmacie';
   static String gardePharmacie(String id) => '/gardes-pharmacie/$id';
+
+  // ─── Visio (téléconsultation Jitsi) ────────────────────────────────
+// Voir visio.routes.js / visio.controller.js : authentifié, réservé
+// au médecin ou au patient du rendez-vous concerné.
+  static const String visioToken = '/visio/token';
 }
 
 /// Exception métier levée par [ApiClient] pour toute réponse en échec

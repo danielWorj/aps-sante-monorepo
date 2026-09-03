@@ -104,6 +104,12 @@ import {
   // vérifier a posteriori un numero_ordre déjà enregistré.
   verifierAppartenanceOrdre,
 } from "../services/medecinService.js";
+// Moyens de paiement du médecin (Mobile Money / compte bancaire) —
+// lecture seule ici : simple liste affichée dans la fiche détail.
+// La gestion (ajout/édition/suppression) reste dans son propre écran
+// (moyenPaiementService.js, mêmes fonctions que celles utilisées par
+// MoyenPaiement.jsx : listerMobileMoneyMedecin / listerComptesBancairesMedecin).
+import * as moyenPaiementService from "../services/moyenPaiementService.js";
 import "../assets/style/medecin.css";
 
 const STATUT_META = {
@@ -393,6 +399,13 @@ export default function Medecin() {
   // non. Réinitialisé à chaque changement de médecin affiché.
   const [piecesOuvertes, setPiecesOuvertes] = useState({});
 
+  // Moyens de paiement du médecin affiché (Mobile Money + compte
+  // bancaire) — simple liste en lecture seule dans la fiche détail,
+  // rechargée à chaque changement de médecin sélectionné.
+  const [moyensPaiement, setMoyensPaiement] = useState({ mobileMoney: [], comptesBancaires: [] });
+  const [moyensPaiementChargement, setMoyensPaiementChargement] = useState(false);
+  const [moyensPaiementErreur, setMoyensPaiementErreur] = useState(null);
+
   // Vérification ONMC déclenchée depuis la fiche détail (bouton dédié,
   // pas automatique à l'ouverture — POST /medecins/verifier-ordre reste
   // volontairement une action explicite, voir onmcVerificationService.js
@@ -476,6 +489,36 @@ export default function Medecin() {
   // Referme tous les panneaux "pièce justificative" quand on ouvre la
   // fiche d'un autre médecin.
   useEffect(() => { setPiecesOuvertes({}); }, [medecinSelectionne?.medecin_id]);
+
+  // Charge la liste des moyens de paiement du médecin dès que sa fiche
+  // est ouverte (et vide la liste quand aucune fiche n'est ouverte).
+  useEffect(() => {
+    const medecinId = medecinSelectionne?.medecin_id;
+    if (!medecinId) {
+      setMoyensPaiement({ mobileMoney: [], comptesBancaires: [] });
+      setMoyensPaiementErreur(null);
+      return;
+    }
+    let annule = false;
+    setMoyensPaiementChargement(true);
+    setMoyensPaiementErreur(null);
+    Promise.all([
+      moyenPaiementService.listerMobileMoneyMedecin(medecinId),
+      moyenPaiementService.listerComptesBancairesMedecin(medecinId),
+    ])
+      .then(([mobileMoney, comptesBancaires]) => {
+        if (annule) return;
+        setMoyensPaiement({ mobileMoney: mobileMoney || [], comptesBancaires: comptesBancaires || [] });
+      })
+      .catch((err) => {
+        if (annule) return;
+        setMoyensPaiementErreur(err.message || "Impossible de charger les moyens de paiement.");
+      })
+      .finally(() => {
+        if (!annule) setMoyensPaiementChargement(false);
+      });
+    return () => { annule = true; };
+  }, [medecinSelectionne?.medecin_id]);
 
   // Réinitialise le résultat de vérification ONMC quand on ouvre la
   // fiche d'un autre médecin (ou qu'on referme la fiche) — on ne veut
@@ -1545,6 +1588,46 @@ export default function Medecin() {
                           <div className="aps-text-muted" style={{ fontSize: 13 }}>Aucune pièce justificative fournie.</div>
                         )}
                       </div>
+
+                      {/* ── Moyens de paiement (lecture seule) ─────
+                          Simple liste des Mobile Money / comptes
+                          bancaires du médecin. La gestion complète
+                          (ajout/édition/suppression) reste dans son
+                          propre écran, cette fiche ne fait qu'informer. */}
+                      <div className="aps-fiche-section-titre">
+                        <i className="fa-solid fa-money-check-dollar me-1"></i> Moyens de paiement
+                      </div>
+
+                      {moyensPaiementChargement ? (
+                        <div className="aps-text-muted" style={{ fontSize: 13 }}>
+                          <i className="fa-solid fa-spinner fa-spin me-1"></i>Chargement…
+                        </div>
+                      ) : moyensPaiementErreur ? (
+                        <div className="aps-text-muted" style={{ fontSize: 13 }}>{moyensPaiementErreur}</div>
+                      ) : moyensPaiement.mobileMoney.length === 0 && moyensPaiement.comptesBancaires.length === 0 ? (
+                        <div className="aps-text-muted" style={{ fontSize: 13 }}>Aucun moyen de paiement enregistré.</div>
+                      ) : (
+                        <ul className="list-unstyled mb-0" style={{ fontSize: 13 }}>
+                          {moyensPaiement.mobileMoney.map((mm) => (
+                            <li key={`mm-${mm.id}`} className="d-flex align-items-center gap-2 mb-1">
+                              <i className="fa-solid fa-mobile-screen-button aps-text-muted"></i>
+                              <span>
+                                {mm.type_mobile_money?.libelle || "Mobile Money"} — {mm.numero}
+                                {mm.titulaire ? ` (${mm.titulaire})` : ""}
+                              </span>
+                            </li>
+                          ))}
+                          {moyensPaiement.comptesBancaires.map((cb) => (
+                            <li key={`cb-${cb.id}`} className="d-flex align-items-center gap-2 mb-1">
+                              <i className="fa-solid fa-building-columns aps-text-muted"></i>
+                              <span>
+                                {cb.nom_banque} — {cb.iban}
+                                {cb.titulaire ? ` (${cb.titulaire})` : ""}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   </div>
                 </div>
