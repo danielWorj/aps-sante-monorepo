@@ -1,0 +1,95 @@
+/* ==========================================================================
+   FicheStructureSante.css — styles propres à la fiche détaillée d'un
+   centre de santé (onglet Présentation : carte Google Maps + formulaire
+   de contact ; onglet Images : galerie ; onglet Examens : liste).
+   Le reste (en-tête, onglets, info-card, chips…) vient des styles
+   globaux du projet : rien n'est redéfini ici.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Carte Google Maps (onglet Présentation, col-md-8)
+-------------------------------------------------------------------------- */
+.gmap-frame-wrap {
+  position: relative;
+  width: 100%;
+  padding-top: 62%; /* ratio ~8:5, hauteur confortable en desktop et mobile */
+  border-radius: .75rem;
+  overflow: hidden;
+  border: 1px solid var(--line, #dfe7e4);
+  background: var(--soft, #f2f7f5);
+}
+.gmap-frame-wrap iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.gmap-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  color: var(--muted, #8a9591);
+  text-align: center;
+  padding: 1rem;
+}
+.gmap-empty i { font-size: 1.6rem; }
+
+/* --------------------------------------------------------------------------
+   Formulaire de contact (onglet Présentation, col-md-4)
+-------------------------------------------------------------------------- */
+.contact-structure-form .mb-2,
+.contact-structure-form .mb-3 { margin-bottom: .85rem; }
+
+/* --------------------------------------------------------------------------
+   Galerie photos (onglet Images)
+-------------------------------------------------------------------------- */
+.structure-gallery {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .75rem;
+}
+.structure-gallery-item {
+  position: relative;
+  border-radius: .7rem;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  background: var(--soft, #f2f7f5);
+  border: 1px solid var(--line, #dfe7e4);
+}
+.structure-gallery-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+@media (max-width: 576px) {
+  .structure-gallery { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* --------------------------------------------------------------------------
+   Liste des examens (onglet Examens)
+-------------------------------------------------------------------------- */
+.exam-list { display: flex; flex-direction: column; }
+.exam-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .75rem 0;
+  border-bottom: 1px solid var(--line, #dfe7e4);
+}
+.exam-row:last-child { border-bottom: 0; }
+.exam-row-name { display: flex; flex-direction: column; gap: .2rem; }
+.exam-row-name strong { font-size: .92rem; color: var(--ink, #17252f); }
+.exam-row-cat { font-size: .78rem; color: var(--muted, #8a9591); }
+.exam-row-price {
+  font-weight: 700;
+  font-size: .9rem;
+  color: var(--green, #2f8f6f);
+  white-space: nowrap;
+}
