@@ -90,10 +90,15 @@ function extraireInitiales(nom) {
 
 /**
  * Extrait le nom complet du médecin depuis un objet rendez-vous.
- * Le backend peut renvoyer medecin sous forme d'objet joint ou
- * uniquement medecin_id — on gère les deux cas.
+ * Le backend (rendezVous.controller.js, INCLUSION_NOMS_RDV) joint
+ * medecin.utilisateur.{nom,prenom} — on gère aussi les variantes
+ * (nom_complet, ou prenom/nom directement sur medecin) au cas où la
+ * forme de la réponse évolue côté serveur.
  */
 function nomMedecin(rdv) {
+  const utilisateur = rdv.medecin?.utilisateur;
+  if (utilisateur?.prenom && utilisateur?.nom)
+    return `Dr ${utilisateur.prenom} ${utilisateur.nom}`;
   if (rdv.medecin?.nom_complet) return `Dr ${rdv.medecin.nom_complet}`;
   if (rdv.medecin?.prenom && rdv.medecin?.nom)
     return `Dr ${rdv.medecin.prenom} ${rdv.medecin.nom}`;

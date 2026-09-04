@@ -75,8 +75,16 @@ function extraireInitiales(nom) {
  */
 function nomPatient(rdv) {
   if (rdv.patient?.nom_complet) return rdv.patient.nom_complet;
+
+  // Cas Prisma : nom/prenom vivent sur Utilisateur, pas sur Patient
+  // (Patient -> utilisateur -> { nom, prenom }).
+  const u = rdv.patient?.utilisateur;
+  if (u?.prenom && u?.nom) return `${u.prenom} ${u.nom}`;
+
+  // Cas où le backend aurait aplati les champs directement sur patient.
   if (rdv.patient?.prenom && rdv.patient?.nom)
     return `${rdv.patient.prenom} ${rdv.patient.nom}`;
+
   if (rdv.patient_id) return `Patient #${String(rdv.patient_id).slice(0, 8)}`;
   return "Patient inconnu";
 }
