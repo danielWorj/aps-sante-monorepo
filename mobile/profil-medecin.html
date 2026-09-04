@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APS — Fiche du praticien (mobile) — Dr. Aïcha Ngo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --green-900:#0F3A2B;
+    --green-700:#1E8A63;
+    --green-600:#279A6E;
+    --green-500:#2FAB7B;
+    --green-100:#E4F3EC;
+    --green-50:#F1F8F4;
+    --coral-500:#E1604A;
+    --coral-600:#C94E3A;
+    --coral-100:#FBE7E2;
+    --amber-500:#DD9A2E;
+    --amber-100:#FBF0DC;
+    --amber-700:#8A5A00;
+    --ink:#16241F;
+    --ink-soft:#5B6B64;
+    --ink-faint:#93A39C;
+    --paper:#F5F8F6;
+    --card:#FFFFFF;
+    --line:#E5ECE8;
+    --line-strong:#D3DFD9;
+    --radius-lg:26px;
+    --radius-md:18px;
+    --radius-sm:12px;
+    --shadow-soft:0 1px 2px rgba(16,36,28,0.04), 0 8px 20px -10px rgba(16,36,28,0.10);
+    --shadow-card:0 1px 1px rgba(16,36,28,0.03), 0 4px 12px -6px rgba(16,36,28,0.08);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    font-family:'Inter',sans-serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+    padding:40px 20px;
+  }
+  h1,h2,h3,.display{font-family:'Sora',sans-serif;}
+  .mono{font-family:'IBM Plex Mono',monospace; letter-spacing:0.01em;}
+  .icon{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;display:block;}
+
+  /* ============ PHONE FRAME ============ */
+  .device{ width:342px; background:#0C1512; border-radius:46px; padding:9px; box-shadow:0 1px 1px rgba(16,36,28,0.05), 0 30px 50px -22px rgba(16,36,28,0.32); }
+  .screen{ position:relative; width:100%; height:718px; background:var(--paper); border-radius:38px; overflow:hidden; display:flex; flex-direction:column; }
+  .island{ position:absolute; top:14px; left:50%; transform:translateX(-50%); width:96px; height:26px; background:#0C1512; border-radius:16px; z-index:20; }
+  .statusbar{ height:46px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:0 26px; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:var(--ink); }
+  .statusbar .icons{display:flex; align-items:center; gap:5px;}
+  .statusbar svg{width:15px;height:11px;}
+
+  .content{ flex:1; overflow-y:auto; padding:2px 18px 14px; scrollbar-width:none; }
+  .content::-webkit-scrollbar{display:none;}
+
+  /* ============ BOTTOM NAV ============ */
+  .bottomnav{ position:absolute; left:10px; right:10px; bottom:10px; height:66px; background:rgba(255,255,255,0.92); backdrop-filter:blur(6px); border:1px solid var(--line); border-radius:22px; display:flex; align-items:center; justify-content:space-around; box-shadow:0 10px 24px -14px rgba(16,36,28,0.28); z-index:15; }
+  .navitem{ display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--ink-faint); font-size:10.5px; font-weight:600; font-family:'Sora',sans-serif; width:56px; position:relative; }
+  .navitem .icon{width:20px;height:20px;}
+  .navitem.active{color:var(--green-700);}
+  .navitem.active .icon-wrap{ background:var(--green-100); border-radius:12px; padding:5px 14px; margin-bottom:1px; }
+  .navitem .icon-wrap{padding:5px 14px; margin-bottom:1px; position:relative;}
+  .navitem-fab{ width:48px;height:48px; border-radius:16px; background:var(--green-700); display:flex; align-items:center; justify-content:center; color:#fff; box-shadow:0 8px 16px -6px rgba(30,138,99,0.55); margin-top:-22px; }
+  .navitem-fab .icon{width:22px;height:22px; stroke-width:2;}
+
+  /* ============ SHARED COMPONENTS (repris de ui-mobile.html) ============ */
+  .btn-primary{ display:flex; align-items:center; justify-content:center; gap:8px; background:var(--green-700); color:#fff; border:none; border-radius:var(--radius-sm); font-family:'Sora',sans-serif; font-weight:600; font-size:14px; padding:13px; width:100%; cursor:pointer; }
+  .btn-icon-outline{ display:flex; align-items:center; justify-content:center; width:44px; height:44px; flex-shrink:0; background:var(--card); color:var(--green-700); border:1px solid var(--line-strong); border-radius:var(--radius-sm); }
+  .btn-icon-outline .icon{width:18px;height:18px;}
+  .btn-outline-row{ display:flex; align-items:center; justify-content:center; gap:7px; flex:1; background:var(--card); color:var(--green-700); border:1px solid var(--green-100); border-radius:var(--radius-sm); font-family:'Sora',sans-serif; font-weight:600; font-size:12.5px; padding:11px; }
+  .btn-outline-row .icon{width:15px;height:15px;}
+
+  .badge{ display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:600; padding:3px 9px; border-radius:100px; font-family:'Sora',sans-serif; }
+  .badge.green{background:var(--green-100); color:var(--green-700);}
+  .badge.amber{background:var(--amber-100); color:var(--amber-500);}
+  .badge .icon{width:11px;height:11px;}
+
+  .avatar{ width:56px;height:56px; border-radius:14px; background:var(--green-100); color:var(--green-700); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-family:'Sora',sans-serif; font-weight:700; font-size:16px; overflow:hidden;}
+
+  .profile-hero{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-lg); padding:20px 16px; margin:14px 0 16px; text-align:center; box-shadow:var(--shadow-card); }
+  .profile-hero .avatar{margin:0 auto 12px; width:72px;height:72px; border-radius:20px; font-size:22px;}
+  .profile-hero .name{font-size:17px; font-weight:700; font-family:'Sora',sans-serif; margin:0 0 3px;}
+  .profile-hero .spec{font-size:12.5px; color:var(--ink-soft); margin:0 0 12px;}
+  .profile-hero .badges{display:flex; justify-content:center; gap:6px; margin-bottom:16px; flex-wrap:wrap;}
+  .stat-row{display:flex; border-top:1px solid var(--line); padding-top:14px;}
+  .stat-row .stat{flex:1; text-align:center;}
+  .stat-row .stat b{display:block; font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:600;}
+  .stat-row .stat span{font-size:10px; color:var(--ink-faint); font-weight:600;}
+
+  .tab-row{display:flex; gap:16px; border-bottom:1px solid var(--line); margin-bottom:16px; overflow-x:auto;}
+  .tab-row::-webkit-scrollbar{display:none;}
+  .tab{ font-size:12px; font-weight:600; font-family:'Sora',sans-serif; color:var(--ink-faint); padding-bottom:10px; position:relative; white-space:nowrap; background:none; border:none; cursor:pointer; }
+  .tab.active{color:var(--green-700);}
+  .tab.active::after{content:'';position:absolute; left:0; right:0; bottom:-1px; height:2px; background:var(--green-700); border-radius:2px;}
+
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  .info-block{margin-bottom:18px;}
+  .info-block h4{font-size:12px; font-weight:700; font-family:'Sora',sans-serif; margin:0 0 8px; color:var(--ink); display:flex; align-items:center; gap:6px;}
+  .info-block h4 .icon{width:14px;height:14px; color:var(--green-700);}
+  .info-block p{font-size:12px; line-height:1.6; color:var(--ink-soft); margin:0;}
+  .pill-row{display:flex; flex-wrap:wrap; gap:6px;}
+  .pill{font-size:11px; font-weight:600; font-family:'Sora',sans-serif; color:var(--ink-soft); background:var(--paper); border:1px solid var(--line-strong); padding:6px 11px; border-radius:100px;}
+  .hours-row{display:flex; justify-content:space-between; font-size:11.5px; padding:6px 0; border-bottom:1px dashed var(--line);}
+  .hours-row span:first-child{color:var(--ink-soft); font-weight:600;}
+  .hours-row span:last-child{font-family:'IBM Plex Mono',monospace; font-weight:600;}
+  .hours-row.off span:last-child{color:var(--ink-faint);}
+
+  .map-ph{ height:120px; border-radius:var(--radius-sm); background:var(--green-50); border:1px dashed var(--line-strong); display:flex; align-items:center; justify-content:center; color:var(--green-700); margin-top:10px; }
+  .map-ph .icon{width:26px;height:26px;}
+
+  /* ===== Avis ===== */
+  .review-card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:12px; margin-bottom:10px; box-shadow:var(--shadow-card); }
+  .review-top{display:flex; align-items:center; gap:9px; margin-bottom:7px;}
+  .av-sm{width:30px;height:30px;border-radius:50%;background:var(--green-100);color:var(--green-700);font-family:'Sora',sans-serif;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .review-top .who{flex:1; min-width:0;}
+  .review-top .who b{display:block; font-size:12.5px; font-weight:700; font-family:'Sora',sans-serif;}
+  .stars{display:flex; gap:1px; margin-top:2px;}
+  .stars .icon{width:11px;height:11px; color:var(--amber-500);}
+  .stars .icon.off{color:var(--line-strong);}
+  .review-card p{font-size:11.5px; line-height:1.55; color:var(--ink-soft); margin:0;}
+
+  /* ===== Tarifs ===== */
+  .price-row{display:flex; justify-content:space-between; align-items:center; font-size:12px; padding:9px 0; border-bottom:1px dashed var(--line);}
+  .price-row span:first-child{color:var(--ink-soft); font-weight:600;}
+  .price-row b{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:12.5px;}
+
+  /* ===== Prochains créneaux ===== */
+  .slot-mini-row{display:flex; gap:8px; overflow-x:auto; padding-bottom:2px;}
+  .slot-mini-row::-webkit-scrollbar{display:none;}
+  .slot-mini{ flex-shrink:0; text-align:center; padding:9px 13px; border-radius:11px; border:1px solid var(--line-strong); font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:var(--ink-soft); background:var(--card); }
+
+  .notice-chip{ display:flex; gap:8px; align-items:flex-start; background:var(--green-50); border:1px solid var(--green-100); color:var(--green-900); border-radius:var(--radius-sm); padding:10px 12px; font-size:11px; line-height:1.5; margin:14px 0 4px; }
+  .notice-chip .icon{width:15px;height:15px; flex-shrink:0; color:var(--green-700); margin-top:1px;}
+
+  /* ===== Professionnels similaires ===== */
+  .sim-row{display:flex; gap:10px; overflow-x:auto; padding:2px 0 4px;}
+  .sim-row::-webkit-scrollbar{display:none;}
+  .sim-card{ flex:0 0 122px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:11px; text-align:center; box-shadow:var(--shadow-card); }
+  .sim-card .avatar{margin:0 auto 8px; width:44px;height:44px; border-radius:13px; font-size:14px;}
+  .sim-card .name{font-size:11.5px; font-weight:700; font-family:'Sora',sans-serif; margin:0 0 2px; line-height:1.3;}
+  .sim-card .spec{font-size:10px; color:var(--ink-faint); margin:0 0 9px;}
+  .sim-card .btn-sim{ display:block; width:100%; background:var(--paper); color:var(--green-700); border:1px solid var(--green-100); border-radius:100px; font-family:'Sora',sans-serif; font-weight:600; font-size:10.5px; padding:7px 0; }
+
+  .section-title{font-size:12.5px; font-weight:700; font-family:'Sora',sans-serif; margin:22px 0 10px; display:flex; align-items:center; gap:6px;}
+  .section-title .icon{width:14px;height:14px; color:var(--green-700);}
+
+  .sticky-cta{ position:sticky; bottom:0; background:linear-gradient(180deg, rgba(245,248,246,0) 0%, var(--paper) 22%); padding:12px 0 4px; margin-top:6px; }
+  .cta-row{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+  .cta-amount{ display:flex; flex-direction:column; }
+  .cta-amount b{font-family:'IBM Plex Mono',monospace; font-size:15px;}
+  .cta-amount span{font-size:9.5px; color:var(--ink-faint); font-weight:600;}
+
+  /* ============ caption sous le device ============ */
+  .cap-wrap{max-width:342px; margin:16px auto 0; text-align:center;}
+  .cap-wrap p{font-size:12px; color:var(--ink-soft); line-height:1.6; margin:0;}
+  .cap-wrap b{color:var(--ink);}
+</style>
+</head>
+<body>
+
+<div>
+  <div class="device"><div class="screen">
+    <div class="island"></div>
+    <div class="statusbar"><span>9:41</span><div class="icons">
+      <svg viewBox="0 0 16 11"><path d="M1 8h1.5v2H1zM4 6h1.5v4H4zM7 3.5h1.5V10H7zM10 1h1.5v9H10z" fill="currentColor" stroke="none"/></svg>
+      <svg viewBox="0 0 20 11"><rect x="1" y="1" width="16" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="currentColor" stroke="none"/><rect x="18" y="3.5" width="1.5" height="4" fill="currentColor" stroke="none"/></svg>
+    </div></div>
+
+    <div class="content">
+
+      <!-- ===== EN-TÊTE ===== -->
+      <div class="profile-hero">
+        <div class="avatar">AN</div>
+        <p class="name">Dr. Aïcha Ngo</p>
+        <p class="spec">Pédiatre · Douala — Bonapriso</p>
+        <div class="badges">
+          <span class="badge green"><svg class="icon" viewBox="0 0 24 24"><path d="m9 12 2 2 4-4"/><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5Z"/></svg>Vérifiée à l'Ordre</span>
+          <span class="badge amber"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Disponible aujourd'hui</span>
+        </div>
+        <div class="stat-row">
+          <div class="stat"><b>4.8</b><span>NOTE</span></div>
+          <div class="stat"><b>126</b><span>AVIS</span></div>
+          <div class="stat"><b>10 ans</b><span>EXERCICE</span></div>
+        </div>
+      </div>
+
+      <!-- ===== ONGLETS ===== -->
+      <div class="tab-row" id="ptabs">
+        <button type="button" class="tab active" data-target="p-presentation">Présentation</button>
+        <button type="button" class="tab" data-target="p-horaires">Horaires</button>
+        <button type="button" class="tab" data-target="p-avis">Avis (126)</button>
+        <button type="button" class="tab" data-target="p-tarifs">Tarifs</button>
+      </div>
+
+      <!-- ===== PRÉSENTATION ===== -->
+      <div class="tab-panel active" id="p-presentation">
+        <div class="info-block">
+          <h4><svg class="icon" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>À propos</h4>
+          <p>Le Dr. Aïcha Ngo exerce la pédiatrie depuis plus de 10 ans à Douala. Son cabinet accueille les enfants de la naissance à l'adolescence, pour le suivi de croissance, les vaccinations et les consultations générales. Consultations disponibles au cabinet ou en téléconsultation.</p>
+        </div>
+        <div class="info-block">
+          <h4><svg class="icon" viewBox="0 0 24 24"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1.5 3 3 6 3s6-1.5 6-3v-5"/></svg>Formation &amp; expérience</h4>
+          <div class="hours-row"><span>Doctorat en médecine</span><span style="font-family:'Inter',sans-serif; font-weight:500; color:var(--ink-soft);">Univ. de Douala</span></div>
+          <div class="hours-row"><span>Spécialisation pédiatrie</span><span style="font-family:'Inter',sans-serif; font-weight:500; color:var(--ink-soft);">10 ans</span></div>
+          <div class="hours-row off"><span>Ordre National des Médecins</span><span>Membre</span></div>
+        </div>
+        <div class="info-block">
+          <h4><svg class="icon" viewBox="0 0 24 24"><path d="M5 8l6 6 6-6"/></svg>Langues parlées</h4>
+          <div class="pill-row"><span class="pill">Français</span><span class="pill">Anglais</span><span class="pill">Douala</span></div>
+        </div>
+      </div>
+
+      <!-- ===== HORAIRES & LOCALISATION ===== -->
+      <div class="tab-panel" id="p-horaires">
+        <div class="info-block">
+          <h4><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Horaires d'ouverture</h4>
+          <div class="hours-row"><span>Lundi – Vendredi</span><span>08:00 – 17:00</span></div>
+          <div class="hours-row"><span>Samedi</span><span>08:00 – 13:00</span></div>
+          <div class="hours-row off"><span>Dimanche</span><span>Fermé</span></div>
+        </div>
+        <div class="info-block">
+          <h4><svg class="icon" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Localisation</h4>
+          <p>Rue des Manguiers, Bonapriso, Douala</p>
+          <div class="map-ph"><svg class="icon" viewBox="0 0 24 24"><path d="M9 20l-6-3V4l6 3 6-3 6 3v13l-6-3-6 3z"/><path d="M9 7v13M15 4v13"/></svg></div>
+        </div>
+      </div>
+
+      <!-- ===== AVIS ===== -->
+      <div class="tab-panel" id="p-avis">
+        <div class="review-card">
+          <div class="review-top">
+            <span class="av-sm">MT</span>
+            <div class="who"><b>Marie T.</b>
+              <div class="stars">
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+              </div>
+            </div>
+          </div>
+          <p>Très à l'écoute, mon fils s'est senti en confiance dès la première visite.</p>
+        </div>
+        <div class="review-card">
+          <div class="review-top">
+            <span class="av-sm">PK</span>
+            <div class="who"><b>Paul K.</b>
+              <div class="stars">
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+                <svg class="icon off" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+              </div>
+            </div>
+          </div>
+          <p>Rendez-vous respecté à l'heure, explications claires sur le traitement.</p>
+        </div>
+        <div class="review-card">
+          <div class="review-top">
+            <span class="av-sm">SN</span>
+            <div class="who"><b>Sarah N.</b>
+              <div class="stars">
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>
+              </div>
+            </div>
+          </div>
+          <p>Téléconsultation très pratique, ordonnance reçue le jour même.</p>
+        </div>
+      </div>
+
+      <!-- ===== TARIFS & ASSURANCES ===== -->
+      <div class="tab-panel" id="p-tarifs">
+        <div class="info-block">
+          <h4><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M2 10h20"/></svg>Tarifs des consultations</h4>
+          <div class="price-row"><span>Consultation standard</span><b>15 000 FCFA</b></div>
+          <div class="price-row"><span>Téléconsultation</span><b>10 000 FCFA</b></div>
+          <div class="price-row"><span>Suivi vaccinal</span><b>8 000 FCFA</b></div>
+        </div>
+        <div class="info-block">
+          <h4><svg class="icon" viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5Z"/></svg>Assurances acceptées</h4>
+          <div class="pill-row">
+            <span class="pill">Activa Assurances</span>
+            <span class="pill">Saham Assurance Cameroun</span>
+            <span class="pill">NSIA Assurances</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PROCHAINS CRÉNEAUX (toujours visible) ===== -->
+      <div class="section-title"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>Prochains créneaux</div>
+      <div class="slot-mini-row">
+        <span class="slot-mini">08:30</span>
+        <span class="slot-mini">09:15</span>
+        <span class="slot-mini">10:00</span>
+        <span class="slot-mini">14:00</span>
+        <span class="slot-mini">14:45</span>
+        <span class="slot-mini">16:30</span>
+      </div>
+
+      <div class="notice-chip">
+        <svg class="icon" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        <span>Paiement sécurisé — vos honoraires sont conservés sous séquestre et libérés uniquement après la consultation.</span>
+      </div>
+
+      <!-- ===== PROFESSIONNELS SIMILAIRES ===== -->
+      <div class="section-title"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>Vous pourriez aussi consulter</div>
+      <div class="sim-row">
+        <div class="sim-card">
+          <div class="avatar">CM</div>
+          <p class="name">Dr. Chantal Mvondo</p>
+          <p class="spec">Médecine générale</p>
+          <button class="btn-sim">Voir le profil</button>
+        </div>
+        <div class="sim-card">
+          <div class="avatar">LA</div>
+          <p class="name">Dr. Léa Abena</p>
+          <p class="spec">Gynécologue</p>
+          <button class="btn-sim">Voir le profil</button>
+        </div>
+        <div class="sim-card">
+          <div class="avatar">SE</div>
+          <p class="name">Dr. Serge Etoundi</p>
+          <p class="spec">Dentiste</p>
+          <button class="btn-sim">Voir le profil</button>
+        </div>
+        <div class="sim-card">
+          <div class="avatar">BF</div>
+          <p class="name">Dr. Bertrand Foka</p>
+          <p class="spec">Cardiologue</p>
+          <button class="btn-sim">Voir le profil</button>
+        </div>
+      </div>
+
+      <!-- ===== CTA STICKY ===== -->
+      <div class="sticky-cta">
+        <div class="cta-row">
+          <button class="btn-icon-outline" aria-label="Appeler"><svg class="icon" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.4 2.1L8.1 9.6a16 16 0 0 0 6 6l1.1-1.2a2 2 0 0 1 2.1-.4c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2Z"/></svg></button>
+          <button class="btn-outline-row"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M22 8l-6 4 6 4z"/></svg>Téléconsulter</button>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div class="cta-amount"><b>15 000 FCFA</b><span>à partir de</span></div>
+          <button class="btn-primary" style="flex:1;">Prendre RDV</button>
+        </div>
+      </div>
+
+    </div>
+
+    <nav class="bottomnav">
+      <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></div>Accueil</div>
+      <div class="navitem active"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Recherche</div>
+      <div class="navitem-fab"><svg class="icon" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 2.4"/></svg></div>
+      <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>Messages</div>
+      <div class="navitem"><div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>Profil</div>
+    </nav>
+  </div></div>
+
+  <div class="cap-wrap">
+    <p><b>Fiche du praticien · mobile</b> — reprend le contenu de la page profil médecin (présentation, horaires, avis, tarifs, créneaux, confrères) dans le style vert de l'application mobile APS.</p>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#ptabs .tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#ptabs .tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.target).classList.add('active');
+    });
+  });
+</script>
+
+</body>
+</html>
