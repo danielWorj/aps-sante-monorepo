@@ -199,7 +199,7 @@ class AuthentificationRepository {
         ApiRealEndpoints.connexion,
         body: payload.toJson(),
       );
-      print("Json : ${json}"); 
+      //print("Json : ${json}");
       return ConnexionResultat.fromJson(_carte(json));
     });
   }

@@ -468,7 +468,7 @@ services:
             - /tmp:size=16M,mode=1777,noexec
         ports:
             - '${JVB_PORT:-10000}:${JVB_PORT:-10000}/udp'
-            - '127.0.0.1:${JVB_COLIBRI_PORT:-8080}:8080'
+            - '127.0.0.1:${JVB_COLIBRI_PORT:-8081}:8080'
         volumes:
             - jvb-config:/config:Z
         labels:

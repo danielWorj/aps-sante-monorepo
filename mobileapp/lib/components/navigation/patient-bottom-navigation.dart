@@ -57,12 +57,13 @@ class PatientBottomNavigationBar extends StatelessWidget {
       ),
       PatientNavItem(
         icon: Icons.event_note_outlined,
-        label: 'Rendez-vous',
+        label: 'RdV',
       ),
       PatientNavItem(
         icon: Icons.person_outline,
         label: 'Profil',
       ),
+
     ],
   });
 
