@@ -7,10 +7,10 @@ import '../../controllers/publicite_controller.dart';
 import '../../models/assurance_models.dart';
 import '../../models/publicite_models.dart';
 import '../../repositories/publicite_repository.dart' show PublicitesParPageResultat;
+import '../../utils/mon_espace_navigation.dart';
 import './utils/DetailAssurance.dart'; // ⚠️ adapter ce chemin à l'emplacement réel du fichier dans le projet.
 import 'publicAcceuil.dart';
 import 'Medecinpage.dart';
-import 'apropos.dart';
 
 /// Écran public — **Annuaire des assurances** (`5 · Annuaire assurances`
 /// dans la maquette `ui-mobile.html`).
@@ -98,11 +98,8 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
         break;
       case 2: // Assurance — déjà sur cet écran.
         break;
-      case 3: // À propos
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AProposPage()),
-        );
+      case 3: // Mon espace
+        ouvrirMonEspace(context);
         break;
     }
   }

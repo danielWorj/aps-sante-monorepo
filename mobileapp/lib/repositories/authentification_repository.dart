@@ -3,8 +3,13 @@
 // Repository du module "authentification".
 // Construit les appels API, effectue le mapping JSON <-> modèles
 // (authentification_models.dart) et normalise les erreurs en
-// [ErreurAuthentification], en s'appuyant sur [ApiClient]
-// (utils/api_client.dart) pour le transport HTTP.
+// [ErreurAuthentification].
+//
+// Version "simple" : comme [MedecinRepository] et [PharmacieRepository]
+// (voir leurs en-têtes), ce repository parle DIRECTEMENT en HTTP via
+// le package `http`, sans passer par ApiClient (voir api_client.dart)
+// ni par ApiEndpoints. Toutes les routes viennent de ApiRealEndpoints
+// (endpoint.dart).
 //
 // ─────────────────────────────────────────────────────────────────
 // ⚠️ DISPOSITION RÉELLE DU BACKEND — refresh token en cookie httpOnly
@@ -13,8 +18,7 @@
 // refresh token dans le corps JSON : il est posé par le serveur via
 // `res.cookie(NOM_COOKIE_REFRESH_TOKEN, ..., { httpOnly: true, ... })`
 // sur /login, /changer-mot-de-passe-initial et /refresh, et effacé via
-// `res.clearCookie(...)` sur /logout. Conséquences pour ce repository
-// et pour l'[ApiClient] qui lui est injecté :
+// `res.clearCookie(...)` sur /logout. Conséquences pour ce repository :
 //
 //  1. Ce fichier ne lit, ne stocke ni ne transmet JAMAIS de refresh
 //     token explicitement : c'est physiquement impossible (httpOnly =
@@ -22,9 +26,9 @@
 //     toute façon une régression de sécurité de tenter de le faire.
 //     Seul le navigateur / moteur HTTP porte ce cookie.
 //
-//  2. Pour que /refresh et /logout fonctionnent, l'[ApiClient] fourni
-//     au constructeur DOIT reposer sur un client HTTP qui PERSISTE et
-//     RENVOIE les cookies entre deux requêtes vers le même hôte :
+//  2. Pour que /refresh et /logout fonctionnent, le [http.Client]
+//     éventuellement injecté au constructeur DOIT persister et
+//     renvoyer les cookies entre deux requêtes vers le même hôte :
 //       - Flutter Web : `package:http`'s `BrowserClient` doit être
 //         utilisé avec `withCredentials = true` si l'API est sur une
 //         autre origine que le front (cross-site), sinon les cookies
@@ -32,10 +36,9 @@
 //       - Mobile/Desktop (dart:io) : `http.Client()` standard NE
 //         PERSISTE PAS les cookies d'un appel à l'autre. Il faut
 //         l'envelopper avec un pot de cookies, p.ex.
-//         `package:cookie_jar` + `package:http/io_client.dart`
-//         (ou construire l'`ApiClient` avec un `http.Client` basé sur
-//         `dart:io HttpClient` + un `CookieJar` persistant sur disque
-//         pour survivre au redémarrage de l'app).
+//         `package:cookie_jar` + `package:http/io_client.dart`, et
+//         injecter ce client au constructeur de ce repository (il est
+//         alors réutilisé pour TOUS les appels — voir [_client]).
 //     Sans cela, /refresh renverra systématiquement 400
 //     ("refresh_token requis.") car le cookie n'aura jamais quitté le
 //     serveur d'origine.
@@ -47,8 +50,7 @@
 //     survivre à un redémarrage — jamais dans du SharedPreferences en
 //     clair. Ce repository reste volontairement STATELESS vis-à-vis de
 //     la session : chaque appel authentifié reçoit son token en
-//     paramètre, exactement comme [ApiClient] le fait déjà pour le
-//     transport (voir sa doc en tête de fichier).
+//     paramètre.
 //
 //  4. Rotation : chaque /refresh RÉVOQUE l'ancien refresh token et en
 //     repose un nouveau dans le même cookie. Il ne faut donc jamais
@@ -58,29 +60,126 @@
 //     sérialise ce cas.
 // ─────────────────────────────────────────────────────────────────
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
 import '../models/authentification_models.dart';
-import '../utils/api_client.dart';
+import '../utils/endpoint.dart';
+
+/// Erreur levée quand une requête HTTP échoue (statut hors 2xx) ou
+/// quand un appel est mal formé côté client. Remplace l'ApiException
+/// de api_client.dart pour ce repository, qui ne dépend plus de ce
+/// fichier — même patron que dans medecin_repository.dart /
+/// pharmacie_repository.dart.
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+
+  const ApiException(this.message, {this.statusCode});
+
+  /// Vrai si l'échec vient d'une absence/expiration d'authentification.
+  bool get estNonAutorise => statusCode == 401 || statusCode == 403;
+
+  @override
+  String toString() => message;
+}
 
 /// Repository du composant authentification. Ne détient aucun état de
 /// session (voir note en tête de fichier) : uniquement le transport
 /// HTTP + le mapping JSON <-> modèles + la normalisation des erreurs.
 class AuthentificationRepository {
-  final ApiClient _client;
+  static const Duration _timeout = Duration(seconds: 15);
 
-  const AuthentificationRepository(this._client);
+  /// Client HTTP RÉUTILISÉ pour tous les appels de ce repository (au
+  /// contraire de MedecinRepository/PharmacieRepository, qui rappellent
+  /// les fonctions de package `http.get()`/`http.post()` à chaque
+  /// requête) : c'est indispensable ici pour que le cookie httpOnly du
+  /// refresh token puisse être conservé d'un appel à l'autre — voir la
+  /// note en tête de fichier. Injecter un client basé sur un
+  /// `cookie_jar` persistant au constructeur pour du mobile/desktop.
+  final http.Client _client;
+
+  AuthentificationRepository([http.Client? client])
+      : _client = client ?? http.Client();
+
+  /* ===================================================================
+   * Aides HTTP internes
+   * =================================================================== */
+
+  Map<String, String> _entetes({
+    String? token,
+    bool avecJson = true,
+    Map<String, String>? entetesSupplementaires,
+  }) {
+    final entetes = <String, String>{'Accept': 'application/json'};
+    if (avecJson) entetes['Content-Type'] = 'application/json';
+    if (token != null && token.isNotEmpty) {
+      entetes['Authorization'] = 'Bearer $token';
+    }
+    if (entetesSupplementaires != null) entetes.addAll(entetesSupplementaires);
+    return entetes;
+  }
+
+  /// Décode le corps de la réponse et lève [ApiException] si le
+  /// statut n'est pas un succès (2xx).
+  dynamic _decoder(http.Response reponse) {
+    dynamic corps;
+    try {
+      corps = reponse.body.isNotEmpty ? jsonDecode(reponse.body) : null;
+    } on FormatException {
+      corps = null;
+    }
+
+    if (reponse.statusCode >= 200 && reponse.statusCode < 300) {
+      return corps;
+    }
+
+    final message = (corps is Map && corps['message'] is String)
+        ? corps['message'] as String
+        : 'Erreur ${reponse.statusCode} lors de l\'appel à l\'API.';
+    throw ApiException(message, statusCode: reponse.statusCode);
+  }
+
+  Future<dynamic> _get(String url, {String? token}) async {
+    final reponse = await _client
+        .get(Uri.parse(url), headers: _entetes(token: token, avecJson: false))
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  Future<dynamic> _post(
+      String url, {
+        Map<String, dynamic>? body,
+        String? token,
+        Map<String, String>? entetesSupplementaires,
+      }) async {
+    final reponse = await _client
+        .post(
+      Uri.parse(url),
+      headers: _entetes(
+        token: token,
+        entetesSupplementaires: entetesSupplementaires,
+      ),
+      body: jsonEncode(body ?? const {}),
+    )
+        .timeout(_timeout);
+    return _decoder(reponse);
+  }
+
+  /* ===================================================================
+   * Authentification
+   * =================================================================== */
 
   // ───────────────────────────────────────────────────────────────
-  // POST /api/auth/register — inscription publique (rôle "patient"
+  // POST /auth/register — inscription publique (rôle "patient"
   // forcé côté serveur quoi qu'on envoie).
   // ───────────────────────────────────────────────────────────────
   Future<InscriptionResultat> inscrire(InscriptionPayload payload) {
     return _executer(() async {
-      final json = await _client.post(
-        ApiEndpoints.inscription,
+      final json = await _post(
+        ApiRealEndpoints.inscription,
         body: payload.toJson(),
       );
       return InscriptionResultat.fromJson(_carte(json));
@@ -88,38 +187,37 @@ class AuthentificationRepository {
   }
 
   // ───────────────────────────────────────────────────────────────
-  // POST /api/auth/login
+  // POST /auth/login
   // Le refresh token (si émis) part dans le cookie httpOnly, hors de
   // portée de ce repository — voir [ConnexionResultat.sessionOuverte]
   // pour distinguer session complète vs mot de passe temporaire.
   // ───────────────────────────────────────────────────────────────
   Future<ConnexionResultat> connecter(ConnexionPayload payload) {
     return _executer(() async {
-      final json = await _client.post(
-        ApiEndpoints.connexion,
+      print("Lancement du login");
+      final json = await _post(
+        ApiRealEndpoints.connexion,
         body: payload.toJson(),
       );
+      print("Json : ${json}"); 
       return ConnexionResultat.fromJson(_carte(json));
     });
   }
 
   // ───────────────────────────────────────────────────────────────
-  // POST /api/auth/changer-mot-de-passe-initial
+  // POST /auth/changer-mot-de-passe-initial
   // Protégée par `exigerTokenChangementMotDePasse` (PAS par
   // `authentifier`) : le token à transmettre est le
   // `tokenChangementMotDePasse` renvoyé par connecter() lorsque
   // `motDePasseAChanger` est vrai — pas un access token classique.
-  // Réutilise le paramètre `token` de [ApiClient.post], qui pose déjà
-  // `Authorization: Bearer <token>`, ce qui correspond exactement à ce
-  // qu'attend le middleware côté serveur.
   // ───────────────────────────────────────────────────────────────
   Future<ChangementMotDePasseInitialResultat> changerMotDePasseInitial(
       ChangementMotDePasseInitialPayload payload, {
         required String tokenChangementMotDePasse,
       }) {
     return _executer(() async {
-      final json = await _client.post(
-        ApiEndpoints.changementMotDePasseInitial,
+      final json = await _post(
+        ApiRealEndpoints.changementMotDePasseInitial,
         body: payload.toJson(),
         token: tokenChangementMotDePasse,
       );
@@ -128,7 +226,7 @@ class AuthentificationRepository {
   }
 
   // ───────────────────────────────────────────────────────────────
-  // POST /api/auth/refresh
+  // POST /auth/refresh
   // Aucun payload et aucun token Bearer à fournir : le refresh token
   // voyage uniquement via le cookie httpOnly (voir note en tête de
   // fichier sur les prérequis du client HTTP sous-jacent). Le nouveau
@@ -137,13 +235,13 @@ class AuthentificationRepository {
   // ───────────────────────────────────────────────────────────────
   Future<RafraichissementResultat> rafraichirToken() {
     return _executer(() async {
-      final json = await _client.post(ApiEndpoints.rafraichissement);
+      final json = await _post(ApiRealEndpoints.rafraichissement);
       return RafraichissementResultat.fromJson(_carte(json));
     });
   }
 
   // ───────────────────────────────────────────────────────────────
-  // POST /api/auth/logout
+  // POST /auth/logout
   // Authentifiée : nécessite l'access token courant (pour mettre son
   // jti en denylist). Révoque aussi le refresh token porté par le
   // cookie et demande son effacement — géré côté serveur via
@@ -151,8 +249,8 @@ class AuthentificationRepository {
   // ───────────────────────────────────────────────────────────────
   Future<MessageResultat> deconnecter({required String accessToken}) {
     return _executer(() async {
-      final json = await _client.post(
-        ApiEndpoints.deconnexion,
+      final json = await _post(
+        ApiRealEndpoints.deconnexion,
         token: accessToken,
       );
       return MessageResultat.fromJson(_carte(json));
@@ -160,12 +258,12 @@ class AuthentificationRepository {
   }
 
   // ───────────────────────────────────────────────────────────────
-  // GET /api/auth/me
+  // GET /auth/me
   // ───────────────────────────────────────────────────────────────
   Future<ProfilResultat> profil({required String accessToken}) {
     return _executer(() async {
-      final json = await _client.get(
-        ApiEndpoints.profilCourant,
+      final json = await _get(
+        ApiRealEndpoints.profilCourant,
         token: accessToken,
       );
       return ProfilResultat.fromJson(_carte(json));
@@ -173,7 +271,7 @@ class AuthentificationRepository {
   }
 
   // ───────────────────────────────────────────────────────────────
-  // POST /api/auth/comptes
+  // POST /auth/comptes
   // Réservée à un appelant authentifié admin/superadmin. La matrice
   // fine des rôles créables (ROLES_CREABLES_PAR côté serveur) n'est
   // pas dupliquée ici : seule la validation locale des champs requis
@@ -194,8 +292,8 @@ class AuthentificationRepository {
       );
     }
     return _executer(() async {
-      final json = await _client.post(
-        ApiEndpoints.comptes,
+      final json = await _post(
+        ApiRealEndpoints.comptes,
         body: payload.toJson(),
         token: accessToken,
       );
@@ -204,23 +302,23 @@ class AuthentificationRepository {
   }
 
   // ───────────────────────────────────────────────────────────────
-  // POST /api/auth/bootstrap-superadmin
+  // POST /auth/bootstrap-superadmin
   // Route publique mais verrouillée par l'en-tête `X-Setup-Token`
   // ([AmorcageSuperAdminPayload.toHeaders]) — pas un Authorization
-  // Bearer. [ApiClient] ne sait poser que des en-têtes Authorization,
-  // d'où l'appel HTTP dédié ci-dessous plutôt qu'un passage par
-  // `_client.post`. Se désactive d'elle-même côté serveur dès qu'un
-  // superadmin existe déjà (403) : à n'utiliser qu'à l'amorçage d'un
-  // environnement, jamais depuis un écran exposé aux utilisateurs
-  // finaux.
+  // Bearer. Comme ce repository parle HTTP directement (plus besoin
+  // du détour par un appel dédié imposé par ApiClient), l'en-tête
+  // supplémentaire est simplement injecté dans [_post]. Se désactive
+  // d'elle-même côté serveur dès qu'un superadmin existe déjà (403) :
+  // à n'utiliser qu'à l'amorçage d'un environnement, jamais depuis un
+  // écran exposé aux utilisateurs finaux.
   // ───────────────────────────────────────────────────────────────
   Future<InscriptionResultat> amorcerSuperAdmin(
       AmorcageSuperAdminPayload payload,
       ) {
     return _executer(() async {
-      final json = await _posterAvecEntetesPersonnalisees(
-        ApiEndpoints.amorcageSuperAdmin, // voir note dans ApiEndpoints
-        corps: payload.toJson(),
+      final json = await _post(
+        ApiRealEndpoints.amorcageSuperAdmin,
+        body: payload.toJson(),
         entetesSupplementaires: payload.toHeaders(),
       );
       return InscriptionResultat.fromJson(_carte(json));
@@ -256,11 +354,11 @@ class AuthentificationRepository {
     }
   }
 
-  // ───────────────────────────────────────────────────────────────
-  // Internes
-  // ───────────────────────────────────────────────────────────────
+  /* ===================================================================
+   * Internes
+   * =================================================================== */
 
-  /// Convertit toute [ApiException] levée par [ApiClient] en
+  /// Convertit toute [ApiException] levée en interne en
   /// [ErreurAuthentification] (typée, exploitable côté UI via
   /// `compteSuspendu` / `identifiantsInvalides` / `emailDejaUtilise`),
   /// pour que les repositories/controllers appelants n'aient qu'un
@@ -282,58 +380,13 @@ class AuthentificationRepository {
   /// qu'en `TypeError` opaque au moment du `fromJson`.
   Map<String, dynamic> _carte(dynamic json) {
     if (json is Map<String, dynamic>) return json;
-    throw const ErreurAuthentification(
-      codeHttp: 0,
-      message: 'Réponse du serveur inattendue (format invalide).',
-    );
+    throw const ApiException('Réponse du serveur inattendue (format invalide).');
   }
 
-  /// Appel POST JSON avec en-têtes personnalisés, pour les cas hors du
-  /// périmètre d'[ApiClient] (ici : `X-Setup-Token`). Reproduit
-  /// volontairement la même politique d'erreur que
-  /// `ApiClient._traiter` pour rester homogène avec le reste du
-  /// transport, sans avoir à modifier [ApiClient] pour un unique
-  /// endpoint d'amorçage.
-  Future<dynamic> _posterAvecEntetesPersonnalisees(
-      String chemin, {
-        required Map<String, dynamic> corps,
-        required Map<String, String> entetesSupplementaires,
-      }) async {
-    final base = _client.baseUrl.endsWith('/')
-        ? _client.baseUrl.substring(0, _client.baseUrl.length - 1)
-        : _client.baseUrl;
-    final chemin_ = chemin.startsWith('/') ? chemin : '/$chemin';
-    final uri = Uri.parse('$base$chemin_');
-
-    final entetes = <String, String>{
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      ...entetesSupplementaires,
-    };
-
-    late final http.Response reponse;
-    try {
-      reponse = await http
-          .post(uri, headers: entetes, body: jsonEncode(corps))
-          .timeout(_client.timeout);
-    } catch (e) {
-      throw ApiException('Erreur inattendue : $e');
-    }
-
-    dynamic decode;
-    try {
-      decode = reponse.body.isNotEmpty ? jsonDecode(reponse.body) : null;
-    } on FormatException {
-      decode = null;
-    }
-
-    if (reponse.statusCode >= 200 && reponse.statusCode < 300) {
-      return decode;
-    }
-
-    final message = (decode is Map && decode['message'] is String)
-        ? decode['message'] as String
-        : 'Erreur ${reponse.statusCode} lors de l\'appel à l\'API.';
-    throw ApiException(message, statusCode: reponse.statusCode);
-  }
+  /// Ne fait plus rien : il n'y a pas de ressource externe à libérer
+  /// tant que [_client] n'a pas été explicitement injecté (dans ce cas
+  /// c'est à l'appelant, propriétaire du client, de le fermer).
+  /// Conservée pour ne pas casser un éventuel appel existant
+  /// (`authentificationRepository.close()`) ailleurs dans l'app.
+  void close() {}
 }

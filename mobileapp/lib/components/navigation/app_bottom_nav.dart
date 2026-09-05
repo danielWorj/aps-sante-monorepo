@@ -19,8 +19,13 @@ class AppBottomNavItem {
 /// - un bouton flottant central « Prendre rendez-vous » (`.navitem-fab`),
 ///   qui dépasse au-dessus de la barre.
 ///
-/// Rubriques par défaut : **Accueil, Médecin, Assurance, À propos**
+/// Rubriques par défaut : **Accueil, Médecin, Assurance, Mon espace**
 /// (le bouton flottant central correspond au rendez-vous, pas à une rubrique).
+///
+/// La rubrique « Mon espace » (ex « À propos ») ouvre l'espace personnel
+/// de l'utilisateur s'il est déjà connecté (sa propre bottom navigation
+/// bar, avec ses différentes pages), ou l'écran de connexion sinon —
+/// voir `utils/mon_espace_navigation.dart` (`ouvrirMonEspace`).
 ///
 /// Utilisation — à placer dans un `Stack` en bas de l'écran (comme dans la
 /// maquette, la barre flotte au-dessus du contenu) :
@@ -54,14 +59,14 @@ class AppBottomNav extends StatelessWidget {
     this.rdvLabel = 'Rendez-vous',
     this.rdvIcon = Icons.calendar_month_rounded,
   }) : assert(items.length == 4,
-            'AppBottomNav attend exactement 4 rubriques (2 de chaque côté du bouton flottant).');
+  'AppBottomNav attend exactement 4 rubriques (2 de chaque côté du bouton flottant).');
 
-  /// Rubriques par défaut de l'application APS : Accueil, Médecin, Assurance, À propos.
+  /// Rubriques par défaut de l'application APS : Accueil, Médecin, Assurance, Mon espace.
   static const List<AppBottomNavItem> defaultItems = [
     AppBottomNavItem(label: 'Accueil', icon: Icons.home_rounded),
     AppBottomNavItem(label: 'Médecin', icon: Icons.medical_services_outlined),
     AppBottomNavItem(label: 'Assurance', icon: Icons.shield_outlined),
-    AppBottomNavItem(label: 'À propos', icon: Icons.info_outline),
+    AppBottomNavItem(label: 'Mon espace', icon: Icons.person_outline_rounded),
   ];
 
   /// Les 4 rubriques affichées (2 avant / 2 après le bouton flottant).

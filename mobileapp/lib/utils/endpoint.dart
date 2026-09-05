@@ -3,6 +3,37 @@ class ApiRealEndpoints {
 
   static const String baseUrl = 'http://10.0.2.2:3000/api';
 
+  // ─── Authentification (module transverse "authentification") ────
+  // Voir authentification.routes.js / authentification.controller.js.
+  //   - register, login, refresh                : publiques.
+  //   - changer-mot-de-passe-initial             : publique au sens
+  //     où elle ne passe pas par `authentifier`, mais verrouillée par
+  //     `exigerTokenChangementMotDePasse` (token restreint renvoyé par
+  //     /login en Authorization: Bearer, PAS un access token normal).
+  //   - logout, me                               : authentifié (tout
+  //     rôle).
+  //   - comptes                                  : authentifié,
+  //     réservé à admin/superadmin (matrice fine appliquée côté
+  //     contrôleur, cf. ROLES_CREABLES_PAR).
+  //   - bootstrap-superadmin                     : publique mais
+  //     verrouillée par l'en-tête `X-Setup-Token` (PAS Authorization),
+  //     et désactivée dès qu'un superadmin existe déjà. Voir
+  //     AmorcageSuperAdminPayload.toHeaders() côté modèles.
+  //   - Le refresh token n'apparaît jamais dans un payload/endpoint
+  //     ici : il voyage uniquement via un cookie httpOnly posé par le
+  //     serveur (voir authentification_repository.dart pour les
+  //     prérequis côté client HTTP).
+  static const String inscription = '${baseUrl}/auth/register';
+  static const String connexion = '${baseUrl}/auth/login';
+  static const String changementMotDePasseInitial =
+      '${baseUrl}/auth/changer-mot-de-passe-initial';
+  static const String rafraichissement = '${baseUrl}/auth/refresh';
+  static const String deconnexion = '${baseUrl}/auth/logout';
+  static const String profilCourant = '${baseUrl}/auth/me';
+  static const String comptes = '${baseUrl}/auth/comptes';
+  static const String amorcageSuperAdmin =
+      '${baseUrl}/auth/bootstrap-superadmin';
+
   // ─── Médecins (fiche Annuaire) ─────────────────────────────────────
   static const String medecins = '${baseUrl}/medecins';
   static String medecin(String id) => '${baseUrl}/medecins/$id';

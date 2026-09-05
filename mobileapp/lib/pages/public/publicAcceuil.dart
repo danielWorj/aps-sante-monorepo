@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mobileapp/pages/public/apropos.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Adaptez ces chemins selon l'emplacement réel des fichiers dans votre
@@ -12,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../components/components.dart';
 import '../../controllers/publicite_controller.dart';
 import '../../models/publicite_models.dart' show Publicite;
+import '../../utils/mon_espace_navigation.dart';
 import 'Medecinpage.dart';
 import 'Pharmaciepage.dart';
 import 'Centresantepage.dart';
@@ -117,8 +117,9 @@ class PublicAcceuilPage extends ConsumerStatefulWidget {
 
   /// Tap sur une rubrique de la barre de navigation basse (0 à 3).
   /// Par défaut : 0=Accueil (reste sur place), 1=Médecin -> [MedecinPage],
-  /// 2=Assurance -> [AssurancePage], 3=À propos -> aucun écran fourni pour
-  /// l'instant (un message le signale).
+  /// 2=Assurance -> [AssurancePage], 3=Mon espace -> espace personnel de
+  /// l'utilisateur s'il est connecté, sinon écran de connexion (voir
+  /// `ouvrirMonEspace`).
   final ValueChanged<int>? onBottomNavTap;
 
   /// Tap sur le bouton flottant central « Rendez-vous ». Par défaut, ouvre
@@ -213,8 +214,11 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const AssurancePage()));
   }
 
-  void _ouvrirAPropos() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const AProposPage()));
+  /// Rubrique basse « Mon espace » (ex « À propos ») : ouvre l'espace
+  /// personnel de l'utilisateur s'il est connecté, sinon l'écran de
+  /// connexion — voir `ouvrirMonEspace`.
+  void _ouvrirMonEspace() {
+    ouvrirMonEspace(context);
   }
 
   /// Feuille de choix rapide ouverte depuis le champ de recherche : la
@@ -358,8 +362,8 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
       case 2: // Assurance
         _ouvrirAssurances();
         break;
-      case 3: // À propos
-        _ouvrirAPropos();
+      case 3: // Mon espace
+        _ouvrirMonEspace();
         break;
     }
   }

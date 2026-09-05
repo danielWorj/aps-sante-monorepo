@@ -12,9 +12,9 @@ import '../../models/medecin_models.dart';
 import '../../models/publicite_models.dart';
 import '../../repositories/publicite_repository.dart'
     show PublicitesParPageResultat;
+import '../../utils/mon_espace_navigation.dart';
 import 'publicAcceuil.dart';
 import 'Assurancepage.dart';
-import 'apropos.dart';
 // ⚠️ Chemin à ajuster à l'emplacement réel de Rendezvous.dart dans votre
 // arborescence : ce fichier (Medecinpage.dart) importe `components.dart`
 // avec 2 niveaux ('../../'), tandis que Rendezvous.dart en utilise 3
@@ -322,11 +322,8 @@ class _MedecinPageState extends State<MedecinPage> {
           MaterialPageRoute(builder: (_) => const AssurancePage()),
         );
         break;
-      case 3: // À propos
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AProposPage()),
-        );
+      case 3: // Mon espace
+        ouvrirMonEspace(context);
         break;
     }
   }
