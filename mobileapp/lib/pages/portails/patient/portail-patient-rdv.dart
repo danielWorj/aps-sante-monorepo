@@ -6,6 +6,7 @@ import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/authentification_models.dart';
 import '../../../models/rendez_vous_models.dart';
+import '../teleconsultation_screen.dart';
 
 /// ============================================================
 /// portail-patient-rdv.dart
@@ -582,10 +583,14 @@ class _PanelConfirme extends ConsumerWidget {
                                   label: 'Démarrer',
                                   icon: Icons.videocam_outlined,
                                   onPressed: () {
-                                    // TODO: Naviguer vers
-                                    // l'écran de
-                                    // téléconsultation
-                                    // (visio_controller.dart).
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            TeleconsultationScreen(
+                                              rdv: rdv,
+                                            ),
+                                      ),
+                                    );
                                   },
                                 )
                               else

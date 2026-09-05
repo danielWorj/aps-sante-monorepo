@@ -7,6 +7,7 @@ import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/authentification_models.dart';
 import '../../../models/rendez_vous_models.dart';
 import '../../../utils/api_client.dart' show ApiException;
+import '../teleconsultation_screen.dart';
 
 /// ============================================================
 /// portail-medecin-rdv.dart - VERSION ADAPTÉE
@@ -609,7 +610,20 @@ class _PanelConfirme extends ConsumerWidget {
                                                             ? Icons.videocam_outlined
                                                             : Icons.description_outlined,
                                                         onPressed: () {
-                                                            // TODO: Gérer l'action
+                                                            if (rdv.typeRdv ==
+                                                                TypeRdv.teleconsultation) {
+                                                                Navigator.of(context).push(
+                                                                    MaterialPageRoute(
+                                                                        builder: (_) =>
+                                                                            TeleconsultationScreen(
+                                                                                rdv: rdv,
+                                                                            ),
+                                                                    ),
+                                                                );
+                                                            } else {
+                                                                // TODO: Naviguer vers le dossier
+                                                                // patient (RDV en cabinet).
+                                                            }
                                                         },
                                                     ),
                                                 ),
