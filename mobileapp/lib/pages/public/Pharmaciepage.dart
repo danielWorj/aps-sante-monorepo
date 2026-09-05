@@ -28,6 +28,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../components/components.dart';
 import '../../controllers/pharmacie_controller.dart';
 import '../../models/pharmacie_models.dart';
+import '../../utils/mon_espace_navigation.dart';
 import 'publicAcceuil.dart';
 import 'Assurancepage.dart';
 
@@ -169,7 +170,7 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
 
   /// Gère un tap sur la barre de navigation basse : met à jour l'index actif
   /// ET navigue réellement vers l'écran correspondant. Ici les rubriques
-  /// sont : 0=Accueil, 1=Pharmacies [écran courant], 2=Assurance, 3=Profil.
+  /// sont : 0=Accueil, 1=Pharmacies [écran courant], 2=Assurance, 3=Mon espace.
   void _onBottomNavTap(int index) {
     setState(() => _navIndex = index);
     switch (index) {
@@ -187,10 +188,8 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
           MaterialPageRoute(builder: (_) => const AssurancePage()),
         );
         break;
-      case 3: // Profil — TODO: brancher vers l'écran Profil dès qu'il existera.
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Écran « Profil » bientôt disponible.')),
-        );
+      case 3: // Mon espace
+        ouvrirMonEspace(context);
         break;
     }
   }

@@ -8,32 +8,54 @@
 // - Boutons : PrimaryButton / SecondaryButton
 // - Alerte : AppAlert (message d'erreur de connexion)
 //
-// Aucune logique réseau n'est incluse : brancher `_handleLogin` sur votre
-// service d'authentification (ex: appel API, Firebase Auth...).
+// Branché sur le vrai flux d'authentification : POST /auth/login via
+// [SessionController.connecter] (authentification_controller.dart).
+// Deux issues possibles côté serveur (voir ConnexionResultat) :
+//   1. Session complète ouverte : la session est déjà mise à jour dans
+//      [sessionControllerProvider] par le controller lui-même ; cet écran
+//      n'a qu'à prévenir l'appelant via `onLoginSuccess` pour la navigation
+//      (généralement un routeur qui écoute `estConnecteProvider`).
+//   2. Mot de passe temporaire détecté (`motDePasseAChanger`) : aucune
+//      session n'est ouverte, seul un `tokenChangementMotDePasse` restreint
+//      est renvoyé. Cet écran redirige alors via `onMotDePasseTemporaire`
+//      vers l'écran de changement de mot de passe initial, qui devra
+//      transmettre ce token à `SessionController.changerMotDePasseInitial`.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../components/components.dart';
+import '../../../controllers/authentification_controller.dart';
+import '../../../models/authentification_models.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({
     super.key,
-    this.onLogin,
+    this.onLoginSuccess,
+    this.onMotDePasseTemporaire,
     this.onForgotPassword,
     this.onCreateAccount,
   });
 
-  /// Appelé avec (email, motDePasse) lorsque l'utilisateur valide le formulaire.
-  /// Doit retourner `true` en cas de succès, `false` (ou lever une exception)
-  /// en cas d'échec, pour piloter l'affichage de l'erreur.
-  final Future<bool> Function(String email, String password)? onLogin;
+  /// Appelé après une connexion réussie avec session complète ouverte
+  /// (`resultat.sessionOuverte`). La session elle-même est déjà à jour
+  /// dans [sessionControllerProvider] ; ce callback ne sert qu'à piloter
+  /// la navigation (ex: `Navigator.pushReplacement`, redirection routeur…).
+  final VoidCallback? onLoginSuccess;
+
+  /// Appelé quand le serveur détecte un mot de passe temporaire
+  /// (`resultat.motDePasseAChanger`), avec le `tokenChangementMotDePasse`
+  /// à transmettre à l'écran de changement de mot de passe initial.
+  /// Aucune session n'est ouverte dans ce cas.
+  final void Function(String tokenChangementMotDePasse)? onMotDePasseTemporaire;
+
   final VoidCallback? onForgotPassword;
   final VoidCallback? onCreateAccount;
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -59,20 +81,39 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final success = widget.onLogin == null
-          ? true
-          : await widget.onLogin!(
-        _emailController.text.trim(),
-        _passwordController.text,
+      final resultat = await ref.read(sessionControllerProvider.notifier).connecter(
+        ConnexionPayload(
+          email: _emailController.text.trim(),
+          motDePasse: _passwordController.text,
+        ),
       );
 
       if (!mounted) return;
 
-      if (!success) {
-        setState(() {
-          _errorMessage = 'Identifiants incorrects. Vérifiez votre e-mail et votre mot de passe.';
-        });
+      if (resultat.motDePasseAChanger) {
+        // Mot de passe temporaire : pas de session ouverte, on redirige
+        // vers l'écran de changement de mot de passe initial avec le
+        // token restreint fourni par le serveur.
+        final token = resultat.tokenChangementMotDePasse;
+        if (token == null) {
+          setState(() {
+            _errorMessage = 'Une erreur est survenue. Veuillez réessayer.';
+          });
+        } else {
+          widget.onMotDePasseTemporaire?.call(token);
+        }
+      } else {
+        // Session complète ouverte par SessionController : il ne reste
+        // qu'à prévenir l'appelant pour la navigation post-login.
+        widget.onLoginSuccess?.call();
       }
+    } on ErreurAuthentification catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.identifiantsInvalides
+            ? 'Identifiants incorrects. Vérifiez votre e-mail et votre mot de passe.'
+            : e.message;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {

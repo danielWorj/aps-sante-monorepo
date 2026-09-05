@@ -29,30 +29,52 @@
 //     supprimer [_StockageSession] et se contenter de l'état mémoire
 //     (perte de session au redémarrage).
 //
-// ⚠️ Réutilise l'`apiClientProvider` partagé déclaré dans
-// api_client.dart (exactement comme le fait rendez_vous_controller.dart)
-// plutôt que d'en redéclarer un ici : deux ApiClient distincts
-// casseraient le partage d'état HTTP entre les modules.
+// ⚠️ Ce module NE réutilise PAS `apiClientProvider` (api_client.dart) :
+// [AuthentificationRepository] a été refactorisé pour parler HTTP
+// directement (voir son en-tête) et attend un `http.Client`, alors
+// que `apiClientProvider` fournit un `ApiClient` — deux types
+// distincts et incompatibles (c'était la source de l'erreur de
+// compilation "ApiClient can't be assigned to Client?"). De plus,
+// [AuthentificationRepository] a un besoin STRUCTUREL que ApiClient
+// ne couvre pas : un client HTTP qui PERSISTE les cookies d'un appel
+// à l'autre, pour que le cookie httpOnly du refresh token survive
+// entre POST /auth/login et POST /auth/refresh (voir la note en tête
+// de authentification_repository.dart). D'où [_authHttpClientProvider]
+// ci-dessous, dédié à ce module.
 
 import 'dart:async';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:riverpod/legacy.dart';
+import 'package:http/http.dart' as http;
 import 'package:riverpod/riverpod.dart';
 
 import '../models/authentification_models.dart';
 import '../repositories/authentification_repository.dart';
-import '../utils/api_client.dart' show apiClientProvider;
+import '../utils/cookie_http_client.dart';
 
 /* =========================================================================
  * Dépendances
  * ========================================================================= */
 
+/// Client HTTP dédié au module authentification : DOIT être un client
+/// qui persiste les cookies entre appels (voir note ci-dessus). Fermé
+/// automatiquement quand le provider est disposé.
+///
+/// ⚠️ Flutter Web : [CookieHttpClient] importe dart:io et ne compile
+/// pas tel quel côté web. Sur une cible Web, remplacer cette
+/// implémentation par `http.BrowserClient()..withCredentials = true`
+/// (le navigateur gère alors les cookies lui-même).
+final _authHttpClientProvider = Provider<http.Client>((ref) {
+  final client = CookieHttpClient();
+  ref.onDispose(client.close);
+  return client;
+});
+
 /// Repository ré-exposé ici pour que les widgets n'aient jamais besoin
 /// d'importer authentification_repository.dart directement.
 final authentificationRepositoryProvider =
 Provider<AuthentificationRepository>((ref) {
-  return AuthentificationRepository(ref.watch(apiClientProvider));
+  return AuthentificationRepository(ref.watch(_authHttpClientProvider));
 });
 
 /// Stockage sécurisé de l'access token uniquement (jamais le refresh
@@ -131,7 +153,7 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
   /// `resultat.sessionOuverte` est vraie (session ouverte, état déjà
   /// mis à jour).
   Future<ConnexionResultat> connecter(ConnexionPayload payload) async {
-    state = const AsyncLoading<SessionUtilisateur?>().copyWithPrevious(state);
+    state = const AsyncLoading<SessionUtilisateur?>();
     try {
       final resultat = await ref
           .read(authentificationRepositoryProvider)
@@ -151,8 +173,7 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
       }
       return resultat;
     } catch (e, pile) {
-      state = AsyncError<SessionUtilisateur?>(e, pile)
-          .copyWithPrevious(state);
+      state = AsyncError<SessionUtilisateur?>(e, pile);
       rethrow;
     }
   }
@@ -166,7 +187,7 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
       ChangementMotDePasseInitialPayload payload, {
         required String tokenChangementMotDePasse,
       }) async {
-    state = const AsyncLoading<SessionUtilisateur?>().copyWithPrevious(state);
+    state = const AsyncLoading<SessionUtilisateur?>();
     try {
       final resultat = await ref
           .read(authentificationRepositoryProvider)
@@ -183,8 +204,7 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
       state = AsyncData(session);
       return resultat;
     } catch (e, pile) {
-      state = AsyncError<SessionUtilisateur?>(e, pile)
-          .copyWithPrevious(state);
+      state = AsyncError<SessionUtilisateur?>(e, pile);
       rethrow;
     }
   }
@@ -228,7 +248,7 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
   /// l'utilisateur si besoin, mais l'état local est déjà nettoyé avant.
   Future<void> deconnecter() async {
     final session = state.value;
-    state = const AsyncLoading<SessionUtilisateur?>().copyWithPrevious(state);
+    state = const AsyncLoading<SessionUtilisateur?>();
 
     Object? erreurServeur;
     StackTrace? pileServeur;
@@ -261,7 +281,7 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
     final session = state.value;
     if (session == null) return;
 
-    state = const AsyncLoading<SessionUtilisateur?>().copyWithPrevious(state);
+    state = const AsyncLoading<SessionUtilisateur?>();
     state = await AsyncValue.guard(() async {
       final resultat = await appelAuthentifie(
             (token) => ref.read(authentificationRepositoryProvider).profil(
@@ -396,7 +416,7 @@ class InscriptionController extends AsyncNotifier<InscriptionResultat?> {
   InscriptionResultat? build() => null;
 
   Future<void> soumettre(InscriptionPayload payload) async {
-    state = const AsyncLoading<InscriptionResultat?>().copyWithPrevious(state);
+    state = const AsyncLoading<InscriptionResultat?>();
     state = await AsyncValue.guard(
           () => ref.read(authentificationRepositoryProvider).inscrire(payload),
     );
@@ -423,7 +443,7 @@ class CreationCompteAdministreController
   InscriptionResultat? build() => null;
 
   Future<void> soumettre(CreerCompteAdministrePayload payload) async {
-    state = const AsyncLoading<InscriptionResultat?>().copyWithPrevious(state);
+    state = const AsyncLoading<InscriptionResultat?>();
     state = await AsyncValue.guard(
           () => ref.read(sessionControllerProvider.notifier).appelAuthentifie(
             (token) => ref
@@ -454,7 +474,7 @@ class AmorcageSuperAdminController extends AsyncNotifier<InscriptionResultat?> {
   InscriptionResultat? build() => null;
 
   Future<void> soumettre(AmorcageSuperAdminPayload payload) async {
-    state = const AsyncLoading<InscriptionResultat?>().copyWithPrevious(state);
+    state = const AsyncLoading<InscriptionResultat?>();
     state = await AsyncValue.guard(
           () => ref.read(authentificationRepositoryProvider).amorcerSuperAdmin(payload),
     );

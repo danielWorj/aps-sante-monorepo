@@ -47,8 +47,8 @@ import '../../models/centresante_models.dart';
 import 'publicAcceuil.dart';
 import 'Medecinpage.dart';
 import 'Assurancepage.dart';
-import 'apropos.dart';
 import '../../repositories/centresante_repository.dart';
+import '../../utils/mon_espace_navigation.dart';
 
 
 /// Écran « Trouver une structure de santé » — annuaire des hôpitaux,
@@ -144,11 +144,8 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
           MaterialPageRoute(builder: (_) => const AssurancePage()),
         );
         break;
-      case 3: // À propos
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AProposPage()),
-        );
+      case 3: // Mon espace
+        ouvrirMonEspace(context);
         break;
     }
   }

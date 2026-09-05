@@ -9,6 +9,7 @@ import '../../components/components.dart';
 // Écrans réels du projet, pour que la barre de navigation basse navigue
 // vraiment (et pas seulement change l'icône active). Adaptez ces chemins
 // si `apropos.dart` n'est pas placé dans le même dossier que ces fichiers.
+import '../../utils/mon_espace_navigation.dart';
 import 'publicAcceuil.dart';
 import 'Medecinpage.dart';
 import 'Assurancepage.dart';
@@ -57,7 +58,8 @@ class _AProposPageState extends State<AProposPage> {
           MaterialPageRoute(builder: (_) => const AssurancePage()),
         );
         break;
-      case 3: // À propos : déjà sur cet écran.
+      case 3: // Mon espace
+        ouvrirMonEspace(context);
         break;
     }
   }

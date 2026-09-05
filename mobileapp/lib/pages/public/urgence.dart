@@ -23,6 +23,7 @@
 
 import 'package:flutter/material.dart';
 import '../../components/components.dart';
+import '../../utils/mon_espace_navigation.dart';
 import 'publicAcceuil.dart';
 import 'Medecinpage.dart';
 import 'Assurancepage.dart';
@@ -146,10 +147,8 @@ class _UrgencePageState extends State<UrgencePage> {
           MaterialPageRoute(builder: (_) => const AssurancePage()),
         );
         break;
-      case 3: // À propos — aucun écran fourni pour l'instant.
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Écran « À propos » bientôt disponible.')),
-        );
+      case 3: // Mon espace
+        ouvrirMonEspace(context);
         break;
     }
   }
