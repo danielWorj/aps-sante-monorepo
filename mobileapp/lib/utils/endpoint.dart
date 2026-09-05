@@ -125,6 +125,22 @@ class ApiRealEndpoints {
   static String publicitesParCodePage(String code) =>
       '${baseUrl}/publicites/par-page/$code';
 
+  // ─── Patients (fiche patient — module transverse "Gestion des
+  // médecins") ────────────────────────────────────────────────────────
+  // Voir patient.routes.js : contrairement à /medecins (annuaire
+  // public), TOUTES les routes ci-dessous exigent déjà "authentifier"
+  // côté backend — jamais de route publique ici. L'autorisation fine
+  // (patient concerné / médecin ayant un rendez-vous avec lui /
+  // admin-superadmin) est vérifiée côté serveur, voir
+  // patient_repository.dart.
+  // ⚠️ "/patients/mon-profil" est déclarée AVANT "/patients/:id" côté
+  // backend pour éviter que "mon-profil" ne soit capturé comme :id
+  // (même piège que /medecins/mon-profil).
+  static const String monProfilPatient = '${baseUrl}/patients/mon-profil';
+  static String patient(String id) => '${baseUrl}/patients/$id';
+  static String rendezVousPatient(String id) =>
+      '${baseUrl}/patients/$id/rendez-vous';
+
   // ─── Visio (téléconsultation Jitsi) ────────────────────────────────
   // Voir visio.routes.js / visio.controller.js : authentifié, réservé
   // au médecin ou au patient du rendez-vous concerné.
