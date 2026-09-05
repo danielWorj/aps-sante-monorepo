@@ -27,6 +27,11 @@ import '../../../models/rendez_vous_models.dart';
 ///   Un patient ne peut ni confirmer ni refuser une demande (ça, c'est
 ///   le rôle du médecin) : "Annuler" et "Contester" remplacent donc
 ///   "Confirmer"/"Refuser" de l'espace médecin.
+///
+/// ⚠️ Ce widget ne gère plus sa propre barre de navigation basse :
+/// il est destiné à être affiché comme un onglet parmi d'autres à
+/// l'intérieur de `PatientHomeShell`, qui est seul responsable du
+/// `Scaffold` et de `PatientBottomNavigationBar`.
 /// ============================================================
 
 /// Page principale
@@ -41,14 +46,6 @@ class PortailPatientRdv extends ConsumerStatefulWidget {
 class _PortailPatientRdvState extends ConsumerState<PortailPatientRdv>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  int _navIndex = 1;
-
-  static const List<AppBottomNavItem> _navItems = [
-    AppBottomNavItem(label: 'Accueil', icon: Icons.home_rounded),
-    AppBottomNavItem(label: 'Rendez-vous', icon: Icons.event_note_outlined),
-    AppBottomNavItem(label: 'Médecins', icon: Icons.medical_services_outlined),
-    AppBottomNavItem(label: 'Profil', icon: Icons.person_outline),
-  ];
 
   @override
   void initState() {
@@ -78,58 +75,36 @@ class _PortailPatientRdvState extends ConsumerState<PortailPatientRdv>
     // Observer l'état du patient connecté
     final patientProfile = ref.watch(authUtilisateurProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.paper,
-      extendBody: true,
-      body: SafeArea(
-        child: Stack(
+    // Pas de Scaffold/SafeArea/AppBottomNav ici : ce widget est un
+    // onglet du shell (PatientHomeShell), qui fournit déjà le
+    // Scaffold et la barre de navigation basse.
+    return Container(
+      color: AppColors.paper,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const _PageHead(),
-                  // Afficher le bandeau du patient connecté
-                  _PatientStrip(patient: patientProfile),
-                  const SizedBox(height: 2),
-                  // Statistiques (dynamiques basées sur les RDV récupérés)
-                  _StatLine(ref: ref),
-                  const SizedBox(height: 2),
-                  _SegmentedTabs(controller: _tabController),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: MediaQuery.of(context).size.height,
-                    child: TabBarView(
-                      controller: _tabController,
-                      physics: const NeverScrollableScrollPhysics(),
-                      children: const [
-                        _PanelAvenir(),
-                        _PanelAttente(),
-                        _PanelTermines(),
-                        _PanelAnnules(),
-                      ],
-                    ),
-                  ),
+            const _PageHead(),
+            // Afficher le bandeau du patient connecté
+            _PatientStrip(patient: patientProfile),
+            const SizedBox(height: 2),
+            // Statistiques (dynamiques basées sur les RDV récupérés)
+            _StatLine(ref: ref),
+            const SizedBox(height: 2),
+            _SegmentedTabs(controller: _tabController),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: MediaQuery.of(context).size.height,
+              child: TabBarView(
+                controller: _tabController,
+                physics: const NeverScrollableScrollPhysics(),
+                children: const [
+                  _PanelAvenir(),
+                  _PanelAttente(),
+                  _PanelTermines(),
+                  _PanelAnnules(),
                 ],
-              ),
-            ),
-            Positioned(
-              left: 10,
-              right: 10,
-              bottom: 10,
-              child: AppBottomNav(
-                items: _navItems,
-                currentIndex: _navIndex,
-                onTap: (i) => setState(() => _navIndex = i),
-                onRdvPressed: () {
-                  // TODO: Nouveau rendez-vous — naviguer vers la
-                  // recherche de médecin (Medecinpage.dart), puis vers
-                  // Rendezvous.dart (RendezVousPage) une fois le
-                  // praticien choisi.
-                },
-                rdvLabel: 'Nouveau',
-                rdvIcon: Icons.add_rounded,
               ),
             ),
           ],

@@ -6,6 +6,7 @@ import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/authentification_models.dart';
 import '../../../models/rendez_vous_models.dart';
+import '../../../utils/api_client.dart' show ApiException;
 
 /// ============================================================
 /// portail-medecin-rdv.dart - VERSION ADAPTÉE
@@ -17,6 +18,11 @@ import '../../../models/rendez_vous_models.dart';
 /// - SessionController fournit le token du médecin
 /// - ListeRendezVousController récupère les RDV via l'API
 /// - Filtrage par statut dans les panels
+///
+/// ⚠️ Ce widget ne gère plus sa propre barre de navigation basse :
+/// il est destiné à être affiché comme un onglet parmi d'autres à
+/// l'intérieur de `MedecinHomeShell`, qui est seul responsable du
+/// `Scaffold` et de `MedecinBottomNavigationBar`.
 /// ============================================================
 
 /// Page principale
@@ -31,14 +37,6 @@ class PortailMedecinRdv extends ConsumerStatefulWidget {
 class _PortailMedecinRdvState extends ConsumerState<PortailMedecinRdv>
     with SingleTickerProviderStateMixin {
     late final TabController _tabController;
-    int _navIndex = 1;
-
-    static const List<AppBottomNavItem> _navItems = [
-        AppBottomNavItem(label: 'Accueil', icon: Icons.home_rounded),
-        AppBottomNavItem(label: 'Rendez-vous', icon: Icons.event_note_outlined),
-        AppBottomNavItem(label: 'Patients', icon: Icons.people_alt_outlined),
-        AppBottomNavItem(label: 'Profil', icon: Icons.person_outline),
-    ];
 
     @override
     void initState() {
@@ -68,55 +66,40 @@ class _PortailMedecinRdvState extends ConsumerState<PortailMedecinRdv>
         // Observer l'état du médecin connecté
         final medecinProfile = ref.watch(authUtilisateurProvider);
 
-        return Scaffold(
-            backgroundColor: AppColors.paper,
-            extendBody: true,
-            body: SafeArea(
-                child: Stack(
+        // Pas de Scaffold/SafeArea/AppBottomNav ici : ce widget est un
+        // onglet du shell (MedecinHomeShell), qui fournit déjà le
+        // Scaffold et la barre de navigation basse.
+        return Container(
+            color: AppColors.paper,
+            child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                        SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                        const _PageHead(),
+                        // Afficher le bandeau du médecin connecté
+                        _DoctorStrip(medecin: medecinProfile),
+                        const SizedBox(height: 2),
+                        // Statistiques (dynamiques basées sur les RDV récupérés)
+                        _StatLine(ref: ref),
+                        const SizedBox(height: 2),
+                        _SegmentedTabs(controller: _tabController),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                            height: MediaQuery.of(context).size.height,
+                            child: TabBarView(
+                                controller: _tabController,
+                                physics: const NeverScrollableScrollPhysics(),
                                 children: [
-                                    const _PageHead(),
-                                    // Afficher le bandeau du médecin connecté
-                                    _DoctorStrip(medecin: medecinProfile),
-                                    const SizedBox(height: 2),
-                                    // Statistiques (dynamiques basées sur les RDV récupérés)
-                                    _StatLine(ref: ref),
-                                    const SizedBox(height: 2),
-                                    _SegmentedTabs(controller: _tabController),
-                                    const SizedBox(height: 16),
-                                    SizedBox(
-                                        height: MediaQuery.of(context).size.height,
-                                        child: TabBarView(
-                                            controller: _tabController,
-                                            physics: const NeverScrollableScrollPhysics(),
-                                            children: const [
-                                                _PanelAvenir(),
-                                                _PanelAttente(),
-                                                _PanelTermines(),
-                                                _PanelAnnules(),
-                                            ],
-                                        ),
+                                    const _PanelConfirme(),
+                                    // Après confirmation d'une demande, on bascule
+                                    // automatiquement sur l'onglet "Confirmé" (index 0).
+                                    _PanelAttente(
+                                        onConfirme: () => _tabController.animateTo(0),
                                     ),
+                                    const _PanelTermines(),
+                                    const _PanelAnnules(),
                                 ],
-                            ),
-                        ),
-                        Positioned(
-                            left: 10,
-                            right: 10,
-                            bottom: 10,
-                            child: AppBottomNav(
-                                items: _navItems,
-                                currentIndex: _navIndex,
-                                onTap: (i) => setState(() => _navIndex = i),
-                                onRdvPressed: () {
-                                    // TODO: Nouveau rendez-vous
-                                },
-                                rdvLabel: 'Nouveau',
-                                rdvIcon: Icons.add_rounded,
                             ),
                         ),
                     ],
@@ -369,24 +352,22 @@ class _SegmentedTabs extends ConsumerWidget {
 
         final tabs = rdvAsync.when(
             loading: () => const [
-                _TabDef(label: 'À venir', count: null),
+                _TabDef(label: 'Confirmé', count: null),
                 _TabDef(label: 'En attente', count: null),
                 _TabDef(label: 'Terminés', count: null),
                 _TabDef(label: 'Annulés', count: null),
             ],
             error: (_, __) => const [
-                _TabDef(label: 'À venir', count: 0),
+                _TabDef(label: 'Confirmé', count: 0),
                 _TabDef(label: 'En attente', count: 0),
                 _TabDef(label: 'Terminés', count: 0),
                 _TabDef(label: 'Annulés', count: 0),
             ],
             data: (rdvList) => [
                 _TabDef(
-                    label: 'À venir',
+                    label: 'Confirmé',
                     count: rdvList
-                        .where((r) =>
-                    r.statut == StatutRendezVous.confirme &&
-                        r.dateCreneau.isAfter(DateTime.now()))
+                        .where((r) => r.statut == StatutRendezVous.confirme)
                         .length,
                 ),
                 _TabDef(
@@ -463,7 +444,7 @@ class _SegmentedTabs extends ConsumerWidget {
                                                         ),
                                                         decoration: BoxDecoration(
                                                             color: active
-                                                                ? Colors.white.withOpacity(0.22)
+                                                                ? Colors.white.withValues(alpha: 0.22)
                                                                 : AppColors.green100,
                                                             borderRadius: BorderRadius.circular(100),
                                                         ),
@@ -560,9 +541,9 @@ class _SectionHead extends StatelessWidget {
 /// PANELS - ConsumerWidget pour accéder aux données Riverpod
 /// ════════════════════════════════════════════════════════════
 
-/// Panneau "À venir"
-class _PanelAvenir extends ConsumerWidget {
-    const _PanelAvenir();
+/// Panneau "Confirmé"
+class _PanelConfirme extends ConsumerWidget {
+    const _PanelConfirme();
 
     @override
     Widget build(BuildContext context, WidgetRef ref) {
@@ -572,21 +553,19 @@ class _PanelAvenir extends ConsumerWidget {
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, stack) => Center(child: Text('Erreur: $err')),
             data: (rdvList) {
-                // Filtrer: RDV confirmés à venir, groupés par date
-                final rdvAvenir = rdvList
-                    .where((r) =>
-                r.statut == StatutRendezVous.confirme &&
-                    r.dateCreneau.isAfter(DateTime.now()))
+                // Filtrer: RDV confirmés (peu importe la date), groupés par date
+                final rdvConfirmes = rdvList
+                    .where((r) => r.statut == StatutRendezVous.confirme)
                     .toList();
 
-                if (rdvAvenir.isEmpty) {
+                if (rdvConfirmes.isEmpty) {
                     return const Center(
-                        child: Text('Aucun rendez-vous à venir'),
+                        child: Text('Aucun rendez-vous confirmé'),
                     );
                 }
 
                 // Grouper par date
-                final groupesParDate = _grouperParDate(rdvAvenir);
+                final groupesParDate = _grouperParDate(rdvConfirmes);
 
                 return SingleChildScrollView(
                     child: Column(
@@ -618,9 +597,9 @@ class _PanelAvenir extends ConsumerWidget {
                                                     ? 'Téléconsultation'
                                                     : 'Cabinet',
                                                 bottom: _Frow(
-                                                    badge: BadgeChip(
-                                                        label: 'En attente',
-                                                        style: BadgeChipStyle.amber,
+                                                    badge: const BadgeChip(
+                                                        label: 'Confirmé',
+                                                        style: BadgeChipStyle.green,
                                                     ),
                                                     action: RdvButton(
                                                         label: rdv.typeRdv == TypeRdv.teleconsultation
@@ -658,7 +637,11 @@ class _PanelAvenir extends ConsumerWidget {
 
 /// Panneau "En attente"
 class _PanelAttente extends ConsumerWidget {
-    const _PanelAttente();
+    /// Appelé après confirmation réussie d'une demande, pour permettre
+    /// au parent de basculer sur l'onglet "Confirmé".
+    final VoidCallback? onConfirme;
+
+    const _PanelAttente({this.onConfirme});
 
     @override
     Widget build(BuildContext context, WidgetRef ref) {
@@ -706,23 +689,9 @@ class _PanelAttente extends ConsumerWidget {
                                         ? 'Téléconsultation'
                                         : 'Cabinet',
                                     bottom: _Frow(
-                                        action: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                                RdvButton(
-                                                    label: 'Confirmer',
-                                                    onPressed: () {
-                                                        // TODO: Confirmer le RDV
-                                                    },
-                                                ),
-                                                const SizedBox(width: 8),
-                                                _DangerOutlineButton(
-                                                    label: 'Refuser',
-                                                    onPressed: () {
-                                                        // TODO: Refuser le RDV
-                                                    },
-                                                ),
-                                            ],
+                                        action: _PendingRdvActions(
+                                            rdv: rdv,
+                                            onConfirme: onConfirme,
                                         ),
                                     ),
                                 );
@@ -731,6 +700,99 @@ class _PanelAttente extends ConsumerWidget {
                     ),
                 );
             },
+        );
+    }
+}
+
+/// ════════════════════════════════════════════════════════════
+/// Actions "Confirmer" / "Refuser" d'une demande en attente
+/// ════════════════════════════════════════════════════════════
+///
+/// PATCH /rendez-vous/:id/statut via [ActionsRendezVousController].
+/// Un état local (`_enCours`) affiche un loader pendant l'appel et
+/// évite les double-taps ; en cas de succès de la confirmation, le
+/// parent est notifié via [onConfirme] pour basculer l'utilisateur
+/// sur l'onglet "Confirmé".
+class _PendingRdvActions extends ConsumerStatefulWidget {
+    final RendezVous rdv;
+    final VoidCallback? onConfirme;
+
+    const _PendingRdvActions({required this.rdv, this.onConfirme});
+
+    @override
+    ConsumerState<_PendingRdvActions> createState() =>
+        _PendingRdvActionsState();
+}
+
+class _PendingRdvActionsState extends ConsumerState<_PendingRdvActions> {
+    bool _enCours = false;
+
+    Future<void> _changerStatut(StatutRendezVous nouveauStatut) async {
+        if (_enCours) return;
+
+        final token = ref.read(authTokenProvider);
+        if (token == null) return;
+
+        setState(() => _enCours = true);
+        try {
+            await ref.read(actionsRendezVousControllerProvider.notifier).changerStatut(
+                widget.rdv.rdvId,
+                payload: ChangerStatutRendezVousPayload(statut: nouveauStatut),
+                token: token,
+            );
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                    content: Text(
+                        nouveauStatut == StatutRendezVous.confirme
+                            ? 'Rendez-vous confirmé.'
+                            : 'Rendez-vous refusé.',
+                    ),
+                ),
+            );
+            // Seule la confirmation fait basculer vers "Confirmé" — un
+            // refus reste visible dans l'onglet "Annulés".
+            if (nouveauStatut == StatutRendezVous.confirme) {
+                widget.onConfirme?.call();
+            }
+        } on ApiException catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text(e.message)));
+        } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text('Erreur : $e')));
+        } finally {
+            if (mounted) setState(() => _enCours = false);
+        }
+    }
+
+    @override
+    Widget build(BuildContext context) {
+        if (_enCours) {
+            return const SizedBox(
+                height: 32,
+                width: 32,
+                child: Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            );
+        }
+
+        return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+                RdvButton(
+                    label: 'Confirmer',
+                    onPressed: () => _changerStatut(StatutRendezVous.confirme),
+                ),
+                const SizedBox(width: 8),
+                _DangerOutlineButton(
+                    label: 'Refuser',
+                    onPressed: () => _changerStatut(StatutRendezVous.annule),
+                ),
+            ],
         );
     }
 }

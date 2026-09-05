@@ -33,6 +33,11 @@ import '../../../repositories/medecin_repository.dart' show ApiException;
 ///   (`ModificationMedecinController.modifier`) une fois les écrans
 ///   d'édition construits.
 ///
+/// ⚠️ Ce widget ne gère plus sa propre barre de navigation basse :
+/// il est destiné à être affiché comme un onglet parmi d'autres à
+/// l'intérieur de `MedecinHomeShell`, qui est seul responsable du
+/// `Scaffold` et de `MedecinBottomNavigationBar`.
+///
 /// ⚠️ Périmètre des données réellement disponibles ici (voir
 /// medecin_models.dart / medecin_repository.dart / medecin_controller.dart) :
 /// - Identité, spécialité, ville/pays d'exercice, numéro d'ordre,
@@ -64,19 +69,6 @@ class PortailMedecinProfil extends ConsumerStatefulWidget {
 class _PortailMedecinProfilState extends ConsumerState<PortailMedecinProfil>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-
-  /// Rubrique active de la barre de navigation basse (3 = "Profil",
-  /// puisque c'est l'écran courant).
-  int _navIndex = 3;
-
-  /// Rubriques de l'espace médecin, identiques à celles utilisées
-  /// dans `portail-medecin-rdv.dart`.
-  static const List<AppBottomNavItem> _navItems = [
-    AppBottomNavItem(label: 'Accueil', icon: Icons.home_rounded),
-    AppBottomNavItem(label: 'Rendez-vous', icon: Icons.event_note_outlined),
-    AppBottomNavItem(label: 'Patients', icon: Icons.people_alt_outlined),
-    AppBottomNavItem(label: 'Profil', icon: Icons.person_outline),
-  ];
 
   @override
   void initState() {
@@ -116,31 +108,12 @@ class _PortailMedecinProfilState extends ConsumerState<PortailMedecinProfil>
   Widget build(BuildContext context) {
     final profilAsync = ref.watch(monProfilMedecinControllerProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.paper,
-      extendBody: true,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            _buildCorps(context, profilAsync),
-            Positioned(
-              left: 10,
-              right: 10,
-              bottom: 10,
-              child: AppBottomNav(
-                items: _navItems,
-                currentIndex: _navIndex,
-                onTap: (i) => setState(() => _navIndex = i),
-                onRdvPressed: () {
-                  // TODO: brancher le flux "Nouveau rendez-vous".
-                },
-                rdvLabel: 'Nouveau',
-                rdvIcon: Icons.add_rounded,
-              ),
-            ),
-          ],
-        ),
-      ),
+    // Pas de Scaffold/SafeArea/AppBottomNav ici : ce widget est un
+    // onglet du shell (MedecinHomeShell), qui fournit déjà le
+    // Scaffold et la barre de navigation basse.
+    return Container(
+      color: AppColors.paper,
+      child: _buildCorps(context, profilAsync),
     );
   }
 
@@ -173,7 +146,7 @@ class _PortailMedecinProfilState extends ConsumerState<PortailMedecinProfil>
       onRefresh: _chargerProfil,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
