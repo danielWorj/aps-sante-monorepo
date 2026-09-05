@@ -38,9 +38,43 @@ void ouvrirMonEspace(BuildContext context) {
   final container = ProviderScope.containerOf(context, listen: false);
   final session = container.read(sessionControllerProvider).value;
 
-  final Widget destination = session != null
-      ? HomeRouterForRole(role: session.utilisateur.role)
-      : const LoginScreen();
+  if (session != null) {
+    // Déjà connecté : on ouvre directement son espace personnel.
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => HomeRouterForRole(role: session.utilisateur.role),
+      ),
+    );
+    return;
+  }
 
-  Navigator.push(context, MaterialPageRoute(builder: (_) => destination));
+  // Non connecté : on ouvre l'écran de connexion, en lui fournissant
+  // `onLoginSuccess`. Sans ce callback, LoginScreen n'a AUCUN moyen de
+  // savoir qu'elle doit naviguer une fois la session ouverte (elle ne
+  // fait que déclencher `SessionController.connecter`, qui met à jour
+  // `sessionControllerProvider`, mais ne navigue jamais elle-même) :
+  // c'était la cause du blocage sur l'écran de login après une
+  // connexion pourtant réussie.
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (routeContext) => LoginScreen(
+        onLoginSuccess: () {
+          final nouvelleSession =
+              container.read(sessionControllerProvider).value;
+          if (nouvelleSession == null) return;
+          // pushReplacement : on remplace l'écran de login par le
+          // "shell" (Scaffold + bottom navigation bar) du rôle
+          // connecté, pour ne pas laisser le login dans l'historique.
+          Navigator.of(routeContext).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) =>
+                  HomeRouterForRole(role: nouvelleSession.utilisateur.role),
+            ),
+          );
+        },
+      ),
+    ),
+  );
 }
