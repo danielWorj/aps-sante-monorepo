@@ -100,7 +100,7 @@ class _PortailPatientRdvState extends ConsumerState<PortailPatientRdv>
                 controller: _tabController,
                 physics: const NeverScrollableScrollPhysics(),
                 children: const [
-                  _PanelAvenir(),
+                  _PanelConfirme(),
                   _PanelAttente(),
                   _PanelTermines(),
                   _PanelAnnules(),
@@ -254,10 +254,8 @@ class _StatLine extends ConsumerWidget {
         child: Text('Erreur: $err', style: const TextStyle(color: Colors.red)),
       ),
       data: (rdvList) {
-        final aVenir = rdvList
-            .where((rdv) =>
-        rdv.statut == StatutRendezVous.confirme &&
-            rdv.dateCreneau.isAfter(DateTime.now()))
+        final confirmes = rdvList
+            .where((rdv) => rdv.statut == StatutRendezVous.confirme)
             .length;
         final enAttente =
             rdvList.where((rdv) => rdv.statut == StatutRendezVous.cree).length;
@@ -268,7 +266,7 @@ class _StatLine extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(4, 2, 4, 14),
           child: Row(
             children: [
-              _stat('$aVenir', 'à venir'),
+              _stat('$confirmes', 'confirmés'),
               const SizedBox(width: 14),
               _sep(),
               const SizedBox(width: 14),
@@ -325,24 +323,22 @@ class _SegmentedTabs extends ConsumerWidget {
 
     final tabs = rdvAsync.when(
       loading: () => const [
-        _TabDef(label: 'À venir', count: null),
+        _TabDef(label: 'Confirmé', count: null),
         _TabDef(label: 'En attente', count: null),
         _TabDef(label: 'Terminés', count: null),
         _TabDef(label: 'Annulés', count: null),
       ],
       error: (_, __) => const [
-        _TabDef(label: 'À venir', count: 0),
+        _TabDef(label: 'Confirmé', count: 0),
         _TabDef(label: 'En attente', count: 0),
         _TabDef(label: 'Terminés', count: 0),
         _TabDef(label: 'Annulés', count: 0),
       ],
       data: (rdvList) => [
         _TabDef(
-          label: 'À venir',
+          label: 'Confirmé',
           count: rdvList
-              .where((r) =>
-          r.statut == StatutRendezVous.confirme &&
-              r.dateCreneau.isAfter(DateTime.now()))
+              .where((r) => r.statut == StatutRendezVous.confirme)
               .length,
         ),
         _TabDef(
@@ -517,9 +513,9 @@ class _SectionHead extends StatelessWidget {
 /// PANELS - ConsumerWidget pour accéder aux données Riverpod
 /// ════════════════════════════════════════════════════════════
 
-/// Panneau "À venir" (RDV confirmés, à venir)
-class _PanelAvenir extends ConsumerWidget {
-  const _PanelAvenir();
+/// Panneau "Confirmé" (RDV confirmés par le médecin)
+class _PanelConfirme extends ConsumerWidget {
+  const _PanelConfirme();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -529,19 +525,17 @@ class _PanelAvenir extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, stack) => Center(child: Text('Erreur: $err')),
       data: (rdvList) {
-        final rdvAvenir = rdvList
-            .where((r) =>
-        r.statut == StatutRendezVous.confirme &&
-            r.dateCreneau.isAfter(DateTime.now()))
+        final rdvConfirmes = rdvList
+            .where((r) => r.statut == StatutRendezVous.confirme)
             .toList();
 
-        if (rdvAvenir.isEmpty) {
+        if (rdvConfirmes.isEmpty) {
           return const Center(
-            child: Text('Aucun rendez-vous à venir'),
+            child: Text('Aucun rendez-vous confirmé'),
           );
         }
 
-        final groupesParDate = _grouperParDate(rdvAvenir);
+        final groupesParDate = _grouperParDate(rdvConfirmes);
 
         return SingleChildScrollView(
           child: Column(

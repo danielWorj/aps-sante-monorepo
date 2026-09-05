@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobileapp/pages/portails/patient/portail-patient-profil.dart';
 
 import '../../../components/navigation/patient-bottom-navigation.dart';
 import 'portail-patient-rdv.dart';
@@ -25,7 +26,7 @@ class _PatientHomeShellState extends State<PatientHomeShell> {
   static const _pages = <Widget>[
     Center(child: Text('Accueil patient')), // TODO: écran réel "Accueil"
     PortailPatientRdv(),
-    Center(child: Text('Profil')), // TODO: créer PortailPatientProfil
+    PortailPatientProfil(), // TODO: créer PortailPatientProfil
   ];
 
   @override
