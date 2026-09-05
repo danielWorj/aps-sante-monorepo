@@ -4,8 +4,10 @@
 // Jitsi), en miroir de visio_repository.dart (voir son en-tête) et de
 // visio_models.dart.
 //
-// Comme [ActionsRendezVousController] : ce fichier ne parle jamais
-// HTTP directement — il s'appuie uniquement sur [VisioRepository].
+// Comme [MedecinController] : ce fichier ne parle jamais HTTP
+// directement — il s'appuie uniquement sur [VisioRepository], qui
+// gère lui-même son client HTTP (package `http`) et ses URLs via
+// ApiRealEndpoints (endpoint.dart), sans passer par ApiClient.
 //
 // Règle du token — même principe que rendez_vous_controller.dart : la
 // route POST /visio/token exige déjà "authentifier" côté backend (voir
@@ -22,20 +24,16 @@ import 'package:riverpod/riverpod.dart';
 
 import '../models/visio_models.dart';
 import '../repositories/visio_repository.dart';
-// Réutilise l'unique instance d'[ApiClient] déjà déclarée dans
-// api_client.dart plutôt que d'en redéclarer une seconde ici (deux
-// `apiClientProvider` distincts casseraient le partage d'état HTTP —
-// timeout, `http.Client` sous-jacent — entre les modules).
-import '../utils/api_client.dart' show apiClientProvider;
 
 /* =========================================================================
  * Dépendances partagées
  * ========================================================================= */
 
 /// Repository ré-exposé ici pour que les widgets n'aient jamais besoin
-/// d'importer visio_repository.dart directement.
+/// d'importer visio_repository.dart directement. Ne dépend plus
+/// d'[ApiClient] : [VisioRepository] gère son propre client HTTP.
 final visioRepositoryProvider = Provider<VisioRepository>((ref) {
-  return VisioRepository(ref.watch(apiClientProvider));
+  return VisioRepository();
 });
 
 /* =========================================================================
@@ -57,7 +55,7 @@ class VisioController extends AsyncNotifier<VisioSession?> {
   /// [rdvId] : identifiant du rendez-vous de téléconsultation
   /// concerné (voir [RendezVous.rdvId] dans rendez_vous_models.dart).
   ///
-  /// Lève une [ApiException] (voir api_client.dart) :
+  /// Lève une [ApiException] (voir visio_repository.dart) :
   /// - 400 si ce rendez-vous n'est pas une téléconsultation, ou si son
   ///   statut ne permet pas encore la visio (voir
   ///   STATUTS_AUTORISES_VISIO côté backend) ;

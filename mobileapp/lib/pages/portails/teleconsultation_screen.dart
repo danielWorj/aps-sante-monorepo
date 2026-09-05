@@ -36,7 +36,7 @@ import '../../controllers/visio_controller.dart';
 import '../../models/authentification_models.dart';
 import '../../models/rendez_vous_models.dart';
 import '../../models/visio_models.dart';
-import '../../utils/api_client.dart';
+import '../../repositories/visio_repository.dart' show ApiException;
 
 class TeleconsultationScreen extends ConsumerStatefulWidget {
   const TeleconsultationScreen({super.key, required this.rdv});
@@ -155,8 +155,6 @@ class _TeleconsultationScreenState
 
     setState(() => _etat = _EtatEcran.enConference);
     await _jitsiMeet.join(options, listener);
-    setState(() => _etat = _EtatEcran.enConference);
-    await _jitsiMeet.join(options);
   }
 
   void _surFinConference() {
