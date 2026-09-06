@@ -1,6 +1,10 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import heroBg from '../assets/img/med7.jpg';
+import mobileApp from '../assets/img/mobileapp.png';
+
+/* Lien vers le fichier APK — à remplacer par l'URL réelle d'hébergement du fichier */
+const APK_DOWNLOAD_URL = '/downloads/aps.apk';
 
 /* ---------------------------- Petits composants réutilisables ---------------------------- */
 
@@ -900,6 +904,54 @@ export default function Home() {
               <span><span className="cat-title">Assurances</span><span className="cat-sub">Compagnies et courtiers santé</span></span>
               <i className="fa-solid fa-chevron-right" />
             </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================ TÉLÉCHARGER L'APPLICATION ============================ */}
+      <section className="app-promo" id="application">
+        <div className="container-aps">
+          <div className="app-promo-grid">
+            <div>
+              <span className="eyebrow">Application mobile</span>
+              <h2>APS dans votre poche, où que vous soyez</h2>
+              <p className="lead-text">
+                Trouvez un professionnel, prenez rendez-vous et accédez aux numéros d&apos;urgence
+                directement depuis votre téléphone. Téléchargez l&apos;application Android d&apos;APS
+                et gardez votre santé à portée de main.
+              </p>
+
+              <ul className="app-promo-features">
+                <li><i className="fa-solid fa-circle-check" /> Recherche et rendez-vous en quelques secondes</li>
+                <li><i className="fa-solid fa-circle-check" /> Notifications de rappel avant chaque consultation</li>
+                <li><i className="fa-solid fa-circle-check" /> Numéros d&apos;urgence et pharmacies de garde hors ligne</li>
+                <li><i className="fa-solid fa-circle-check" /> Installation directe, sans passer par un store</li>
+              </ul>
+
+              <div className="d-flex gap-3 flex-wrap align-items-center">
+                <a href={APK_DOWNLOAD_URL} download className="btn btn-primary btn-lg-aps app-download-btn">
+                  <i className="fa-solid fa-download" /> Télécharger l&apos;application
+                </a>
+                <span className="app-promo-meta">
+                  <i className="fa-brands fa-android" /> Fichier APK · Android 7.0 ou plus
+                </span>
+              </div>
+            </div>
+
+            <div className="app-mockup-wrap">
+              <div className="app-phone">
+                <div className="app-phone-notch" />
+                <div className="app-phone-screen">
+                  <img src={mobileApp} alt="Aperçu de l'application APS" />
+                </div>
+              </div>
+              <div className="app-badge-float app-badge-security">
+                <i className="fa-solid fa-shield-halved" /> Fichier vérifié
+              </div>
+              <div className="app-badge-float app-badge-rating">
+                <i className="fa-solid fa-star" /> Simple &amp; rapide
+              </div>
+            </div>
           </div>
         </div>
       </section>

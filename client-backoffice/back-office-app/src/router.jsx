@@ -41,6 +41,10 @@ import RendezVous from './pages/RendezVous';
 import AvisPharmacie from './pages/avisPharmacie';
 import Utilisateurs from './pages/Utilisateurs';
 import StructureSante from './pages/StructureSante';
+
+//APK 
+
+import GestionApk from './pages/GestionApk';
 // import Medecin from './pages/Medecin';
 // import StructureSante from './pages/StructureSante';
 // import Pharmacie from './pages/Pharmacie';
@@ -88,6 +92,8 @@ export const router = createBrowserRouter([
           { path: '/ordonnance', element: <Ordonnance /> },
           // RENDEZ VOUS 
           { path: '/rendez-vous', element: <RendezVous /> },
+          // APK
+          { path: '/apk', element: <GestionApk /> },
           //   { path: '/pharmacie', element: <Pharmacie /> },
           //   { path: '/structure-sante', element: <StructureSante /> },
           //   { path: '/profil/:id', element: <ProfilMedecin /> },

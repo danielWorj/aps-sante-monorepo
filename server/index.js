@@ -18,6 +18,8 @@ import patientRoutes from "./src/routes/patient.routes.js";
 import moyenPaiementRoutes from "./src/routes/moyenPaiement.routes.js";
 import visioRoutes from "./src/routes/visio.routes.js";
 import utilisateursRoutes from "./src/routes/utilisateurs.routes.js";
+import gestionApkRoutes from "./src/routes/gestionapk.routes.js"; // Importer les routes de gestion des APKs
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -88,6 +90,8 @@ app.use("/api", patientRoutes);
 app.use("/api", moyenPaiementRoutes);
 app.use("/api", visioRoutes);
 app.use("/api/utilisateurs", utilisateursRoutes);
+app.use("/api/apks", gestionApkRoutes);
+
 // ─── Gestion d'erreurs centralisée ─────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error(err);

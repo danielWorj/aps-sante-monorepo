@@ -1,0 +1,64 @@
+/* src/assets/style/GestionApk.css
+ *
+ * Styles ADDITIFS pour GestionApk.jsx uniquement. Le reste du visuel
+ * (aps-card, aps-kpi, aps-table, aps-badge is-success/is-neutral/
+ * is-danger, aps-notice, aps-search, aps-page-header…) vient déjà de
+ * la feuille de style globale du back-office (voir Medecin.jsx /
+ * RendezVous.jsx, qui la réutilisent sans redéfinition locale) — on
+ * ne redéclare ici QUE ce qui manque :
+ *   1) le "chip" de fichier APK (lien de téléchargement dans la
+ *      table et dans le formulaire) ;
+ *   2) l'atténuation des lignes correspondant à un APK inactif.
+ *
+ * Portée : toutes les règles sont préfixées par .apk-page ou ciblent
+ * des classes spécifiques à ce composant (apk-file-chip…), pour ne
+ * jamais interférer avec les autres pages du back-office.
+ */
+
+/* ────────────────────────── Chip de fichier (table) ────────────────────────── */
+/* Lien de téléchargement du binaire, mis en évidence en police
+   monospace façon "nom de fichier" — cohérent avec .rdv-code-unique
+   dans RendezVous.css pour les identifiants techniques affichés. */
+.apk-file-chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0ea5e9;
+  background-color: #f0f9ff;
+  border: 1px solid #d6ecfa;
+  border-radius: 6px;
+  padding: 4px 8px;
+  text-decoration: none;
+  max-width: 220px;
+}
+
+.apk-file-chip:hover {
+  background-color: #e0f2fe;
+  color: #0284c7;
+}
+
+.apk-file-chip i {
+  flex-shrink: 0;
+}
+
+/* Variante en ligne, sans bordure, utilisée dans le texte d'aide du
+   formulaire (fichier actuel / fichier remplacé). */
+.apk-file-chip-inline {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-weight: 600;
+}
+
+/* ────────────────────────── Lignes inactives ────────────────────────── */
+/* Un APK désactivé n'est plus distribué : on l'atténue légèrement
+   dans le tableau pour le distinguer d'un coup d'œil des versions
+   actives, sans pour autant le masquer (même logique que les
+   rendez-vous "annulé"/"non honoré" dans RendezVous.css). */
+.apk-page .aps-table tbody tr.apk-row-inactive {
+  opacity: 0.7;
+}
+
+.apk-page .aps-table td {
+  vertical-align: middle;
+}
