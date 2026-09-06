@@ -4,6 +4,15 @@
 // mise_en_relation, diagramme 08_annuaire_assurances). Consomme
 // entièrement assuranceService.js — aucun appel réseau direct ici.
 //
+// Reprend le design system partagé du back-office (aps-content,
+// aps-page-header, aps-kpi, aps-card, aps-badge, aps-notice, modales
+// Bootstrap pilotées par état React…), déjà utilisé par RendezVous.jsx,
+// Medecin.jsx et Pharmacie.jsx — remplace l'ancien système de classes
+// "aps-assur-*" propre à cette page, pour que l'annuaire des assurances
+// ait le même look & feel que le reste du back-office. La logique
+// métier (appels service, règles d'accès, formulaires) est inchangée :
+// seule la couche de présentation a été reprise.
+//
 // Règles d'accès rappelées côté UX (le serveur reste la seule source
 // de vérité — voir assuranceService.js) :
 //   service_assurance : GET public · POST tout utilisateur authentifié
@@ -55,6 +64,27 @@ const LIBELLES_TYPE = TYPES_ACTEUR_ASSURANCE.reduce((acc, t) => {
   acc[t.valeur] = t.libelle;
   return acc;
 }, {});
+
+// Couleurs/icônes des badges de statut — même palette aps-badge que
+// Pharmacie.jsx / StructureSante.jsx (is-success / is-warning / is-danger).
+const STATUT_META = {
+  publie: { badge: 'is-success', icone: 'fa-circle-check' },
+  en_cours: { badge: 'is-warning', icone: 'fa-hourglass-half' },
+  non_publie: { badge: 'is-danger', icone: 'fa-circle-xmark' },
+};
+
+const TYPE_META = {
+  compagnie: { icone: 'fa-building-shield' },
+  courtier: { icone: 'fa-user-tie' },
+};
+
+function libelleStatut(valeur) {
+  return LIBELLES_STATUT[valeur] || valeur || '—';
+}
+
+function libelleType(valeur) {
+  return LIBELLES_TYPE[valeur] || valeur || '—';
+}
 
 function donneesFormulaireVides() {
   return {
@@ -123,135 +153,28 @@ function extraireRole(user) {
 }
 
 /* ===================================================================
- * Sous-composants
+ * Modale générique (patron Bootstrap piloté par état React, identique
+ * à RendezVous.jsx / Ordonnance.jsx / Referentiel.jsx).
  * =================================================================== */
 
-function Modale({ titre, taille = 'moyenne', onFermer, children }) {
-  useEffect(() => {
-    function surEchap(e) {
-      if (e.key === 'Escape') onFermer();
-    }
-    document.addEventListener('keydown', surEchap);
-    return () => document.removeEventListener('keydown', surEchap);
-  }, [onFermer]);
-
+function Modal({ id, title, isOpen, onClose, children, footer, large }) {
+  if (!isOpen) return null;
   return (
-    <div
-      className="aps-assur-overlay"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onFermer();
-      }}
-    >
-      <div
-        className={`aps-assur-modale aps-assur-modale-${taille}`}
-        role="dialog"
-        aria-modal="true"
-        aria-label={titre}
-      >
-        <div className="aps-assur-modale-entete">
-          <h2>{titre}</h2>
-          <button
-            type="button"
-            className="aps-assur-modale-fermer"
-            onClick={onFermer}
-            aria-label="Fermer"
-          >
-            ×
-          </button>
-        </div>
-        <div className="aps-assur-modale-corps">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function EtatChargement({ texte }) {
-  return (
-    <div className="aps-assur-etat-chargement">
-      <span className="aps-assur-spinner" aria-hidden="true"></span>
-      <p>{texte}</p>
-    </div>
-  );
-}
-
-function Badge({ type, valeur }) {
-  if (!valeur) return null;
-  if (type === 'statut') {
-    return (
-      <span className={`aps-assur-badge aps-assur-badge-${valeur}`}>
-        {LIBELLES_STATUT[valeur] || valeur}
-      </span>
-    );
-  }
-  return <span className="aps-assur-badge aps-assur-badge-type">{LIBELLES_TYPE[valeur] || valeur}</span>;
-}
-
-function CarteService({ service, peutModifier, peutSupprimer, onVoir, onModifier, onSupprimer, onConfigurer }) {
-  return (
-    <article className={`aps-assur-carte aps-assur-carte-statut-${service.statut_verification || 'defaut'}`}>
-      <div className="aps-assur-carte-image">
-        {service.image_url ? (
-          <img src={service.image_url} alt={service.nom} loading="lazy" />
-        ) : (
-          <div className="aps-assur-carte-image-vide" aria-hidden="true">
-            🛡️
+    <>
+      <div className="modal fade show d-block" id={id} tabIndex="-1" role="dialog">
+        <div className={`modal-dialog${large ? ' modal-lg' : ''}`}>
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">{title}</h5>
+              <button type="button" className="btn-close" onClick={onClose}></button>
+            </div>
+            <div className="modal-body">{children}</div>
+            {footer && <div className="modal-footer">{footer}</div>}
           </div>
-        )}
-        <div className="aps-assur-carte-image-degrade" aria-hidden="true"></div>
-        <div className="aps-assur-carte-badge-statut">
-          <Badge type="statut" valeur={service.statut_verification} />
-        </div>
-        <div className="aps-assur-carte-logo" aria-hidden="true">
-          🛡️
         </div>
       </div>
-      <div className="aps-assur-carte-corps">
-        <div className="aps-assur-carte-entete">
-          <h3 className="aps-assur-carte-nom">{service.nom}</h3>
-          <Badge type="acteur" valeur={service.type_acteur} />
-        </div>
-        <ul className="aps-assur-carte-infos">
-          <li className="aps-assur-carte-meta">
-            <span className="aps-assur-carte-icone" aria-hidden="true">📍</span>
-            <span>
-              {service.ville?.nom || '—'}, {service.pays?.nom || '—'}
-            </span>
-          </li>
-          <li className="aps-assur-carte-meta">
-            <span className="aps-assur-carte-icone" aria-hidden="true">📞</span>
-            <span>{service.telephone || '—'}</span>
-          </li>
-        </ul>
-      </div>
-      <div className="aps-assur-carte-actions">
-        <button
-          type="button"
-          className="aps-assur-btn aps-assur-btn-primary aps-assur-btn-sm"
-          onClick={onVoir}
-        >
-          Voir la fiche
-        </button>
-        {peutModifier && (
-          <button type="button" className="aps-assur-btn aps-assur-btn-ghost aps-assur-btn-sm" onClick={onModifier}>
-            Modifier
-          </button>
-        )}
-        {peutModifier && (
-          <button
-            type="button"
-            className="aps-assur-btn aps-assur-btn-secondary aps-assur-btn-sm"
-            onClick={onConfigurer}
-          >
-            ⚙️ Configurer
-          </button>
-        )}
-        {peutSupprimer && (
-          <button type="button" className="aps-assur-btn aps-assur-btn-danger aps-assur-btn-sm" onClick={onSupprimer}>
-            Supprimer
-          </button>
-        )}
-      </div>
-    </article>
+      <div className="modal-backdrop fade show" onClick={onClose}></div>
+    </>
   );
 }
 
@@ -378,8 +301,7 @@ function ConfigurationModale({ service, onFermer }) {
     setFormActivite((f) => ({ ...f, [name]: value }));
   }
 
-  async function soumettreActivite(e) {
-    e.preventDefault();
+  async function soumettreActivite() {
     setEnvoiActivite(true);
     setErreurFormActivite(null);
     try {
@@ -471,8 +393,7 @@ function ConfigurationModale({ service, onFermer }) {
     setFormOption((f) => ({ ...f, [name]: value }));
   }
 
-  async function soumettreOption(e) {
-    e.preventDefault();
+  async function soumettreOption() {
     setEnvoiOption(true);
     setErreurFormOption(null);
     try {
@@ -532,8 +453,7 @@ function ConfigurationModale({ service, onFermer }) {
     setFormAgence((f) => ({ ...f, [name]: value }));
   }
 
-  async function soumettreAgence(e) {
-    e.preventDefault();
+  async function soumettreAgence() {
     setEnvoiAgence(true);
     setErreurFormAgence(null);
     try {
@@ -564,442 +484,448 @@ function ConfigurationModale({ service, onFermer }) {
   /* ---------------------------- Rendu ---------------------------- */
 
   return (
-    <Modale titre={`Configurer « ${service.nom} »`} taille="grande" onFermer={onFermer}>
-      <div className="aps-assur-onglets">
-        <button
-          type="button"
-          className={`aps-assur-onglet${onglet === 'activites' ? ' aps-assur-onglet-actif' : ''}`}
-          onClick={() => setOnglet('activites')}
-        >
-          Activités{activites.length ? ` (${activites.length})` : ''}
-        </button>
-        <button
-          type="button"
-          className={`aps-assur-onglet${onglet === 'agences' ? ' aps-assur-onglet-actif' : ''}`}
-          onClick={() => setOnglet('agences')}
-        >
-          Agences{agences.length ? ` (${agences.length})` : ''}
-        </button>
-      </div>
-
-      {/* ---------------------------- Onglet Activités ---------------------------- */}
-      {onglet === 'activites' && (
-        <div className="aps-assur-config-panneau">
-          <div className="aps-assur-config-entete">
-            <p className="aps-assur-info">Catalogue des activités proposées par ce service et de leurs options.</p>
+    <>
+      <Modal
+        id="modalConfigurationAssurance"
+        large
+        title={`Configurer « ${service.nom} »`}
+        isOpen
+        onClose={onFermer}
+      >
+        <ul className="nav nav-tabs mb-3">
+          <li className="nav-item">
             <button
               type="button"
-              className="aps-assur-btn aps-assur-btn-primary aps-assur-btn-sm"
-              onClick={ouvrirCreationActivite}
+              className={`nav-link${onglet === 'activites' ? ' active' : ''}`}
+              onClick={() => setOnglet('activites')}
             >
-              + Nouvelle activité
+              Activités{activites.length ? ` (${activites.length})` : ''}
             </button>
-          </div>
+          </li>
+          <li className="nav-item">
+            <button
+              type="button"
+              className={`nav-link${onglet === 'agences' ? ' active' : ''}`}
+              onClick={() => setOnglet('agences')}
+            >
+              Agences{agences.length ? ` (${agences.length})` : ''}
+            </button>
+          </li>
+        </ul>
 
-          {chargementActivites && <EtatChargement texte="Chargement des activités..." />}
-
-          {!chargementActivites && erreurActivites && (
-            <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
-              <p>{erreurActivites}</p>
+        {/* ---------------------------- Onglet Activités ---------------------------- */}
+        {onglet === 'activites' && (
+          <div>
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <p className="aps-text-muted mb-0" style={{ fontSize: 13 }}>
+                Catalogue des activités proposées par ce service et de leurs options.
+              </p>
+              <button type="button" className="btn btn-sm btn-primary" onClick={ouvrirCreationActivite}>
+                <i className="fa-solid fa-plus me-1"></i>Nouvelle activité
+              </button>
             </div>
-          )}
 
-          {!chargementActivites && !erreurActivites && activites.length === 0 && (
-            <div className="aps-assur-etat-vide">Aucune activité pour le moment.</div>
-          )}
+            {chargementActivites && (
+              <div className="text-center py-4">
+                <i className="fa-solid fa-spinner fa-spin"></i>
+              </div>
+            )}
 
-          {!chargementActivites && !erreurActivites && activites.length > 0 && (
-            <ul className="aps-assur-config-liste">
-              {activites.map((a) => (
-                <li key={a.activite_id} className="aps-assur-config-item">
-                  <div className="aps-assur-config-item-entete">
-                    <div>
-                      <strong>{a.titre}</strong>
-                      {a.public_cible && <span className="aps-assur-config-meta"> — {a.public_cible}</span>}
-                      {a.description && <p className="aps-assur-config-desc">{a.description}</p>}
-                    </div>
-                    <div className="aps-assur-config-actions">
-                      <button
-                        type="button"
-                        className="aps-assur-btn aps-assur-btn-ghost aps-assur-btn-sm"
-                        onClick={() => basculerOptions(a.activite_id)}
-                      >
-                        {activiteOuverte === a.activite_id ? 'Masquer les options' : 'Options'}
-                      </button>
-                      <button
-                        type="button"
-                        className="aps-assur-btn aps-assur-btn-ghost aps-assur-btn-sm"
-                        onClick={() => ouvrirEditionActivite(a)}
-                      >
-                        Modifier
-                      </button>
-                      <button
-                        type="button"
-                        className="aps-assur-btn aps-assur-btn-danger aps-assur-btn-sm"
-                        onClick={() => supprimerActiviteHandler(a)}
-                      >
-                        Supprimer
-                      </button>
-                    </div>
-                  </div>
+            {!chargementActivites && erreurActivites && (
+              <div className="aps-notice is-danger mb-3">
+                <i className="fa-solid fa-circle-exclamation"></i>
+                <div>{erreurActivites}</div>
+              </div>
+            )}
 
-                  {activiteOuverte === a.activite_id && (
-                    <div className="aps-assur-config-sous-liste">
-                      <div className="aps-assur-config-entete">
-                        <h5 className="aps-assur-section-titre">Options de l'activité</h5>
-                        <button
-                          type="button"
-                          className="aps-assur-btn aps-assur-btn-secondary aps-assur-btn-sm"
-                          onClick={() => ouvrirCreationOption(a.activite_id)}
-                        >
-                          + Option
-                        </button>
+            {!chargementActivites && !erreurActivites && activites.length === 0 && (
+              <div className="text-center aps-text-muted py-4">Aucune activité pour le moment.</div>
+            )}
+
+            {!chargementActivites && !erreurActivites && activites.length > 0 && (
+              <div className="d-flex flex-column gap-2">
+                {activites.map((a) => (
+                  <div className="aps-card" key={a.activite_id}>
+                    <div className="aps-card__body">
+                      <div className="d-flex align-items-start justify-content-between gap-2 flex-wrap">
+                        <div>
+                          <strong>{a.titre}</strong>
+                          {a.public_cible && <span className="aps-text-muted"> — {a.public_cible}</span>}
+                          {a.description && (
+                            <p className="aps-text-muted mb-0 mt-1" style={{ fontSize: 13 }}>
+                              {a.description}
+                            </p>
+                          )}
+                        </div>
+                        <div className="d-flex gap-1">
+                          <button
+                            className="btn btn-sm btn-light"
+                            title="Options de l'activité"
+                            onClick={() => basculerOptions(a.activite_id)}
+                          >
+                            <i className={`fa-solid ${activiteOuverte === a.activite_id ? 'fa-chevron-up' : 'fa-list'}`}></i>
+                          </button>
+                          <button className="btn btn-sm btn-light" title="Modifier" onClick={() => ouvrirEditionActivite(a)}>
+                            <i className="fa-solid fa-pen"></i>
+                          </button>
+                          <button
+                            className="btn btn-sm btn-light"
+                            title="Supprimer"
+                            onClick={() => supprimerActiviteHandler(a)}
+                          >
+                            <i className="fa-solid fa-trash"></i>
+                          </button>
+                        </div>
                       </div>
 
-                      {chargementOptions[a.activite_id] && <EtatChargement texte="Chargement des options..." />}
+                      {activiteOuverte === a.activite_id && (
+                        <div className="assur-sous-liste mt-3 pt-3">
+                          <div className="d-flex align-items-center justify-content-between mb-2">
+                            <h6 className="mb-0" style={{ fontSize: 13 }}>
+                              Options de l'activité
+                            </h6>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-primary"
+                              onClick={() => ouvrirCreationOption(a.activite_id)}
+                            >
+                              <i className="fa-solid fa-plus me-1"></i>Option
+                            </button>
+                          </div>
 
-                      {erreurOptions[a.activite_id] && (
-                        <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
-                          <p>{erreurOptions[a.activite_id]}</p>
+                          {chargementOptions[a.activite_id] && (
+                            <div className="text-center py-3">
+                              <i className="fa-solid fa-spinner fa-spin"></i>
+                            </div>
+                          )}
+
+                          {erreurOptions[a.activite_id] && (
+                            <div className="aps-notice is-danger mb-2">
+                              <i className="fa-solid fa-circle-exclamation"></i>
+                              <div>{erreurOptions[a.activite_id]}</div>
+                            </div>
+                          )}
+
+                          {!chargementOptions[a.activite_id] &&
+                            !erreurOptions[a.activite_id] &&
+                            (optionsParActivite[a.activite_id]?.length ?? 0) === 0 && (
+                              <p className="aps-text-muted mb-0" style={{ fontSize: 13 }}>
+                                Aucune option pour cette activité.
+                              </p>
+                            )}
+
+                          {(optionsParActivite[a.activite_id]?.length ?? 0) > 0 && (
+                            <div className="d-flex flex-column gap-2">
+                              {optionsParActivite[a.activite_id].map((o) => (
+                                <div className="assur-option-item" key={o.option_activite_id}>
+                                  <div>
+                                    <strong style={{ fontSize: 13 }}>{o.libelle}</strong>
+                                    {o.description && (
+                                      <p className="aps-text-muted mb-0" style={{ fontSize: 12 }}>
+                                        {o.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="d-flex gap-1">
+                                    <button
+                                      className="btn btn-sm btn-light"
+                                      title="Modifier"
+                                      onClick={() => ouvrirEditionOption(a.activite_id, o)}
+                                    >
+                                      <i className="fa-solid fa-pen"></i>
+                                    </button>
+                                    <button
+                                      className="btn btn-sm btn-light"
+                                      title="Supprimer"
+                                      onClick={() => supprimerOptionHandler(a.activite_id, o)}
+                                    >
+                                      <i className="fa-solid fa-trash"></i>
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
-
-                      {!chargementOptions[a.activite_id] &&
-                        !erreurOptions[a.activite_id] &&
-                        (optionsParActivite[a.activite_id]?.length ?? 0) === 0 && (
-                          <p className="aps-assur-etat-vide">Aucune option pour cette activité.</p>
-                        )}
-
-                      {(optionsParActivite[a.activite_id]?.length ?? 0) > 0 && (
-                        <ul className="aps-assur-config-liste">
-                          {optionsParActivite[a.activite_id].map((o) => (
-                            <li key={o.option_activite_id} className="aps-assur-config-item aps-assur-config-item-sm">
-                              <div>
-                                <strong>{o.libelle}</strong>
-                                {o.description && <p className="aps-assur-config-desc">{o.description}</p>}
-                              </div>
-                              <div className="aps-assur-config-actions">
-                                <button
-                                  type="button"
-                                  className="aps-assur-btn aps-assur-btn-ghost aps-assur-btn-sm"
-                                  onClick={() => ouvrirEditionOption(a.activite_id, o)}
-                                >
-                                  Modifier
-                                </button>
-                                <button
-                                  type="button"
-                                  className="aps-assur-btn aps-assur-btn-danger aps-assur-btn-sm"
-                                  onClick={() => supprimerOptionHandler(a.activite_id, o)}
-                                >
-                                  Supprimer
-                                </button>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
                     </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {/* ---------------------------- Onglet Agences ---------------------------- */}
-      {onglet === 'agences' && (
-        <div className="aps-assur-config-panneau">
-          <div className="aps-assur-config-entete">
-            <p className="aps-assur-info">Agences (implantations physiques) rattachées à ce service.</p>
-            <button
-              type="button"
-              className="aps-assur-btn aps-assur-btn-primary aps-assur-btn-sm"
-              onClick={ouvrirCreationAgence}
-            >
-              + Nouvelle agence
-            </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
+        )}
 
-          {chargementAgences && <EtatChargement texte="Chargement des agences..." />}
-
-          {!chargementAgences && erreurAgences && (
-            <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
-              <p>{erreurAgences}</p>
+        {/* ---------------------------- Onglet Agences ---------------------------- */}
+        {onglet === 'agences' && (
+          <div>
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <p className="aps-text-muted mb-0" style={{ fontSize: 13 }}>
+                Agences (implantations physiques) rattachées à ce service.
+              </p>
+              <button type="button" className="btn btn-sm btn-primary" onClick={ouvrirCreationAgence}>
+                <i className="fa-solid fa-plus me-1"></i>Nouvelle agence
+              </button>
             </div>
-          )}
 
-          {!chargementAgences && !erreurAgences && agences.length === 0 && (
-            <div className="aps-assur-etat-vide">Aucune agence pour le moment.</div>
-          )}
+            {chargementAgences && (
+              <div className="text-center py-4">
+                <i className="fa-solid fa-spinner fa-spin"></i>
+              </div>
+            )}
 
-          {!chargementAgences && !erreurAgences && agences.length > 0 && (
-            <ul className="aps-assur-config-liste">
-              {agences.map((a) => (
-                <li key={a.agence_id} className="aps-assur-config-item">
-                  <div>
-                    <strong>{a.libelle}</strong>
-                    <p className="aps-assur-config-desc">{a.localisation}</p>
-                    {a.contact && <p className="aps-assur-config-meta">📞 {a.contact}</p>}
-                    {(a.latitude ?? a.gps?.latitude) != null && (
-                      <p className="aps-assur-config-meta">
-                        📍 {a.latitude ?? a.gps?.latitude}, {a.longitude ?? a.gps?.longitude}
-                      </p>
-                    )}
+            {!chargementAgences && erreurAgences && (
+              <div className="aps-notice is-danger mb-3">
+                <i className="fa-solid fa-circle-exclamation"></i>
+                <div>{erreurAgences}</div>
+              </div>
+            )}
+
+            {!chargementAgences && !erreurAgences && agences.length === 0 && (
+              <div className="text-center aps-text-muted py-4">Aucune agence pour le moment.</div>
+            )}
+
+            {!chargementAgences && !erreurAgences && agences.length > 0 && (
+              <div className="d-flex flex-column gap-2">
+                {agences.map((a) => (
+                  <div className="aps-card" key={a.agence_id}>
+                    <div className="aps-card__body d-flex align-items-start justify-content-between gap-2 flex-wrap">
+                      <div>
+                        <strong>{a.libelle}</strong>
+                        <p className="aps-text-muted mb-0 mt-1" style={{ fontSize: 13 }}>
+                          {a.localisation}
+                        </p>
+                        {a.contact && (
+                          <p className="aps-text-muted mb-0" style={{ fontSize: 13 }}>
+                            <i className="fa-solid fa-phone me-1"></i>
+                            {a.contact}
+                          </p>
+                        )}
+                        {(a.latitude ?? a.gps?.latitude) != null && (
+                          <p className="aps-text-muted mb-0" style={{ fontSize: 13 }}>
+                            <i className="fa-solid fa-location-dot me-1"></i>
+                            {a.latitude ?? a.gps?.latitude}, {a.longitude ?? a.gps?.longitude}
+                          </p>
+                        )}
+                      </div>
+                      <div className="d-flex gap-1">
+                        <button className="btn btn-sm btn-light" title="Modifier" onClick={() => ouvrirEditionAgence(a)}>
+                          <i className="fa-solid fa-pen"></i>
+                        </button>
+                        <button
+                          className="btn btn-sm btn-light"
+                          title="Supprimer"
+                          onClick={() => supprimerAgenceHandler(a)}
+                        >
+                          <i className="fa-solid fa-trash"></i>
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="aps-assur-config-actions">
-                    <button
-                      type="button"
-                      className="aps-assur-btn aps-assur-btn-ghost aps-assur-btn-sm"
-                      onClick={() => ouvrirEditionAgence(a)}
-                    >
-                      Modifier
-                    </button>
-                    <button
-                      type="button"
-                      className="aps-assur-btn aps-assur-btn-danger aps-assur-btn-sm"
-                      onClick={() => supprimerAgenceHandler(a)}
-                    >
-                      Supprimer
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
 
       {/* ---------------------------- Sous-modale : formulaire activité ---------------------------- */}
-      {activiteEnEdition && (
-        <Modale
-          titre={activiteEnEdition.activite_id ? "Modifier l'activité" : 'Nouvelle activité'}
-          taille="petite"
-          onFermer={fermerFormActivite}
-        >
-          <form className="aps-assur-form" onSubmit={soumettreActivite}>
-            {erreurFormActivite && (
-              <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
-                <p>{erreurFormActivite}</p>
-              </div>
-            )}
-            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
-              <label className="aps-assur-label" htmlFor="fa-titre">
-                Titre *
-              </label>
-              <input
-                id="fa-titre"
-                className="aps-assur-input"
-                type="text"
-                name="titre"
-                value={formActivite.titre}
-                onChange={handleFormActiviteChange}
-                required
-              />
-            </div>
-            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
-              <label className="aps-assur-label" htmlFor="fa-public">
-                Public cible
-              </label>
-              <input
-                id="fa-public"
-                className="aps-assur-input"
-                type="text"
-                name="public_cible"
-                value={formActivite.public_cible}
-                onChange={handleFormActiviteChange}
-                placeholder="Optionnel"
-              />
-            </div>
-            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
-              <label className="aps-assur-label" htmlFor="fa-description">
-                Description
-              </label>
-              <textarea
-                id="fa-description"
-                className="aps-assur-input"
-                name="description"
-                rows="3"
-                value={formActivite.description}
-                onChange={handleFormActiviteChange}
-                placeholder="Optionnel"
-              ></textarea>
-            </div>
-            <div className="aps-assur-modale-actions">
-              <button
-                type="button"
-                className="aps-assur-btn aps-assur-btn-ghost"
-                onClick={fermerFormActivite}
-                disabled={envoiActivite}
-              >
-                Annuler
-              </button>
-              <button type="submit" className="aps-assur-btn aps-assur-btn-primary" disabled={envoiActivite}>
-                {envoiActivite ? 'Enregistrement...' : activiteEnEdition.activite_id ? 'Enregistrer' : 'Créer'}
-              </button>
-            </div>
-          </form>
-        </Modale>
-      )}
+      <Modal
+        id="modalFormActivite"
+        title={activiteEnEdition?.activite_id ? "Modifier l'activité" : 'Nouvelle activité'}
+        isOpen={!!activiteEnEdition}
+        onClose={fermerFormActivite}
+        footer={
+          <>
+            <button className="btn btn-light" onClick={fermerFormActivite} disabled={envoiActivite}>
+              Annuler
+            </button>
+            <button className="btn btn-primary" onClick={soumettreActivite} disabled={envoiActivite}>
+              {envoiActivite ? 'Enregistrement…' : activiteEnEdition?.activite_id ? 'Enregistrer' : 'Créer'}
+            </button>
+          </>
+        }
+      >
+        {erreurFormActivite && (
+          <div className="aps-notice is-danger mb-3">
+            <i className="fa-solid fa-circle-exclamation"></i>
+            <div>{erreurFormActivite}</div>
+          </div>
+        )}
+        <div className="mb-3">
+          <label className="form-label">
+            Titre <span className="text-danger">*</span>
+          </label>
+          <input
+            className="form-control"
+            type="text"
+            name="titre"
+            value={formActivite.titre}
+            onChange={handleFormActiviteChange}
+            required
+          />
+        </div>
+        <div className="mb-3">
+          <label className="form-label">Public cible</label>
+          <input
+            className="form-control"
+            type="text"
+            name="public_cible"
+            value={formActivite.public_cible}
+            onChange={handleFormActiviteChange}
+            placeholder="Optionnel"
+          />
+        </div>
+        <div className="mb-1">
+          <label className="form-label">Description</label>
+          <textarea
+            className="form-control"
+            name="description"
+            rows={3}
+            value={formActivite.description}
+            onChange={handleFormActiviteChange}
+            placeholder="Optionnel"
+          ></textarea>
+        </div>
+      </Modal>
 
       {/* ---------------------------- Sous-modale : formulaire option ---------------------------- */}
-      {optionEnEdition && (
-        <Modale
-          titre={optionEnEdition.option_activite_id ? "Modifier l'option" : 'Nouvelle option'}
-          taille="petite"
-          onFermer={fermerFormOption}
-        >
-          <form className="aps-assur-form" onSubmit={soumettreOption}>
-            {erreurFormOption && (
-              <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
-                <p>{erreurFormOption}</p>
-              </div>
-            )}
-            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
-              <label className="aps-assur-label" htmlFor="fo-libelle">
-                Libellé *
-              </label>
-              <input
-                id="fo-libelle"
-                className="aps-assur-input"
-                type="text"
-                name="libelle"
-                value={formOption.libelle}
-                onChange={handleFormOptionChange}
-                required
-              />
-            </div>
-            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
-              <label className="aps-assur-label" htmlFor="fo-description">
-                Description
-              </label>
-              <textarea
-                id="fo-description"
-                className="aps-assur-input"
-                name="description"
-                rows="3"
-                value={formOption.description}
-                onChange={handleFormOptionChange}
-                placeholder="Optionnel"
-              ></textarea>
-            </div>
-            <div className="aps-assur-modale-actions">
-              <button
-                type="button"
-                className="aps-assur-btn aps-assur-btn-ghost"
-                onClick={fermerFormOption}
-                disabled={envoiOption}
-              >
-                Annuler
-              </button>
-              <button type="submit" className="aps-assur-btn aps-assur-btn-primary" disabled={envoiOption}>
-                {envoiOption ? 'Enregistrement...' : optionEnEdition.option_activite_id ? 'Enregistrer' : 'Créer'}
-              </button>
-            </div>
-          </form>
-        </Modale>
-      )}
+      <Modal
+        id="modalFormOption"
+        title={optionEnEdition?.option_activite_id ? "Modifier l'option" : 'Nouvelle option'}
+        isOpen={!!optionEnEdition}
+        onClose={fermerFormOption}
+        footer={
+          <>
+            <button className="btn btn-light" onClick={fermerFormOption} disabled={envoiOption}>
+              Annuler
+            </button>
+            <button className="btn btn-primary" onClick={soumettreOption} disabled={envoiOption}>
+              {envoiOption ? 'Enregistrement…' : optionEnEdition?.option_activite_id ? 'Enregistrer' : 'Créer'}
+            </button>
+          </>
+        }
+      >
+        {erreurFormOption && (
+          <div className="aps-notice is-danger mb-3">
+            <i className="fa-solid fa-circle-exclamation"></i>
+            <div>{erreurFormOption}</div>
+          </div>
+        )}
+        <div className="mb-3">
+          <label className="form-label">
+            Libellé <span className="text-danger">*</span>
+          </label>
+          <input
+            className="form-control"
+            type="text"
+            name="libelle"
+            value={formOption.libelle}
+            onChange={handleFormOptionChange}
+            required
+          />
+        </div>
+        <div className="mb-1">
+          <label className="form-label">Description</label>
+          <textarea
+            className="form-control"
+            name="description"
+            rows={3}
+            value={formOption.description}
+            onChange={handleFormOptionChange}
+            placeholder="Optionnel"
+          ></textarea>
+        </div>
+      </Modal>
 
       {/* ---------------------------- Sous-modale : formulaire agence ---------------------------- */}
-      {agenceEnEdition && (
-        <Modale
-          titre={agenceEnEdition.agence_id ? "Modifier l'agence" : 'Nouvelle agence'}
-          taille="petite"
-          onFermer={fermerFormAgence}
-        >
-          <form className="aps-assur-form" onSubmit={soumettreAgence}>
-            {erreurFormAgence && (
-              <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
-                <p>{erreurFormAgence}</p>
-              </div>
-            )}
-            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
-              <label className="aps-assur-label" htmlFor="fg-libelle">
-                Libellé *
-              </label>
-              <input
-                id="fg-libelle"
-                className="aps-assur-input"
-                type="text"
-                name="libelle"
-                value={formAgence.libelle}
-                onChange={handleFormAgenceChange}
-                required
-              />
-            </div>
-            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
-              <label className="aps-assur-label" htmlFor="fg-localisation">
-                Localisation *
-              </label>
-              <input
-                id="fg-localisation"
-                className="aps-assur-input"
-                type="text"
-                name="localisation"
-                value={formAgence.localisation}
-                onChange={handleFormAgenceChange}
-                required
-              />
-            </div>
-            <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
-              <label className="aps-assur-label" htmlFor="fg-contact">
-                Contact *
-              </label>
-              <input
-                id="fg-contact"
-                className="aps-assur-input"
-                type="text"
-                name="contact"
-                value={formAgence.contact}
-                onChange={handleFormAgenceChange}
-                required
-              />
-            </div>
-            <div className="aps-assur-form-groupe">
-              <label className="aps-assur-label" htmlFor="fg-latitude">
-                Latitude
-              </label>
-              <input
-                id="fg-latitude"
-                className="aps-assur-input"
-                type="text"
-                name="latitude"
-                value={formAgence.latitude}
-                onChange={handleFormAgenceChange}
-                placeholder="Optionnel"
-              />
-            </div>
-            <div className="aps-assur-form-groupe">
-              <label className="aps-assur-label" htmlFor="fg-longitude">
-                Longitude
-              </label>
-              <input
-                id="fg-longitude"
-                className="aps-assur-input"
-                type="text"
-                name="longitude"
-                value={formAgence.longitude}
-                onChange={handleFormAgenceChange}
-                placeholder="Optionnel"
-              />
-            </div>
-            <div className="aps-assur-modale-actions">
-              <button
-                type="button"
-                className="aps-assur-btn aps-assur-btn-ghost"
-                onClick={fermerFormAgence}
-                disabled={envoiAgence}
-              >
-                Annuler
-              </button>
-              <button type="submit" className="aps-assur-btn aps-assur-btn-primary" disabled={envoiAgence}>
-                {envoiAgence ? 'Enregistrement...' : agenceEnEdition.agence_id ? 'Enregistrer' : 'Créer'}
-              </button>
-            </div>
-          </form>
-        </Modale>
-      )}
-    </Modale>
+      <Modal
+        id="modalFormAgence"
+        title={agenceEnEdition?.agence_id ? "Modifier l'agence" : 'Nouvelle agence'}
+        isOpen={!!agenceEnEdition}
+        onClose={fermerFormAgence}
+        footer={
+          <>
+            <button className="btn btn-light" onClick={fermerFormAgence} disabled={envoiAgence}>
+              Annuler
+            </button>
+            <button className="btn btn-primary" onClick={soumettreAgence} disabled={envoiAgence}>
+              {envoiAgence ? 'Enregistrement…' : agenceEnEdition?.agence_id ? 'Enregistrer' : 'Créer'}
+            </button>
+          </>
+        }
+      >
+        {erreurFormAgence && (
+          <div className="aps-notice is-danger mb-3">
+            <i className="fa-solid fa-circle-exclamation"></i>
+            <div>{erreurFormAgence}</div>
+          </div>
+        )}
+        <div className="mb-3">
+          <label className="form-label">
+            Libellé <span className="text-danger">*</span>
+          </label>
+          <input
+            className="form-control"
+            type="text"
+            name="libelle"
+            value={formAgence.libelle}
+            onChange={handleFormAgenceChange}
+            required
+          />
+        </div>
+        <div className="mb-3">
+          <label className="form-label">
+            Localisation <span className="text-danger">*</span>
+          </label>
+          <input
+            className="form-control"
+            type="text"
+            name="localisation"
+            value={formAgence.localisation}
+            onChange={handleFormAgenceChange}
+            required
+          />
+        </div>
+        <div className="mb-3">
+          <label className="form-label">
+            Contact <span className="text-danger">*</span>
+          </label>
+          <input
+            className="form-control"
+            type="text"
+            name="contact"
+            value={formAgence.contact}
+            onChange={handleFormAgenceChange}
+            required
+          />
+        </div>
+        <div className="row g-3">
+          <div className="col-md-6">
+            <label className="form-label">Latitude</label>
+            <input
+              className="form-control"
+              type="text"
+              name="latitude"
+              value={formAgence.latitude}
+              onChange={handleFormAgenceChange}
+              placeholder="Optionnel"
+            />
+          </div>
+          <div className="col-md-6">
+            <label className="form-label">Longitude</label>
+            <input
+              className="form-control"
+              type="text"
+              name="longitude"
+              value={formAgence.longitude}
+              onChange={handleFormAgenceChange}
+              placeholder="Optionnel"
+            />
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }
 
@@ -1148,6 +1074,19 @@ export default function Assurances() {
       }
     };
   }, [formImageApercu]);
+
+  // Compteurs pour les KPI d'en-tête — calculés depuis les services
+  // réellement chargés (le service ne renvoie pas de compteur global).
+  const compteurs = services.reduce(
+    (acc, s) => {
+      acc.total += 1;
+      if (s.statut_verification === 'publie') acc.publies += 1;
+      else if (s.statut_verification === 'en_cours') acc.enCours += 1;
+      else if (s.statut_verification === 'non_publie') acc.nonPublies += 1;
+      return acc;
+    },
+    { total: 0, publies: 0, enCours: 0, nonPublies: 0 }
+  );
 
   /* ---------------------------- Filtres ---------------------------- */
 
@@ -1392,394 +1331,99 @@ export default function Assurances() {
   /* ---------------------------- Rendu ---------------------------- */
 
   return (
-    <div className="aps-assur-page">
-      <header className="aps-assur-header">
-        <div>
-          <h1 className="aps-assur-titre">Annuaire des assurances</h1>
-          <p className="aps-assur-soustitre">Compagnies et courtiers d'assurance référencés dans l'annuaire.</p>
-        </div>
-        {estConnecte && (
-          <button type="button" className="aps-assur-btn aps-assur-btn-primary" onClick={ouvrirCreation}>
-            + Nouveau service
-          </button>
-        )}
-      </header>
-
-      <section className="aps-assur-filtres" aria-label="Filtres de recherche">
-        <div className="aps-assur-champ">
-          <label htmlFor="assur-recherche" className="aps-assur-label">
-            Recherche
-          </label>
-          <input
-            id="assur-recherche"
-            type="text"
-            name="recherche"
-            className="aps-assur-input"
-            placeholder="Nom du service..."
-            value={filtres.recherche}
-            onChange={handleFiltreChange}
-          />
-        </div>
-        <div className="aps-assur-champ">
-          <label htmlFor="assur-pays" className="aps-assur-label">
-            Pays
-          </label>
-          <select
-            id="assur-pays"
-            name="pays_id"
-            className="aps-assur-input"
-            value={filtres.pays_id}
-            onChange={handleFiltreChange}
-          >
-            <option value="">Tous les pays</option>
-            {paysListe.map((p) => (
-              <option key={p.pays_id} value={p.pays_id}>
-                {p.nom}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="aps-assur-champ">
-          <label htmlFor="assur-ville" className="aps-assur-label">
-            Ville
-          </label>
-          <select
-            id="assur-ville"
-            name="ville_id"
-            className="aps-assur-input"
-            value={filtres.ville_id}
-            onChange={handleFiltreChange}
-            disabled={!filtres.pays_id}
-          >
-            <option value="">Toutes les villes</option>
-            {villesFiltre.map((v) => (
-              <option key={v.ville_id} value={v.ville_id}>
-                {v.nom}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="aps-assur-champ">
-          <label htmlFor="assur-type" className="aps-assur-label">
-            Type d'acteur
-          </label>
-          <select
-            id="assur-type"
-            name="type_acteur"
-            className="aps-assur-input"
-            value={filtres.type_acteur}
-            onChange={handleFiltreChange}
-          >
-            <option value="">Tous les types</option>
-            {TYPES_ACTEUR_ASSURANCE.map((t) => (
-              <option key={t.valeur} value={t.valeur}>
-                {t.libelle}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="aps-assur-champ">
-          <label htmlFor="assur-statut" className="aps-assur-label">
-            Statut
-          </label>
-          <select
-            id="assur-statut"
-            name="statut_verification"
-            className="aps-assur-input"
-            value={filtres.statut_verification}
-            onChange={handleFiltreChange}
-          >
-            <option value="">Tous les statuts</option>
-            {STATUTS_VERIFICATION_ASSURANCE.map((s) => (
-              <option key={s.valeur} value={s.valeur}>
-                {s.libelle}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button type="button" className="aps-assur-btn aps-assur-btn-ghost" onClick={reinitialiserFiltres}>
-          Réinitialiser
-        </button>
-      </section>
-
-      <section className="aps-assur-contenu">
-        {chargementListe && <EtatChargement texte="Chargement des services d'assurance..." />}
-
-        {!chargementListe && erreurListe && (
-          <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
-            <p>{erreurListe}</p>
-            <button
-              type="button"
-              className="aps-assur-btn aps-assur-btn-secondary aps-assur-btn-sm"
-              onClick={() => setRecharger((n) => n + 1)}
-            >
-              Réessayer
+    <>
+      <main className="aps-content assur-page">
+        {/* ===================== EN-TÊTE DE PAGE ===================== */}
+        <div className="aps-page-header">
+          <div>
+            <nav className="aps-breadcrumb">
+              <a href="dashboard.html">Tableau de bord</a>
+              <span className="sep">/</span>
+              <span>Annuaire &amp; Utilisateurs</span>
+              <span className="sep">/</span>
+              <span>Assurances</span>
+            </nav>
+            <h1>Annuaire des assurances</h1>
+            <p className="aps-text-muted mb-0" style={{ fontSize: 13 }}>
+              Compagnies et courtiers d'assurance référencés dans l'annuaire.
+            </p>
+          </div>
+          {estConnecte && (
+            <button type="button" className="btn btn-primary" onClick={ouvrirCreation}>
+              <i className="fa-solid fa-plus me-1"></i> Nouveau service
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
-        {!chargementListe && !erreurListe && services.length === 0 && (
-          <div className="aps-assur-etat-vide">Aucun service d'assurance ne correspond à ces critères.</div>
-        )}
-
-        {!chargementListe && !erreurListe && services.length > 0 && (
-          <div className="row g-4 aps-assur-grille">
-            {services.map((service) => (
-              <div className="col-md-4" key={service.service_assurance_id}>
-                <CarteService
-                  service={service}
-                  peutModifier={estConnecte}
-                  peutSupprimer={estSuperadmin}
-                  onVoir={() => ouvrirDetail(service.service_assurance_id)}
-                  onModifier={() => ouvrirEdition(service)}
-                  onSupprimer={() => demanderSuppression(service)}
-                  onConfigurer={() => ouvrirConfiguration(service)}
-                />
+        {/* ===================== KPI ===================== */}
+        <div className="row g-3 mb-4">
+          <div className="col-6 col-lg-3">
+            <div className="aps-kpi">
+              <div className="aps-kpi__top">
+                <div className="aps-kpi__icon is-primary">
+                  <i className="fa-solid fa-shield-halved"></i>
+                </div>
               </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* ---------------------------- Fiche détail ---------------------------- */}
-      {detailOuvert && (
-        <Modale titre="Fiche du service d'assurance" taille="grande" onFermer={fermerDetail}>
-          {chargementDetail && <EtatChargement texte="Chargement de la fiche..." />}
-
-          {!chargementDetail && erreurDetail && (
-            <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
-              <p>{erreurDetail}</p>
+              <div className="aps-kpi__label">Total</div>
+              <div className="aps-kpi__value">{compteurs.total.toLocaleString('fr-FR')}</div>
             </div>
-          )}
-
-          {!chargementDetail && !erreurDetail && serviceDetail && (
-            <>
-              <div className="aps-assur-detail-entete">
-                {serviceDetail.image_url ? (
-                  <img className="aps-assur-detail-image" src={serviceDetail.image_url} alt={serviceDetail.nom} />
-                ) : (
-                  <div className="aps-assur-detail-image aps-assur-detail-image-vide" aria-hidden="true">
-                    🛡️
-                  </div>
-                )}
-                <div>
-                  <h3>{serviceDetail.nom}</h3>
-                  <div className="aps-assur-detail-badges">
-                    <Badge type="acteur" valeur={serviceDetail.type_acteur} />
-                    <Badge type="statut" valeur={serviceDetail.statut_verification} />
-                  </div>
+          </div>
+          <div className="col-6 col-lg-3">
+            <div className="aps-kpi">
+              <div className="aps-kpi__top">
+                <div className="aps-kpi__icon is-success">
+                  <i className="fa-solid fa-circle-check"></i>
                 </div>
               </div>
-
-              <div className="aps-assur-detail-grille">
-                <div className="aps-assur-detail-item">
-                  <span className="aps-assur-detail-label">Téléphone</span>
-                  <span className="aps-assur-detail-valeur">{serviceDetail.telephone || '—'}</span>
+              <div className="aps-kpi__label">Publiés</div>
+              <div className="aps-kpi__value">{compteurs.publies.toLocaleString('fr-FR')}</div>
+            </div>
+          </div>
+          <div className="col-6 col-lg-3">
+            <div className="aps-kpi">
+              <div className="aps-kpi__top">
+                <div className="aps-kpi__icon is-warning">
+                  <i className="fa-solid fa-hourglass-half"></i>
                 </div>
-                <div className="aps-assur-detail-item">
-                  <span className="aps-assur-detail-label">Email</span>
-                  <span className="aps-assur-detail-valeur">{serviceDetail.email || '—'}</span>
+              </div>
+              <div className="aps-kpi__label">En cours de vérification</div>
+              <div className="aps-kpi__value">{compteurs.enCours.toLocaleString('fr-FR')}</div>
+            </div>
+          </div>
+          <div className="col-6 col-lg-3">
+            <div className="aps-kpi">
+              <div className="aps-kpi__top">
+                <div className="aps-kpi__icon is-danger">
+                  <i className="fa-solid fa-circle-xmark"></i>
                 </div>
-                <div className="aps-assur-detail-item">
-                  <span className="aps-assur-detail-label">N° d'agrément</span>
-                  <span className="aps-assur-detail-valeur">{serviceDetail.agrement || '—'}</span>
+              </div>
+              <div className="aps-kpi__label">Non publiés</div>
+              <div className="aps-kpi__value">{compteurs.nonPublies.toLocaleString('fr-FR')}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* ===================== FILTRES ===================== */}
+        <div className="aps-card mb-3">
+          <div className="aps-card__body">
+            <div className="row g-3 align-items-end">
+              <div className="col-md-3">
+                <label className="form-label">Recherche</label>
+                <div className="aps-search">
+                  <i className="fa-solid fa-magnifying-glass"></i>
+                  <input
+                    type="text"
+                    name="recherche"
+                    placeholder="Nom du service…"
+                    value={filtres.recherche}
+                    onChange={handleFiltreChange}
+                  />
                 </div>
-                <div className="aps-assur-detail-item">
-                  <span className="aps-assur-detail-label">Pays</span>
-                  <span className="aps-assur-detail-valeur">{serviceDetail.pays?.nom || '—'}</span>
-                </div>
-                <div className="aps-assur-detail-item">
-                  <span className="aps-assur-detail-label">Ville</span>
-                  <span className="aps-assur-detail-valeur">{serviceDetail.ville?.nom || '—'}</span>
-                </div>
-                {(serviceDetail.latitude ?? serviceDetail.geolocalisation?.latitude) != null && (
-                  <div className="aps-assur-detail-item">
-                    <span className="aps-assur-detail-label">Localisation</span>
-                    <span className="aps-assur-detail-valeur">
-                      {serviceDetail.latitude ?? serviceDetail.geolocalisation?.latitude},{' '}
-                      {serviceDetail.longitude ?? serviceDetail.geolocalisation?.longitude}
-                    </span>
-                  </div>
-                )}
               </div>
-
-              {serviceDetail.description && (
-                <div className="aps-assur-section">
-                  <h4 className="aps-assur-section-titre">Description</h4>
-                  <p>{serviceDetail.description}</p>
-                </div>
-              )}
-
-              <div className="aps-assur-modale-actions">
-                <button
-                  type="button"
-                  className="aps-assur-btn aps-assur-btn-secondary"
-                  onClick={() => ouvrirEdition(serviceDetail)}
-                >
-                  Modifier
-                </button>
-                <button
-                  type="button"
-                  className="aps-assur-btn aps-assur-btn-secondary"
-                  onClick={() => ouvrirConfiguration(serviceDetail)}
-                >
-                  ⚙️ Configurer
-                </button>
-                {estSuperadmin && (
-                  <button
-                    type="button"
-                    className="aps-assur-btn aps-assur-btn-danger"
-                    onClick={() => demanderSuppression(serviceDetail)}
-                  >
-                    Supprimer
-                  </button>
-                )}
-              </div>
-
-              <div className="aps-assur-section">
-                <h4 className="aps-assur-section-titre">Demander une mise en relation</h4>
-                {!estConnecte && !chargementSession && (
-                  <p className="aps-assur-info">Connectez-vous pour contacter ce service.</p>
-                )}
-                {estConnecte && (
-                  <form className="aps-assur-mise-form" onSubmit={envoyerMessage}>
-                    <textarea
-                      className="aps-assur-input"
-                      rows="3"
-                      placeholder="Votre message..."
-                      value={nouveauMessage}
-                      onChange={(e) => setNouveauMessage(e.target.value)}
-                      required
-                    ></textarea>
-                    {erreurEnvoiMessage && <p className="aps-assur-erreur-champ">{erreurEnvoiMessage}</p>}
-                    {succesEnvoiMessage && (
-                      <p className="aps-assur-alerte aps-assur-alerte-succes">Votre demande a été envoyée.</p>
-                    )}
-                    <button type="submit" className="aps-assur-btn aps-assur-btn-primary" disabled={envoiMessage}>
-                      {envoiMessage ? 'Envoi...' : 'Envoyer la demande'}
-                    </button>
-                  </form>
-                )}
-              </div>
-
-              <div className="aps-assur-section">
-                <h4 className="aps-assur-section-titre">Mises en relation reçues</h4>
-                <p className="aps-assur-info">
-                  Réservé à l'agent en charge de ce service ou à un administrateur.
-                </p>
-                {!misesChargees && (
-                  <button
-                    type="button"
-                    className="aps-assur-btn aps-assur-btn-secondary aps-assur-btn-sm"
-                    onClick={chargerMises}
-                    disabled={chargementMises}
-                  >
-                    {chargementMises ? 'Chargement...' : 'Charger les demandes'}
-                  </button>
-                )}
-                {chargementMises && misesChargees && <EtatChargement texte="Chargement..." />}
-                {erreurMises && (
-                  <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
-                    <p>{erreurMises}</p>
-                  </div>
-                )}
-                {misesChargees &&
-                  !erreurMises &&
-                  !chargementMises &&
-                  (misesEnRelation.length === 0 ? (
-                    <p className="aps-assur-etat-vide">Aucune demande pour le moment.</p>
-                  ) : (
-                    <ul className="aps-assur-mise-liste">
-                      {misesEnRelation.map((m) => (
-                        <li key={m.mise_en_relation_id} className="aps-assur-mise-item">
-                          <div>
-                            <strong>
-                              {m.utilisateur?.prenom} {m.utilisateur?.nom}
-                            </strong>
-                            <span className="aps-assur-mise-date">
-                              {formaterDate(m.date_creation || m.createdAt)}
-                            </span>
-                            <p>{m.message}</p>
-                          </div>
-                          <button
-                            type="button"
-                            className="aps-assur-btn aps-assur-btn-ghost aps-assur-btn-sm"
-                            onClick={() => supprimerMise(m.mise_en_relation_id)}
-                          >
-                            Supprimer
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ))}
-              </div>
-            </>
-          )}
-        </Modale>
-      )}
-
-      {/* ---------------------------- Formulaire ---------------------------- */}
-      {formOuvert && (
-        <Modale
-          titre={modeForm === 'creation' ? "Nouveau service d'assurance" : "Modifier le service d'assurance"}
-          taille="grande"
-          onFermer={fermerForm}
-        >
-          <form className="aps-assur-form" onSubmit={handleFormSubmit}>
-            {formErreur && (
-              <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
-                <p>{formErreur}</p>
-              </div>
-            )}
-
-            <div className="aps-assur-form-grille">
-              <div className="aps-assur-form-groupe">
-                <label className="aps-assur-label" htmlFor="f-nom">
-                  Nom du service *
-                </label>
-                <input
-                  id="f-nom"
-                  className="aps-assur-input"
-                  type="text"
-                  name="nom"
-                  value={formDonnees.nom}
-                  onChange={handleFormChange}
-                  required
-                />
-              </div>
-              <div className="aps-assur-form-groupe">
-                <label className="aps-assur-label" htmlFor="f-type">
-                  Type d'acteur *
-                </label>
-                <select
-                  id="f-type"
-                  className="aps-assur-input"
-                  name="type_acteur"
-                  value={formDonnees.type_acteur}
-                  onChange={handleFormChange}
-                  required
-                >
-                  <option value="">Sélectionner...</option>
-                  {TYPES_ACTEUR_ASSURANCE.map((t) => (
-                    <option key={t.valeur} value={t.valeur}>
-                      {t.libelle}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="aps-assur-form-groupe">
-                <label className="aps-assur-label" htmlFor="f-pays">
-                  Pays *
-                </label>
-                <select
-                  id="f-pays"
-                  className="aps-assur-input"
-                  name="pays_id"
-                  value={formDonnees.pays_id}
-                  onChange={handleFormChange}
-                  required
-                >
-                  <option value="">Sélectionner...</option>
+              <div className="col-md-2">
+                <label className="form-label">Pays</label>
+                <select className="form-select" name="pays_id" value={filtres.pays_id} onChange={handleFiltreChange}>
+                  <option value="">Tous les pays</option>
                   {paysListe.map((p) => (
                     <option key={p.pays_id} value={p.pays_id}>
                       {p.nom}
@@ -1787,326 +1431,754 @@ export default function Assurances() {
                   ))}
                 </select>
               </div>
-              <div className="aps-assur-form-groupe">
-                <label className="aps-assur-label" htmlFor="f-ville">
-                  Ville *
-                </label>
+              <div className="col-md-2">
+                <label className="form-label">Ville</label>
                 <select
-                  id="f-ville"
-                  className="aps-assur-input"
+                  className="form-select"
                   name="ville_id"
-                  value={formDonnees.ville_id}
-                  onChange={handleFormChange}
-                  required
-                  disabled={!formDonnees.pays_id}
+                  value={filtres.ville_id}
+                  onChange={handleFiltreChange}
+                  disabled={!filtres.pays_id}
                 >
-                  <option value="">Sélectionner...</option>
-                  {villesFormulaire.map((v) => (
+                  <option value="">Toutes les villes</option>
+                  {villesFiltre.map((v) => (
                     <option key={v.ville_id} value={v.ville_id}>
                       {v.nom}
                     </option>
                   ))}
                 </select>
               </div>
-              <div className="aps-assur-form-groupe">
-                <label className="aps-assur-label" htmlFor="f-telephone">
-                  Téléphone *
-                </label>
-                <input
-                  id="f-telephone"
-                  className="aps-assur-input"
-                  type="tel"
-                  name="telephone"
-                  value={formDonnees.telephone}
-                  onChange={handleFormChange}
-                  required
-                />
+              <div className="col-md-2">
+                <label className="form-label">Type d'acteur</label>
+                <select
+                  className="form-select"
+                  name="type_acteur"
+                  value={filtres.type_acteur}
+                  onChange={handleFiltreChange}
+                >
+                  <option value="">Tous les types</option>
+                  {TYPES_ACTEUR_ASSURANCE.map((t) => (
+                    <option key={t.valeur} value={t.valeur}>
+                      {t.libelle}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div className="aps-assur-form-groupe">
-                <label className="aps-assur-label" htmlFor="f-email">
-                  Email *
-                </label>
-                <input
-                  id="f-email"
-                  className="aps-assur-input"
-                  type="email"
-                  name="email"
-                  value={formDonnees.email}
-                  onChange={handleFormChange}
-                  required
-                />
+              <div className="col-md-2">
+                <label className="form-label">Statut</label>
+                <select
+                  className="form-select"
+                  name="statut_verification"
+                  value={filtres.statut_verification}
+                  onChange={handleFiltreChange}
+                >
+                  <option value="">Tous les statuts</option>
+                  {STATUTS_VERIFICATION_ASSURANCE.map((s) => (
+                    <option key={s.valeur} value={s.valeur}>
+                      {s.libelle}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div className="aps-assur-form-groupe">
-                <label className="aps-assur-label" htmlFor="f-agrement">
-                  N° d'agrément *
-                </label>
-                <input
-                  id="f-agrement"
-                  className="aps-assur-input"
-                  type="text"
-                  name="agrement"
-                  value={formDonnees.agrement}
-                  onChange={handleFormChange}
-                  required
-                />
+              <div className="col-md-1">
+                <button
+                  type="button"
+                  className="btn btn-light w-100"
+                  title="Réinitialiser les filtres"
+                  onClick={reinitialiserFiltres}
+                >
+                  <i className="fa-solid fa-rotate-left"></i>
+                </button>
               </div>
+            </div>
+          </div>
+        </div>
 
-              {estAdmin ? (
-                <div className="aps-assur-form-groupe">
-                  <label className="aps-assur-label" htmlFor="f-statut">
-                    Statut de vérification
-                  </label>
-                  <select
-                    id="f-statut"
-                    className="aps-assur-input"
-                    name="statut_verification"
-                    value={formDonnees.statut_verification}
-                    onChange={handleFormChange}
-                  >
-                    {STATUTS_VERIFICATION_ASSURANCE.map((s) => (
-                      <option key={s.valeur} value={s.valeur}>
-                        {s.libelle}
-                      </option>
-                    ))}
-                  </select>
+        {erreurListe && (
+          <div className="aps-notice is-danger mb-3">
+            <i className="fa-solid fa-circle-exclamation"></i>
+            <div className="flex-grow-1">{erreurListe}</div>
+            <button className="btn btn-sm btn-light" onClick={() => setRecharger((n) => n + 1)}>
+              <i className="fa-solid fa-rotate-right me-1"></i>Réessayer
+            </button>
+          </div>
+        )}
+
+        {/* ===================== LISTE — CARTES ===================== */}
+        {chargementListe ? (
+          <div className="aps-card">
+            <div className="aps-card__body text-center py-5">
+              <i className="fa-solid fa-spinner fa-spin"></i>
+            </div>
+          </div>
+        ) : !erreurListe && services.length === 0 ? (
+          <div className="aps-card">
+            <div className="aps-card__body text-center aps-text-muted py-5">
+              Aucun service d'assurance ne correspond à ces critères.
+            </div>
+          </div>
+        ) : (
+          <div className="row g-3">
+            {services.map((service) => {
+              const statut = STATUT_META[service.statut_verification] || {};
+              return (
+                <div className="col-md-6 col-xl-4" key={service.service_assurance_id}>
+                  <div className="card h-100 shadow-sm">
+                    <img
+                      src={service.image_url}
+                      className="card-img-top"
+                      alt={service.nom}
+                      style={{ height: 150, objectFit: 'cover', background: 'var(--aps-bg)' }}
+                    />
+                    <div className="card-body d-flex flex-column">
+                      <div className="d-flex align-items-start justify-content-between mb-1 gap-2">
+                        <h5 className="card-title mb-0" style={{ fontSize: 16 }}>
+                          {service.nom}
+                        </h5>
+                        <span className={`aps-badge ${statut.badge || 'is-info'}`}>
+                          <i className="fa-solid fa-circle"></i> {libelleStatut(service.statut_verification)}
+                        </span>
+                      </div>
+                      <p className="card-text aps-text-muted mb-2" style={{ fontSize: 13 }}>
+                        <i className={`fa-solid ${TYPE_META[service.type_acteur]?.icone || 'fa-building'} me-1`}></i>
+                        {libelleType(service.type_acteur)}
+                      </p>
+                      <p className="card-text aps-text-muted mb-2" style={{ fontSize: 13 }}>
+                        <i className="fa-solid fa-location-dot me-1"></i>
+                        {service.ville?.nom || '—'}
+                        {service.ville?.nom && service.pays?.nom ? ', ' : ''}
+                        {service.pays?.nom || ''}
+                      </p>
+                      <p className="card-text mb-3" style={{ fontSize: 13 }}>
+                        <i className="fa-solid fa-phone me-1"></i>
+                        {service.telephone || '—'}
+                      </p>
+
+                      <div className="d-flex flex-wrap gap-2 mt-auto pt-2" style={{ borderTop: '1px solid var(--aps-border)' }}>
+                        <button
+                          className="btn btn-sm btn-primary flex-grow-1"
+                          onClick={() => ouvrirDetail(service.service_assurance_id)}
+                        >
+                          <i className="fa-solid fa-eye me-1"></i> Voir la fiche
+                        </button>
+                        {estConnecte && (
+                          <>
+                            <button className="btn btn-sm btn-light" title="Modifier" onClick={() => ouvrirEdition(service)}>
+                              <i className="fa-solid fa-pen"></i>
+                            </button>
+                            <button
+                              className="btn btn-sm btn-light"
+                              title="Configurer (activités / agences)"
+                              onClick={() => ouvrirConfiguration(service)}
+                            >
+                              <i className="fa-solid fa-gear"></i>
+                            </button>
+                          </>
+                        )}
+                        {estSuperadmin && (
+                          <button
+                            className="btn btn-sm btn-light"
+                            title="Supprimer"
+                            onClick={() => demanderSuppression(service)}
+                          >
+                            <i className="fa-solid fa-trash"></i>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
+              );
+            })}
+          </div>
+        )}
+      </main>
+
+      {/* ===================== MODAL FICHE DÉTAIL ===================== */}
+      <Modal id="modalDetailAssurance" large title="Fiche du service d'assurance" isOpen={detailOuvert} onClose={fermerDetail}>
+        {chargementDetail && (
+          <div className="text-center py-5">
+            <i className="fa-solid fa-spinner fa-spin"></i>
+          </div>
+        )}
+
+        {!chargementDetail && erreurDetail && (
+          <div className="aps-notice is-danger">
+            <i className="fa-solid fa-circle-exclamation"></i>
+            <div>{erreurDetail}</div>
+          </div>
+        )}
+
+        {!chargementDetail && !erreurDetail && serviceDetail && (
+          <>
+            <div className="d-flex align-items-center gap-3 mb-3">
+              {serviceDetail.image_url ? (
+                <img
+                  src={serviceDetail.image_url}
+                  alt={serviceDetail.nom}
+                  style={{ width: 84, height: 84, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
+                />
               ) : (
-                <div className="aps-assur-form-groupe">
-                  <span className="aps-assur-label">Statut de vérification</span>
-                  <p className="aps-assur-info">
-                    La fiche sera placée « En cours de vérification » jusqu'à validation par un administrateur.
-                  </p>
+                <div
+                  className="aps-kpi__icon is-primary"
+                  style={{ width: 84, height: 84, borderRadius: 10, fontSize: 30, flexShrink: 0 }}
+                >
+                  <i className="fa-solid fa-shield-halved"></i>
                 </div>
               )}
-
-              <div className="aps-assur-form-groupe">
-                <label className="aps-assur-label" htmlFor="f-latitude">
-                  Latitude
-                </label>
-                <input
-                  id="f-latitude"
-                  className="aps-assur-input"
-                  type="text"
-                  name="latitude"
-                  value={formDonnees.latitude}
-                  onChange={handleFormChange}
-                  placeholder="Optionnel"
-                />
-              </div>
-              <div className="aps-assur-form-groupe">
-                <label className="aps-assur-label" htmlFor="f-longitude">
-                  Longitude
-                </label>
-                <input
-                  id="f-longitude"
-                  className="aps-assur-input"
-                  type="text"
-                  name="longitude"
-                  value={formDonnees.longitude}
-                  onChange={handleFormChange}
-                  placeholder="Optionnel"
-                />
-              </div>
-
-              <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
-                <label className="aps-assur-label" htmlFor="f-description">
-                  Description
-                </label>
-                <textarea
-                  id="f-description"
-                  className="aps-assur-input"
-                  name="description"
-                  rows="3"
-                  value={formDonnees.description}
-                  onChange={handleFormChange}
-                  placeholder="Optionnel"
-                ></textarea>
-              </div>
-
-              <div className="aps-assur-form-groupe aps-assur-form-groupe-pleine">
-                <label className="aps-assur-label" htmlFor="f-image">
-                  Photo / logo {modeForm === 'creation' ? '*' : "(optionnel — laisser vide pour conserver l'actuel)"}
-                </label>
-                <input
-                  id="f-image"
-                  className="aps-assur-input"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFormFichier}
-                  required={modeForm === 'creation'}
-                />
-                {formImageApercu && <img className="aps-assur-image-apercu" src={formImageApercu} alt="Aperçu" />}
+              <div>
+                <h5 className="mb-1">{serviceDetail.nom}</h5>
+                <div className="d-flex gap-2 flex-wrap">
+                  <span className="aps-badge is-neutral">
+                    <i className={`fa-solid ${TYPE_META[serviceDetail.type_acteur]?.icone || 'fa-building'}`}></i>{' '}
+                    {libelleType(serviceDetail.type_acteur)}
+                  </span>
+                  <span className={`aps-badge ${STATUT_META[serviceDetail.statut_verification]?.badge || 'is-info'}`}>
+                    <i className={`fa-solid ${STATUT_META[serviceDetail.statut_verification]?.icone || 'fa-circle'}`}></i>{' '}
+                    {libelleStatut(serviceDetail.statut_verification)}
+                  </span>
+                </div>
               </div>
             </div>
 
-            {modeForm === 'creation' && (
-              <div className="aps-assur-section">
-                <h4 className="aps-assur-section-titre">Compte de l'agent responsable</h4>
-                <p className="aps-assur-info">
-                  Un compte utilisateur est créé pour l'agent en charge de ce service. Un mot de passe temporaire
-                  vous sera communiqué une seule fois, juste après la création.
-                </p>
-                <div className="aps-assur-form-grille">
-                  <div className="aps-assur-form-groupe">
-                    <label className="aps-assur-label" htmlFor="f-fonction">
-                      Fonction *
-                    </label>
-                    <input
-                      id="f-fonction"
-                      className="aps-assur-input"
-                      type="text"
-                      name="fonction"
-                      value={formDonnees.fonction}
-                      onChange={handleFormChange}
-                      required
-                    />
-                  </div>
-                  <div className="aps-assur-form-groupe">
-                    <label className="aps-assur-label" htmlFor="f-agent-nom">
-                      Nom de l'agent *
-                    </label>
-                    <input
-                      id="f-agent-nom"
-                      className="aps-assur-input"
-                      type="text"
-                      name="agent_nom"
-                      value={formDonnees.agent_nom}
-                      onChange={handleFormChange}
-                      required
-                    />
-                  </div>
-                  <div className="aps-assur-form-groupe">
-                    <label className="aps-assur-label" htmlFor="f-agent-prenom">
-                      Prénom de l'agent *
-                    </label>
-                    <input
-                      id="f-agent-prenom"
-                      className="aps-assur-input"
-                      type="text"
-                      name="agent_prenom"
-                      value={formDonnees.agent_prenom}
-                      onChange={handleFormChange}
-                      required
-                    />
-                  </div>
-                  <div className="aps-assur-form-groupe">
-                    <label className="aps-assur-label" htmlFor="f-agent-email">
-                      Email de l'agent *
-                    </label>
-                    <input
-                      id="f-agent-email"
-                      className="aps-assur-input"
-                      type="email"
-                      name="agent_email"
-                      value={formDonnees.agent_email}
-                      onChange={handleFormChange}
-                      required
-                    />
-                  </div>
-                  <div className="aps-assur-form-groupe">
-                    <label className="aps-assur-label" htmlFor="f-agent-telephone">
-                      Téléphone de l'agent
-                    </label>
-                    <input
-                      id="f-agent-telephone"
-                      className="aps-assur-input"
-                      type="tel"
-                      name="agent_telephone"
-                      value={formDonnees.agent_telephone}
-                      onChange={handleFormChange}
-                      placeholder="Optionnel"
-                    />
-                  </div>
+            <div className="row g-3 mb-3">
+              <div className="col-md-6">
+                <label className="form-label">Téléphone</label>
+                <div className="form-control-plaintext" style={{ fontSize: 14 }}>
+                  {serviceDetail.telephone || '—'}
+                </div>
+              </div>
+              <div className="col-md-6">
+                <label className="form-label">Email</label>
+                <div className="form-control-plaintext" style={{ fontSize: 14 }}>
+                  {serviceDetail.email || '—'}
+                </div>
+              </div>
+              <div className="col-md-6">
+                <label className="form-label">N° d'agrément</label>
+                <div className="form-control-plaintext" style={{ fontSize: 14 }}>
+                  {serviceDetail.agrement || '—'}
+                </div>
+              </div>
+              <div className="col-md-6">
+                <label className="form-label">Localisation</label>
+                <div className="form-control-plaintext" style={{ fontSize: 14 }}>
+                  {serviceDetail.ville?.nom || '—'}
+                  {serviceDetail.ville?.nom && serviceDetail.pays?.nom ? ', ' : ''}
+                  {serviceDetail.pays?.nom || ''}
+                  {(serviceDetail.latitude ?? serviceDetail.geolocalisation?.latitude) != null && (
+                    <span className="aps-text-muted">
+                      {' '}
+                      ({serviceDetail.latitude ?? serviceDetail.geolocalisation?.latitude},{' '}
+                      {serviceDetail.longitude ?? serviceDetail.geolocalisation?.longitude})
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {serviceDetail.description && (
+              <div className="mb-3">
+                <label className="form-label">Description</label>
+                <div className="aps-card" style={{ padding: 12, fontSize: 14, lineHeight: 1.6 }}>
+                  {serviceDetail.description}
                 </div>
               </div>
             )}
 
-            <div className="aps-assur-modale-actions">
-              <button
-                type="button"
-                className="aps-assur-btn aps-assur-btn-ghost"
-                onClick={fermerForm}
-                disabled={formEnvoi}
-              >
-                Annuler
+            <div className="d-flex gap-2 flex-wrap mb-4">
+              <button className="btn btn-light" onClick={() => ouvrirEdition(serviceDetail)}>
+                <i className="fa-solid fa-pen me-1"></i>Modifier
               </button>
-              <button type="submit" className="aps-assur-btn aps-assur-btn-primary" disabled={formEnvoi}>
-                {formEnvoi ? 'Enregistrement...' : modeForm === 'creation' ? 'Créer le service' : 'Enregistrer'}
+              <button className="btn btn-light" onClick={() => ouvrirConfiguration(serviceDetail)}>
+                <i className="fa-solid fa-gear me-1"></i>Configurer
               </button>
+              {estSuperadmin && (
+                <button className="btn btn-outline-danger" onClick={() => demanderSuppression(serviceDetail)}>
+                  <i className="fa-solid fa-trash me-1"></i>Supprimer
+                </button>
+              )}
             </div>
-          </form>
-        </Modale>
-      )}
 
-      {/* ---------------------------- Confirmation suppression ---------------------------- */}
-      {suppressionCible && (
-        <Modale titre="Confirmer la suppression" taille="petite" onFermer={annulerSuppression}>
-          <p>
-            Voulez-vous vraiment supprimer le service « {suppressionCible.nom} » ? Cette action est définitive.
-          </p>
-          {suppressionErreur && (
-            <div className="aps-assur-alerte aps-assur-alerte-erreur" role="alert">
-              <p>{suppressionErreur}</p>
+            <div className="mb-4">
+              <h6 className="mb-2">Demander une mise en relation</h6>
+              {!estConnecte && !chargementSession && (
+                <p className="aps-text-muted" style={{ fontSize: 13 }}>
+                  Connectez-vous pour contacter ce service.
+                </p>
+              )}
+              {estConnecte && (
+                <form onSubmit={envoyerMessage}>
+                  <textarea
+                    className="form-control mb-2"
+                    rows={3}
+                    placeholder="Votre message…"
+                    value={nouveauMessage}
+                    onChange={(e) => setNouveauMessage(e.target.value)}
+                    required
+                  ></textarea>
+                  {erreurEnvoiMessage && (
+                    <div className="aps-notice is-danger mb-2">
+                      <i className="fa-solid fa-circle-exclamation"></i>
+                      <div>{erreurEnvoiMessage}</div>
+                    </div>
+                  )}
+                  {succesEnvoiMessage && (
+                    <div className="aps-notice is-success mb-2">
+                      <i className="fa-solid fa-circle-check"></i>
+                      <div>Votre demande a été envoyée.</div>
+                    </div>
+                  )}
+                  <button type="submit" className="btn btn-primary" disabled={envoiMessage}>
+                    {envoiMessage ? 'Envoi…' : 'Envoyer la demande'}
+                  </button>
+                </form>
+              )}
             </div>
-          )}
-          <div className="aps-assur-modale-actions">
-            <button
-              type="button"
-              className="aps-assur-btn aps-assur-btn-ghost"
-              onClick={annulerSuppression}
-              disabled={suppressionEnCours}
-            >
+
+            <div>
+              <h6 className="mb-1">Mises en relation reçues</h6>
+              <p className="aps-text-muted mb-2" style={{ fontSize: 13 }}>
+                Réservé à l'agent en charge de ce service ou à un administrateur.
+              </p>
+              {!misesChargees && (
+                <button className="btn btn-sm btn-light" onClick={chargerMises} disabled={chargementMises}>
+                  {chargementMises ? 'Chargement…' : 'Charger les demandes'}
+                </button>
+              )}
+              {chargementMises && misesChargees && (
+                <div className="text-center py-3">
+                  <i className="fa-solid fa-spinner fa-spin"></i>
+                </div>
+              )}
+              {erreurMises && (
+                <div className="aps-notice is-danger mt-2">
+                  <i className="fa-solid fa-circle-exclamation"></i>
+                  <div>{erreurMises}</div>
+                </div>
+              )}
+              {misesChargees &&
+                !erreurMises &&
+                !chargementMises &&
+                (misesEnRelation.length === 0 ? (
+                  <p className="aps-text-muted mt-2" style={{ fontSize: 13 }}>
+                    Aucune demande pour le moment.
+                  </p>
+                ) : (
+                  <div className="d-flex flex-column gap-2 mt-2">
+                    {misesEnRelation.map((m) => (
+                      <div className="assur-mise-item" key={m.mise_en_relation_id}>
+                        <div>
+                          <strong style={{ fontSize: 13 }}>
+                            {m.utilisateur?.prenom} {m.utilisateur?.nom}
+                          </strong>
+                          <span className="aps-text-muted ms-2" style={{ fontSize: 11 }}>
+                            {formaterDate(m.date_creation || m.createdAt)}
+                          </span>
+                          <p className="mb-0 mt-1" style={{ fontSize: 13 }}>
+                            {m.message}
+                          </p>
+                        </div>
+                        <button
+                          className="btn btn-sm btn-light"
+                          title="Supprimer"
+                          onClick={() => supprimerMise(m.mise_en_relation_id)}
+                        >
+                          <i className="fa-solid fa-trash"></i>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+            </div>
+          </>
+        )}
+      </Modal>
+
+      {/* ===================== MODAL FORMULAIRE (création / édition) ===================== */}
+      <Modal
+        id="modalFormAssurance"
+        large
+        title={modeForm === 'creation' ? "Nouveau service d'assurance" : "Modifier le service d'assurance"}
+        isOpen={formOuvert}
+        onClose={fermerForm}
+        footer={
+          <>
+            <button className="btn btn-light" onClick={fermerForm} disabled={formEnvoi}>
               Annuler
             </button>
-            <button
-              type="button"
-              className="aps-assur-btn aps-assur-btn-danger"
-              onClick={confirmerSuppression}
-              disabled={suppressionEnCours}
-            >
-              {suppressionEnCours ? 'Suppression...' : 'Supprimer définitivement'}
+            <button type="submit" form="formulaireAssurance" className="btn btn-primary" disabled={formEnvoi}>
+              {formEnvoi ? 'Enregistrement…' : modeForm === 'creation' ? 'Créer le service' : 'Enregistrer'}
             </button>
-          </div>
-        </Modale>
-      )}
+          </>
+        }
+      >
+        <form id="formulaireAssurance" onSubmit={handleFormSubmit}>
+          {formErreur && (
+            <div className="aps-notice is-danger mb-3">
+              <i className="fa-solid fa-circle-exclamation"></i>
+              <div>{formErreur}</div>
+            </div>
+          )}
 
-      {/* ---------------------------- Configuration (activités / options / agences) ---------------------------- */}
-      {configurationCible && (
-        <ConfigurationModale service={configurationCible} onFermer={fermerConfiguration} />
-      )}
-
-      {/* ---------------------------- Compte agent créé ---------------------------- */}
-      {agentCree && (
-        <Modale titre="Compte agent créé" taille="moyenne" onFermer={() => setAgentCree(null)}>
-          <div className="aps-assur-alerte aps-assur-alerte-avertissement">
-            <p>Ce mot de passe temporaire ne sera plus jamais affiché. Communiquez-le à l'agent dès maintenant.</p>
-          </div>
-          <div className="aps-assur-agent-recap">
-            <p>
-              <strong>
-                {agentCree.utilisateur?.prenom} {agentCree.utilisateur?.nom}
-              </strong>{' '}
-              — {agentCree.fonction}
-            </p>
-            <p>{agentCree.utilisateur?.email}</p>
-            <div className="aps-assur-mot-de-passe">
-              <code>{agentCree.mot_de_passe_temporaire}</code>
-              <button
-                type="button"
-                className="aps-assur-btn aps-assur-btn-secondary aps-assur-btn-sm"
-                onClick={copierMotDePasse}
+          <div className="row g-3 mb-3">
+            <div className="col-md-6">
+              <label className="form-label">
+                Nom du service <span className="text-danger">*</span>
+              </label>
+              <input
+                className="form-control"
+                type="text"
+                name="nom"
+                value={formDonnees.nom}
+                onChange={handleFormChange}
+                required
+              />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label">
+                Type d'acteur <span className="text-danger">*</span>
+              </label>
+              <select
+                className="form-select"
+                name="type_acteur"
+                value={formDonnees.type_acteur}
+                onChange={handleFormChange}
+                required
               >
-                {motDePasseCopie ? 'Copié !' : 'Copier'}
-              </button>
+                <option value="">Sélectionner…</option>
+                {TYPES_ACTEUR_ASSURANCE.map((t) => (
+                  <option key={t.valeur} value={t.valeur}>
+                    {t.libelle}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-md-6">
+              <label className="form-label">
+                Pays <span className="text-danger">*</span>
+              </label>
+              <select
+                className="form-select"
+                name="pays_id"
+                value={formDonnees.pays_id}
+                onChange={handleFormChange}
+                required
+              >
+                <option value="">Sélectionner…</option>
+                {paysListe.map((p) => (
+                  <option key={p.pays_id} value={p.pays_id}>
+                    {p.nom}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-md-6">
+              <label className="form-label">
+                Ville <span className="text-danger">*</span>
+              </label>
+              <select
+                className="form-select"
+                name="ville_id"
+                value={formDonnees.ville_id}
+                onChange={handleFormChange}
+                required
+                disabled={!formDonnees.pays_id}
+              >
+                <option value="">Sélectionner…</option>
+                {villesFormulaire.map((v) => (
+                  <option key={v.ville_id} value={v.ville_id}>
+                    {v.nom}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-md-6">
+              <label className="form-label">
+                Téléphone <span className="text-danger">*</span>
+              </label>
+              <input
+                className="form-control"
+                type="tel"
+                name="telephone"
+                value={formDonnees.telephone}
+                onChange={handleFormChange}
+                required
+              />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label">
+                Email <span className="text-danger">*</span>
+              </label>
+              <input
+                className="form-control"
+                type="email"
+                name="email"
+                value={formDonnees.email}
+                onChange={handleFormChange}
+                required
+              />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label">
+                N° d'agrément <span className="text-danger">*</span>
+              </label>
+              <input
+                className="form-control"
+                type="text"
+                name="agrement"
+                value={formDonnees.agrement}
+                onChange={handleFormChange}
+                required
+              />
+            </div>
+
+            {estAdmin ? (
+              <div className="col-md-6">
+                <label className="form-label">Statut de vérification</label>
+                <select
+                  className="form-select"
+                  name="statut_verification"
+                  value={formDonnees.statut_verification}
+                  onChange={handleFormChange}
+                >
+                  {STATUTS_VERIFICATION_ASSURANCE.map((s) => (
+                    <option key={s.valeur} value={s.valeur}>
+                      {s.libelle}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="col-md-6">
+                <div className="aps-notice is-info mb-0">
+                  <i className="fa-solid fa-circle-info"></i>
+                  <div>La fiche sera placée « En cours de vérification » jusqu'à validation par un administrateur.</div>
+                </div>
+              </div>
+            )}
+
+            <div className="col-md-6">
+              <label className="form-label">Latitude</label>
+              <input
+                className="form-control"
+                type="text"
+                name="latitude"
+                value={formDonnees.latitude}
+                onChange={handleFormChange}
+                placeholder="Optionnel"
+              />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label">Longitude</label>
+              <input
+                className="form-control"
+                type="text"
+                name="longitude"
+                value={formDonnees.longitude}
+                onChange={handleFormChange}
+                placeholder="Optionnel"
+              />
+            </div>
+
+            <div className="col-12">
+              <label className="form-label">Description</label>
+              <textarea
+                className="form-control"
+                name="description"
+                rows={3}
+                value={formDonnees.description}
+                onChange={handleFormChange}
+                placeholder="Optionnel"
+              ></textarea>
+            </div>
+
+            <div className="col-12">
+              <label className="form-label">
+                Photo / logo{' '}
+                {modeForm === 'creation' ? (
+                  <span className="text-danger">*</span>
+                ) : (
+                  <span className="aps-text-muted" style={{ fontSize: 12 }}>
+                    (optionnel — laisser vide pour conserver l'actuel)
+                  </span>
+                )}
+              </label>
+              <input
+                className="form-control"
+                type="file"
+                accept="image/*"
+                onChange={handleFormFichier}
+                required={modeForm === 'creation'}
+              />
+              {formImageApercu && (
+                <img
+                  src={formImageApercu}
+                  alt="Aperçu"
+                  className="mt-2"
+                  style={{ width: 140, height: 100, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--aps-border)' }}
+                />
+              )}
             </div>
           </div>
-          <div className="aps-assur-modale-actions">
-            <button type="button" className="aps-assur-btn aps-assur-btn-primary" onClick={() => setAgentCree(null)}>
-              J'ai noté le mot de passe
+
+          {modeForm === 'creation' && (
+            <div className="mt-2 pt-3" style={{ borderTop: '1px solid var(--aps-border)' }}>
+              <h6 className="mb-1">Compte de l'agent responsable</h6>
+              <p className="aps-text-muted mb-3" style={{ fontSize: 13 }}>
+                Un compte utilisateur est créé pour l'agent en charge de ce service. Un mot de passe temporaire vous
+                sera communiqué une seule fois, juste après la création.
+              </p>
+              <div className="row g-3">
+                <div className="col-md-6">
+                  <label className="form-label">
+                    Fonction <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    className="form-control"
+                    type="text"
+                    name="fonction"
+                    value={formDonnees.fonction}
+                    onChange={handleFormChange}
+                    required
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">
+                    Nom de l'agent <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    className="form-control"
+                    type="text"
+                    name="agent_nom"
+                    value={formDonnees.agent_nom}
+                    onChange={handleFormChange}
+                    required
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">
+                    Prénom de l'agent <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    className="form-control"
+                    type="text"
+                    name="agent_prenom"
+                    value={formDonnees.agent_prenom}
+                    onChange={handleFormChange}
+                    required
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">
+                    Email de l'agent <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    className="form-control"
+                    type="email"
+                    name="agent_email"
+                    value={formDonnees.agent_email}
+                    onChange={handleFormChange}
+                    required
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Téléphone de l'agent</label>
+                  <input
+                    className="form-control"
+                    type="tel"
+                    name="agent_telephone"
+                    value={formDonnees.agent_telephone}
+                    onChange={handleFormChange}
+                    placeholder="Optionnel"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </form>
+      </Modal>
+
+      {/* ===================== MODAL SUPPRESSION ===================== */}
+      <Modal
+        id="modalSuppressionAssurance"
+        title="Confirmer la suppression"
+        isOpen={!!suppressionCible}
+        onClose={annulerSuppression}
+        footer={
+          <>
+            <button className="btn btn-light" onClick={annulerSuppression} disabled={suppressionEnCours}>
+              Annuler
             </button>
+            <button className="btn btn-danger" onClick={confirmerSuppression} disabled={suppressionEnCours}>
+              {suppressionEnCours ? (
+                <>
+                  <i className="fa-solid fa-spinner fa-spin me-2"></i>Suppression…
+                </>
+              ) : (
+                'Supprimer définitivement'
+              )}
+            </button>
+          </>
+        }
+      >
+        <div className="aps-notice is-danger">
+          <i className="fa-solid fa-triangle-exclamation"></i>
+          <div>
+            Voulez-vous vraiment supprimer le service « {suppressionCible?.nom} » ? Cette action est définitive.
           </div>
-        </Modale>
-      )}
-    </div>
+        </div>
+        {suppressionErreur && (
+          <div className="aps-notice is-danger mt-3">
+            <i className="fa-solid fa-circle-xmark"></i>
+            <div>{suppressionErreur}</div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ===================== CONFIGURATION (activités / agences) ===================== */}
+      {configurationCible && <ConfigurationModale service={configurationCible} onFermer={fermerConfiguration} />}
+
+      {/* ===================== COMPTE AGENT CRÉÉ ===================== */}
+      <Modal
+        id="modalAgentCreeAssurance"
+        title="Compte agent créé"
+        isOpen={!!agentCree}
+        onClose={() => setAgentCree(null)}
+        footer={
+          <button className="btn btn-primary" onClick={() => setAgentCree(null)}>
+            J'ai noté le mot de passe
+          </button>
+        }
+      >
+        {agentCree && (
+          <>
+            <div className="aps-notice is-warning mb-3">
+              <i className="fa-solid fa-triangle-exclamation"></i>
+              <div>Ce mot de passe temporaire ne sera plus jamais affiché. Communiquez-le à l'agent dès maintenant.</div>
+            </div>
+            <div className="aps-card">
+              <div className="aps-card__body">
+                <p className="mb-1">
+                  <strong>
+                    {agentCree.utilisateur?.prenom} {agentCree.utilisateur?.nom}
+                  </strong>{' '}
+                  — {agentCree.fonction}
+                </p>
+                <p className="aps-text-muted mb-3" style={{ fontSize: 13 }}>
+                  {agentCree.utilisateur?.email}
+                </p>
+                <div className="d-flex align-items-center gap-2">
+                  <code className="assur-mot-de-passe">{agentCree.mot_de_passe_temporaire}</code>
+                  <button type="button" className="btn btn-sm btn-light" onClick={copierMotDePasse}>
+                    {motDePasseCopie ? 'Copié !' : 'Copier'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </Modal>
+    </>
   );
 }
