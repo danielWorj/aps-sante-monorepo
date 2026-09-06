@@ -1,7 +1,7 @@
 class ApiRealEndpoints {
   ApiRealEndpoints._();
 
-  static const String baseUrl = 'http://10.0.2.2:3000/api';
+  static const String baseUrl = 'https://api.azasante.com/api';
 
   // ─── Authentification (module transverse "authentification") ────
   // Voir authentification.routes.js / authentification.controller.js.
@@ -175,5 +175,5 @@ class ApiRealEndpoints {
   // ─── Visio (téléconsultation Jitsi) ────────────────────────────────
   // Voir visio.routes.js / visio.controller.js : authentifié, réservé
   // au médecin ou au patient du rendez-vous concerné.
-  static const String visioToken = '${baseUrl}/visio/token';
+  static const String visioToken = 'https//meet.azasante.com/visio/token';
 }
