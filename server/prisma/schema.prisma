@@ -1507,3 +1507,17 @@ model CompteBancaire {
   @@index([medecin_id])
   @@map("compte_bancaire")
 }
+
+// GESTION DES APKS DE L'APPLICATION MOBILE 
+
+model MobileApk {
+  id String @id @default(uuid()) @db.Uuid
+
+  libelle      String    @db.VarChar(255)
+  description  String?   @db.Text
+  file_url     String    @db.Text
+  status       Boolean   @default(true)
+  date_upload  DateTime  @default(now())
+
+  @@map("mobile_apk")
+}
