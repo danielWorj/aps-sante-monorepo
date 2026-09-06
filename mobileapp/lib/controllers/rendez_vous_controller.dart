@@ -31,11 +31,6 @@ import 'package:riverpod/riverpod.dart';
 
 import '../models/rendez_vous_models.dart';
 import '../repositories/rendez_vous_repository.dart';
-// Réutilise l'unique instance d'[ApiClient] déjà déclarée dans
-// api_client.dart plutôt que d'en redéclarer une seconde ici (deux
-// `apiClientProvider` distincts casseraient le partage d'état HTTP —
-// timeout, `http.Client` sous-jacent — entre les modules).
-import '../utils/api_client.dart' show apiClientProvider;
 
 /* =========================================================================
  * Dépendances partagées
@@ -43,8 +38,16 @@ import '../utils/api_client.dart' show apiClientProvider;
 
 /// Repository ré-exposé ici pour que les widgets n'aient jamais besoin
 /// d'importer rendez_vous_repository.dart directement.
+///
+/// [RendezVousRepository] parle HTTP directement via `package:http` et
+/// [ApiRealEndpoints] (endpoint.dart) — même patron que
+/// [MedecinRepository]/[PatientRepository] — il n'a donc plus besoin
+/// d'un [ApiClient] injecté ici (l'ancien api_client.dart, supprimé,
+/// pointait vers une URL de base différente de celle utilisée pour
+/// l'authentification, ce qui causait des 401 "Token invalide" sur
+/// toutes les routes /rendez-vous et /ordonnances).
 final rendezVousRepositoryProvider = Provider<RendezVousRepository>((ref) {
-  return RendezVousRepository(ref.watch(apiClientProvider));
+  return RendezVousRepository();
 });
 
 /* =========================================================================
