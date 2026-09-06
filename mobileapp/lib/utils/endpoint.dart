@@ -172,6 +172,22 @@ class ApiRealEndpoints {
   static String rendezVousPatient(String id) =>
       '${baseUrl}/patients/$id/rendez-vous';
 
+  // ─── Rendez-vous (module transverse "Gestion des médecins") ──────
+  // Voir rendezVous.controller.js / medecin.routes.js : toutes les
+  // routes exigent déjà "authentifier" côté backend — aucune n'est
+  // publique. Suppression physique réservée à admin/superadmin.
+  static const String rendezVous = '${baseUrl}/rendez-vous';
+  static String unRendezVous(String id) => '${baseUrl}/rendez-vous/$id';
+  static String statutRendezVous(String id) =>
+      '${baseUrl}/rendez-vous/$id/statut';
+
+  // ─── Ordonnances (module transverse "Gestion des médecins") ──────
+  // Voir rendezVous.controller.js / medecin.routes.js : toutes
+  // authentifiées. Création réservée au médecin du rendez-vous
+  // concerné ; suppression réservée à admin/superadmin.
+  static const String ordonnances = '${baseUrl}/ordonnances';
+  static String uneOrdonnance(String id) => '${baseUrl}/ordonnances/$id';
+
   // ─── Visio (téléconsultation Jitsi) ────────────────────────────────
   // Voir visio.routes.js / visio.controller.js : authentifié, réservé
   // au médecin ou au patient du rendez-vous concerné.

@@ -6,7 +6,7 @@ import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/authentification_models.dart';
 import '../../../models/rendez_vous_models.dart';
-import '../../../utils/api_client.dart' show ApiException;
+import '../../../repositories/rendez_vous_repository.dart' show ApiException;
 import '../teleconsultation_screen.dart';
 
 /// ============================================================
