@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router-dom';
 import App from './App';
 import Home from './pages/Home';
 import Medecin from './pages/Medecin';
+import CreerPatient from './components/patient/creerPatient.jsx'
 import CreationMedecin from './components/medecin/creationMedecin';
 
 
@@ -50,7 +51,7 @@ export const router = createBrowserRouter([
       { path: '/home', element: <Home /> },
       { path: '/medecin', element: <Medecin /> },
       { path: '/devenir-medecin', element: <CreationMedecin /> },
-
+      { path: '/creer-patient', element: <CreerPatient /> },
 
       { path: '/pharmacie', element: <Pharmacie /> },
       { path: '/pharmacie/:id', element: <FichePharmacie /> },

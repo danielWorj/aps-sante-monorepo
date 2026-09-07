@@ -24,6 +24,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 
 let accessToken = null;
 let onUnauthorized = null; // injecté par AuthProvider
+let onTokenRefreshed = null; // injecté par AuthProvider
 
 export function setAccessToken(token) {
   accessToken = token;
@@ -39,23 +40,67 @@ export function setUnauthorizedHandler(handler) {
 }
 
 /**
+ * Permet à AuthProvider de s'abonner à l'obtention d'un nouvel access
+ * token via tenterRefresh() — que ce refresh ait été déclenché
+ * explicitement (restauration de session, refresh proactif planifié
+ * côté AuthProvider) ou implicitement par le filet de sécurité réactif
+ * d'apiFetch (retry sur 401, voir plus bas). Ainsi AuthProvider peut
+ * reprogrammer son timer de refresh proactif à partir de CE token,
+ * quel que soit le chemin par lequel il a été obtenu — sans ça, un
+ * refresh déclenché uniquement par le filet réactif laissait le timer
+ * proactif désynchronisé (toujours calé sur l'expiration de l'ancien
+ * token plutôt que du nouveau).
+ */
+export function setTokenRefreshedHandler(handler) {
+  onTokenRefreshed = handler;
+}
+
+/**
+ * Appel de refresh actuellement "en vol", partagé entre tous les
+ * appelants concurrents. Sans cette déduplication, deux appels
+ * simultanés à tenterRefresh() (ex. React.StrictMode qui monte l'app
+ * deux fois en dev, ou plusieurs onglets) partent chacun avec le MÊME
+ * cookie refresh_token. Le serveur applique une rotation stricte : le
+ * premier appel révoque ce cookie et en émet un nouveau, donc le
+ * second appel — parti avec l'ancien cookie avant que le Set-Cookie du
+ * premier ait pu être appliqué — se voit rejeté en 401 ("Refresh token
+ * invalide"), alors même que la session est valide. Ce 401 fait croire
+ * à AuthContext que la session a expiré et renvoie l'utilisateur sur
+ * /login à chaque rechargement.
+ */
+let refreshEnCours = null;
+
+/**
  * Appelle POST /api/auth/refresh (cookie httpOnly envoyé
  * automatiquement) pour obtenir un nouvel access token.
  * Retourne le nouveau token, ou null si aucune session valide.
+ *
+ * Si un refresh est déjà en cours, on réutilise sa promesse au lieu
+ * d'en déclencher un second : un seul appel réseau part réellement,
+ * quel que soit le nombre d'appelants concurrents.
  */
 export async function tenterRefresh() {
-  try {
-    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    setAccessToken(data.access_token);
-    return data.access_token;
-  } catch {
-    return null;
-  }
+  if (refreshEnCours) return refreshEnCours;
+
+  refreshEnCours = (async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      setAccessToken(data.access_token);
+      onTokenRefreshed?.(data.access_token);
+      return data.access_token;
+    } catch {
+      return null;
+    } finally {
+      refreshEnCours = null;
+    }
+  })();
+
+  return refreshEnCours;
 }
 
 /**
@@ -66,23 +111,11 @@ export async function tenterRefresh() {
  *  - sur 401, tente un refresh puis rejoue la requête une seule fois
  *    (sauf si `skipAuthRetry: true`, utilisé pour login/logout/refresh
  *    eux-mêmes afin d'éviter toute boucle).
- *  - `authOverride` (ex. `"Bearer <token_changement_mot_de_passe>"`)
- *    force l'en-tête Authorization de CET appel précis, à la place de
- *    l'access_token de session en mémoire. Utilisé par
- *    changerMotDePasseInitial() dans authService.js : au moment de cet
- *    appel il n'y a justement pas encore d'access_token de session.
- *    Un appel avec authOverride ne déclenche jamais de refresh
- *    silencieux sur 401 : ce n'est pas un jeton de session, un refresh
- *    du cookie httpOnly n'a aucun sens ici et rejouerait la requête
- *    avec un token complètement différent.
  *
  * Lève une Error (avec `.status` et `.data`) si la réponse finale n'est
  * pas OK, pour un traitement simple par les appelants (try/catch).
  */
-export async function apiFetch(
-  path,
-  { body, headers, skipAuthRetry = false, authOverride, ...options } = {}
-) {
+export async function apiFetch(path, { body, headers, skipAuthRetry = false, ...options } = {}) {
   // Un FormData (upload multipart, ex. création/modification de centre
   // de santé avec fichiers) ne doit JAMAIS être passé à JSON.stringify
   // (il n'a pas de propriétés énumérables : on obtiendrait "{}", donc
@@ -98,11 +131,7 @@ export async function apiFetch(
       credentials: 'include',
       headers: {
         ...(estFormData ? {} : { 'Content-Type': 'application/json' }),
-        ...(authOverride
-          ? { Authorization: authOverride }
-          : token
-          ? { Authorization: `Bearer ${token}` }
-          : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...headers,
       },
       body: body === undefined ? undefined : estFormData ? body : JSON.stringify(body),
@@ -110,7 +139,7 @@ export async function apiFetch(
 
   let res = await doFetch(accessToken);
 
-  if (res.status === 401 && !skipAuthRetry && !authOverride) {
+  if (res.status === 401 && !skipAuthRetry) {
     const nouveauToken = await tenterRefresh();
     if (nouveauToken) {
       res = await doFetch(nouveauToken);
