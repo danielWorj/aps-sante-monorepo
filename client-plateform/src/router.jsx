@@ -42,6 +42,10 @@ import Teleconsultation from './pages/Teleconsultation';
 //PORTAIL PATIENT
 import PatientRdv from './components/portails/components/patient-rdv';
 import PatientProfil from './components/portails/components/patient-profil';
+//PUBLICITE 
+
+//ANNONCES 
+import FicheAnnonce from './pages/FicheAnnonce.jsx';
 
 export const router = createBrowserRouter([
   {
@@ -72,7 +76,10 @@ export const router = createBrowserRouter([
       // ASSURANCE
       { path: '/assurance', element: <Assurance /> },
       { path: "/assurances/:id", element: <FicheAssurance /> }, 
-      { path: '/assurances/creation', element: <CreationAssurance /> }
+      { path: '/assurances/creation', element: <CreationAssurance /> }, 
+
+      //ANNONCE 
+      {path: '/annonces/:id', element: <FicheAnnonce />},
     ],
   },
   {
