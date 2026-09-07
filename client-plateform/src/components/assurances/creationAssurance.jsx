@@ -865,7 +865,7 @@ const CreationAssurance = () => {
                           onClick={prevStep}
                           disabled={isSubmitting}
                         >
-                          <i className="bi bi-arrow-left"></i> Retour
+                          <i className="fa-solid fa-arrow-left"></i> Retour
                         </button>
                       ) : (
                         <div></div>
@@ -877,7 +877,7 @@ const CreationAssurance = () => {
                           className="btn btn-primary"
                           onClick={nextStep}
                         >
-                          Continuer <i className="bi bi-arrow-right"></i>
+                          Continuer <i className="fa-solid fa-arrow-right"></i>
                         </button>
                       ) : (
                         <button
@@ -890,7 +890,7 @@ const CreationAssurance = () => {
                           ) : (
                             <>
                               Envoyer ma demande{' '}
-                              <i className="bi bi-send"></i>
+                              <i className="fa-solid fa-paper-plane"></i>
                             </>
                           )}
                         </button>

@@ -400,7 +400,7 @@ if (isSubmitted) {
                 <div className="confirm-check-ring"></div>
                 <div className="confirm-check-ring"></div>
                 <div className="confirm-check-circle">
-                  <i className="bi bi-check-lg"></i>
+                  <i className="fa-solid fa-check"></i>
                 </div>
               </div>
 
@@ -415,13 +415,13 @@ if (isSubmitted) {
               {compteCree && (
                 <div className="confirm-credentials">
                   <div className="confirm-credentials-title">
-                    <i className="bi bi-shield-lock-fill"></i>
+                    <i className="fa-solid fa-shield-halved"></i>
                     Identifiants à conserver précieusement
                   </div>
 
                   <div className="cred-row">
                     <div className="cred-icon">
-                      <i className="bi bi-envelope-fill"></i>
+                      <i className="fa-solid fa-envelope"></i>
                     </div>
                     <div className="cred-body">
                       <span className="cred-label">Identifiant</span>
@@ -434,13 +434,13 @@ if (isSubmitted) {
                       title="Copier l'identifiant"
                       aria-label="Copier l'identifiant"
                     >
-                      <i className={`bi ${copiedField === 'email' ? 'bi-check2' : 'bi-clipboard'}`}></i>
+                      <i className={`fa-solid ${copiedField === 'email' ? 'fa-check' : 'fa-clipboard'}`}></i>
                     </button>
                   </div>
 
                   <div className="cred-row">
                     <div className="cred-icon">
-                      <i className="bi bi-key-fill"></i>
+                      <i className="fa-solid fa-key"></i>
                     </div>
                     <div className="cred-body">
                       <span className="cred-label">Mot de passe temporaire</span>
@@ -455,7 +455,7 @@ if (isSubmitted) {
                       title="Copier le mot de passe"
                       aria-label="Copier le mot de passe"
                     >
-                      <i className={`bi ${copiedField === 'password' ? 'bi-check2' : 'bi-clipboard'}`}></i>
+                      <i className={`fa-solid ${copiedField === 'password' ? 'fa-check' : 'fa-clipboard'}`}></i>
                     </button>
                   </div>
                 </div>
@@ -464,7 +464,7 @@ if (isSubmitted) {
               {/* Avertissement trésorerie */}
               {compteCree?.erreurTresorerie && (
                 <div className="confirm-warning" role="alert">
-                  <i className="bi bi-exclamation-triangle-fill"></i>
+                  <i className="fa-solid fa-triangle-exclamation"></i>
                   <span>{compteCree.erreurTresorerie}</span>
                 </div>
               )}
@@ -472,11 +472,11 @@ if (isSubmitted) {
               {/* CTA principal */}
               <a href="#" className="confirm-cta">
                 Suivre l'état de ma demande
-                <i className="bi bi-arrow-right"></i>
+                <i className="fa-solid fa-arrow-right"></i>
               </a>
 
               <div className="confirm-hint">
-                <i className="bi bi-envelope-paper-heart-fill"></i>
+                <i className="fa-solid fa-envelope-open-text"></i>
                 Un e-mail de confirmation vous a été envoyé.
               </div>
             </div>
@@ -503,7 +503,7 @@ if (isSubmitted) {
                   </p>
                   <ul className="form-side-list">
                     <li>
-                      <i className="bi bi-person"></i>
+                      <i className="fa-solid fa-user"></i>
                       <div>
                         <strong>Informations</strong>
                         <span className="form-side-desc">
@@ -512,7 +512,7 @@ if (isSubmitted) {
                       </div>
                     </li>
                     <li>
-                      <i className="bi bi-stethoscope"></i>
+                      <i className="fa-solid fa-stethoscope"></i>
                       <div>
                         <strong>Spécialité & Ordre</strong>
                         <span className="form-side-desc">
@@ -521,14 +521,14 @@ if (isSubmitted) {
                       </div>
                     </li>
                     <li>
-                      <i className="bi bi-journal-text"></i>
+                      <i className="fa-solid fa-file-lines"></i>
                       <div>
                         <strong>Biographie</strong>
                         <span className="form-side-desc">Présentation visible sur votre fiche</span>
                       </div>
                     </li>
                     <li>
-                      <i className="bi bi-file-earmark-check"></i>
+                      <i className="fa-solid fa-file-circle-check"></i>
                       <div>
                         <strong>Justificatifs</strong>
                         <span className="form-side-desc">
@@ -537,7 +537,7 @@ if (isSubmitted) {
                       </div>
                     </li>
                     <li>
-                      <i className="bi bi-wallet2"></i>
+                      <i className="fa-solid fa-wallet"></i>
                       <div>
                         <strong>Trésorerie</strong>
                         <span className="form-side-desc">
@@ -546,7 +546,7 @@ if (isSubmitted) {
                       </div>
                     </li>
                     <li>
-                      <i className="bi bi-check-circle"></i>
+                      <i className="fa-solid fa-circle-check"></i>
                       <div>
                         <strong>Confirmation</strong>
                         <span className="form-side-desc">
@@ -597,10 +597,10 @@ if (isSubmitted) {
                                 alt="Aperçu"
                               />
                             ) : (
-                              <i className="bi bi-camera upload-placeholder-icon"></i>
+                              <i className="fa-solid fa-camera upload-placeholder-icon"></i>
                             )}
                             <div className="avatar-upload-badge">
-                              <i className="bi bi-pencil"></i>
+                              <i className="fa-solid fa-pencil"></i>
                             </div>
                           </label>
                           <div className="avatar-upload-info">
@@ -768,7 +768,7 @@ if (isSubmitted) {
                             )}
                             {ordreVerification.statut === 'trouve' && (
                               <p className="form-hint text-success">
-                                <i className="bi bi-check-circle"></i> Inscription confirmée
+                                <i className="fa-solid fa-circle-check"></i> Inscription confirmée
                                 {ordreVerification.nomComplet ? ` (${ordreVerification.nomComplet})` : ''}.
                               </p>
                             )}
@@ -870,7 +870,7 @@ if (isSubmitted) {
                                 accept=".pdf, image/png, image/jpeg"
                                 onChange={(e) => handleFileChange(e, 'cni')}
                               />
-                              <i className="bi bi-cloud-arrow-up"></i>
+                              <i className="fa-solid fa-cloud-arrow-up"></i>
                               <strong>Glissez le fichier ici</strong>
                               <span className="upload-default-text">
                                 PDF, JPG — 5 Mo max
@@ -885,7 +885,7 @@ if (isSubmitted) {
                                   setFormData((prev) => ({ ...prev, cni: null }))
                                 }
                               >
-                                <i className="bi bi-x"></i>
+                                <i className="fa-solid fa-xmark"></i>
                               </button>
                             </div>
                           </div>
@@ -904,7 +904,7 @@ if (isSubmitted) {
                                 accept=".pdf, image/png, image/jpeg"
                                 onChange={(e) => handleFileChange(e, 'attestation')}
                               />
-                              <i className="bi bi-cloud-arrow-up"></i>
+                              <i className="fa-solid fa-cloud-arrow-up"></i>
                               <strong>Glissez le fichier ici</strong>
                               <span className="upload-default-text">
                                 PDF, JPG — 5 Mo max
@@ -919,7 +919,7 @@ if (isSubmitted) {
                                   setFormData((prev) => ({ ...prev, attestation: null }))
                                 }
                               >
-                                <i className="bi bi-x"></i>
+                                <i className="fa-solid fa-xmark"></i>
                               </button>
                             </div>
                           </div>
@@ -947,7 +947,7 @@ if (isSubmitted) {
                               onChange={handleChange}
                             />
                             <div className="opt-card">
-                              <i className="bi bi-dash-circle"></i>
+                              <i className="fa-solid fa-circle-minus"></i>
                               Plus tard
                             </div>
                           </label>
@@ -960,7 +960,7 @@ if (isSubmitted) {
                               onChange={handleChange}
                             />
                             <div className="opt-card">
-                              <i className="bi bi-phone"></i>
+                              <i className="fa-solid fa-phone"></i>
                               Mobile Money
                             </div>
                           </label>
@@ -973,7 +973,7 @@ if (isSubmitted) {
                               onChange={handleChange}
                             />
                             <div className="opt-card">
-                              <i className="bi bi-bank"></i>
+                              <i className="fa-solid fa-building-columns"></i>
                               Compte bancaire
                             </div>
                           </label>
@@ -1134,7 +1134,7 @@ if (isSubmitted) {
                           onClick={prevStep}
                           disabled={isSubmitting}
                         >
-                          <i className="bi bi-arrow-left"></i> Retour
+                          <i className="fa-solid fa-arrow-left"></i> Retour
                         </button>
                       ) : (
                         <div></div>
@@ -1146,12 +1146,12 @@ if (isSubmitted) {
                           className="btn btn-primary"
                           onClick={nextStep}
                         >
-                          Continuer <i className="bi bi-arrow-right"></i>
+                          Continuer <i className="fa-solid fa-arrow-right"></i>
                         </button>
                       ) : (
                         <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
                           {isSubmitting ? 'Envoi en cours…' : (
-                            <>Envoyer ma demande <i className="bi bi-send"></i></>
+                            <>Envoyer ma demande <i className="fa-solid fa-paper-plane"></i></>
                           )}
                         </button>
                       )}

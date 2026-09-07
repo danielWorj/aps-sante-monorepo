@@ -243,7 +243,7 @@ const CreerPatient = () => {
                   <div className="confirm-check-ring"></div>
                   <div className="confirm-check-ring"></div>
                   <div className="confirm-check-circle">
-                    <i className="bi bi-check-lg"></i>
+                    <i className="fa-solid fa-check"></i>
                   </div>
                 </div>
 
@@ -257,12 +257,12 @@ const CreerPatient = () => {
                 {!compteCree?.connexionReussie && compteCree?.email && (
                   <div className="confirm-credentials">
                     <div className="confirm-credentials-title">
-                      <i className="bi bi-envelope-fill"></i>
+                      <i className="fa-solid fa-envelope"></i>
                       Identifiant de connexion
                     </div>
                     <div className="cred-row">
                       <div className="cred-icon">
-                        <i className="bi bi-envelope-fill"></i>
+                        <i className="fa-solid fa-envelope"></i>
                       </div>
                       <div className="cred-body">
                         <span className="cred-label">Identifiant</span>
@@ -277,11 +277,11 @@ const CreerPatient = () => {
                   className="confirm-cta"
                 >
                   {compteCree?.connexionReussie ? 'Accéder à mon espace patient' : 'Me connecter'}
-                  <i className="bi bi-arrow-right"></i>
+                  <i className="fa-solid fa-arrow-right"></i>
                 </a>
 
                 <div className="confirm-hint">
-                  <i className="bi bi-envelope-paper-heart-fill"></i>
+                  <i className="fa-solid fa-envelope-open-text"></i>
                   Un e-mail de confirmation vous a été envoyé.
                 </div>
               </div>
@@ -307,7 +307,7 @@ const CreerPatient = () => {
                   </p>
                   <ul className="form-side-list">
                     <li>
-                      <i className="bi bi-person"></i>
+                      <i className="fa-solid fa-user"></i>
                       <div>
                         <strong>Informations</strong>
                         <span className="form-side-desc">
@@ -316,7 +316,7 @@ const CreerPatient = () => {
                       </div>
                     </li>
                     <li>
-                      <i className="bi bi-shield-lock"></i>
+                      <i className="fa-solid fa-lock"></i>
                       <div>
                         <strong>Sécurité</strong>
                         <span className="form-side-desc">
@@ -325,7 +325,7 @@ const CreerPatient = () => {
                       </div>
                     </li>
                     <li>
-                      <i className="bi bi-check-circle"></i>
+                      <i className="fa-solid fa-circle-check"></i>
                       <div>
                         <strong>Confirmation</strong>
                         <span className="form-side-desc">
@@ -523,7 +523,7 @@ const CreerPatient = () => {
                           onClick={prevStep}
                           disabled={isSubmitting}
                         >
-                          <i className="bi bi-arrow-left"></i> Retour
+                          <i className="fa-solid fa-arrow-left"></i> Retour
                         </button>
                       ) : (
                         <div></div>
@@ -531,12 +531,12 @@ const CreerPatient = () => {
 
                       {currentStep < ETAPES.length ? (
                         <button type="button" className="btn btn-primary" onClick={nextStep}>
-                          Continuer <i className="bi bi-arrow-right"></i>
+                          Continuer <i className="fa-solid fa-arrow-right"></i>
                         </button>
                       ) : (
                         <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
                           {isSubmitting ? 'Envoi en cours…' : (
-                            <>Créer mon compte <i className="bi bi-send"></i></>
+                            <>Créer mon compte <i className="fa-solid fa-paper-plane"></i></>
                           )}
                         </button>
                       )}

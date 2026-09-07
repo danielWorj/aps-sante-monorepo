@@ -298,7 +298,7 @@ const CreationPharmacie = () => {
                   <div className="confirm-check-ring"></div>
                   <div className="confirm-check-ring"></div>
                   <div className="confirm-check-circle">
-                    <i className="bi bi-check-lg"></i>
+                    <i className="fa-solid fa-check"></i>
                   </div>
                 </div>
 
@@ -311,13 +311,13 @@ const CreationPharmacie = () => {
                 {pharmacieCreee?.agentEmail && (
                   <div className="confirm-credentials">
                     <div className="confirm-credentials-title">
-                      <i className="bi bi-shield-lock-fill"></i>
+                      <i className="fa-solid fa-shield-halved"></i>
                       Identifiants de l'agent responsable — à conserver précieusement
                     </div>
 
                     <div className="cred-row">
                       <div className="cred-icon">
-                        <i className="bi bi-envelope-fill"></i>
+                        <i className="fa-solid fa-envelope"></i>
                       </div>
                       <div className="cred-body">
                         <span className="cred-label">Identifiant</span>
@@ -330,14 +330,14 @@ const CreationPharmacie = () => {
                         title="Copier l'identifiant"
                         aria-label="Copier l'identifiant"
                       >
-                        <i className={`bi ${copiedField === 'email' ? 'bi-check2' : 'bi-clipboard'}`}></i>
+                        <i className={`fa-solid ${copiedField === 'email' ? 'fa-check' : 'fa-clipboard'}`}></i>
                       </button>
                     </div>
 
                     {pharmacieCreee.motDePasseTemporaire && (
                       <div className="cred-row">
                         <div className="cred-icon">
-                          <i className="bi bi-key-fill"></i>
+                          <i className="fa-solid fa-key"></i>
                         </div>
                         <div className="cred-body">
                           <span className="cred-label">Mot de passe temporaire</span>
@@ -352,7 +352,7 @@ const CreationPharmacie = () => {
                           title="Copier le mot de passe"
                           aria-label="Copier le mot de passe"
                         >
-                          <i className={`bi ${copiedField === 'password' ? 'bi-check2' : 'bi-clipboard'}`}></i>
+                          <i className={`fa-solid ${copiedField === 'password' ? 'fa-check' : 'fa-clipboard'}`}></i>
                         </button>
                       </div>
                     )}
@@ -367,11 +367,11 @@ const CreationPharmacie = () => {
 
                 <a href="#" className="confirm-cta">
                   Voir ma fiche pharmacie
-                  <i className="bi bi-arrow-right"></i>
+                  <i className="fa-solid fa-arrow-right"></i>
                 </a>
 
                 <div className="confirm-hint">
-                  <i className="bi bi-envelope-paper-heart-fill"></i>
+                  <i className="fa-solid fa-envelope-open-text"></i>
                   Un e-mail de confirmation vous a été envoyé.
                 </div>
               </div>
@@ -398,7 +398,7 @@ const CreationPharmacie = () => {
                   </p>
                   <ul className="form-side-list">
                     <li>
-                      <i className="bi bi-shop"></i>
+                      <i className="fa-solid fa-shop"></i>
                       <div>
                         <strong>Informations</strong>
                         <span className="form-side-desc">
@@ -407,7 +407,7 @@ const CreationPharmacie = () => {
                       </div>
                     </li>
                     <li>
-                      <i className="bi bi-geo-alt"></i>
+                      <i className="fa-solid fa-location-dot"></i>
                       <div>
                         <strong>Localisation</strong>
                         <span className="form-side-desc">
@@ -416,7 +416,7 @@ const CreationPharmacie = () => {
                       </div>
                     </li>
                     <li>
-                      <i className="bi bi-person-badge"></i>
+                      <i className="fa-solid fa-id-badge"></i>
                       <div>
                         <strong>Agent responsable</strong>
                         <span className="form-side-desc">
@@ -425,7 +425,7 @@ const CreationPharmacie = () => {
                       </div>
                     </li>
                     <li>
-                      <i className="bi bi-file-earmark-check"></i>
+                      <i className="fa-solid fa-file-circle-check"></i>
                       <div>
                         <strong>Justificatifs</strong>
                         <span className="form-side-desc">
@@ -434,7 +434,7 @@ const CreationPharmacie = () => {
                       </div>
                     </li>
                     <li>
-                      <i className="bi bi-check-circle"></i>
+                      <i className="fa-solid fa-circle-check"></i>
                       <div>
                         <strong>Confirmation</strong>
                         <span className="form-side-desc">
@@ -691,7 +691,7 @@ const CreationPharmacie = () => {
                                 accept="image/png, image/jpeg"
                                 onChange={(e) => handleFileChange(e, 'image_pharmacie')}
                               />
-                              <i className="bi bi-cloud-arrow-up"></i>
+                              <i className="fa-solid fa-cloud-arrow-up"></i>
                               <strong>Glissez le fichier ici</strong>
                               <span className="upload-default-text">JPG, PNG — 5 Mo max</span>
                               <span className="upload-filename">{formData.image_pharmacie?.name}</span>
@@ -700,7 +700,7 @@ const CreationPharmacie = () => {
                                 className="upload-remove"
                                 onClick={() => setFormData((prev) => ({ ...prev, image_pharmacie: null }))}
                               >
-                                <i className="bi bi-x"></i>
+                                <i className="fa-solid fa-xmark"></i>
                               </button>
                             </div>
                           </div>
@@ -714,7 +714,7 @@ const CreationPharmacie = () => {
                                 accept=".pdf, image/png, image/jpeg"
                                 onChange={(e) => handleFileChange(e, 'piece_identite')}
                               />
-                              <i className="bi bi-cloud-arrow-up"></i>
+                              <i className="fa-solid fa-cloud-arrow-up"></i>
                               <strong>Glissez le fichier ici</strong>
                               <span className="upload-default-text">PDF, JPG — 5 Mo max</span>
                               <span className="upload-filename">{formData.piece_identite?.name}</span>
@@ -723,7 +723,7 @@ const CreationPharmacie = () => {
                                 className="upload-remove"
                                 onClick={() => setFormData((prev) => ({ ...prev, piece_identite: null }))}
                               >
-                                <i className="bi bi-x"></i>
+                                <i className="fa-solid fa-xmark"></i>
                               </button>
                             </div>
                           </div>
@@ -737,7 +737,7 @@ const CreationPharmacie = () => {
                                 accept=".pdf, image/png, image/jpeg"
                                 onChange={(e) => handleFileChange(e, 'document_agrement')}
                               />
-                              <i className="bi bi-cloud-arrow-up"></i>
+                              <i className="fa-solid fa-cloud-arrow-up"></i>
                               <strong>Glissez le fichier ici</strong>
                               <span className="upload-default-text">PDF, JPG — 5 Mo max</span>
                               <span className="upload-filename">{formData.document_agrement?.name}</span>
@@ -746,7 +746,7 @@ const CreationPharmacie = () => {
                                 className="upload-remove"
                                 onClick={() => setFormData((prev) => ({ ...prev, document_agrement: null }))}
                               >
-                                <i className="bi bi-x"></i>
+                                <i className="fa-solid fa-xmark"></i>
                               </button>
                             </div>
                           </div>
@@ -794,7 +794,7 @@ const CreationPharmacie = () => {
                           onClick={prevStep}
                           disabled={isSubmitting}
                         >
-                          <i className="bi bi-arrow-left"></i> Retour
+                          <i className="fa-solid fa-arrow-left"></i> Retour
                         </button>
                       ) : (
                         <div></div>
@@ -802,12 +802,12 @@ const CreationPharmacie = () => {
 
                       {currentStep < ETAPES.length ? (
                         <button type="button" className="btn btn-primary" onClick={nextStep}>
-                          Continuer <i className="bi bi-arrow-right"></i>
+                          Continuer <i className="fa-solid fa-arrow-right"></i>
                         </button>
                       ) : (
                         <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
                           {isSubmitting ? 'Envoi en cours…' : (
-                            <>Envoyer ma demande <i className="bi bi-send"></i></>
+                            <>Envoyer ma demande <i className="fa-solid fa-paper-plane"></i></>
                           )}
                         </button>
                       )}

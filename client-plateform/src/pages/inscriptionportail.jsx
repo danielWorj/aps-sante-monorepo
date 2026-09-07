@@ -11,7 +11,7 @@ const InscriptionPortail = () => {
       id: 'patient',
       title: 'Patient',
       description: 'Accéder à vos rendez-vous et ordonnances',
-      icon: 'bi-person-heart',
+      icon: 'fa-hospital-user',
       color: 'var(--primary)',
       path: '/creer-patient',
     },
@@ -19,7 +19,7 @@ const InscriptionPortail = () => {
       id: 'medecin',
       title: 'Médecin & Professionnel',
       description: 'Médecins, spécialistes, professionnels de santé',
-      icon: 'bi-stethoscope',
+      icon: 'fa-stethoscope',
       color: 'var(--teal)',
       path: '/devenir-medecin',
     },
@@ -27,7 +27,7 @@ const InscriptionPortail = () => {
       id: 'pharmacie',
       title: 'Pharmacie',
       description: 'Gérants et personnel des pharmacies',
-      icon: 'bi-capsule',
+      icon: 'fa-capsules',
       color: 'var(--violet)',
       path: '/pharmacie/creation',
     },
@@ -35,7 +35,7 @@ const InscriptionPortail = () => {
       id: 'structure',
       title: 'Structure de Santé',
       description: 'Cliniques, hôpitaux, centres médicaux',
-      icon: 'bi-building',
+      icon: 'fa-building',
       color: 'var(--urgence)',
       path: '/structure-sante/creation',
     },
@@ -43,7 +43,7 @@ const InscriptionPortail = () => {
       id: 'assurance',
       title: 'Compagnie d\'Assurance',
       description: 'Assurances santé et mutuelles',
-      icon: 'bi-shield-check',
+      icon: 'fa-shield-halved',
       color: 'var(--orange)',
       path: '/assurances/creation',
     },
@@ -75,14 +75,14 @@ const InscriptionPortail = () => {
                   style={{ '--icon-color': type.color }}
                 >
                   <div className="icon-wrapper">
-                    <i className={`bi ${type.icon}`}></i>
+                    <i className={`fa-solid ${type.icon}`}></i>
                   </div>
                   <div className="card-content">
                     <h3>{type.title}</h3>
                     <p>{type.description}</p>
                   </div>
                   <div className="arrow-icon">
-                    <i className="bi bi-chevron-right"></i>
+                    <i className="fa-solid fa-chevron-right"></i>
                   </div>
                 </button>
               ))}
