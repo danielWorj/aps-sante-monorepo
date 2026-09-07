@@ -1,0 +1,96 @@
+/* src/assets/style/annonces.css
+ *
+ * Styles ADDITIFS pour Annonces.jsx uniquement. Le reste du visuel
+ * (aps-card, aps-kpi, aps-table, aps-badge is-primary/is-success/
+ * is-warning/is-danger/is-info, aps-notice, aps-search…) vient déjà
+ * de la feuille de style globale du back-office (voir Ordonnance.jsx /
+ * Medecin.jsx / RendezVous.jsx, qui la réutilisent sans redéfinition
+ * locale) — on ne redéclare ici QUE ce qui manque ou ce qui est
+ * propre à cette page :
+ *   1) le badge "annonce expirée / désactivée" (aps-badge.is-muted
+ *      n'existe pas dans la feuille globale — même correctif que
+ *      RendezVous.css) ;
+ *   2) l'atténuation visuelle des lignes expirées/désactivées ;
+ *   3) l'aperçu du visuel/flyer (miniature, bouton d'upload) ;
+ *   4) quelques ajustements mineurs propres à cette page.
+ *
+ * Portée : toutes les règles sont préfixées par .annonces-page (ou
+ * ciblent des classes spécifiques à ce composant), pour ne jamais
+ * interférer avec les autres pages du back-office.
+ */
+
+/* ────────────────────────── Badge "expirée / désactivée" ────────────────────────── */
+/* Modificateur manquant du système aps-badge existant (is-primary /
+   is-success / is-warning / is-danger / is-info sont déjà stylés
+   globalement) : une annonce expirée ou désactivée n'est ni une
+   erreur (danger) ni une réussite (success), simplement un état
+   neutre/éteint. */
+.aps-badge.is-muted {
+  background-color: #eef0f3;
+  color: #6b7280;
+  border: 1px solid #dfe3e8;
+}
+
+.aps-badge.is-muted i {
+  color: #9ca3af;
+}
+
+/* ────────────────────────── Ajustements de page ────────────────────────── */
+
+.annonces-page .aps-table td {
+  vertical-align: middle;
+}
+
+/* Colonne "Annonce" : libellé + aperçu de description sur deux
+   lignes, sans faire déborder le tableau (le texte complet reste
+   consultable via "Voir / modifier"). */
+.annonces-page .aps-table td .fw-semibold {
+  line-height: 1.3;
+}
+
+/* Annonces expirées ou désactivées : légère atténuation visuelle des
+   lignes dans la table pour distinguer d'un coup d'œil ce qui n'est
+   plus diffusé côté application du reste des annonces actives. */
+.annonces-page .aps-table tbody tr:has(.aps-badge.is-muted) {
+  opacity: 0.7;
+}
+
+/* ────────────────────────── Champ fichier (upload) ────────────────────────── */
+/* Bouton "Choisir un fichier / Remplacer le fichier" du composant
+   ChampFichier : léger relief au survol pour bien signaler la zone
+   cliquable, cohérent avec les autres actions secondaires
+   (btn-light) du back-office. */
+.annonces-page .btn-light:has(+ span .fa-paperclip),
+.annonces-page .modal-body .btn-light:hover {
+  background-color: #eef0f3;
+}
+
+/* ────────────────────────── Aperçu visuel / flyer ────────────────────────── */
+/* Miniature du visuel affichée dans le détail d'une annonce (image
+   uniquement — un PDF n'a qu'un lien "ouvrir", jamais d'aperçu
+   inline) : cadre discret cohérent avec aps-card. */
+.annonces-page .modal-body img,
+.modal-body .rdv-annonce-preview {
+  object-fit: cover;
+  background-color: #f8f9fb;
+}
+
+/* Zone de description (création/édition) : compteur de caractères
+   aligné à droite, cohérent avec le style discret déjà utilisé pour
+   les aides de formulaire (aps-text-muted) ailleurs dans le
+   back-office. */
+.annonces-page textarea.form-control,
+.modal-body textarea.form-control {
+  resize: vertical;
+  min-height: 90px;
+}
+
+/* Icônes de type de fichier dans la table (PDF / image) — repérer un
+   flyer d'un visuel d'un coup d'œil sans ouvrir le lien. */
+.annonces-page .aps-table td i.fa-file-pdf {
+  color: #dc2626;
+}
+
+.annonces-page .aps-table td i.fa-image {
+  color: #0ea5e9;
+}

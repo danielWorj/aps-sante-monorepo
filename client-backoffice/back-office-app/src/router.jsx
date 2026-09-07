@@ -25,6 +25,8 @@ import Pharmacie from './pages/Pharmacie';
 import Publicite from './pages/Publicite';
 import EmplacementForfaire from './pages/EmplacementForfaire';
 import ForfaitPublicitaire from './pages/ForfaitPublicitaire';
+// ANNONCES
+import Annonces from './pages/Annonces';
 // ASSURANCES 
 import Assurances from './pages/Assurances';
 //URGENCES
@@ -79,7 +81,8 @@ export const router = createBrowserRouter([
           { path: '/publicite', element: <Publicite /> },
           { path: '/emplacement-publicitaire', element: <EmplacementForfaire /> },
           { path: '/forfait-publicitaire', element: <ForfaitPublicitaire /> },
-
+          // ANNONCES 
+          { path: '/annonces', element: <Annonces /> },
           // ASSURANCES 
           { path: '/assurances', element: <Assurances /> },
 
@@ -94,6 +97,7 @@ export const router = createBrowserRouter([
           { path: '/rendez-vous', element: <RendezVous /> },
           // APK
           { path: '/apk', element: <GestionApk /> },
+          
           //   { path: '/pharmacie', element: <Pharmacie /> },
           //   { path: '/structure-sante', element: <StructureSante /> },
           //   { path: '/profil/:id', element: <ProfilMedecin /> },

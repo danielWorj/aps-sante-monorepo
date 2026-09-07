@@ -131,6 +131,14 @@ const APS_MENU = [
       { key: "forfait-publicitaire", label: "Forfaits publicitaires", icon: "fa-solid fa-tags", to: "/forfait-publicitaire" }
     ]
   },
+   {
+    // Correspond aux 3 routes /publicite, /emplacement-publicitaire et
+    // /forfait-publicitaire déclarées dans router.jsx (bloc "PUBLICITE").
+    group: "Annonces",
+    items: [
+      { key: "annonces", label: "Annonces", icon: "fa-solid fa-bullhorn", to: "/annonces" }
+      ]
+  },
   {
     group: "Urgences",
     entities: [

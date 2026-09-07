@@ -19,7 +19,7 @@ import moyenPaiementRoutes from "./src/routes/moyenPaiement.routes.js";
 import visioRoutes from "./src/routes/visio.routes.js";
 import utilisateursRoutes from "./src/routes/utilisateurs.routes.js";
 import gestionApkRoutes from "./src/routes/gestionapk.routes.js"; // Importer les routes de gestion des APKs
-
+import annonceRoutes from "./src/routes/annonce.routes.js"; // Importer les routes d'annonces
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -91,6 +91,7 @@ app.use("/api", moyenPaiementRoutes);
 app.use("/api", visioRoutes);
 app.use("/api/utilisateurs", utilisateursRoutes);
 app.use("/api/apks", gestionApkRoutes);
+app.use("/api", annonceRoutes); // Ajouter les routes d'annonces
 
 // ─── Gestion d'erreurs centralisée ─────────────────────────────
 app.use((err, _req, res, _next) => {

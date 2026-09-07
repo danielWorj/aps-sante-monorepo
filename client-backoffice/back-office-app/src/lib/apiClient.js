@@ -24,6 +24,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 
 let accessToken = null;
 let onUnauthorized = null; // injecté par AuthProvider
+let onTokenRefreshed = null; // injecté par AuthProvider
 
 export function setAccessToken(token) {
   accessToken = token;
@@ -36,6 +37,22 @@ export function getAccessToken() {
 /** Permet à AuthProvider de s'abonner à une déconnexion forcée (401 non récupérable). */
 export function setUnauthorizedHandler(handler) {
   onUnauthorized = handler;
+}
+
+/**
+ * Permet à AuthProvider de s'abonner à l'obtention d'un nouvel access
+ * token via tenterRefresh() — que ce refresh ait été déclenché
+ * explicitement (restauration de session, refresh proactif planifié
+ * côté AuthProvider) ou implicitement par le filet de sécurité réactif
+ * d'apiFetch (retry sur 401, voir plus bas). Ainsi AuthProvider peut
+ * reprogrammer son timer de refresh proactif à partir de CE token,
+ * quel que soit le chemin par lequel il a été obtenu — sans ça, un
+ * refresh déclenché uniquement par le filet réactif laissait le timer
+ * proactif désynchronisé (toujours calé sur l'expiration de l'ancien
+ * token plutôt que du nouveau).
+ */
+export function setTokenRefreshedHandler(handler) {
+  onTokenRefreshed = handler;
 }
 
 /**
@@ -52,6 +69,7 @@ export async function tenterRefresh() {
     if (!res.ok) return null;
     const data = await res.json();
     setAccessToken(data.access_token);
+    onTokenRefreshed?.(data.access_token);
     return data.access_token;
   } catch {
     return null;
