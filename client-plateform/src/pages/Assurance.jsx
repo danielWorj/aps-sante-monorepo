@@ -2,10 +2,9 @@
 // Dynamisée : les fiches proviennent de GET /api/services-assurance.
 
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import pub3 from "../assets/img/ads/pub3.jpg";
 import { listerServicesAssurance } from "../services/assuranceService";
-import DeclarerCompagnieModal from "./../components/assurances/DeclarerCompagnieModal";
 
 const LABEL_TYPE_ACTEUR = {
   compagnie: "Compagnie d'assurance",
@@ -71,10 +70,10 @@ function InsurerCard({ insurer }) {
 }
 
 export default function Assurance() {
+  const navigate = useNavigate();
   const [services, setServices] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState("");
-  const [modalOuvert, setModalOuvert] = useState(false);
 
   const [typeActeur, setTypeActeur] = useState("");
   const [paysId, setPaysId] = useState("");
@@ -253,7 +252,7 @@ export default function Assurance() {
                 <button
                   type="button"
                   className="btn btn-primary btn-sm-aps"
-                  onClick={() => setModalOuvert(true)}
+                  onClick={() => navigate("/assurances/creation")}
                 >
                   <i className="fa-solid fa-plus" /> Déclarer une compagnie
                 </button>
@@ -277,11 +276,7 @@ export default function Assurance() {
         </div>
       </section>
 
-      <DeclarerCompagnieModal
-        open={modalOuvert}
-        onClose={() => setModalOuvert(false)}
-        onCreated={() => charger()}
-      />
+
     </>
   );
 }

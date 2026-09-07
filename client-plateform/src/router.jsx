@@ -7,18 +7,24 @@ import CreationMedecin from './components/medecin/creationMedecin';
 
 import Pharmacie from './pages/Pharmacie';
 import FichePharmacie from './pages/FichePharmacie.jsx';
+import CreationPharmacie from './components/pharmacie/creationPharmacie.jsx';
 
 import StructureSante from './pages/StructureSante';
 import FicheStructureSante from './pages/FicheStructureSante.jsx';
+import CreationCentreSante from './components/centre-sante/creationCentreSante.jsx';
+
 
 import ProfilMedecin from './pages/ProfilMedecin';
 import RendezVous from './pages/RendezVous';
 import Urgences from './pages/Urgence';
 import Login from './pages/Login';
 import ModifPassword from './pages/ModifPassword';
+
 import Assurance from './pages/Assurance';
 import Abonnement from './pages/Abonnement';
 import FicheAssurance from './pages/FicheAssurance';
+import CreationAssurance from './components/assurances/creationAssurance.jsx';
+
 
 //PORTAIL 
 
@@ -48,16 +54,23 @@ export const router = createBrowserRouter([
 
       { path: '/pharmacie', element: <Pharmacie /> },
       { path: '/pharmacie/:id', element: <FichePharmacie /> },
+      { path: '/pharmacie/creation', element: <CreationPharmacie /> },
+      //CENTRE DE SANTE
       { path: '/structure-sante', element: <StructureSante /> },
       { path: '/structure-sante/:id', element: <FicheStructureSante /> },
+      { path: '/structure-sante/creation', element: <CreationCentreSante />},
+      
+
       { path: '/profil/:id', element: <ProfilMedecin /> },
       { path: '/rendez-vous/:id', element: <RendezVous /> },
       { path: '/urgences', element: <Urgences /> },
       { path: '/pricing', element: <Abonnement /> },
       { path: '/login', element: <Login /> },
       { path: '/modifier-mot-de-passe', element: <ModifPassword /> },
+      // ASSURANCE
       { path: '/assurance', element: <Assurance /> },
-      { path: "/assurances/:id", element: <FicheAssurance /> }
+      { path: "/assurances/:id", element: <FicheAssurance /> }, 
+      { path: '/assurances/creation', element: <CreationAssurance /> }
     ],
   },
   {

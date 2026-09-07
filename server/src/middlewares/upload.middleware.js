@@ -204,3 +204,32 @@ export function gererTeleversementMedecin(req, res, next) {
     next();
   });
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Annonce — un seul fichier optionnel (voir annonce.controller.js,
+// creerAnnonce/modifierAnnonce ; schema.prisma, Annonce.file_url
+// nullable) :
+//   - fichier : visuel OU flyer PDF de l'annonce
+// Contrairement à Publicité/Assurance (toujours une image, jamais de
+// sens en PDF), une annonce peut aussi bien être un visuel qu'un
+// document PDF (ex. affiche d'un événement scannée) : on réutilise
+// donc TYPES_AUTORISES (image + pdf), comme pour Centre de santé /
+// Pharmacie / Médecin, et non le filtre restreint aux images de
+// Publicité/Assurance.
+// ─────────────────────────────────────────────────────────────────
+const televersementAnnonce = multer({
+  storage: stockage,
+  limits: { fileSize: TAILLE_MAX_OCTETS },
+  fileFilter: filtreFichier,
+}).fields([{ name: "fichier", maxCount: 1 }]);
+
+export function gererTeleversementAnnonce(req, res, next) {
+  televersementAnnonce(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        message: err.message || "Erreur lors du téléversement du fichier.",
+      });
+    }
+    next();
+  });
+}

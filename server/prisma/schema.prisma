@@ -1521,3 +1521,16 @@ model MobileApk {
 
   @@map("mobile_apk")
 }
+
+model Annonce {
+  id String @id @default(uuid()) @db.Uuid
+
+  libelle        String   @db.VarChar(255)
+  description    String?  @db.Text
+  file_url       String?  @db.Text
+  date_creation  DateTime @default(now())
+  jour_validite  Int
+  statut         Boolean  @default(true)
+
+  @@map("annonce")
+}
