@@ -1527,6 +1527,7 @@ model Annonce {
 
   libelle        String   @db.VarChar(255)
   description    String?  @db.Text
+  courte_description    String?  @db.Text
   file_url       String?  @db.Text
   date_creation  DateTime @default(now())
   jour_validite  Int

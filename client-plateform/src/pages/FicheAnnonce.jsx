@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { obtenirAnnonce } from "../services/annonceService";
-import heroBg from "../assets/img/med7.jpg";
 
 // Fiche annonce — page de détail d'une annonce de la bande défilante
 // (cf. AnnouncementsBand dans Home.jsx : image, libellé, description).
@@ -10,9 +9,6 @@ import heroBg from "../assets/img/med7.jpg";
 // même modèle que assuranceService / obtenirServiceAssurance dans
 // FicheAssurance.jsx : chargement / introuvable / erreur gérés via
 // useEffect.
-
-/* Image de repli quand l'annonce n'a pas de fichier (file_url) associé */
-const ANNONCE_FALLBACK_IMAGE = heroBg;
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -133,11 +129,28 @@ export default function FicheAnnonce() {
                 overflow: "hidden",
               }}
             >
-              <img
-                src={annonce.file_url || ANNONCE_FALLBACK_IMAGE}
-                alt={annonce.libelle}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
+              {annonce.file_url ? (
+                <img
+                  src={annonce.file_url}
+                  alt={annonce.libelle}
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <i
+                    className="fa-solid fa-bullhorn"
+                    style={{ fontSize: "2.4rem", color: "var(--ink-faint)" }}
+                  />
+                </div>
+              )}
             </div>
 
             <div style={{ padding: "1.5rem" }}>
