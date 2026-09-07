@@ -4,7 +4,7 @@ import Home from './pages/Home';
 import Medecin from './pages/Medecin';
 import CreerPatient from './components/patient/creerPatient.jsx'
 import CreationMedecin from './components/medecin/creationMedecin';
-
+import InscriptionPortail from './pages/inscriptionportail.jsx';
 
 import Pharmacie from './pages/Pharmacie';
 import FichePharmacie from './pages/FichePharmacie.jsx';
@@ -49,6 +49,7 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <Home /> },
       { path: '/home', element: <Home /> },
+      { path: '/inscription', element: <InscriptionPortail /> },
       { path: '/medecin', element: <Medecin /> },
       { path: '/devenir-medecin', element: <CreationMedecin /> },
       { path: '/creer-patient', element: <CreerPatient /> },
