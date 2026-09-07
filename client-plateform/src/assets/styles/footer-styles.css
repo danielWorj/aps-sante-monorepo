@@ -1,0 +1,163 @@
+/* ========== FOOTER STYLES - UPDATED ========== */
+
+/* Main footer - Improved text visibility */
+.aps-footer{
+  background:#4C6459; 
+  padding:3.5rem 0 0; 
+  color:rgba(255,255,255,.95);  /* Increased from .82 for better readability */
+}
+
+.aps-footer h5{
+  color:#fff; 
+  font-size:.85rem; 
+  text-transform:uppercase; 
+  letter-spacing:.05em; 
+  margin-bottom:1.1rem;
+}
+
+.footer-links{
+  list-style:none; 
+  margin:0; 
+  padding:0; 
+  display:flex; 
+  flex-direction:column; 
+  gap:.7rem;
+}
+
+.footer-links a{
+  color:rgba(255,255,255,.9);  /* Increased from .68 for better readability */
+  font-size:.87rem;
+}
+
+.footer-links a:hover{
+  color:#fff;
+}
+
+/* Social icons */
+.social-row{
+  display:flex; 
+  gap:.6rem;
+}
+
+.social-row a{
+  width:36px; 
+  height:36px; 
+  border-radius:50%;
+  border:1px solid rgba(255,255,255,.2);
+  color:#fff;
+  display:flex; 
+  align-items:center; 
+  justify-content:center;
+  font-size:.85rem;
+}
+
+.social-row a:hover{
+  background:var(--primary); 
+  border-color:var(--primary);
+}
+
+/* Footer bottom section */
+.footer-bottom{
+  display:flex; 
+  align-items:center; 
+  justify-content:space-between; 
+  flex-wrap:wrap; 
+  gap:1rem;
+  border-top:1px solid rgba(255,255,255,.12);
+  margin-top:2.5rem;
+  padding:1.5rem 0;
+  font-size:.82rem;
+  color:rgba(255,255,255,.9);  /* Improved readability */
+}
+
+/* Footer language selector */
+.footer-lang{
+  display:flex; 
+  align-items:center; 
+  gap:.5rem; 
+  color:rgba(255,255,255,.9);  /* Increased from .7 for better readability */
+}
+
+.footer-lang select{
+  background:transparent; 
+  color:#fff; 
+  border:1px solid rgba(255,255,255,.25);
+  border-radius:var(--radius-sm); 
+  padding:.3rem .5rem; 
+  font-size:.78rem;
+}
+
+.footer-lang select option{
+  color:#111;
+}
+
+/* ========== NEWSLETTER CARD - NEW ========== */
+
+.newsletter-card{
+  background:linear-gradient(135deg, #f5e6d3 0%, #ffe8cc 100%);
+  border-radius:var(--radius-md);
+  padding:2rem;
+  margin-bottom:2.5rem;
+  box-shadow:0 4px 12px rgba(0,0,0,.08);
+}
+
+.newsletter-card h4{
+  color:#1a1a1a;
+  font-size:1.5rem;
+  font-weight:600;
+  margin-bottom:0.5rem;
+}
+
+.newsletter-card p{
+  color:rgba(0,0,0,.6);
+  font-size:.95rem;
+  margin-bottom:1.5rem;
+}
+
+/* Newsletter form container */
+.newsletter-form{
+  display:flex;
+  gap:.5rem;
+  flex-wrap:wrap;
+}
+
+/* Newsletter email input */
+.newsletter-form input{
+  flex:1;
+  min-width:250px;
+  padding:.6rem 1rem;
+  border:none;
+  border-radius:var(--radius-sm);
+  font-size:.95rem;
+  background:#fff;
+}
+
+.newsletter-form input::placeholder{
+  color:rgba(0,0,0,.5);
+}
+
+.newsletter-form input:focus{
+  outline:none;
+  box-shadow:0 0 0 3px rgba(76,100,89,.2);
+}
+
+/* Newsletter subscribe button */
+.newsletter-form button{
+  padding:.6rem 1.5rem;
+  background:var(--primary, #4C6459);
+  color:#fff;
+  border:none;
+  border-radius:var(--radius-sm);
+  font-size:.95rem;
+  font-weight:500;
+  cursor:pointer;
+  transition:all .3s ease;
+}
+
+.newsletter-form button:hover{
+  background:#3d4f42;
+  transform:translateY(-2px);
+  box-shadow:0 4px 8px rgba(0,0,0,.15);
+}
+
+/* ========== END OF FOOTER STYLES ========== */

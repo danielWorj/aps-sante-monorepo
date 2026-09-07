@@ -956,42 +956,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ============================ REJOINDRE APS (FORMULAIRES) ============================ */}
-      <section className="section-alt" id="rejoindre">
-        <div className="container-aps">
-          <div className="section-head">
-            <span className="eyebrow">Espace professionnel</span>
-            <h2>Rejoignez APS</h2>
-            <p>Que vous soyez médecin ou responsable d&apos;une structure, votre inscription est vérifiée avant mise en ligne.</p>
-          </div>
-
-          <div className="pro-tabs">
-            <button
-              type="button"
-              className={`pro-tab-btn ${proTab === 'medecin' ? 'active' : ''}`}
-              onClick={() => setProTab('medecin')}
-            >
-              <i className="fa-solid fa-user-doctor" /> Devenir professionnel de santé
-            </button>
-            <button
-              type="button"
-              className={`pro-tab-btn ${proTab === 'service' ? 'active' : ''}`}
-              onClick={() => setProTab('service')}
-            >
-              <i className="fa-solid fa-building-shield" /> Inscrire un service
-            </button>
-          </div>
-
-          <div>
-            <div className={`pro-panel ${proTab === 'medecin' ? 'active' : ''}`}>
-              {proTab === 'medecin' && <MedecinForm />}
-            </div>
-            <div className={`pro-panel ${proTab === 'service' ? 'active' : ''}`}>
-              {proTab === 'service' && <ServiceForm />}
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* ============================ ASSURANCES (aperçu) ============================ */}
       <section id="assurances">
