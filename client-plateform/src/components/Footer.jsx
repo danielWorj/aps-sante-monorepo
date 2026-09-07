@@ -1,15 +1,49 @@
 import { Link } from 'react-router-dom';
+import { useState } from 'react';
 
 export default function Footer() {
+  const [email, setEmail] = useState('');
+  const [subscribeMessage, setSubscribeMessage] = useState('');
+
+  const handleSubscribe = (e) => {
+    e.preventDefault();
+    if (email) {
+      setSubscribeMessage('Merci de vous être abonné !');
+      setEmail('');
+      setTimeout(() => setSubscribeMessage(''), 3000);
+    }
+  };
+
   return (
     <footer className="aps-footer">
       <div className="container-aps">
+        {/* Newsletter Card */}
+        <div className="newsletter-card">
+          <h4>Abonnez-vous à notre newsletter !</h4>
+          <p>Restez informé about news, wellness, & more</p>
+          <form onSubmit={handleSubscribe} className="newsletter-form">
+            <input
+              type="email"
+              placeholder="Votre adresse email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            <button type="submit">S'abonner</button>
+          </form>
+          {subscribeMessage && (
+            <p style={{ color: '#2d5016', marginTop: '0.5rem', fontSize: '.9rem' }}>
+              {subscribeMessage}
+            </p>
+          )}
+        </div>
+
         <div className="row g-4">
           <div className="col-lg-4">
             <Link to="/" className="aps-logo" style={{ color: '#fff' }}>
               <span className="mark"><i className="fa-solid fa-staff-snake" /></span> APS
             </Link>
-            <p className="mt-3" style={{ fontSize: '.87rem', maxWidth: 320 }}>
+            <p className="mt-3" style={{ fontSize: '.87rem', maxWidth: 320 , color: '#fff'}}>
               La plateforme qui connecte patients et professionnels de santé, avec un paiement sécurisé à chaque étape.
             </p>
             <div className="social-row mt-3">
