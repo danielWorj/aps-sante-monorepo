@@ -7,8 +7,9 @@
 //
 // Champs réels du modèle Annonce (voir schema.prisma) :
 //   annonce { id, libelle (obligatoire), description (optionnel),
-//     file_url (optionnel), date_creation (auto), jour_validite
-//     (obligatoire, Int), statut (Boolean, défaut true) }
+//     courte_description (optionnel), file_url (optionnel),
+//     date_creation (auto), jour_validite (obligatoire, Int),
+//     statut (Boolean, défaut true) }
 //
 // ⚠️ Comme pour Medecin/StructureSante/Pharmacie (voir
 // medecin.controller.js), file_url ne contient EN BASE que le "nom"
@@ -153,7 +154,7 @@ export async function obtenirAnnonce(req, res, next) {
  * Réservé à admin/superadmin (voir annonce.routes.js — à câbler avec
  * authentifier + autoriser("admin", "superadmin")).
  * Champs requis (req.body) : libelle, jour_validite (entier positif).
- * Champ optionnel : description.
+ * Champs optionnels : description, courte_description.
  * Fichier optionnel (multipart, voir gererTeleversementAnnonce) :
  *   - fichier : visuel ou flyer PDF de l'annonce.
  * statut n'est pas lisible depuis req.body à la création : toute
@@ -162,7 +163,7 @@ export async function obtenirAnnonce(req, res, next) {
  */
 export async function creerAnnonce(req, res, next) {
   try {
-    const { libelle, description, jour_validite } = req.body;
+    const { libelle, description, courte_description, jour_validite } = req.body;
 
     const champsManquants = [];
     if (!libelle || !String(libelle).trim()) champsManquants.push("libelle");
@@ -198,6 +199,7 @@ export async function creerAnnonce(req, res, next) {
         data: {
           libelle,
           description: description || null,
+          courte_description: courte_description || null,
           jour_validite: jourValiditeNombre,
           file_url: resultatFichier ? resultatFichier.nom : null,
         },
@@ -221,7 +223,8 @@ export async function creerAnnonce(req, res, next) {
 /**
  * PUT /api/annonces/:id
  * Réservé à admin/superadmin.
- * Champs modifiables : libelle, description, jour_validite, statut.
+ * Champs modifiables : libelle, description, courte_description,
+ * jour_validite, statut.
  * Fichier optionnel (multipart) : `fichier` — remplace file_url ;
  * l'ancien fichier Cloudinary est nettoyé (best effort) une fois la
  * mise à jour DB confirmée, même patron que modifierMedecin.
@@ -248,6 +251,10 @@ export async function modifierAnnonce(req, res, next) {
 
     if (req.body.description !== undefined) {
       donnees.description = req.body.description || null;
+    }
+
+    if (req.body.courte_description !== undefined) {
+      donnees.courte_description = req.body.courte_description || null;
     }
 
     if (req.body.jour_validite !== undefined) {

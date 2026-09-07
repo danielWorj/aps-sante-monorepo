@@ -17,6 +17,8 @@
 //
 // Champs réels du modèle Annonce (voir annonce.controller.js) :
 //   annonce { id, libelle (obligatoire), description (optionnel),
+//     courte_description (optionnel — résumé court affiché dans les
+//     listes/aperçus, distinct de la description longue),
 //     file_url (optionnel — visuel image ou flyer PDF, jamais l'URL
 //     brute stockée en base, voir avecUrlFichier côté serveur),
 //     date_creation (auto), jour_validite (obligatoire, Int, nombre de
@@ -82,12 +84,13 @@ function extraireNomRole(objetUtilisateur) {
 // jour_validite <= 0 et libelle vide ; ces limites ne sont qu'un
 // garde-fou, pas une règle de sécurité serveur.
 const DESCRIPTION_LONGUEUR_MAX = 1000;
+const COURTE_DESCRIPTION_LONGUEUR_MAX = 200; // résumé court (listes/aperçus), garde-fou de saisie
 const JOUR_VALIDITE_MAX = 3650; // ~10 ans, garde-fou de saisie
 const TAILLE_FICHIER_MAX_OCTETS = 10 * 1024 * 1024; // 10 Mo, alignement UX avec upload.middleware.js
 const TYPES_FICHIER_ACCEPTES = 'image/png,image/jpeg,image/webp,application/pdf';
 
-const FORM_CREATION_VIDE = { libelle: '', description: '', jour_validite: '30', fichier: null };
-const FORM_EDITION_VIDE = { libelle: '', description: '', jour_validite: '', fichier: null };
+const FORM_CREATION_VIDE = { libelle: '', description: '', courte_description: '', jour_validite: '30', fichier: null };
+const FORM_EDITION_VIDE = { libelle: '', description: '', courte_description: '', jour_validite: '', fichier: null };
 
 /* ────────────────────────── Aides d'affichage ────────────────────────── */
 
@@ -334,12 +337,17 @@ export default function Annonces() {
       setErreurCreation(`La description est trop longue (${DESCRIPTION_LONGUEUR_MAX} caractères maximum).`);
       return;
     }
+    if (formCreation.courte_description.length > COURTE_DESCRIPTION_LONGUEUR_MAX) {
+      setErreurCreation(`La description courte est trop longue (${COURTE_DESCRIPTION_LONGUEUR_MAX} caractères maximum).`);
+      return;
+    }
 
     setCreationEnCours(true);
     try {
       await creerAnnonce({
         libelle,
         description: formCreation.description.trim() || undefined,
+        courte_description: formCreation.courte_description.trim() || undefined,
         jour_validite: jourValidite,
         fichier: formCreation.fichier || undefined,
       });
@@ -369,6 +377,7 @@ export default function Annonces() {
     setFormEdition({
       libelle: annonce.libelle || '',
       description: annonce.description || '',
+      courte_description: annonce.courte_description || '',
       jour_validite: String(annonce.jour_validite ?? ''),
       fichier: null,
     });
@@ -400,6 +409,10 @@ export default function Annonces() {
       setErreurEdition(`La description est trop longue (${DESCRIPTION_LONGUEUR_MAX} caractères maximum).`);
       return;
     }
+    if (formEdition.courte_description.length > COURTE_DESCRIPTION_LONGUEUR_MAX) {
+      setErreurEdition(`La description courte est trop longue (${COURTE_DESCRIPTION_LONGUEUR_MAX} caractères maximum).`);
+      return;
+    }
 
     const donnees = {};
     if (libelle !== annonceActive.libelle) donnees.libelle = libelle;
@@ -407,6 +420,11 @@ export default function Annonces() {
       // Chaîne vide volontaire : efface la description côté serveur
       // (voir commentaire modifierAnnonce dans annonceService.js).
       donnees.description = formEdition.description.trim();
+    }
+    if (formEdition.courte_description.trim() !== (annonceActive.courte_description || '')) {
+      // Même règle : une chaîne vide volontaire efface la description
+      // courte côté serveur.
+      donnees.courte_description = formEdition.courte_description.trim();
     }
     if (jourValidite !== annonceActive.jour_validite) donnees.jour_validite = jourValidite;
     if (formEdition.fichier) donnees.fichier = formEdition.fichier;
@@ -633,7 +651,7 @@ export default function Annonces() {
                           <td style={{ maxWidth: 320 }}>
                             <div className="fw-semibold">{annonce.libelle}</div>
                             <div className="aps-text-muted" style={{ fontSize: 12.5 }}>
-                              {apercuTexte(annonce.description)}
+                              {apercuTexte(annonce.courte_description || annonce.description)}
                             </div>
                           </td>
                           <td>
@@ -753,6 +771,23 @@ export default function Annonces() {
           <div className="aps-text-muted mt-1" style={{ fontSize: 12 }}>
             L'annonce sera automatiquement considérée comme expirée après ce délai à compter de sa création.
           </div>
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label d-flex justify-content-between">
+            <span>Description courte (optionnel)</span>
+            <span className="aps-text-muted" style={{ fontSize: 12 }}>
+              {formCreation.courte_description.length}/{COURTE_DESCRIPTION_LONGUEUR_MAX}
+            </span>
+          </label>
+          <textarea
+            className="form-control"
+            rows={2}
+            maxLength={COURTE_DESCRIPTION_LONGUEUR_MAX}
+            placeholder="Résumé affiché dans la liste des annonces…"
+            value={formCreation.courte_description}
+            onChange={(e) => setFormCreation((f) => ({ ...f, courte_description: e.target.value }))}
+          />
         </div>
 
         <div className="mb-1">
@@ -899,6 +934,31 @@ export default function Annonces() {
                   {formaterDate(dateExpirationEstimee(annonceActive)) || '—'}
                 </div>
               </div>
+            </div>
+
+            <div className="mb-3">
+              <label className="form-label d-flex justify-content-between">
+                <span>Description courte</span>
+                {modeEdition && (
+                  <span className="aps-text-muted" style={{ fontSize: 12 }}>
+                    {formEdition.courte_description.length}/{COURTE_DESCRIPTION_LONGUEUR_MAX}
+                  </span>
+                )}
+              </label>
+              {modeEdition ? (
+                <textarea
+                  className="form-control"
+                  rows={2}
+                  maxLength={COURTE_DESCRIPTION_LONGUEUR_MAX}
+                  placeholder="Résumé affiché dans la liste des annonces…"
+                  value={formEdition.courte_description}
+                  onChange={(e) => setFormEdition((f) => ({ ...f, courte_description: e.target.value }))}
+                />
+              ) : (
+                <div className="form-control-plaintext" style={{ fontSize: 14 }}>
+                  {annonceActive.courte_description || '—'}
+                </div>
+              )}
             </div>
 
             <div className="mb-3">
