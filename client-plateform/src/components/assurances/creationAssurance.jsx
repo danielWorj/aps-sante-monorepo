@@ -248,10 +248,30 @@ const CreationAssurance = () => {
       };
 
       const response = await creerServiceAssurance(dataToSend);
-      
+
+      // Le nom exact du champ email dans la réponse de l'API peut varier
+      // selon l'implémentation backend. On essaie les variantes les plus
+      // probables avant de retomber sur l'email saisi dans le formulaire,
+      // pour ne jamais afficher une case vide silencieusement.
+      const agentEmail =
+        response.agent?.email ??
+        response.agent?.agent_email ??
+        response.agent_email ??
+        formData.agent_email;
+
+      if (!response.agent?.email && !response.agent?.agent_email && !response.agent_email) {
+        // Aide au diagnostic : la réponse ne contenait pas le champ email
+        // attendu. On garde une trace en console pour identifier le bon
+        // nom de champ à utiliser côté API.
+        console.warn(
+          "creerServiceAssurance: champ email introuvable dans la réponse, utilisation de la valeur du formulaire en secours.",
+          response
+        );
+      }
+
       setCompteCree({
         nom_compagnie: response.service_assurance?.nom,
-        agent_email: response.agent?.email,
+        agent_email: agentEmail,
         mot_de_passe_temporaire: response.agent?.mot_de_passe_temporaire,
       });
 
@@ -280,7 +300,7 @@ const CreationAssurance = () => {
                   avec succès. Elle est actuellement en cours de vérification.
                 </p>
 
-                <div className="alert alert-info mt-4">
+                <div className="alert alert-info credentials-box mt-4">
                   <strong>Identifiants de connexion :</strong>
                   <p className="mt-2">
                     Email de l'agent : <code>{compteCree.agent_email}</code>
