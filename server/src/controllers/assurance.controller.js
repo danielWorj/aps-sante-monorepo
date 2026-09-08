@@ -194,17 +194,27 @@ async function appliquerGeolocalisation(serviceAssuranceId, latitude, longitude)
     return null;
   }
 
-  if (typeof latitude !== "number" || typeof longitude !== "number") {
+  // fix : sur les endpoints multipart/form-data (ex. POST/PUT
+  // /services-assurance avec upload d'image), tous les champs arrivent
+  // en string ("4.05"), même après un parseFloat() côté client — le
+  // FormData force la conversion en texte. Un `typeof === "number"`
+  // strict rejetait donc systématiquement des coordonnées pourtant
+  // valides, sans que l'avertissement ne remonte clairement au front.
+  // On coerce ici les chaînes numériques avant de valider le type.
+  const latNum = typeof latitude === "string" && latitude.trim() !== "" ? Number(latitude) : latitude;
+  const lngNum = typeof longitude === "string" && longitude.trim() !== "" ? Number(longitude) : longitude;
+
+  if (typeof latNum !== "number" || Number.isNaN(latNum) || typeof lngNum !== "number" || Number.isNaN(lngNum)) {
     return "latitude et longitude doivent être des nombres.";
   }
-  if (latitude < -90 || latitude > 90) {
+  if (latNum < -90 || latNum > 90) {
     return "latitude invalide (doit être comprise entre -90 et 90).";
   }
-  if (longitude < -180 || longitude > 180) {
+  if (lngNum < -180 || lngNum > 180) {
     return "longitude invalide (doit être comprise entre -180 et 180).";
   }
 
-  await definirGeolocalisation(serviceAssuranceId, latitude, longitude);
+  await definirGeolocalisation(serviceAssuranceId, latNum, lngNum);
   return null;
 }
 
@@ -338,13 +348,16 @@ export async function creerServiceAssurance(req, res, next) {
       agent_telephone,
     } = req.body;
 
+    // fix : statut_verification est OPTIONNEL à la création — s'il est
+    // absent, on applique le défaut "en_cours" plus bas (voir estAdmin).
+    // Il ne doit donc pas figurer dans les champs strictement obligatoires.
     if (
       !nom || !pays_id || !ville_id || !telephone || !email || !email.trim() ||
-      !agrement || !agrement.trim() || !statut_verification || !type_acteur
+      !agrement || !agrement.trim() || !type_acteur
     ) {
       return res.status(400).json({
         message:
-          "Champs requis manquants : nom, pays_id, ville_id, telephone, email, agrement, statut_verification, type_acteur.",
+          "Champs requis manquants : nom, pays_id, ville_id, telephone, email, agrement, type_acteur.",
       });
     }
     if (!REGEX_EMAIL.test(email.trim())) {
@@ -407,12 +420,14 @@ export async function creerServiceAssurance(req, res, next) {
     // son statut est forcé à "en_cours" quoi qu'il envoie.
     const estAdmin = estAdminOuSuperadmin(req.utilisateur);
 
-    if (estAdmin && !STATUTS_VERIFICATION_ASSURANCE.includes(statut_verification)) {
+    if (estAdmin && statut_verification && !STATUTS_VERIFICATION_ASSURANCE.includes(statut_verification)) {
       return res.status(400).json({
         message: `statut_verification invalide. Valeurs acceptées : ${STATUTS_VERIFICATION_ASSURANCE.join(", ")}.`,
       });
     }
-    const statutApplique = estAdmin ? statut_verification : "en_cours";
+    // fix : si statut_verification n'est pas fourni (ou si l'appelant
+    // n'est pas admin/superadmin), on applique le défaut "en_cours".
+    const statutApplique = estAdmin && statut_verification ? statut_verification : "en_cours";
 
     // Téléversement Cloudinary — après les validations métier, pour ne
     // pas envoyer inutilement le fichier si la requête est invalide.

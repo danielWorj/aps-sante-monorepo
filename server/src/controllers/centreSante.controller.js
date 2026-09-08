@@ -300,6 +300,11 @@ export async function obtenirCentreSante(req, res, next) {
  *   - piece_identite     : pièce d'identité du professionnel qui soumet la fiche
  *   - document_agrement  : agrément officiel autorisant l'exercice
  * Champs latitude / longitude optionnels (voir appliquerGeolocalisation).
+ * statut_verification est optionnel : absent (ou vide) -> "en_cours" par
+ * défaut, quel que soit le profil de l'appelant. S'il est envoyé par un
+ * admin/superadmin, il est validé contre STATUTS_VERIFICATION_STRUCTURE et
+ * appliqué tel quel ; envoyé par tout autre profil, il est simplement
+ * ignoré et écrasé par "en_cours" (circuit de modération).
  *
  * Champs supplémentaires requis — création du COMPTE AGENT en même
  * temps que le centre (voir creerCompteAgentPourStructure) :
@@ -331,10 +336,10 @@ export async function creerCentreSante(req, res, next) {
       agent_telephone,
     } = req.body;
 
-    if (!nom || !pays_id || !ville_id || !telephone || !statut_verification || !type_structure) {
+    if (!nom || !pays_id || !ville_id || !telephone || !type_structure) {
       return res.status(400).json({
         message:
-          "Champs requis manquants : nom, pays_id, ville_id, telephone, statut_verification, type_structure.",
+          "Champs requis manquants : nom, pays_id, ville_id, telephone, type_structure.",
       });
     }
     if (!fonction || !fonction.trim() || !agent_nom || !agent_nom.trim() ||
@@ -401,12 +406,21 @@ export async function creerCentreSante(req, res, next) {
     // toute façon écrasée pour les autres profils.
     const estAdmin = req.utilisateur?.role === "admin" || req.utilisateur?.role === "superadmin";
 
-    if (estAdmin && !STATUTS_VERIFICATION_STRUCTURE.includes(statut_verification)) {
+    // statut_verification est optionnel : absent (ou chaîne vide) du
+    // corps de la requête -> "en_cours" par défaut, pour tout profil,
+    // admin/superadmin inclus. On ne valide contre
+    // STATUTS_VERIFICATION_STRUCTURE que lorsqu'une valeur est
+    // effectivement fournie par un appelant admin/superadmin — pour un
+    // autre profil, toute valeur envoyée est de toute façon ignorée et
+    // écrasée par "en_cours" juste après.
+    if (estAdmin && statut_verification && !STATUTS_VERIFICATION_STRUCTURE.includes(statut_verification)) {
       return res.status(400).json({
         message: `statut_verification invalide. Valeurs acceptées : ${STATUTS_VERIFICATION_STRUCTURE.join(", ")}.`,
       });
     }
-    const statutApplique = estAdmin ? statut_verification : "en_cours";
+    const statutApplique = estAdmin
+      ? (statut_verification || "en_cours")
+      : "en_cours";
 
     // Téléversement Cloudinary — après les validations métier, pour ne
     // pas envoyer inutilement des fichiers si la requête est invalide.

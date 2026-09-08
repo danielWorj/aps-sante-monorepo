@@ -322,12 +322,18 @@ textarea.form-control {
 
 .file-input-wrapper input[type='file'] {
   position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   opacity: 0;
-  width: 0;
-  height: 0;
+  cursor: pointer;
+  z-index: 2;
 }
 
 .file-preview {
+  position: relative;
+  z-index: 1;
   border: 2px dashed var(--border-color);
   border-radius: var(--border-radius);
   padding: 2rem;
@@ -497,6 +503,18 @@ textarea.form-control {
   background-color: #f0f8ff;
   color: var(--primary-color);
   border-left-color: var(--primary-color);
+}
+
+/* Variante utilisée pour le récapitulatif des identifiants (étape de confirmation) :
+   ce bloc contient plusieurs <p> empilés (pas juste icône + texte), donc on
+   force un empilement vertical au lieu du display:flex en ligne hérité de .alert */
+.alert-info.credentials-box {
+  display: block;
+}
+
+.alert-info.credentials-box strong {
+  display: block;
+  margin-bottom: 0.5rem;
 }
 
 .alert i {

@@ -338,13 +338,12 @@ export async function creerPharmacie(req, res, next) {
       !pays_id ||
       !ville_id ||
       !telephone ||
-      !statut_verification ||
       !numero_ordre_titulaire ||
       !numero_ordre_titulaire.trim()
     ) {
       return res.status(400).json({
         message:
-          "Champs requis manquants : nom, pays_id, ville_id, telephone, statut_verification, numero_ordre_titulaire.",
+          "Champs requis manquants : nom, pays_id, ville_id, telephone, numero_ordre_titulaire.",
       });
     }
     if (!fonction || !fonction.trim() || !agent_nom || !agent_nom.trim() ||
@@ -399,18 +398,26 @@ export async function creerPharmacie(req, res, next) {
     // préserver le circuit de modération (badge "en_cours" -> bouton
     // "Examiner" côté admin dans le front), un utilisateur non
     // admin/superadmin ne peut pas publier directement : son statut
-    // est forcé à "en_cours" quoi qu'il envoie. On ne valide donc
-    // statut_verification que lorsqu'il sera réellement utilisé (cas
-    // admin/superadmin) — inutile de rejeter une valeur qui sera de
-    // toute façon écrasée pour les autres profils.
+    // est forcé à "en_cours" quoi qu'il envoie. statut_verification
+    // reste par ailleurs optionnel même pour un admin/superadmin : s'il
+    // ne l'envoie pas, la fiche part aussi en "en_cours" (valeur par
+    // défaut) — on ne valide le champ que lorsqu'une valeur a
+    // effectivement été fournie.
     const estAdmin = req.utilisateur?.role === "admin" || req.utilisateur?.role === "superadmin";
 
-    if (estAdmin && !STATUTS_VERIFICATION_PHARMACIE.includes(statut_verification)) {
+    if (
+      estAdmin &&
+      statut_verification !== undefined &&
+      statut_verification !== null &&
+      statut_verification !== "" &&
+      !STATUTS_VERIFICATION_PHARMACIE.includes(statut_verification)
+    ) {
       return res.status(400).json({
         message: `statut_verification invalide. Valeurs acceptées : ${STATUTS_VERIFICATION_PHARMACIE.join(", ")}.`,
       });
     }
-    const statutApplique = estAdmin ? statut_verification : "en_cours";
+    const statutApplique =
+      estAdmin && statut_verification ? statut_verification : "en_cours";
 
     // Téléversement Cloudinary — après les validations métier, pour ne
     // pas envoyer inutilement des fichiers si la requête est invalide.
