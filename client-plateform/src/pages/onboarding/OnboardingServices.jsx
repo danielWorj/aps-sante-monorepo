@@ -1,4 +1,4 @@
-import ServiceCard from './components/ServiceCard';
+import ServiceCard from './ServiceCard';
 
 /**
  * Écran 1.1 — Liste des services de APS Santé.
