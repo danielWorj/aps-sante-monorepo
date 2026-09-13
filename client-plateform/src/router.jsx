@@ -57,7 +57,7 @@ export const router = createBrowserRouter([
   {
     element: <App />, // Layout commun : Navbar + <Outlet /> + Footer
     children: [
-      { path: '/', element: <Home /> },
+      { path: '/', element: <OnboardingAccueil /> },
       { path: '/home', element: <Home /> },
       { path: '/inscription', element: <InscriptionPortail /> },
 
