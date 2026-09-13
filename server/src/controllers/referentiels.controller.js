@@ -7,6 +7,7 @@
 // Écriture (création/modification) : réservée à admin/superadmin.
 // Suppression : réservée à superadmin (impact transverse élevé).
 
+import { getNearestCity } from "offline-geocode-city";
 import prisma from "../lib/prisma.js";
 
 const STATUTS_ACTIVATION_PAYS = ["pilote", "actif", "inactif"];
@@ -662,6 +663,41 @@ export async function supprimerRole(req, res, next) {
 
     await prisma.role.delete({ where: { role_id: req.params.id } });
     return res.status(200).json({ message: "Rôle supprimé." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/referentiels/pays/detecter?lat=..&lng=..
+ * Détecte le pays APS correspondant à une position GPS.
+ * Public (même règle d'accès que le reste du référentiel Pays).
+ */
+export async function detecterPaysParPosition(req, res, next) {
+  try {
+    const lat = Number(req.query.lat);
+    const lng = Number(req.query.lng);
+
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+      return res.status(400).json({ message: "Paramètres lat/lng invalides." });
+    }
+
+    const resultat = getNearestCity(lat, lng); // { countryIso2, countryName, cityName } | undefined
+    if (!resultat) {
+      return res.status(404).json({ message: "Position non reconnue." });
+    }
+
+    const pays = await prisma.pays.findUnique({
+      where: { code_iso2: resultat.countryIso2 },
+    });
+
+    if (!pays) {
+      // Position reconnue mais pays hors périmètre APS (statut_activation
+      // inexistant) : le front doit basculer sur la sélection manuelle.
+      return res.status(404).json({ message: "Pays hors périmètre APS." });
+    }
+
+    return res.status(200).json({ pays });
   } catch (err) {
     next(err);
   }
