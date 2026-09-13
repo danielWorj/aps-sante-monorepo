@@ -51,6 +51,16 @@ app.use(
   })
 );
 
+// ─── Webhook Stripe : DOIT être monté AVANT express.json() ─────
+// La route interne utilise express.raw({ type: "application/json" })
+// car Stripe exige le Buffer brut EXACT (octet pour octet) pour
+// vérifier la signature HMAC (stripe.webhooks.constructEvent).
+// Si express.json() global tourne en premier, il consomme et parse
+// le body ; express.raw() ne reçoit alors plus rien à lire et la
+// vérification de signature échoue à chaque appel. D'où ce montage
+// AVANT le parseur JSON global, exceptionnellement pour cette route.
+app.use("/api/paiement/webhook", paiementWebhookRoutes);
+
 // Limite de taille du body pour éviter les payloads abusifs.
 app.use(express.json({ limit: "100kb" }));
 
@@ -95,7 +105,8 @@ app.use("/api/utilisateurs", utilisateursRoutes);
 app.use("/api/apks", gestionApkRoutes);
 app.use("/api", annonceRoutes); // Ajouter les routes d'annonces
 app.use("/api/paiement", paiementRoutes);
-app.use("/api/paiement/webhook", paiementWebhookRoutes);
+// NB : le webhook Stripe (paiementWebhookRoutes) est déjà monté plus
+// haut, avant express.json() — voir commentaire à cet endroit.
 
 // ─── Gestion d'erreurs centralisée ─────────────────────────────
 app.use((err, _req, res, _next) => {
