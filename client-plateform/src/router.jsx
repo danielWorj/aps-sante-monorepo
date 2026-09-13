@@ -11,6 +11,8 @@ import OnboardingAccueil from './pages/onboarding/OnboardingAccueil.jsx';
 import OnboardingServices from './pages/onboarding/OnboardingServices.jsx';
 import OnboardingMedecinVille from './pages/onboarding/OnboardingMedecinVille.jsx';
 import OnboardingMedecinSpecialite from './pages/onboarding/OnboardingMedecinSpecialite.jsx';
+import OnboardingAssuranceVille from './pages/onboarding/OnboardingAssuranceVille.jsx';
+import OnboardingAssuranceType from './pages/onboarding/OnboardingAssuranceType.jsx';
 
 import Pharmacie from './pages/Pharmacie';
 import FichePharmacie from './pages/FichePharmacie.jsx';
@@ -66,6 +68,8 @@ export const router = createBrowserRouter([
       { path: '/onboarding/services', element: <OnboardingServices /> },
       { path: '/onboarding/medecins/ville', element: <OnboardingMedecinVille /> },
       { path: '/onboarding/medecins/specialite', element: <OnboardingMedecinSpecialite /> },
+      { path: '/onboarding/assurances/ville', element: <OnboardingAssuranceVille /> },
+      { path: '/onboarding/assurances/type', element: <OnboardingAssuranceType /> },
       { path: '/medecin', element: <Medecin /> },
       { path: '/devenir-medecin', element: <CreationMedecin /> },
       { path: '/creer-patient', element: <CreerPatient /> },

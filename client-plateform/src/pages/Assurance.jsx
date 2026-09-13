@@ -2,7 +2,7 @@
 // Dynamisée : les fiches proviennent de GET /api/services-assurance.
 
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import pub3 from "../assets/img/ads/pub3.jpg";
 import { listerServicesAssurance } from "../services/assuranceService";
 
@@ -71,13 +71,21 @@ function InsurerCard({ insurer }) {
 
 export default function Assurance() {
   const navigate = useNavigate();
+  // Écran 1.3.3 du parcours d'onboarding (croquis) : arrivée ici
+  // depuis OnboardingAssuranceType.jsx avec type_acteur, pays_id et
+  // ville_id déjà choisis en query params (ville_id et type_acteur
+  // facultatifs, voir notes du sous-parcours) — ils servent de
+  // valeurs initiales des filtres pour que l'annuaire soit déjà
+  // pré-filtré, sans que l'utilisateur ait à ressaisir sa recherche.
+  const [searchParams] = useSearchParams();
+
   const [services, setServices] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState("");
 
-  const [typeActeur, setTypeActeur] = useState("");
-  const [paysId, setPaysId] = useState("");
-  const [villeId, setVilleId] = useState("");
+  const [typeActeur, setTypeActeur] = useState(searchParams.get("type_acteur") || "");
+  const [paysId, setPaysId] = useState(searchParams.get("pays_id") || "");
+  const [villeId, setVilleId] = useState(searchParams.get("ville_id") || "");
   const [recherche, setRecherche] = useState("");
 
   const charger = async () => {
