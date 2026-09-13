@@ -43,7 +43,6 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import Stripe from 'stripe';
 
 import med1 from '../assets/img/med1.jpg';
 import { useAuth } from '../context/AuthContext';
@@ -54,6 +53,7 @@ import {
   MOTIF_RENDEZ_VOUS_LONGUEUR_MAX,
 } from '../services/medecinService';
 import { inscrirePatient } from '../services/authService';
+import { demanderPaiementRdv } from '../services/paiementService';
 // Seul `listerPays` est utilisé ici : inscrirePatient() (authService.js)
 // n'attend que { nom, prenom, email, telephone?, mot_de_passe, pays_id,
 // date_naissance } — pas de ville_id. `listerVilles` (aussi exposé par
@@ -102,13 +102,6 @@ function dateDuJourISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-//FONCTON POUR L'INTEGRATION DE STRIPE 
-
-const makeStripePayment = async (amount) => {
-  const rdv = await creerRendezVous(donnees);
-  const urlPaiement = await demanderPaiementRdv(rdv.rdv_id);
-  window.location.href = urlPaiement; // redirection vers Stripe Checkout
-}
 /* =====================================================================
  * Calendrier "Choisir un jour" / "Choisir une heure" (repris de
  * ProfilMedecin.jsx) : remplace les <input type="date"> / <input
@@ -301,6 +294,11 @@ export default function RendezVous() {
   const [rendezVousCree, setRendezVousCree] = useState(null);
   const [copied, setCopied] = useState(false);
 
+  // Paiement Stripe (POST /paiement/rendez-vous/:id/paiement) déclenché
+  // depuis le ticket de confirmation, une fois le rendez-vous créé.
+  const [paiementEnCours, setPaiementEnCours] = useState(false);
+  const [erreurPaiement, setErreurPaiement] = useState(null);
+
   // Le statut de connexion ne bloque plus l'accès à cette page : la
   // fiche du médecin et le choix du créneau restent consultables par
   // tout le monde. Ce n'est qu'au moment de la confirmation
@@ -448,6 +446,25 @@ export default function RendezVous() {
       setErreurEnvoi(err?.message || "La demande de rendez-vous a échoué. Veuillez réessayer.");
     } finally {
       setEnvoiEnCours(false);
+    }
+  };
+
+  // Déclenché depuis le bouton "Payer maintenant" du ticket (étape 3).
+  // Le rendez-vous existe déjà à ce stade (créé par confirmerRendezVous
+  // ci-dessus) ; on demande une session Stripe Checkout pour ce RDV
+  // précis, puis on redirige le navigateur dessus. Le montant n'est
+  // jamais envoyé depuis le client : le serveur le recalcule lui-même
+  // à partir du tarif du médecin (voir paiement.controller.js).
+  const payerRendezVous = async () => {
+    if (!rendezVousCree?.rdv_id) return;
+    setErreurPaiement(null);
+    setPaiementEnCours(true);
+    try {
+      const urlPaiement = await demanderPaiementRdv(rendezVousCree.rdv_id);
+      window.location.href = urlPaiement; // redirection vers Stripe Checkout
+    } catch (err) {
+      setErreurPaiement(err?.message || "Impossible de lancer le paiement. Veuillez réessayer.");
+      setPaiementEnCours(false);
     }
   };
 
@@ -806,6 +823,25 @@ export default function RendezVous() {
                                   rejoindre la visio
                                 </Link>
                               </p>
+                            )}
+
+                            {rendezVousCree.statut === 'cree' && (
+                              <div className="mt-3">
+                                <p className="text-faint mb-2" style={{ fontSize: '.85rem' }}>
+                                  Ce rendez-vous n&apos;est confirmé qu&apos;une fois le paiement effectué.
+                                </p>
+                                {erreurPaiement && (
+                                  <p className="text-danger mb-2" style={{ fontSize: '.85rem' }}>{erreurPaiement}</p>
+                                )}
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-block-aps w-100"
+                                  onClick={payerRendezVous}
+                                  disabled={paiementEnCours}
+                                >
+                                  {paiementEnCours ? 'Redirection vers le paiement…' : 'Payer maintenant'}
+                                </button>
+                              </div>
                             )}
 
                             <div className="d-flex gap-2 mt-3">
