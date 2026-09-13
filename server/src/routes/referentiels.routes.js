@@ -63,8 +63,8 @@ router.delete("/devises/:id", authentifier, autoriser("superadmin"), supprimerDe
 
 // ─── Pays ─────────────────────────────────────────────────────
 router.get("/pays", listerPays);
-router.get("/pays/:id", obtenirPays);
 router.get("/pays/detecter", detecterPaysParPosition);
+router.get("/pays/:id", obtenirPays);
 router.post("/pays", authentifier, autoriser("admin", "superadmin"), creerPays);
 router.put("/pays/:id", authentifier, autoriser("admin", "superadmin"), modifierPays);
 router.delete("/pays/:id", authentifier, autoriser("superadmin"), supprimerPays);
