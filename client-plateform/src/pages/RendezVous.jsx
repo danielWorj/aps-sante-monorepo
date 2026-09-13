@@ -43,6 +43,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import Stripe from 'stripe';
 
 import med1 from '../assets/img/med1.jpg';
 import { useAuth } from '../context/AuthContext';
@@ -101,6 +102,11 @@ function dateDuJourISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+//FONCTON POUR L'INTEGRATION DE STRIPE 
+
+const makeStripePayment = async (amount) => {
+  const stripe = await loadStripe('A mettre les cles!!!!'); 
+}
 /* =====================================================================
  * Calendrier "Choisir un jour" / "Choisir une heure" (repris de
  * ProfilMedecin.jsx) : remplace les <input type="date"> / <input

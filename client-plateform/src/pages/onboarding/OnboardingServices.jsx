@@ -5,9 +5,10 @@ import ServiceCard from './ServiceCard';
  *
  * Reprend le principe du "cat-grid" de Home.jsx (voir ServiceCard,
  * factorisé pour l'occasion) pour lister les grandes familles
- * d'acteurs de l'annuaire. Seul "Médecins et professionnels" ouvre le
- * sous-parcours de recherche guidée (Écran 1.1.1 : ville, puis
- * Écran 1.1.2 : spécialité) ; les autres services, déjà pourvus d'un
+ * d'acteurs de l'annuaire. "Médecins et professionnels" et
+ * "Assurances" ouvrent chacun un sous-parcours de recherche guidée en
+ * deux étapes (ville, puis spécialité / type d'acteur — Écrans
+ * 1.1.1/1.1.2 et 1.3.1/1.3.2) ; les autres services, déjà pourvus d'un
  * annuaire complet, y renvoient directement.
  *
  * "Pompes funèbres" n'a pas encore d'annuaire dédié côté client
@@ -38,7 +39,7 @@ export default function OnboardingServices() {
             subtitle="De garde ou horaires classiques"
           />
           <ServiceCard
-            to="/assurance"
+            to="/onboarding/assurances/ville"
             icon="fa-shield-heart"
             title="Assurances"
             subtitle="Compagnies et courtiers santé"
