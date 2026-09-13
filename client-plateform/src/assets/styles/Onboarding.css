@@ -1,0 +1,112 @@
+/* ============================================================
+   APS — Onboarding (Écrans 1, 1.1, 1.1.1, 1.1.2, 1.1.3 du croquis)
+   Reprend les tokens du design system (style.css) : aucune nouvelle
+   couleur/rayon introduits ici, uniquement de la mise en page propre
+   aux écrans d'onboarding.
+   ============================================================ */
+
+.onboarding-shell{
+  min-height:calc(100vh - 64px);
+  display:flex;
+  align-items:center;
+  padding:3rem 0;
+}
+/* Écrans à contenu plus long (listes, formulaires) : on ancre en haut
+   plutôt que de centrer verticalement, pour éviter que le contenu ne
+   "saute" quand son nombre de lignes change (chargement, erreurs…). */
+.onboarding-shell-top{
+  align-items:flex-start;
+  padding-top:2.5rem;
+}
+
+.onboarding-container{
+  max-width:460px;
+  margin:0 auto;
+  width:100%;
+}
+.onboarding-container-lg{
+  max-width:720px;
+  margin:0 auto;
+  width:100%;
+}
+
+.onboarding-intro{
+  text-align:center;
+  margin-bottom:2rem;
+}
+.onboarding-intro p{margin:0;}
+
+/* ---------------------------- Écran 1 — choix initial ---------------------------- */
+.onboarding-choices{
+  display:flex;
+  flex-direction:column;
+  gap:1rem;
+  margin-bottom:2rem;
+}
+.onboarding-choice-card{
+  display:flex;
+  align-items:center;
+  gap:1rem;
+  padding:1.25rem 1.4rem;
+  border:1.5px solid var(--line-strong);
+  border-radius:var(--radius-lg);
+  background:var(--surface);
+  color:var(--ink);
+  transition:border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.onboarding-choice-card:hover{
+  border-color:var(--primary);
+  box-shadow:var(--shadow-sm);
+  color:var(--ink);
+  transform:translateY(-1px);
+}
+.onboarding-choice-card .icon-wrap{
+  width:48px; height:48px; min-width:48px;
+  border-radius:var(--radius-md);
+  display:flex; align-items:center; justify-content:center;
+  font-size:1.15rem;
+  background:var(--primary-tint);
+  color:var(--primary);
+}
+.onboarding-choice-card.is-pro .icon-wrap{
+  background:var(--teal-tint);
+  color:var(--teal-dark);
+}
+.onboarding-choice-card > span:nth-child(2){
+  display:flex; flex-direction:column; gap:.15rem; flex:1;
+}
+.choice-title{font-weight:700; font-size:.95rem;}
+.choice-sub{font-size:.78rem; color:var(--ink-faint);}
+.onboarding-choice-card > i{color:var(--ink-faint); font-size:.85rem;}
+
+.onboarding-skip{
+  display:flex; align-items:center; justify-content:center; gap:.4rem;
+  font-size:.82rem; font-weight:600;
+  color:var(--ink-faint);
+}
+.onboarding-skip:hover{color:var(--primary);}
+
+/* ---------------------------- Écran 1.1 — liste des services ---------------------------- */
+.onboarding-service-list{margin-bottom:1rem;}
+.cat-card.is-disabled{
+  cursor:not-allowed;
+  opacity:.55;
+}
+.cat-card.is-disabled:hover{border-color:var(--line); box-shadow:none;}
+
+/* ---------------------------- Sous-parcours "Médecins et professionnels" ---------------------------- */
+.onboarding-progress{
+  display:flex;
+  gap:.4rem;
+  margin-bottom:1.3rem;
+}
+.onboarding-progress span{
+  height:4px;
+  flex:1;
+  max-width:48px;
+  border-radius:var(--radius-pill);
+  background:var(--line-strong);
+}
+.onboarding-progress span.is-done{background:var(--primary);}
+
+.onboarding-specialite-grid{margin-bottom:1.5rem;}

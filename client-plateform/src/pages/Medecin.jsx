@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import med1 from '../assets/img/med1.jpg';
 import pub4 from '../assets/img/ads/pub4.jpg';
 import {
@@ -19,6 +19,14 @@ const RESULTATS_PAR_PAGE = 10;
 const PHOTO_PAR_DEFAUT = med1;
 
 export default function Medecin() {
+  // Écran 1.1.3 du parcours d'onboarding (croquis) : arrivée ici
+  // depuis OnboardingMedecinSpecialite.jsx avec specialite_id,
+  // pays_exercice_id et ville_exercice_id déjà choisis en query
+  // params — ils servent de valeurs initiales des filtres pour que la
+  // "liste des médecins obtenus" soit déjà pré-filtrée, sans que
+  // l'utilisateur ait à ressaisir sa recherche.
+  const [searchParams] = useSearchParams();
+
   const [view, setView] = useState('list'); // 'list' | 'map'
   const [page, setPage] = useState(1);
 
@@ -34,9 +42,9 @@ export default function Medecin() {
   // (voir listerMedecins dans medecin.controller.js : specialite_id,
   // ville_exercice_id, pays_exercice_id, recherche).
   const [filtres, setFiltres] = useState({
-    specialite_id: '',
-    pays_exercice_id: '',
-    ville_exercice_id: '',
+    specialite_id: searchParams.get('specialite_id') || '',
+    pays_exercice_id: searchParams.get('pays_exercice_id') || '',
+    ville_exercice_id: searchParams.get('ville_exercice_id') || '',
     recherche: '',
   });
 

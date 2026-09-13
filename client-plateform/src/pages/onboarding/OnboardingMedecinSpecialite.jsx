@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { listerSpecialites } from '../../services/medecinService';
 import OnboardingProgress from './components/OnboardingProgress';
 
 /**
- * Écran 1.1.1 — Choix de la spécialité (étape 1/2 du sous-parcours
- * "Médecins et professionnels").
+ * Écran 1.1.2 — Choix de la spécialité (étape 2/2 du sous-parcours
+ * "Médecins et professionnels", après la ville — voir Écran 1.1.1).
  *
  * Charge le référentiel des spécialités via listerSpecialites()
  * (medecinService.js, GET /specialites, public) et le présente sous
@@ -13,13 +13,23 @@ import OnboardingProgress from './components/OnboardingProgress';
  * .opt-card" déjà utilisé dans Home.jsx et creationMedecin.jsx — aucune
  * nouvelle classe CSS nécessaire).
  *
- * La sélection est conservée via un query param (specialite_id, +
- * specialite_nom pour l'affichage du récapitulatif à l'écran suivant)
- * plutôt qu'un state React partagé : l'écran 1.1.2 reste ainsi
- * fonctionnel même après un rechargement de page ou un lien partagé.
+ * pays_exercice_id et ville_exercice_id sont repris tels quels des
+ * query params (renseignés par l'Écran 1.1.1) et transmis à l'Écran
+ * 1.1.3 (liste des médecins obtenus, = /medecin déjà existant) au clic
+ * sur "Voir les médecins".
+ *
+ * Le lien "Retour" renvoie vers l'Écran 1.1.1 en conservant le pays et
+ * la ville déjà choisis (le croquis note explicitement qu'on peut
+ * "passer de 1.1.2 → 1.1.1"), pour ne pas faire perdre ce choix à
+ * l'utilisateur qui veut seulement le corriger.
  */
 export default function OnboardingMedecinSpecialite() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const paysId = searchParams.get('pays_exercice_id') || '';
+  const villeId = searchParams.get('ville_exercice_id') || '';
+  const villeNom = searchParams.get('ville_nom') || '';
 
   const [specialites, setSpecialites] = useState([]);
   const [chargement, setChargement] = useState(true);
@@ -45,22 +55,41 @@ export default function OnboardingMedecinSpecialite() {
     };
   }, []);
 
-  function allerVersEtapeVille() {
+  function voirLesMedecins() {
     if (!specialiteId) return;
-    const specialite = specialites.find((s) => String(s.specialite_id) === String(specialiteId));
-    const params = new URLSearchParams({ specialite_id: specialiteId });
-    if (specialite?.nom) params.set('specialite_nom', specialite.nom);
+    const params = new URLSearchParams({
+      specialite_id: specialiteId,
+      pays_exercice_id: paysId,
+      ville_exercice_id: villeId,
+    });
+    navigate(`/medecin?${params.toString()}`);
+  }
+
+  function retourEtapeVille() {
+    const params = new URLSearchParams({ pays_exercice_id: paysId, ville_exercice_id: villeId });
     navigate(`/onboarding/medecins/ville?${params.toString()}`);
+  }
+
+  // Étape accédée directement sans être passé par le choix de ville
+  // (lien partagé, retour navigateur après nettoyage des query
+  // params...) : on renvoie vers l'étape 1.1.1 plutôt que d'afficher
+  // un écran de spécialités sans ville de recherche.
+  if (!paysId || !villeId) {
+    return <Navigate to="/onboarding/medecins/ville" replace />;
   }
 
   return (
     <section className="onboarding-shell onboarding-shell-top">
       <div className="container-aps onboarding-container-lg">
-        <OnboardingProgress current={1} total={2} />
+        <OnboardingProgress current={2} total={2} />
 
         <span className="eyebrow">Médecins et professionnels</span>
         <h1 style={{ fontSize: '1.6rem', marginTop: '.5rem' }}>Quelle spécialité recherchez-vous ?</h1>
-        <p className="mb-4">Sélectionnez une spécialité pour affiner la recherche de professionnels.</p>
+        {villeNom && (
+          <p className="mb-4">
+            Recherche à : <strong>{villeNom}</strong>
+          </p>
+        )}
 
         {chargement && (
           <div className="info-card" style={{ padding: '2rem', textAlign: 'center' }}>
@@ -101,11 +130,11 @@ export default function OnboardingMedecinSpecialite() {
         )}
 
         <div className="form-nav-actions">
-          <Link to="/onboarding/services" className="btn btn-ghost">
+          <button type="button" className="btn btn-ghost" onClick={retourEtapeVille}>
             <i className="fa-solid fa-arrow-left" /> Retour
-          </Link>
-          <button type="button" className="btn btn-primary" disabled={!specialiteId} onClick={allerVersEtapeVille}>
-            Suivant <i className="fa-solid fa-arrow-right" />
+          </button>
+          <button type="button" className="btn btn-primary" disabled={!specialiteId} onClick={voirLesMedecins}>
+            <i className="fa-solid fa-magnifying-glass" /> Voir les médecins
           </button>
         </div>
       </div>
