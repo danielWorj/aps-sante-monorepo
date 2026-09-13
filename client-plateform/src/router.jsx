@@ -6,6 +6,12 @@ import CreerPatient from './components/patient/creerPatient.jsx'
 import CreationMedecin from './components/medecin/creationMedecin';
 import InscriptionPortail from './pages/inscriptionportail.jsx';
 
+// ONBOARDING (croquis : Écran 1 → 1.1 → 1.1.1/1.1.2 → 1.1.3)
+import OnboardingAccueil from './pages/onboarding/OnboardingAccueil.jsx';
+import OnboardingServices from './pages/onboarding/OnboardingServices.jsx';
+import OnboardingMedecinVille from './pages/onboarding/OnboardingMedecinVille.jsx';
+import OnboardingMedecinSpecialite from './pages/onboarding/OnboardingMedecinSpecialite.jsx';
+
 import Pharmacie from './pages/Pharmacie';
 import FichePharmacie from './pages/FichePharmacie.jsx';
 import CreationPharmacie from './components/pharmacie/creationPharmacie.jsx';
@@ -54,6 +60,12 @@ export const router = createBrowserRouter([
       { path: '/', element: <Home /> },
       { path: '/home', element: <Home /> },
       { path: '/inscription', element: <InscriptionPortail /> },
+
+      // ONBOARDING
+      { path: '/onboarding', element: <OnboardingAccueil /> },
+      { path: '/onboarding/services', element: <OnboardingServices /> },
+      { path: '/onboarding/medecins/ville', element: <OnboardingMedecinVille /> },
+      { path: '/onboarding/medecins/specialite', element: <OnboardingMedecinSpecialite /> },
       { path: '/medecin', element: <Medecin /> },
       { path: '/devenir-medecin', element: <CreationMedecin /> },
       { path: '/creer-patient', element: <CreerPatient /> },
