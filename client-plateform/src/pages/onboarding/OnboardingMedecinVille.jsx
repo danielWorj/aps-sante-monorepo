@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { listerPays, listerVilles } from '../../services/geoService';
 import { detecterPaysUtilisateur } from '../../lib/geoloc';
-import OnboardingProgress from './components/OnboardingProgress';
+import OnboardingProgress from './OnboardingProgess';
 
 /**
  * Écran 1.1.1 — Choix de la ville (étape 1/2 du sous-parcours

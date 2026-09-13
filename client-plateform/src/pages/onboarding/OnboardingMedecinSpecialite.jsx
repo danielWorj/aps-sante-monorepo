@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { listerSpecialites } from '../../services/medecinService';
-import OnboardingProgress from './components/OnboardingProgress';
+import OnboardingProgress from './OnboardingProgess';
 
 /**
  * Écran 1.1.2 — Choix de la spécialité (étape 2/2 du sous-parcours
