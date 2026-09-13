@@ -105,7 +105,9 @@ function dateDuJourISO() {
 //FONCTON POUR L'INTEGRATION DE STRIPE 
 
 const makeStripePayment = async (amount) => {
-  const stripe = await loadStripe('A mettre les cles!!!!'); 
+  const rdv = await creerRendezVous(donnees);
+  const urlPaiement = await demanderPaiementRdv(rdv.rdv_id);
+  window.location.href = urlPaiement; // redirection vers Stripe Checkout
 }
 /* =====================================================================
  * Calendrier "Choisir un jour" / "Choisir une heure" (repris de

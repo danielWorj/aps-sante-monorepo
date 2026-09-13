@@ -5,6 +5,8 @@ import Medecin from './pages/Medecin';
 import CreerPatient from './components/patient/creerPatient.jsx'
 import CreationMedecin from './components/medecin/creationMedecin';
 import InscriptionPortail from './pages/inscriptionportail.jsx';
+import PaiementSucces from './pages/PaiementSucces.jsx';
+import PaiementAnnule from './pages/PaiementAnnule.jsx';
 
 // ONBOARDING (croquis : Écran 1 → 1.1 → 1.1.1/1.1.2 → 1.1.3)
 import OnboardingAccueil from './pages/onboarding/OnboardingAccueil.jsx';
@@ -96,6 +98,9 @@ export const router = createBrowserRouter([
 
       //ANNONCE 
       {path: '/annonces/:id', element: <FicheAnnonce />},
+      //PAIEMENTS
+      { path: '/paiement/succes', element: <PaiementSucces /> },
+      { path: '/paiement/annule', element: <PaiementAnnule /> },
     ],
   },
   {
