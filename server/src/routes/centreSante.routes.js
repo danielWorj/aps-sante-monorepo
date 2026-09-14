@@ -49,6 +49,14 @@ import { gererTeleversementCentreSante } from "../middlewares/upload.middleware.
 const router = Router();
 
 // ─── Centres de santé ─────────────────────────────────────────
+// GET liste : filtres optionnels ?pays_id=...&ville_id=...&type_structure=...
+// &statut_verification=...&recherche=... (nom, insensible à la casse),
+// combinables avec une recherche par proximité optionnelle
+// ?lat=...&lng=...&rayon_km=... (lat/lng à fournir ensemble ; rayon_km
+// défaut 10 km) — voir listerCentresSante / lib/geo.js (même pattern
+// que le module Assurance et le module Pharmacie). Quand la proximité
+// est active, chaque fiche renvoyée gagne un champ distance_km et le
+// tri se fait par distance croissante.
 router.get("/centres-sante", listerCentresSante);
 router.get("/centres-sante/:id", obtenirCentreSante);
 
