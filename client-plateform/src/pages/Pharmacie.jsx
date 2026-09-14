@@ -6,6 +6,11 @@ import pub5 from "../assets/img/ads/pub5.jpg";
 
 import { listerPharmacies, listerGardesPharmacie } from "../services/pharmacieService";
 import { listerPays, listerVilles } from "../services/geoService";
+import { useGeolocation } from "../hooks/useGeolocation";
+
+// Rayons proposés pour le filtre "Autour de moi" (voir
+// server/src/lib/geo.js : rayon par défaut 10 km si non précisé).
+const RAYONS_KM = [5, 10, 25, 50];
 
 // Page "Pharmacies" — annuaire des pharmacies, alimenté par l'API
 // (module pharmacie) : liste publique + repérage des pharmacies de
@@ -58,6 +63,14 @@ function PharmacyCard({ pharmacy, enGarde }) {
             <span>
               <i className="fa-solid fa-id-card" /> N° ordre {pharmacy.numero_ordre_titulaire}
             </span>
+            {typeof pharmacy.distance_km === "number" && (
+              <>
+                <span>&middot;</span>
+                <span>
+                  <i className="fa-solid fa-route" /> {pharmacy.distance_km.toFixed(1)} km
+                </span>
+              </>
+            )}
           </div>
         </div>
       </Link>
@@ -101,6 +114,27 @@ export default function Pharmacie() {
 
   const [gardePharmacieIds, setGardePharmacieIds] = useState(new Set());
 
+  // Filtre "Autour de moi" — API navigateur native (voir
+  // src/hooks/useGeolocation.js), aucune librairie carto. Refus de
+  // permission / navigateur non compatible : on retombe silencieusement
+  // sur les filtres pays/ville existants (aucun lat/lng envoyé), avec
+  // un message discret affiché sous le bouton.
+  const {
+    position: positionActuelle,
+    loading: geoEnCours,
+    error: geoErreur,
+    demanderPosition,
+  } = useGeolocation();
+  const [autourDeMoi, setAutourDeMoi] = useState(false);
+  const [rayonKm, setRayonKm] = useState(10);
+
+  function handleToggleAutourDeMoi(actif) {
+    setAutourDeMoi(actif);
+    if (actif && !positionActuelle) {
+      demanderPosition();
+    }
+  }
+
   // Référentiel Pays (une fois)
   useEffect(() => {
     listerPays()
@@ -128,15 +162,25 @@ export default function Pharmacie() {
     };
   }, [paysId]);
 
-  // Liste des pharmacies (fiches publiées uniquement)
+  // Liste des pharmacies (fiches publiées uniquement). Le filtre de
+  // proximité (lat/lng/rayon_km) n'est envoyé au backend
+  // (server/src/lib/geo.js) que si "Autour de moi" est actif ET
+  // qu'une position a effectivement été obtenue ; sinon on reste sur
+  // les filtres pays/ville habituels — le tri par distance renvoyé par
+  // le serveur n'est jamais recalculé côté front.
   function chargerPharmacies() {
     setChargement(true);
     setErreurChargement("");
+    const filtresProximite =
+      autourDeMoi && positionActuelle
+        ? { lat: positionActuelle.latitude, lng: positionActuelle.longitude, rayon_km: rayonKm }
+        : {};
     listerPharmacies({
       pays_id: paysId || undefined,
       ville_id: villeId || undefined,
       recherche: recherche || undefined,
       statut_verification: STATUT_PUBLIC,
+      ...filtresProximite,
     })
       .then((data) => setPharmacies(data.pharmacies || []))
       .catch(() =>
@@ -148,7 +192,7 @@ export default function Pharmacie() {
   useEffect(() => {
     chargerPharmacies();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paysId, villeId, recherche]);
+  }, [paysId, villeId, recherche, autourDeMoi, positionActuelle, rayonKm]);
 
   // Pharmacies de garde à l'instant présent (pour le badge + le filtre)
   useEffect(() => {
@@ -258,7 +302,44 @@ export default function Pharmacie() {
                       <i className="fa-solid fa-circle" /> Pharmacies de garde
                       uniquement
                     </label>
+                    <label className="chip chip-verifie" style={{ cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={autourDeMoi}
+                        onChange={(e) => handleToggleAutourDeMoi(e.target.checked)}
+                        style={{ marginRight: ".35rem" }}
+                      />
+                      <i className="fa-solid fa-location-crosshairs" /> Autour de
+                      moi
+                    </label>
                   </div>
+                  {autourDeMoi && (
+                    <div className="mb-3">
+                      <label className="form-label-aps" htmlFor="f-rayon">
+                        Rayon de recherche
+                      </label>
+                      <select
+                        className="form-select"
+                        id="f-rayon"
+                        value={rayonKm}
+                        onChange={(e) => setRayonKm(Number(e.target.value))}
+                      >
+                        {RAYONS_KM.map((km) => (
+                          <option key={km} value={km}>
+                            {km} km
+                          </option>
+                        ))}
+                      </select>
+                      {geoEnCours && (
+                        <p className="minimal-note mt-2">Localisation en cours…</p>
+                      )}
+                      {geoErreur && (
+                        <p className="minimal-note mt-2">
+                          <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <button type="submit" className="btn btn-primary btn-block-aps">
                     <i className="fa-solid fa-magnifying-glass" /> Rechercher
                   </button>
