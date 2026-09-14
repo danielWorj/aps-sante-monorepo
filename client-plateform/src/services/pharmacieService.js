@@ -55,8 +55,19 @@ function versFormData(champs = {}) {
 
 /**
  * GET /pharmacies
- * @param {{pays_id?: string, ville_id?: string, statut_verification?: string, recherche?: string}} filtres
- * @returns {Promise<{ pharmacies: object[] }>}
+ * @param {object} [filtres]
+ * @param {string} [filtres.pays_id]
+ * @param {string} [filtres.ville_id]
+ * @param {string} [filtres.statut_verification]
+ * @param {string} [filtres.recherche] - recherche insensible à la casse sur le nom
+ * @param {number} [filtres.lat] - recherche par proximité optionnelle,
+ *   à fournir avec lng (voir server/src/lib/geo.js).
+ * @param {number} [filtres.lng] - à fournir avec lat.
+ * @param {number} [filtres.rayon_km] - rayon de recherche en km,
+ *   ignoré si lat/lng absents (défaut serveur : 10 km).
+ * @returns {Promise<{ pharmacies: object[] }>} quand lat/lng sont
+ *   fournis, chaque fiche gagne un champ `distance_km` et la liste est
+ *   triée par distance croissante.
  */
 export function listerPharmacies(filtres = {}) {
   return apiFetch(`/pharmacies${versQueryString(filtres)}`);

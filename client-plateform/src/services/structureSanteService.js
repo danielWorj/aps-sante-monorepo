@@ -105,13 +105,19 @@ function construireFormData(donnees, fichiers) {
  * GET /centres-sante
  * Route publique.
  * @param {Object} filtres - { pays_id?, ville_id?, type_structure?,
- *   statut_verification?, recherche? } — `recherche` filtre sur le nom
- *   (insensible à la casse), `type_structure` doit être une valeur de
- *   TYPES_STRUCTURE, `statut_verification` une valeur de
- *   STATUTS_VERIFICATION_STRUCTURE.
+ *   statut_verification?, recherche?, lat?, lng?, rayon_km? } —
+ *   `recherche` filtre sur le nom (insensible à la casse),
+ *   `type_structure` doit être une valeur de TYPES_STRUCTURE,
+ *   `statut_verification` une valeur de STATUTS_VERIFICATION_STRUCTURE.
+ *   `lat`/`lng` activent une recherche par proximité optionnelle (à
+ *   fournir ensemble — voir server/src/lib/geo.js) ; `rayon_km` est le
+ *   rayon de recherche en km, ignoré si lat/lng absents (défaut
+ *   serveur : 10 km).
  * @returns {Promise<Array>} liste des centres de santé (chaque entrée
  *   inclut pays, ville, geolocalisation, image_url, piece_identite_url,
- *   document_agrement_url)
+ *   document_agrement_url) ; quand lat/lng sont fournis, chaque entrée
+ *   gagne aussi un champ `distance_km` et la liste est triée par
+ *   distance croissante.
  */
 export async function listerCentresSante(filtres = {}) {
   const data = await apiFetch(`/centres-sante${construireQueryString(filtres)}`);
