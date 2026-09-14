@@ -266,11 +266,11 @@ export async function creerRendezVous(req, res, next) {
  *   - motif : précision/correction du motif de consultation, ouverte à
  *     toutes les parties autorisées (envoyer une chaîne vide ou null
  *     efface le motif).
- *   - statut : doit rester une transition cohérente avec le rôle
- *     (un patient ne peut pas se déclarer "honore" lui-même, etc.) —
- *     validation volontairement permissive ici (valeur dans l'enum
- *     uniquement) ; le contrôle fin des transitions autorisées par
- *     rôle est laissé à la couche métier/produit si nécessaire.
+ *   - statut : doit rester une transition cohérente avec le rôle (un
+ *     patient ne peut pas se déclarer "honore" lui-même, etc.) et,
+ *     pour une confirmation par le médecin, exige qu'un paiement
+ *     Stripe ait déjà été validé pour ce rendez-vous — voir
+ *     verifierTransitionAutorisee (partagée avec PATCH .../statut).
  * DELETE reste interdit ici : un rendez-vous s'annule via statut, il
  * ne se supprime pas physiquement une fois créé (voir supprimerRendezVous).
  */
@@ -288,11 +288,28 @@ export async function modifierRendezVous(req, res, next) {
     const { statut, date_creneau, structure_id, motif } = req.body;
     const donnees = {};
 
+    // CORRECTIF SÉCURITÉ : ce PUT généraliste acceptait auparavant
+    // n'importe quel statut, de la part de n'importe quelle partie
+    // autorisée (patient OU médecin), sans vérifier ni la cohérence du
+    // rôle avec la transition demandée, ni — surtout — qu'un paiement
+    // avait été validé. Un médecin (ou même un patient) pouvait donc
+    // faire passer un rendez-vous "cree" à "confirme" via cette seule
+    // route, en contournant totalement le paiement Stripe.
+    // On applique désormais la même vérification que le PATCH
+    // .../statut ci-dessous (voir verifierTransitionAutorisee) :
+    // matrice de rôle + verrou paiement pour la transition
+    // cree -> confirme initiée par un médecin.
     if (statut !== undefined) {
       if (!STATUTS_RDV.includes(statut)) {
         return res.status(400).json({
           message: `statut invalide. Valeurs acceptées : ${STATUTS_RDV.join(", ")}.`,
         });
+      }
+      if (statut !== rdv.statut) {
+        const erreurTransition = await verifierTransitionAutorisee(rdv, req.utilisateur, statut);
+        if (erreurTransition) {
+          return res.status(erreurTransition.status).json({ message: erreurTransition.message });
+        }
       }
       donnees.statut = statut;
     }
@@ -383,19 +400,80 @@ const TRANSITIONS_AUTORISEES = {
 };
 
 /**
+ * Vérifie qu'une transition de statut demandée par l'utilisateur
+ * courant (hors admin/superadmin) est légitime, sur deux plans :
+ *
+ *   1. Cohérence avec TRANSITIONS_AUTORISEES pour son rôle (patient ou
+ *      médecin) et le statut courant du rdv.
+ *   2. Verrou paiement : un médecin ne peut faire passer un
+ *      rendez-vous de "cree" à "confirme" QUE si le paiement Stripe a
+ *      déjà été validé pour ce rdv — c'est-à-dire qu'un CompteEscrow
+ *      existe (il n'est créé que par le webhook Stripe, sur
+ *      "checkout.session.completed", voir paiement.controller.js).
+ *      Sans paiement réussi, il n'y a pas de CompteEscrow : la
+ *      confirmation manuelle est donc bloquée. C'est cette fonction
+ *      qui garantit qu'un rendez-vous ne peut jamais être confirmé
+ *      par le médecin tant que le patient n'a pas payé au préalable.
+ *
+ * admin/superadmin ne sont volontairement PAS soumis à ce verrou :
+ * ils gardent la possibilité de forcer une transition à la main pour
+ * une correction manuelle exceptionnelle (cas déjà documenté sur
+ * TRANSITIONS_AUTORISEES ci-dessus).
+ *
+ * @returns {Promise<null|{status:number, message:string}>} null si la
+ *   transition est autorisée, sinon l'erreur HTTP à renvoyer telle quelle.
+ */
+async function verifierTransitionAutorisee(rdv, utilisateurCourant, nouveauStatut) {
+  if (estAdmin(utilisateurCourant)) return null;
+
+  const patient = await profilPatientCourant(utilisateurCourant);
+  const medecin = await profilMedecinCourant(utilisateurCourant);
+
+  // estAutoriseSurRdv (déjà vérifié en amont par l'appelant) garantit
+  // que l'un des deux correspond au rdv ; on détermine lequel pour
+  // choisir la bonne matrice de transitions.
+  const role = patient && patient.patient_id === rdv.patient_id ? "patient" : "medecin";
+
+  const transitionsPermises = TRANSITIONS_AUTORISEES[role][rdv.statut] || [];
+  if (!transitionsPermises.includes(nouveauStatut)) {
+    return {
+      status: 403,
+      message: `Transition non autorisée : un ${role === "patient" ? "patient" : "médecin"} ne peut pas faire passer un rendez-vous de "${rdv.statut}" à "${nouveauStatut}".`,
+    };
+  }
+
+  if (role === "medecin" && rdv.statut === "cree" && nouveauStatut === "confirme") {
+    const escrow = await prisma.compteEscrow.findUnique({ where: { rdv_id: rdv.rdv_id } });
+    if (!escrow) {
+      return {
+        status: 409,
+        message:
+          "Ce rendez-vous ne peut pas être confirmé : le paiement du patient n'a pas encore été validé.",
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
  * PATCH /api/rendez-vous/:id/statut
  * Body: { statut: <valeur de StatutRendezVous> }
  *
  * Action dédiée au changement de statut (même patron que
- * publier/suspendre/reactiver sur medecin) : contrairement à
- * PUT /rendez-vous/:id (qui accepte "statut" sans contrôle de
- * transition), cet endpoint vérifie que le passage demandé est
- * cohérent avec le rôle de l'appelant et le statut actuel du rdv —
- * voir TRANSITIONS_AUTORISEES.
+ * publier/suspendre/reactiver sur medecin). Vérifie, via
+ * verifierTransitionAutorisee, que le passage demandé est cohérent
+ * avec le rôle de l'appelant et le statut actuel du rdv — voir
+ * TRANSITIONS_AUTORISEES — et, pour cree -> confirme par un médecin,
+ * qu'un paiement Stripe a bien été validé (CompteEscrow existant).
  *   - patient concerné / médecin concerné : transition doit figurer
- *     dans TRANSITIONS_AUTORISEES[role][statut_actuel].
+ *     dans TRANSITIONS_AUTORISEES[role][statut_actuel] ET, si c'est
+ *     une confirmation par le médecin, être adossée à un paiement
+ *     réussi.
  *   - admin/superadmin : toute transition vers un statut différent
- *     est acceptée (correction manuelle).
+ *     est acceptée (correction manuelle), sans verrou paiement.
+ * PUT /rendez-vous/:id applique désormais exactement le même contrôle
+ * pour le champ "statut" (voir modifierRendezVous ci-dessus).
  */
 export async function changerStatutRendezVous(req, res, next) {
   try {
@@ -422,20 +500,9 @@ export async function changerStatutRendezVous(req, res, next) {
       return res.status(400).json({ message: "Le rendez-vous a déjà ce statut." });
     }
 
-    if (!estAdmin(req.utilisateur)) {
-      const patient = await profilPatientCourant(req.utilisateur);
-      const medecin = await profilMedecinCourant(req.utilisateur);
-
-      // estAutoriseSurRdv garantit que l'un des deux correspond au rdv ;
-      // on détermine lequel pour choisir la bonne matrice de transitions.
-      const role = patient && patient.patient_id === rdv.patient_id ? "patient" : "medecin";
-
-      const transitionsPermises = TRANSITIONS_AUTORISEES[role][rdv.statut] || [];
-      if (!transitionsPermises.includes(statut)) {
-        return res.status(403).json({
-          message: `Transition non autorisée : un ${role === "patient" ? "patient" : "médecin"} ne peut pas faire passer un rendez-vous de "${rdv.statut}" à "${statut}".`,
-        });
-      }
+    const erreurTransition = await verifierTransitionAutorisee(rdv, req.utilisateur, statut);
+    if (erreurTransition) {
+      return res.status(erreurTransition.status).json({ message: erreurTransition.message });
     }
 
     const rdvMisAJour = await prisma.rendezVous.update({

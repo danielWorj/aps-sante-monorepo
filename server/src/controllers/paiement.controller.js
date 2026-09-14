@@ -58,14 +58,25 @@ export async function creerPaiementRdv(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// GET /api/rendez-vous/:id/paiement — statut (pour la page de retour)
+// GET /api/rendez-vous/:id/paiement — statut (pour la page de retour
+// côté patient, ET pour le portail médecin qui doit savoir si le
+// rendez-vous a bien été payé avant de proposer sa confirmation).
 export async function obtenirStatutPaiementRdv(req, res, next) {
   try {
     const rdv = await prisma.rendezVous.findUnique({ where: { rdv_id: req.params.id } });
     if (!rdv) return res.status(404).json({ message: "Rendez-vous introuvable." });
 
+    const estAdmin = req.utilisateur?.role === "admin" || req.utilisateur?.role === "superadmin";
     const patient = await prisma.patient.findUnique({ where: { utilisateur_id: req.utilisateur.utilisateur_id } });
-    if (!patient || patient.patient_id !== rdv.patient_id) {
+    const estPatientConcerne = patient && patient.patient_id === rdv.patient_id;
+
+    let estMedecinConcerne = false;
+    if (!estPatientConcerne && !estAdmin) {
+      const medecin = await prisma.medecin.findUnique({ where: { utilisateur_id: req.utilisateur.utilisateur_id } });
+      estMedecinConcerne = medecin && medecin.medecin_id === rdv.medecin_id;
+    }
+
+    if (!estPatientConcerne && !estMedecinConcerne && !estAdmin) {
       return res.status(403).json({ message: "Accès refusé." });
     }
 

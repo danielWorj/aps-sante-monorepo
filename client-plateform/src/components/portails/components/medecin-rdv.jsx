@@ -11,6 +11,7 @@ import {
   STATUTS_RENDEZ_VOUS,
   TYPES_RENDEZ_VOUS,
 } from "./../../../services/medecinService";
+import { obtenirStatutPaiementRdv } from "./../../../services/paiementService";
 import { useAuth } from "./../../../context/AuthContext";
 import { categoriserRdv } from "./../../../utils/rdv";
 
@@ -233,16 +234,38 @@ const MedecinRdv = () => {
   }, [rdvParCategorie]);
 
   // ─── Actions accepter / refuser ─────────────────────────────
+  // Un rendez-vous ne peut être confirmé par le médecin que si le
+  // patient a préalablement payé (paiement Stripe validé par webhook
+  // -> CompteEscrow créé). Le serveur applique ce verrou de toute
+  // façon (rendezVous.controller.js renvoie 409 sinon) : la
+  // vérification ci-dessous n'est qu'une amélioration d'UX pour éviter
+  // un clic inutile et donner un message explicite plutôt qu'une
+  // erreur générique.
   const accepter = async (id) => {
     setActionEnCours(id);
     try {
+      const { paiement } = await obtenirStatutPaiementRdv(id);
+      if (paiement?.statut !== "reussie") {
+        showToast(
+          "Impossible de confirmer : le patient n'a pas encore payé ce rendez-vous."
+        );
+        return;
+      }
+
       await modifierRendezVous(id, { statut: "confirme" });
       setRendezVous((prev) =>
         prev.map((r) => (r.rdv_id === id ? { ...r, statut: "confirme" } : r))
       );
       showToast("Rendez-vous confirmé — le patient a été notifié.");
     } catch (err) {
-      showToast("Erreur : " + (err.message || "impossible de confirmer le RDV."));
+      // 409 renvoyé par le serveur si, malgré la vérification
+      // ci-dessus, le paiement n'était finalement pas validé (cas
+      // limite : course avec un remboursement/expiration concurrent).
+      if (err?.status === 409) {
+        showToast("Impossible de confirmer : le paiement de ce rendez-vous n'est pas validé.");
+      } else {
+        showToast("Erreur : " + (err.message || "impossible de confirmer le RDV."));
+      }
     } finally {
       setActionEnCours(null);
     }
