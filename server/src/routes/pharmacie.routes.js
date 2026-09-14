@@ -70,6 +70,13 @@ import { gererTeleversementPharmacie } from "../middlewares/upload.middleware.js
 const router = Router();
 
 // ─── Pharmacies ────────────────────────────────────────────────
+// GET liste : filtres optionnels ?pays_id=...&ville_id=...
+// &statut_verification=...&recherche=... (nom, insensible à la casse),
+// combinables avec une recherche par proximité optionnelle
+// ?lat=...&lng=...&rayon_km=... (lat/lng à fournir ensemble ; rayon_km
+// défaut 10 km) — voir listerPharmacies / lib/geo.js. Quand la
+// proximité est active, chaque fiche renvoyée gagne un champ
+// distance_km et le tri se fait par distance croissante.
 router.get("/pharmacies", listerPharmacies);
 router.get("/pharmacies/:id", obtenirPharmacie);
 
