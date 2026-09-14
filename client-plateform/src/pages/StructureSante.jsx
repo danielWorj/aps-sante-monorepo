@@ -46,12 +46,31 @@ function libelleType(valeur) {
 /* =====================================================================
    Carte résultat de l'annuaire
 ===================================================================== */
-function StructureCard({ structure }) {
+// Construit le lien "Itinéraire" Google Maps. `origine` (facultative)
+// vient du hook useGeolocation déjà instancié par la page (filtre
+// "Autour de moi") : si elle est disponible, elle devient le point de
+// départ ; sinon Google Maps demandera lui-même le point de départ à
+// l'ouverture du lien (fallback silencieux, jamais de blocage).
+function lienItineraire(destLat, destLng, origine) {
+  if (destLat == null || destLng == null) return null;
+  const destination = `${destLat},${destLng}`;
+  return origine
+    ? `https://www.google.com/maps/dir/?api=1&origin=${origine.latitude},${origine.longitude}&destination=${destination}`
+    : `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+}
+
+function StructureCard({ structure, positionActuelle, demanderPosition }) {
   const navigate = useNavigate();
   const meta = TYPE_META[structure.type_structure] || { cls: "is-centre", icon: "fa-hospital" };
   const ville = structure.ville?.nom;
   const pays = structure.pays?.nom;
   const structureId = structure.structure_id;
+
+  // Coordonnées renvoyées par le backend sous structure.geolocalisation
+  // (voir centreSante.controller.js — avecGeolocalisation), pas à plat.
+  const destLat = structure.geolocalisation?.latitude;
+  const destLng = structure.geolocalisation?.longitude;
+  const hrefItineraire = lienItineraire(destLat, destLng, positionActuelle);
 
   // Ouvre la fiche détaillée de la structure (route /structure-sante/:id).
   function ouvrirFiche() {
@@ -116,18 +135,22 @@ function StructureCard({ structure }) {
             <i className="fa-solid fa-phone" /> Appeler
           </a>
         )}
-        <a
-          href={
-            structure.latitude && structure.longitude
-              ? `https://www.google.com/maps/dir/?api=1&destination=${structure.latitude},${structure.longitude}`
-              : "#"
-          }
-          target="_blank"
-          rel="noreferrer"
-          className="btn btn-outline-primary btn-sm-aps"
-        >
-          <i className="fa-solid fa-diamond-turn-right" /> Itinéraire
-        </a>
+        {hrefItineraire && (
+          <a
+            href={hrefItineraire}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-outline-primary btn-sm-aps"
+            onClick={() => {
+              // Si on n'a pas encore la position de l'utilisateur, on la
+              // demande pour les prochains clics (celui-ci s'ouvre sans
+              // origin — Google Maps la demandera lui-même).
+              if (!positionActuelle) demanderPosition();
+            }}
+          >
+            <i className="fa-solid fa-diamond-turn-right" /> Itinéraire
+          </a>
+        )}
       </div>
     </div>
   );
@@ -394,7 +417,12 @@ export default function StructureSante() {
               {!chargement && !erreur && structures.length > 0 && (
                 <div>
                   {structuresPage.map((s) => (
-                    <StructureCard key={s.structure_id} structure={s} />
+                    <StructureCard
+                      key={s.structure_id}
+                      structure={s}
+                      positionActuelle={positionActuelle}
+                      demanderPosition={demanderPosition}
+                    />
                   ))}
                   {totalPages > 1 && (
                     <nav aria-label="Pagination des résultats" className="mt-4">

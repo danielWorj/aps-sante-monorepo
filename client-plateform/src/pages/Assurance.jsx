@@ -16,9 +16,28 @@ const LABEL_TYPE_ACTEUR = {
   courtier: "Courtier",
 };
 
-function InsurerCard({ insurer }) {
+// Construit le lien "Itinéraire" Google Maps. `origine` (facultative)
+// vient du hook useGeolocation déjà instancié par la page (filtre
+// "Autour de moi") : si elle est disponible, elle devient le point de
+// départ ; sinon Google Maps demandera lui-même le point de départ à
+// l'ouverture du lien (fallback silencieux, jamais de blocage).
+function lienItineraire(destLat, destLng, origine) {
+  if (destLat == null || destLng == null) return null;
+  const destination = `${destLat},${destLng}`;
+  return origine
+    ? `https://www.google.com/maps/dir/?api=1&origin=${origine.latitude},${origine.longitude}&destination=${destination}`
+    : `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+}
+
+function InsurerCard({ insurer, positionActuelle, demanderPosition }) {
   const ficheUrl = `/assurances/${insurer.service_assurance_id}`;
   const estVerifie = insurer.statut_verification === "publie";
+
+  // Coordonnées renvoyées par le backend sous insurer.geolocalisation
+  // (voir assurance.controller.js — avecGeolocalisation), pas à plat.
+  const destLat = insurer.geolocalisation?.latitude;
+  const destLng = insurer.geolocalisation?.longitude;
+  const hrefItineraire = lienItineraire(destLat, destLng, positionActuelle);
 
   return (
     <div className="insurer-card">
@@ -70,6 +89,23 @@ function InsurerCard({ insurer }) {
           <Link to={ficheUrl} className="btn btn-sm-aps btn-outline-primary">
             Voir la fiche
           </Link>
+          {hrefItineraire && (
+            <a
+              href={hrefItineraire}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-outline-primary btn-sm-aps"
+              onClick={(e) => {
+                e.stopPropagation();
+                // Si on n'a pas encore la position de l'utilisateur, on
+                // la demande pour les prochains clics (celui-ci s'ouvre
+                // sans origin — Google Maps la demandera lui-même).
+                if (!positionActuelle) demanderPosition();
+              }}
+            >
+              <i className="fa-solid fa-diamond-turn-right" /> Itinéraire
+            </a>
+          )}
         </div>
       </div>
 
@@ -366,7 +402,12 @@ export default function Assurance() {
               )}
 
               {services.map((insurer) => (
-                <InsurerCard key={insurer.service_assurance_id} insurer={insurer} />
+                <InsurerCard
+                  key={insurer.service_assurance_id}
+                  insurer={insurer}
+                  positionActuelle={positionActuelle}
+                  demanderPosition={demanderPosition}
+                />
               ))}
             </div>
           </div>
