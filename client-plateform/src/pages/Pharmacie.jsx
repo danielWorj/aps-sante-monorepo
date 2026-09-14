@@ -27,10 +27,29 @@ const STATUT_PUBLIC = "publie"; // seules les fiches validées sont montrées au
  * Carte pharmacie
  * =================================================================== */
 
-function PharmacyCard({ pharmacy, enGarde }) {
+// Construit le lien "Itinéraire" Google Maps. `origine` (facultative)
+// vient du hook useGeolocation déjà instancié par la page (filtre
+// "Autour de moi") : si elle est disponible, elle devient le point de
+// départ ; sinon Google Maps demandera lui-même le point de départ à
+// l'ouverture du lien (fallback silencieux, jamais de blocage).
+function lienItineraire(destLat, destLng, origine) {
+  if (destLat == null || destLng == null) return null;
+  const destination = `${destLat},${destLng}`;
+  return origine
+    ? `https://www.google.com/maps/dir/?api=1&origin=${origine.latitude},${origine.longitude}&destination=${destination}`
+    : `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+}
+
+function PharmacyCard({ pharmacy, enGarde, positionActuelle, demanderPosition }) {
   const ville = pharmacy.ville?.nom;
   const pays = pharmacy.pays?.nom;
   const localisation = [ville, pays].filter(Boolean).join(" — ");
+
+  // Coordonnées renvoyées par le backend sous pharmacy.geolocalisation
+  // (voir pharmacie.controller.js — avecGeolocalisation), pas à plat.
+  const destLat = pharmacy.geolocalisation?.latitude;
+  const destLng = pharmacy.geolocalisation?.longitude;
+  const hrefItineraire = lienItineraire(destLat, destLng, positionActuelle);
 
   return (
     <div className="pharmacy-card">
@@ -82,13 +101,24 @@ function PharmacyCard({ pharmacy, enGarde }) {
         >
           <i className="fa-solid fa-phone" /> Appeler
         </a>
-        <a
-          href="#"
-          className="btn btn-outline-primary btn-sm-aps"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <i className="fa-solid fa-diamond-turn-right" /> Itinéraire
-        </a>
+        {hrefItineraire && (
+          <a
+            href={hrefItineraire}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-outline-primary btn-sm-aps"
+            onClick={(e) => {
+              e.stopPropagation();
+              // Si on n'a pas encore la position de l'utilisateur, on la
+              // demande pour les prochains clics (celui-ci s'ouvre sans
+              // origin — Google Maps la demandera lui-même le temps
+              // qu'on l'obtienne côté app).
+              if (!positionActuelle) demanderPosition();
+            }}
+          >
+            <i className="fa-solid fa-diamond-turn-right" /> Itinéraire
+          </a>
+        )}
       </div>
     </div>
   );
@@ -381,6 +411,8 @@ export default function Pharmacie() {
                     key={p.pharmacie_id}
                     pharmacy={p}
                     enGarde={gardePharmacieIds.has(p.pharmacie_id)}
+                    positionActuelle={positionActuelle}
+                    demanderPosition={demanderPosition}
                   />
                 ))}
             </div>
