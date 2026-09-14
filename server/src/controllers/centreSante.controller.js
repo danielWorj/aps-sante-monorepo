@@ -34,6 +34,7 @@ import prisma from "../lib/prisma.js";
 import { televerserFichier, supprimerFichier, construireUrl } from "../lib/cloudinaryService.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt"; // même bibliothèque que authentification.controller.js
+import { creerAccesseurGeospatial, validerCoordonnees } from "../lib/geo.js";
 
 const SALT_ROUNDS = 10; // valeur identique à authentification.controller.js
 
@@ -131,80 +132,76 @@ async function creerCompteAgentPourStructure(tx, { structureId, fonction, nom, p
  * Géolocalisation (GEOGRAPHY(POINT,4326))
  *
  * Non supporté nativement par Prisma Client (type "Unsupported" côté
- * schéma) : lecture/écriture passent par des requêtes SQL brutes,
- * isolées ici pour ne pas polluer le reste des contrôleurs.
+ * schéma) : lecture/écriture/proximité passent par lib/geo.js, qui
+ * factorise en un seul endroit le pattern SQL brut ($queryRaw /
+ * $executeRaw) déjà utilisé pour les modules Assurance
+ * (ServiceAssurance.geolocalisation, Agence.gps — voir
+ * assurance.controller.js) et Pharmacie (Pharmacie.geolocalisation —
+ * voir pharmacie.controller.js) — voir lib/geo.js pour le détail
+ * (validerCoordonnees, ST_X/ST_Y, ST_SetSRID(ST_MakePoint(...)),
+ * ST_DWithin/ST_Distance).
  * =================================================================== */
 
-async function recupererGeolocalisation(structureId) {
-  const resultat = await prisma.$queryRaw`
-    SELECT ST_Y(geolocalisation::geometry) AS latitude,
-           ST_X(geolocalisation::geometry) AS longitude
-    FROM structure_sante
-    WHERE structure_id = ${structureId}::uuid
-      AND geolocalisation IS NOT NULL
-  `;
-
-  if (!resultat.length) return null;
-
-  const { latitude, longitude } = resultat[0];
-  return latitude !== null && longitude !== null ? { latitude, longitude } : null;
-}
-
-async function definirGeolocalisation(structureId, latitude, longitude) {
-  await prisma.$executeRaw`
-    UPDATE structure_sante
-    SET geolocalisation = ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)
-    WHERE structure_id = ${structureId}::uuid
-  `;
-}
-
-async function effacerGeolocalisation(structureId) {
-  await prisma.$executeRaw`
-    UPDATE structure_sante
-    SET geolocalisation = NULL
-    WHERE structure_id = ${structureId}::uuid
-  `;
-}
-
-/**
- * Valide un couple latitude/longitude et applique le changement demandé :
- *   - les deux valeurs présentes  -> définit le point
- *   - les deux valeurs à null     -> efface le point
- *   - absentes du corps de requête -> ne touche pas au champ
- * Retourne un message d'erreur (string) en cas de valeurs invalides, sinon null.
- */
-async function appliquerGeolocalisation(structureId, latitude, longitude) {
-  const latFournie = latitude !== undefined;
-  const lngFournie = longitude !== undefined;
-
-  if (!latFournie && !lngFournie) return null;
-
-  if (latFournie !== lngFournie) {
-    return "latitude et longitude doivent être fournies ensemble.";
-  }
-
-  if (latitude === null && longitude === null) {
-    await effacerGeolocalisation(structureId);
-    return null;
-  }
-
-  if (typeof latitude !== "number" || typeof longitude !== "number") {
-    return "latitude et longitude doivent être des nombres.";
-  }
-  if (latitude < -90 || latitude > 90) {
-    return "latitude invalide (doit être comprise entre -90 et 90).";
-  }
-  if (longitude < -180 || longitude > 180) {
-    return "longitude invalide (doit être comprise entre -180 et 180).";
-  }
-
-  await definirGeolocalisation(structureId, latitude, longitude);
-  return null;
-}
+const geoCentreSante = creerAccesseurGeospatial({
+  table: "structure_sante",
+  colonne: "geolocalisation",
+  clePrimaire: "structure_id",
+});
 
 async function avecGeolocalisation(structure) {
-  const geolocalisation = await recupererGeolocalisation(structure.structure_id);
+  const geolocalisation = await geoCentreSante.recuperer(structure.structure_id);
   return { ...structure, geolocalisation };
+}
+
+/* ===================================================================
+ * Recherche par proximité (query params ?lat=...&lng=...&rayon_km=...)
+ *
+ * Même contrat que analyserParametresProximite dans
+ * assurance.controller.js / pharmacie.controller.js, utilisé ici par
+ * listerCentresSante.
+ * =================================================================== */
+
+const RAYON_KM_PAR_DEFAUT = 10;
+
+/**
+ * Interprète les query params ?lat=...&lng=...&rayon_km=... de
+ * listerCentresSante.
+ * Retourne :
+ *   { actif: false }                       -> ni lat ni lng fournis, liste "classique"
+ *   { actif: false, erreur: "..." }        -> paramètres invalides, à renvoyer en 400
+ *   { actif: true, latitude, longitude, rayonKm } -> recherche par proximité à effectuer
+ */
+function analyserParametresProximite({ lat, lng, rayon_km }) {
+  const resultatCoord = validerCoordonnees(lat, lng);
+
+  if (resultatCoord.statut === "inchange") {
+    return { actif: false };
+  }
+  if (resultatCoord.statut === "erreur") {
+    return { actif: false, erreur: resultatCoord.message };
+  }
+  // statut "effacement" (lat/lng explicitement à null) ne peut pas
+  // survenir via des query params HTTP (toujours des chaînes ou
+  // absents) — gardé par cohérence défensive avec validerCoordonnees.
+  if (resultatCoord.statut === "effacement") {
+    return { actif: false, erreur: "latitude et longitude doivent être des nombres." };
+  }
+
+  let rayonKm = RAYON_KM_PAR_DEFAUT;
+  if (rayon_km !== undefined) {
+    const rayonNum = typeof rayon_km === "string" ? Number(rayon_km) : rayon_km;
+    if (typeof rayonNum !== "number" || Number.isNaN(rayonNum) || rayonNum <= 0) {
+      return { actif: false, erreur: "rayon_km invalide (doit être un nombre strictement positif)." };
+    }
+    rayonKm = rayonNum;
+  }
+
+  return {
+    actif: true,
+    latitude: resultatCoord.latitude,
+    longitude: resultatCoord.longitude,
+    rayonKm,
+  };
 }
 
 /**
@@ -235,6 +232,12 @@ async function enrichirCentreSante(structure) {
  * GET /api/centres-sante
  * Filtres optionnels : ?pays_id=...&ville_id=...&type_structure=...
  *                      &statut_verification=...&recherche=...(nom, insensible à la casse)
+ * Recherche par proximité optionnelle : ?lat=...&lng=...&rayon_km=...
+ * (voir analyserParametresProximite / lib/geo.js) — combinable avec les
+ * filtres ci-dessus. lat/lng doivent être fournis ensemble ; rayon_km
+ * est optionnel (défaut : 10 km). Quand elle est active, chaque fiche
+ * renvoyée gagne un champ distance_km (arrondi à 1 décimale) et la
+ * liste est triée par distance croissante plutôt que par nom.
  */
 export async function listerCentresSante(req, res, next) {
   try {
@@ -251,12 +254,52 @@ export async function listerCentresSante(req, res, next) {
       });
     }
 
+    const proximite = analyserParametresProximite(req.query);
+    if (proximite.erreur) {
+      return res.status(400).json({ message: proximite.erreur });
+    }
+
     const where = {};
     if (pays_id) where.pays_id = pays_id;
     if (ville_id) where.ville_id = ville_id;
     if (type_structure) where.type_structure = type_structure;
     if (statut_verification) where.statut_verification = statut_verification;
     if (recherche) where.nom = { contains: recherche, mode: "insensitive" };
+
+    if (proximite.actif) {
+      const proches = await geoCentreSante.rechercherParProximite({
+        latitude: proximite.latitude,
+        longitude: proximite.longitude,
+        rayonKm: proximite.rayonKm,
+        where,
+      });
+
+      if (!proches.length) {
+        return res.status(200).json({ centresSante: [] });
+      }
+
+      const ids = proches.map((p) => p.id);
+      const distanceParId = new Map(proches.map((p) => [p.id, p.distance_km]));
+
+      const structures = await prisma.structureSante.findMany({
+        where: { structure_id: { in: ids } },
+        include: { pays: true, ville: true },
+      });
+      const structureParId = new Map(structures.map((s) => [s.structure_id, s]));
+
+      // rechercherParProximite fait déjà foi pour l'ordre (tri par
+      // distance croissante) — findMany({ in: [...] }) ne garantit pas
+      // l'ordre, donc on ré-ordonne explicitement selon `ids`.
+      const resultat = [];
+      for (const id of ids) {
+        const structure = structureParId.get(id);
+        if (!structure) continue; // ligne supprimée entre les deux requêtes (rare, best effort)
+        const enrichie = await enrichirCentreSante(structure);
+        resultat.push({ ...enrichie, distance_km: Math.round(distanceParId.get(id) * 10) / 10 });
+      }
+
+      return res.status(200).json({ centresSante: resultat });
+    }
 
     const structures = await prisma.structureSante.findMany({
       where,
@@ -299,7 +342,7 @@ export async function obtenirCentreSante(req, res, next) {
  *   - image_structure   : photo du centre de santé
  *   - piece_identite     : pièce d'identité du professionnel qui soumet la fiche
  *   - document_agrement  : agrément officiel autorisant l'exercice
- * Champs latitude / longitude optionnels (voir appliquerGeolocalisation).
+ * Champs latitude / longitude optionnels (voir lib/geo.js — geoCentreSante.appliquer).
  * statut_verification est optionnel : absent (ou vide) -> "en_cours" par
  * défaut, quel que soit le profil de l'appelant. S'il est envoyé par un
  * admin/superadmin, il est validé contre STATUTS_VERIFICATION_STRUCTURE et
@@ -487,7 +530,7 @@ export async function creerCentreSante(req, res, next) {
       throw errTransaction;
     }
 
-    const erreurGeo = await appliquerGeolocalisation(structure.structure_id, latitude, longitude);
+    const erreurGeo = await geoCentreSante.appliquer(structure.structure_id, latitude, longitude);
 
     const centreSante = await enrichirCentreSante(structure);
     // ⚠️ Le mot de passe temporaire n'est renvoyé QU'ICI, en clair, et
@@ -641,7 +684,7 @@ export async function modifierCentreSante(req, res, next) {
       include: { pays: true, ville: true },
     });
 
-    const erreurGeo = await appliquerGeolocalisation(structure.structure_id, latitude, longitude);
+    const erreurGeo = await geoCentreSante.appliquer(structure.structure_id, latitude, longitude);
     if (erreurGeo) {
       return res.status(400).json({ message: erreurGeo });
     }
