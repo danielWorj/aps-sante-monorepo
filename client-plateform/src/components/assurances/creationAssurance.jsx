@@ -4,6 +4,7 @@ import '../../assets/styles/creationAssurance.css';
 import { creerServiceAssurance } from '../../services/assuranceService';
 import { listerPays, listerVilles } from '../../services/geoService';
 import { connecter } from '../../services/authService';
+import { useGeolocation } from '../../hooks/useGeolocation';
 
 // ───────────────────────────────────────────────────────────────────
 // Ce formulaire suit EXACTEMENT le contrat de POST /services-assurance
@@ -36,6 +37,16 @@ const CreationAssurance = () => {
   const [pays, setPays] = useState([]);
   const [villes, setVilles] = useState([]);
   const [chargementReferentiels, setChargementReferentiels] = useState(true);
+
+  // Étape 4 — bouton "Utiliser ma position actuelle" (voir
+  // src/hooks/useGeolocation.js). Ne remplace pas la saisie manuelle
+  // des champs latitude/longitude : ne fait que les pré-remplir.
+  const {
+    position: positionActuelle,
+    loading: geoEnCours,
+    error: geoErreur,
+    demanderPosition,
+  } = useGeolocation();
 
   const [formData, setFormData] = useState({
     // Étape 1 — Infos générales
@@ -109,6 +120,19 @@ const CreationAssurance = () => {
     };
   }, [formData.pays_id]);
 
+  // Pré-remplit latitude/longitude dès que le navigateur renvoie une
+  // position (bouton "Utiliser ma position actuelle" de l'étape 4).
+  // Les champs restent modifiables ensuite : on ne fait qu'initialiser
+  // la valeur, l'utilisateur peut toujours l'ajuster à la main.
+  useEffect(() => {
+    if (!positionActuelle) return;
+    setFormData((prev) => ({
+      ...prev,
+      latitude: positionActuelle.latitude,
+      longitude: positionActuelle.longitude,
+    }));
+  }, [positionActuelle]);
+
   const handleChange = (e) => {
     const { name, value, type, checked, files } = e.target;
     setFormData((prev) => ({
@@ -167,6 +191,12 @@ const CreationAssurance = () => {
       case 4:
         if (!formData.agrement.trim()) {
           setStepError('Un numéro d\'agrément est requis.');
+          return false;
+        }
+        if ((formData.latitude !== '') !== (formData.longitude !== '')) {
+          setStepError(
+            'Latitude et longitude doivent être renseignées ensemble (ou laissées vides toutes les deux).'
+          );
           return false;
         }
         return true;
@@ -666,6 +696,25 @@ const CreationAssurance = () => {
                         </div>
 
                         <h3 className="form-subtitle mt-4">Coordonnées GPS (optionnel)</h3>
+
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-sm-aps mb-3"
+                          onClick={demanderPosition}
+                          disabled={geoEnCours}
+                        >
+                          <i className="fa-solid fa-location-crosshairs" />{' '}
+                          {geoEnCours
+                            ? 'Localisation en cours…'
+                            : positionActuelle
+                            ? 'Position mise à jour'
+                            : 'Utiliser ma position actuelle'}
+                        </button>
+                        {geoErreur && (
+                          <p className="minimal-note mb-3">
+                            <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
+                          </p>
+                        )}
 
                         <div className="row g-3">
                           <div className="col-md-6">
