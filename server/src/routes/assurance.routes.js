@@ -68,6 +68,13 @@ const router = Router();
 // ─── Services d'assurance ──────────────────────────────────────
 // 1 fichier obligatoire à la création (image_assurance), optionnel en
 // modification — voir upload.middleware.js / assurance.controller.js.
+// GET liste : filtres optionnels ?pays_id=...&ville_id=...&type_acteur=...
+// &statut_verification=...&recherche=... (nom, insensible à la casse),
+// combinables avec une recherche par proximité optionnelle
+// ?lat=...&lng=...&rayon_km=... (lat/lng à fournir ensemble ; rayon_km
+// défaut 10 km) — voir listerServicesAssurance / lib/geo.js. Quand la
+// proximité est active, chaque fiche renvoyée gagne un champ
+// distance_km et le tri se fait par distance croissante.
 router.get("/services-assurance", listerServicesAssurance);
 router.get("/services-assurance/:id", obtenirServiceAssurance);
 
@@ -126,6 +133,13 @@ router.delete("/options-activite/:id", authentifier, supprimerOptionActivite);
 // ─── Agences ──────────────────────────────────────────────────
 // GET publique ; écriture réservée à l'agent du service_assurance
 // concerné ou à admin/superadmin (vérifié dans le contrôleur).
+// GET liste : filtre optionnel ?service_assurance_id=..., combinable
+// avec une recherche par proximité optionnelle ?lat=...&lng=...
+// &rayon_km=... (même contrat que /services-assurance ci-dessus — voir
+// listerAgences / lib/geo.js), utile pour trouver l'agence la plus
+// proche d'un point donné. Quand la proximité est active, chaque
+// agence renvoyée gagne un champ distance_km et le tri se fait par
+// distance croissante.
 router.get("/agences", listerAgences);
 router.get("/agences/:id", obtenirAgence);
 router.post("/agences", authentifier, creerAgence);

@@ -39,6 +39,7 @@
 
 import prisma from "../lib/prisma.js";
 import { televerserFichier, supprimerFichier, construireUrl } from "../lib/cloudinaryService.js";
+import { creerAccesseurGeospatial, validerCoordonnees } from "../lib/geo.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt"; // même bibliothèque que authentification.controller.js
 
@@ -137,86 +138,25 @@ async function creerCompteAgentPourServiceAssurance(
  * Géolocalisation (GEOGRAPHY(POINT,4326))
  *
  * Non supporté nativement par Prisma Client (type "Unsupported" côté
- * schéma) : lecture/écriture passent par des requêtes SQL brutes,
- * même patron que centreSante.controller.js / pharmacie.controller.js.
+ * schéma) : lecture/écriture/proximité passent par lib/geo.js, qui
+ * factorise en un seul endroit le pattern SQL brut ($queryRaw /
+ * $executeRaw) auparavant dupliqué ici une fois pour
+ * ServiceAssurance.geolocalisation et une fois pour Agence.gps — voir
+ * lib/geo.js pour le détail (validerCoordonnees, ST_X/ST_Y,
+ * ST_SetSRID(ST_MakePoint(...)), ST_DWithin/ST_Distance).
  * =================================================================== */
 
-async function recupererGeolocalisation(serviceAssuranceId) {
-  const resultat = await prisma.$queryRaw`
-    SELECT ST_Y(geolocalisation::geometry) AS latitude,
-           ST_X(geolocalisation::geometry) AS longitude
-    FROM service_assurance
-    WHERE service_assurance_id = ${serviceAssuranceId}::uuid
-      AND geolocalisation IS NOT NULL
-  `;
+const geoServiceAssurance = creerAccesseurGeospatial({
+  table: "service_assurance",
+  colonne: "geolocalisation",
+  clePrimaire: "service_assurance_id",
+});
 
-  if (!resultat.length) return null;
-
-  const { latitude, longitude } = resultat[0];
-  return latitude !== null && longitude !== null ? { latitude, longitude } : null;
-}
-
-async function definirGeolocalisation(serviceAssuranceId, latitude, longitude) {
-  await prisma.$executeRaw`
-    UPDATE service_assurance
-    SET geolocalisation = ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)
-    WHERE service_assurance_id = ${serviceAssuranceId}::uuid
-  `;
-}
-
-async function effacerGeolocalisation(serviceAssuranceId) {
-  await prisma.$executeRaw`
-    UPDATE service_assurance
-    SET geolocalisation = NULL
-    WHERE service_assurance_id = ${serviceAssuranceId}::uuid
-  `;
-}
-
-/**
- * Valide un couple latitude/longitude et applique le changement demandé :
- *   - les deux valeurs présentes  -> définit le point
- *   - les deux valeurs à null     -> efface le point
- *   - absentes du corps de requête -> ne touche pas au champ
- * Retourne un message d'erreur (string) en cas de valeurs invalides, sinon null.
- */
-async function appliquerGeolocalisation(serviceAssuranceId, latitude, longitude) {
-  const latFournie = latitude !== undefined;
-  const lngFournie = longitude !== undefined;
-
-  if (!latFournie && !lngFournie) return null;
-
-  if (latFournie !== lngFournie) {
-    return "latitude et longitude doivent être fournies ensemble.";
-  }
-
-  if (latitude === null && longitude === null) {
-    await effacerGeolocalisation(serviceAssuranceId);
-    return null;
-  }
-
-  // fix : sur les endpoints multipart/form-data (ex. POST/PUT
-  // /services-assurance avec upload d'image), tous les champs arrivent
-  // en string ("4.05"), même après un parseFloat() côté client — le
-  // FormData force la conversion en texte. Un `typeof === "number"`
-  // strict rejetait donc systématiquement des coordonnées pourtant
-  // valides, sans que l'avertissement ne remonte clairement au front.
-  // On coerce ici les chaînes numériques avant de valider le type.
-  const latNum = typeof latitude === "string" && latitude.trim() !== "" ? Number(latitude) : latitude;
-  const lngNum = typeof longitude === "string" && longitude.trim() !== "" ? Number(longitude) : longitude;
-
-  if (typeof latNum !== "number" || Number.isNaN(latNum) || typeof lngNum !== "number" || Number.isNaN(lngNum)) {
-    return "latitude et longitude doivent être des nombres.";
-  }
-  if (latNum < -90 || latNum > 90) {
-    return "latitude invalide (doit être comprise entre -90 et 90).";
-  }
-  if (lngNum < -180 || lngNum > 180) {
-    return "longitude invalide (doit être comprise entre -180 et 180).";
-  }
-
-  await definirGeolocalisation(serviceAssuranceId, latNum, lngNum);
-  return null;
-}
+const geoAgence = creerAccesseurGeospatial({
+  table: "agence",
+  colonne: "gps",
+  clePrimaire: "agence_id",
+});
 
 /**
  * Ajoute l'URL publique (reconstruite via Cloudinary) de l'image, en
@@ -232,8 +172,59 @@ function avecUrlFichier(serviceAssurance) {
 }
 
 async function enrichirServiceAssurance(serviceAssurance) {
-  const geolocalisation = await recupererGeolocalisation(serviceAssurance.service_assurance_id);
+  const geolocalisation = await geoServiceAssurance.recuperer(serviceAssurance.service_assurance_id);
   return avecUrlFichier({ ...serviceAssurance, geolocalisation });
+}
+
+/* ===================================================================
+ * Recherche par proximité (query params ?lat=...&lng=...&rayon_km=...)
+ *
+ * Utilisée par listerServicesAssurance ET listerAgences : factorisée
+ * ici plutôt que dupliquée, même logique que le reste du refactor
+ * géospatial de ce fichier (voir lib/geo.js).
+ * =================================================================== */
+
+const RAYON_KM_PAR_DEFAUT = 10;
+
+/**
+ * Interprète les query params ?lat=...&lng=...&rayon_km=... communs à
+ * listerServicesAssurance et listerAgences.
+ * Retourne :
+ *   { actif: false }                       -> ni lat ni lng fournis, liste "classique"
+ *   { actif: false, erreur: "..." }        -> paramètres invalides, à renvoyer en 400
+ *   { actif: true, latitude, longitude, rayonKm } -> recherche par proximité à effectuer
+ */
+function analyserParametresProximite({ lat, lng, rayon_km }) {
+  const resultatCoord = validerCoordonnees(lat, lng);
+
+  if (resultatCoord.statut === "inchange") {
+    return { actif: false };
+  }
+  if (resultatCoord.statut === "erreur") {
+    return { actif: false, erreur: resultatCoord.message };
+  }
+  // statut "effacement" (lat/lng explicitement à null) ne peut pas
+  // survenir via des query params HTTP (toujours des chaînes ou
+  // absents) — gardé par cohérence défensive avec validerCoordonnees.
+  if (resultatCoord.statut === "effacement") {
+    return { actif: false, erreur: "latitude et longitude doivent être des nombres." };
+  }
+
+  let rayonKm = RAYON_KM_PAR_DEFAUT;
+  if (rayon_km !== undefined) {
+    const rayonNum = typeof rayon_km === "string" ? Number(rayon_km) : rayon_km;
+    if (typeof rayonNum !== "number" || Number.isNaN(rayonNum) || rayonNum <= 0) {
+      return { actif: false, erreur: "rayon_km invalide (doit être un nombre strictement positif)." };
+    }
+    rayonKm = rayonNum;
+  }
+
+  return {
+    actif: true,
+    latitude: resultatCoord.latitude,
+    longitude: resultatCoord.longitude,
+    rayonKm,
+  };
 }
 
 /* ===================================================================
@@ -247,6 +238,12 @@ async function enrichirServiceAssurance(serviceAssurance) {
  * inscription.
  * Filtres optionnels : ?pays_id=...&ville_id=...&type_acteur=...
  *                      &statut_verification=...&recherche=...(nom, insensible à la casse)
+ * Recherche par proximité optionnelle : ?lat=...&lng=...&rayon_km=...
+ * (voir analyserParametresProximite / lib/geo.js) — combinable avec les
+ * filtres ci-dessus. lat/lng doivent être fournis ensemble ; rayon_km
+ * est optionnel (défaut : 10 km). Quand elle est active, chaque fiche
+ * renvoyée gagne un champ distance_km (arrondi à 1 décimale) et la
+ * liste est triée par distance croissante plutôt que par nom.
  */
 export async function listerServicesAssurance(req, res, next) {
   try {
@@ -263,12 +260,52 @@ export async function listerServicesAssurance(req, res, next) {
       });
     }
 
+    const proximite = analyserParametresProximite(req.query);
+    if (proximite.erreur) {
+      return res.status(400).json({ message: proximite.erreur });
+    }
+
     const where = {};
     if (pays_id) where.pays_id = pays_id;
     if (ville_id) where.ville_id = ville_id;
     if (type_acteur) where.type_acteur = type_acteur;
     if (statut_verification) where.statut_verification = statut_verification;
     if (recherche) where.nom = { contains: recherche, mode: "insensitive" };
+
+    if (proximite.actif) {
+      const proches = await geoServiceAssurance.rechercherParProximite({
+        latitude: proximite.latitude,
+        longitude: proximite.longitude,
+        rayonKm: proximite.rayonKm,
+        where,
+      });
+
+      if (!proches.length) {
+        return res.status(200).json({ services_assurance: [] });
+      }
+
+      const ids = proches.map((p) => p.id);
+      const distanceParId = new Map(proches.map((p) => [p.id, p.distance_km]));
+
+      const servicesAssurance = await prisma.serviceAssurance.findMany({
+        where: { service_assurance_id: { in: ids } },
+        include: { pays: true, ville: true },
+      });
+      const serviceParId = new Map(servicesAssurance.map((s) => [s.service_assurance_id, s]));
+
+      // rechercherParProximite fait déjà foi pour l'ordre (tri par
+      // distance croissante) — findMany({ in: [...] }) ne garantit pas
+      // l'ordre, donc on ré-ordonne explicitement selon `ids`.
+      const resultat = [];
+      for (const id of ids) {
+        const service = serviceParId.get(id);
+        if (!service) continue; // ligne supprimée entre les deux requêtes (rare, best effort)
+        const enrichi = await enrichirServiceAssurance(service);
+        resultat.push({ ...enrichi, distance_km: Math.round(distanceParId.get(id) * 10) / 10 });
+      }
+
+      return res.status(200).json({ services_assurance: resultat });
+    }
 
     const servicesAssurance = await prisma.serviceAssurance.findMany({
       where,
@@ -314,7 +351,7 @@ export async function obtenirServiceAssurance(req, res, next) {
  * Champs requis pour la fiche : nom, pays_id, ville_id, telephone,
  * email, agrement, statut_verification, type_acteur ('compagnie' |
  * 'courtier'). Champ optionnel : description.
- * Champs latitude / longitude optionnels (voir appliquerGeolocalisation).
+ * Champs latitude / longitude optionnels (voir lib/geo.js — geoServiceAssurance.appliquer).
  *
  * Champs supplémentaires requis — création du COMPTE AGENT en même
  * temps que le service (même patron que Pharmacie) :
@@ -490,7 +527,7 @@ export async function creerServiceAssurance(req, res, next) {
       throw errTransaction;
     }
 
-    const erreurGeo = await appliquerGeolocalisation(serviceCree.service_assurance_id, latitude, longitude);
+    const erreurGeo = await geoServiceAssurance.appliquer(serviceCree.service_assurance_id, latitude, longitude);
 
     const serviceAssurance = await enrichirServiceAssurance(serviceCree);
 
@@ -636,7 +673,7 @@ export async function modifierServiceAssurance(req, res, next) {
       include: { pays: true, ville: true },
     });
 
-    const erreurGeo = await appliquerGeolocalisation(serviceAssurance.service_assurance_id, latitude, longitude);
+    const erreurGeo = await geoServiceAssurance.appliquer(serviceAssurance.service_assurance_id, latitude, longitude);
     if (erreurGeo) {
       return res.status(400).json({ message: erreurGeo });
     }
@@ -1041,89 +1078,71 @@ export async function supprimerOptionActivite(req, res, next) {
  *
  * Ex. "Agence Douala — Akwa (Siège)". Une assurance possède N agences ;
  * une agence appartient à une seule assurance. gps suit le même patron
- * que ServiceAssurance.geolocalisation (GEOGRAPHY(POINT,4326), lu/écrit
- * en SQL brut faute de support natif Prisma pour ce type).
+ * que ServiceAssurance.geolocalisation (GEOGRAPHY(POINT,4326)),
+ * factorisé dans lib/geo.js (voir geoAgence, déclaré plus haut aux
+ * côtés de geoServiceAssurance).
  * =================================================================== */
 
-async function recupererGpsAgence(agenceId) {
-  const resultat = await prisma.$queryRaw`
-    SELECT ST_Y(gps::geometry) AS latitude,
-           ST_X(gps::geometry) AS longitude
-    FROM agence
-    WHERE agence_id = ${agenceId}::uuid
-      AND gps IS NOT NULL
-  `;
-
-  if (!resultat.length) return null;
-
-  const { latitude, longitude } = resultat[0];
-  return latitude !== null && longitude !== null ? { latitude, longitude } : null;
-}
-
-async function definirGpsAgence(agenceId, latitude, longitude) {
-  await prisma.$executeRaw`
-    UPDATE agence
-    SET gps = ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)
-    WHERE agence_id = ${agenceId}::uuid
-  `;
-}
-
-async function effacerGpsAgence(agenceId) {
-  await prisma.$executeRaw`
-    UPDATE agence
-    SET gps = NULL
-    WHERE agence_id = ${agenceId}::uuid
-  `;
-}
-
-/**
- * Même contrat que appliquerGeolocalisation (voir plus haut), pour le
- * champ gps de agence.
- */
-async function appliquerGpsAgence(agenceId, latitude, longitude) {
-  const latFournie = latitude !== undefined;
-  const lngFournie = longitude !== undefined;
-
-  if (!latFournie && !lngFournie) return null;
-
-  if (latFournie !== lngFournie) {
-    return "latitude et longitude doivent être fournies ensemble.";
-  }
-
-  if (latitude === null && longitude === null) {
-    await effacerGpsAgence(agenceId);
-    return null;
-  }
-
-  if (typeof latitude !== "number" || typeof longitude !== "number") {
-    return "latitude et longitude doivent être des nombres.";
-  }
-  if (latitude < -90 || latitude > 90) {
-    return "latitude invalide (doit être comprise entre -90 et 90).";
-  }
-  if (longitude < -180 || longitude > 180) {
-    return "longitude invalide (doit être comprise entre -180 et 180).";
-  }
-
-  await definirGpsAgence(agenceId, latitude, longitude);
-  return null;
-}
-
 async function enrichirAgence(agence) {
-  const gps = await recupererGpsAgence(agence.agence_id);
+  const gps = await geoAgence.recuperer(agence.agence_id);
   return { ...agence, gps };
 }
 
 /**
  * GET /api/agences?service_assurance_id=...
  * PUBLIQUE. Filtre optionnel par service_assurance_id.
+ * Recherche par proximité optionnelle : ?lat=...&lng=...&rayon_km=...
+ * (même contrat que listerServicesAssurance — voir
+ * analyserParametresProximite / lib/geo.js), utile par exemple pour
+ * retrouver l'agence la plus proche d'un point donné. Combinable avec
+ * service_assurance_id. Quand elle est active, chaque agence renvoyée
+ * gagne un champ distance_km (arrondi à 1 décimale) et la liste est
+ * triée par distance croissante plutôt que par libellé.
  */
 export async function listerAgences(req, res, next) {
   try {
     const { service_assurance_id } = req.query;
 
+    const proximite = analyserParametresProximite(req.query);
+    if (proximite.erreur) {
+      return res.status(400).json({ message: proximite.erreur });
+    }
+
+    const where = service_assurance_id ? { service_assurance_id } : {};
+
+    if (proximite.actif) {
+      const proches = await geoAgence.rechercherParProximite({
+        latitude: proximite.latitude,
+        longitude: proximite.longitude,
+        rayonKm: proximite.rayonKm,
+        where,
+      });
+
+      if (!proches.length) {
+        return res.status(200).json({ agences: [] });
+      }
+
+      const ids = proches.map((p) => p.id);
+      const distanceParId = new Map(proches.map((p) => [p.id, p.distance_km]));
+
+      const agences = await prisma.agence.findMany({
+        where: { agence_id: { in: ids } },
+      });
+      const agenceParId = new Map(agences.map((a) => [a.agence_id, a]));
+
+      const resultat = [];
+      for (const id of ids) {
+        const agence = agenceParId.get(id);
+        if (!agence) continue; // ligne supprimée entre les deux requêtes (rare, best effort)
+        const enrichi = await enrichirAgence(agence);
+        resultat.push({ ...enrichi, distance_km: Math.round(distanceParId.get(id) * 10) / 10 });
+      }
+
+      return res.status(200).json({ agences: resultat });
+    }
+
     const agences = await prisma.agence.findMany({
-      where: service_assurance_id ? { service_assurance_id } : {},
+      where,
       orderBy: { libelle: "asc" },
     });
 
@@ -1158,7 +1177,7 @@ export async function obtenirAgence(req, res, next) {
  * Réservée à l'agent du service_assurance concerné (service_assurance_id
  * fourni dans le corps), ou à admin/superadmin.
  * Champs requis : service_assurance_id, libelle, localisation, contact.
- * Champs optionnels : latitude, longitude (voir appliquerGpsAgence).
+ * Champs optionnels : latitude, longitude (voir lib/geo.js — geoAgence.appliquer).
  */
 export async function creerAgence(req, res, next) {
   try {
@@ -1194,7 +1213,7 @@ export async function creerAgence(req, res, next) {
       },
     });
 
-    const erreurGps = await appliquerGpsAgence(agence.agence_id, latitude, longitude);
+    const erreurGps = await geoAgence.appliquer(agence.agence_id, latitude, longitude);
 
     const resultat = await enrichirAgence(agence);
 
@@ -1242,7 +1261,7 @@ export async function modifierAgence(req, res, next) {
       },
     });
 
-    const erreurGps = await appliquerGpsAgence(agence.agence_id, latitude, longitude);
+    const erreurGps = await geoAgence.appliquer(agence.agence_id, latitude, longitude);
     if (erreurGps) {
       return res.status(400).json({ message: erreurGps });
     }
