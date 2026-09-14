@@ -5,6 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import pub3 from "../assets/img/ads/pub3.jpg";
 import { listerServicesAssurance } from "../services/assuranceService";
+import { useGeolocation } from "../hooks/useGeolocation";
+
+// Rayons proposés pour le filtre "Autour de moi" (voir
+// server/src/lib/geo.js : rayon par défaut 10 km si non précisé).
+const RAYONS_KM = [5, 10, 25, 50];
 
 const LABEL_TYPE_ACTEUR = {
   compagnie: "Compagnie d'assurance",
@@ -42,6 +47,14 @@ function InsurerCard({ insurer }) {
               <span>
                 <i className="fa-solid fa-location-dot" /> {insurer.ville?.nom}, {insurer.pays?.nom}
               </span>
+              {typeof insurer.distance_km === "number" && (
+                <>
+                  <span>&middot;</span>
+                  <span>
+                    <i className="fa-solid fa-route" /> {insurer.distance_km.toFixed(1)} km
+                  </span>
+                </>
+              )}
             </div>
             <div className="practitioner-tags mt-2">
               {estVerifie && (
@@ -88,16 +101,42 @@ export default function Assurance() {
   const [villeId, setVilleId] = useState(searchParams.get("ville_id") || "");
   const [recherche, setRecherche] = useState("");
 
+  // Filtre "Autour de moi" — API navigateur native (voir
+  // src/hooks/useGeolocation.js), aucune librairie carto. Refus de
+  // permission / navigateur non compatible : on retombe silencieusement
+  // sur les filtres pays/ville existants (aucun lat/lng envoyé), avec
+  // un message discret affiché sous le sélecteur de rayon.
+  const {
+    position: positionActuelle,
+    loading: geoEnCours,
+    error: geoErreur,
+    demanderPosition,
+  } = useGeolocation();
+  const [autourDeMoi, setAutourDeMoi] = useState(false);
+  const [rayonKm, setRayonKm] = useState(10);
+
+  function handleToggleAutourDeMoi(actif) {
+    setAutourDeMoi(actif);
+    if (actif && !positionActuelle) {
+      demanderPosition();
+    }
+  }
+
   const charger = async () => {
     setChargement(true);
     setErreur("");
     try {
+      const filtresProximite =
+        autourDeMoi && positionActuelle
+          ? { lat: positionActuelle.latitude, lng: positionActuelle.longitude, rayon_km: rayonKm }
+          : {};
       const data = await listerServicesAssurance({
         statut_verification: "publie",
         type_acteur: typeActeur || undefined,
         pays_id: paysId || undefined,
         ville_id: villeId || undefined,
         recherche: recherche || undefined,
+        ...filtresProximite,
       });
       setServices(data.services_assurance || []);
     } catch (err) {
@@ -111,6 +150,17 @@ export default function Assurance() {
     charger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Relance automatiquement la recherche dès qu'une position est
+  // obtenue pendant que "Autour de moi" est actif (la demande de
+  // localisation est asynchrone : au moment du clic sur "Rechercher",
+  // la position n'est pas encore forcément disponible).
+  useEffect(() => {
+    if (autourDeMoi && positionActuelle) {
+      charger();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [positionActuelle]);
 
   // Options pays/villes dérivées des résultats déjà chargés — évite de
   // dépendre d'un endpoint géo dédié pour le simple filtrage de la liste.
@@ -234,6 +284,45 @@ export default function Assurance() {
                       onChange={(e) => setRecherche(e.target.value)}
                     />
                   </div>
+                  <div className="mb-3">
+                    <label className="chip chip-verifie" style={{ cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={autourDeMoi}
+                        onChange={(e) => handleToggleAutourDeMoi(e.target.checked)}
+                        style={{ marginRight: ".35rem" }}
+                      />
+                      <i className="fa-solid fa-location-crosshairs" /> Autour de
+                      moi
+                    </label>
+                  </div>
+                  {autourDeMoi && (
+                    <div className="mb-3">
+                      <label className="form-label-aps" htmlFor="f-rayon">
+                        Rayon de recherche
+                      </label>
+                      <select
+                        className="form-select"
+                        id="f-rayon"
+                        value={rayonKm}
+                        onChange={(e) => setRayonKm(Number(e.target.value))}
+                      >
+                        {RAYONS_KM.map((km) => (
+                          <option key={km} value={km}>
+                            {km} km
+                          </option>
+                        ))}
+                      </select>
+                      {geoEnCours && (
+                        <p className="minimal-note mt-2">Localisation en cours…</p>
+                      )}
+                      {geoErreur && (
+                        <p className="minimal-note mt-2">
+                          <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <button type="submit" className="btn btn-primary btn-block-aps">
                     <i className="fa-solid fa-magnifying-glass" /> Rechercher
                   </button>

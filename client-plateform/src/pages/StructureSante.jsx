@@ -13,10 +13,15 @@ import {
   listerCentresSante,
 } from "../services/structureSanteService";
 import { listerPays, listerVilles } from "../services/geoService";
+import { useGeolocation } from "../hooks/useGeolocation";
 
 // Page "Structures de santé" — annuaire des hôpitaux, cliniques et
 // centres de santé, avec leurs services et l'itinéraire.
 const RESULTATS_PAR_PAGE = 10;
+
+// Rayons proposés pour le filtre "Autour de moi" (voir
+// server/src/lib/geo.js : rayon par défaut 10 km si non précisé).
+const RAYONS_KM = [5, 10, 25, 50];
 
 // Photo par défaut si le centre n'a pas (encore) d'image_url exploitable.
 const PHOTO_PAR_DEFAUT = structure1;
@@ -88,6 +93,14 @@ function StructureCard({ structure }) {
               <i className="fa-solid fa-location-dot" /> {[ville, pays].filter(Boolean).join(" — ")}
             </span>
           )}
+          {typeof structure.distance_km === "number" && (
+            <>
+              <span>&middot;</span>
+              <span>
+                <i className="fa-solid fa-route" /> {structure.distance_km.toFixed(1)} km
+              </span>
+            </>
+          )}
         </div>
       </div>
       {/* stopPropagation : ces boutons ont leur propre action (appel,
@@ -138,6 +151,27 @@ export default function StructureSante() {
     recherche: "",
   });
 
+  // Filtre "Autour de moi" — API navigateur native (voir
+  // src/hooks/useGeolocation.js), aucune librairie carto. Refus de
+  // permission / navigateur non compatible : on retombe silencieusement
+  // sur les filtres pays/ville/type existants (aucun lat/lng envoyé),
+  // avec un message discret affiché sous le sélecteur de rayon.
+  const {
+    position: positionActuelle,
+    loading: geoEnCours,
+    error: geoErreur,
+    demanderPosition,
+  } = useGeolocation();
+  const [autourDeMoi, setAutourDeMoi] = useState(false);
+  const [rayonKm, setRayonKm] = useState(10);
+
+  function handleToggleAutourDeMoi(actif) {
+    setAutourDeMoi(actif);
+    if (actif && !positionActuelle) {
+      demanderPosition();
+    }
+  }
+
   /* Référentiels (pays) au montage — route publique. */
   useEffect(() => {
     listerPays()
@@ -156,12 +190,19 @@ export default function StructureSante() {
       .catch(() => setVillesFiltre([]));
   }, [filtres.pays_id]);
 
-  /* Chargement des structures — relancé à chaque changement de filtre. */
+  /* Chargement des structures — relancé à chaque changement de filtre,
+     y compris "Autour de moi" et sa position (une fois obtenue) /
+     son rayon. Le tri par distance renvoyé par le serveur n'est
+     jamais recalculé côté front. */
   useEffect(() => {
     let annule = false;
     setChargement(true);
     setErreur(null);
-    listerCentresSante(filtres)
+    const filtresProximite =
+      autourDeMoi && positionActuelle
+        ? { lat: positionActuelle.latitude, lng: positionActuelle.longitude, rayon_km: rayonKm }
+        : {};
+    listerCentresSante({ ...filtres, ...filtresProximite })
       .then((donnees) => {
         if (!annule) {
           setStructures(donnees || []);
@@ -177,7 +218,7 @@ export default function StructureSante() {
     return () => {
       annule = true;
     };
-  }, [filtres]);
+  }, [filtres, autourDeMoi, positionActuelle, rayonKm]);
 
   function soumettreFiltres(e) {
     e.preventDefault();
@@ -272,6 +313,45 @@ export default function StructureSante() {
                       onChange={(e) => setFiltres((f) => ({ ...f, recherche: e.target.value }))}
                     />
                   </div>
+                  <div className="mb-3">
+                    <label className="chip chip-verifie" style={{ cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={autourDeMoi}
+                        onChange={(e) => handleToggleAutourDeMoi(e.target.checked)}
+                        style={{ marginRight: ".35rem" }}
+                      />
+                      <i className="fa-solid fa-location-crosshairs" /> Autour de
+                      moi
+                    </label>
+                  </div>
+                  {autourDeMoi && (
+                    <div className="mb-3">
+                      <label className="form-label-aps" htmlFor="f-rayon">
+                        Rayon de recherche
+                      </label>
+                      <select
+                        className="form-select"
+                        id="f-rayon"
+                        value={rayonKm}
+                        onChange={(e) => setRayonKm(Number(e.target.value))}
+                      >
+                        {RAYONS_KM.map((km) => (
+                          <option key={km} value={km}>
+                            {km} km
+                          </option>
+                        ))}
+                      </select>
+                      {geoEnCours && (
+                        <p className="minimal-note mt-2">Localisation en cours…</p>
+                      )}
+                      {geoErreur && (
+                        <p className="minimal-note mt-2">
+                          <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <button type="submit" className="btn btn-primary btn-block-aps">
                     <i className="fa-solid fa-magnifying-glass" /> Rechercher
                   </button>
