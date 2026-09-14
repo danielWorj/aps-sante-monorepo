@@ -10,6 +10,7 @@ import '../../assets/styles/creer-medecin.css';
 
 import { creerPharmacie } from '../../services/pharmacieService';
 import { listerPays, listerVilles } from '../../services/geoService';
+import { useGeolocation } from '../../hooks/useGeolocation';
 
 // ───────────────────────────────────────────────────────────────────
 // Ce formulaire suit EXACTEMENT le contrat de POST /pharmacies
@@ -63,6 +64,16 @@ const CreationPharmacie = () => {
   const [pays, setPays] = useState([]);
   const [villes, setVilles] = useState([]);
   const [chargementReferentiels, setChargementReferentiels] = useState(true);
+
+  // Étape 2 — bouton "Utiliser ma position actuelle" (voir
+  // src/hooks/useGeolocation.js). Ne remplace pas la saisie manuelle
+  // des champs latitude/longitude : ne fait que les pré-remplir.
+  const {
+    position: positionActuelle,
+    loading: geoEnCours,
+    error: geoErreur,
+    demanderPosition,
+  } = useGeolocation();
 
   const [formData, setFormData] = useState({
     // Étape 1 — informations de la pharmacie
@@ -133,6 +144,19 @@ const CreationPharmacie = () => {
       annule = true;
     };
   }, [formData.pays_id]);
+
+  // Pré-remplit latitude/longitude dès que le navigateur renvoie une
+  // position (bouton "Utiliser ma position actuelle" de l'étape 2).
+  // Les champs restent modifiables ensuite : on ne fait qu'initialiser
+  // la valeur, l'utilisateur peut toujours l'ajuster à la main.
+  useEffect(() => {
+    if (!positionActuelle) return;
+    setFormData((prev) => ({
+      ...prev,
+      latitude: positionActuelle.latitude,
+      longitude: positionActuelle.longitude,
+    }));
+  }, [positionActuelle]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -569,6 +593,26 @@ const CreationPharmacie = () => {
                           pharmacie apparaisse précisément sur la carte. Vous
                           pouvez passer cette étape.
                         </p>
+
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-sm-aps mb-3"
+                          onClick={demanderPosition}
+                          disabled={geoEnCours}
+                        >
+                          <i className="fa-solid fa-location-crosshairs" />{' '}
+                          {geoEnCours
+                            ? 'Localisation en cours…'
+                            : positionActuelle
+                            ? 'Position mise à jour'
+                            : 'Utiliser ma position actuelle'}
+                        </button>
+                        {geoErreur && (
+                          <p className="minimal-note mb-3">
+                            <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
+                          </p>
+                        )}
+
                         <div className="row g-3">
                           <div className="col-md-6">
                             <label className="form-label-aps">Latitude</label>
