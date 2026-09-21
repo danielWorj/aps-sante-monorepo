@@ -1335,6 +1335,9 @@ model RendezVous {
   // plus bas). Nullable : un rendez-vous historique ou créé avant le
   // module Agenda peut ne pas être rattaché à un créneau.
   creneau_agenda CreneauAgenda?
+  // Séquestre Stripe de ce rendez-vous (1-1, créé par le webhook
+  // checkout.session.completed — voir paiement.controller.js).
+  compte_escrow CompteEscrow?
 
   @@index([patient_id])
   @@index([medecin_id])

@@ -34,6 +34,14 @@ export async function creerPaiementRdv(req, res, next) {
     const montant = rdv.medecin.tarif_indicatif;
     const devise = DEVISE_PAR_DEFAUT;
 
+    // Stripe refuse un montant nul (et en dessous d'un minimum selon la
+    // devise) : on renvoie un message clair plutôt qu'un 500 opaque.
+    if (!(Number(montant) > 0)) {
+      return res.status(400).json({
+        message: "Ce médecin n'a pas de tarif défini : le paiement en ligne est impossible.",
+      });
+    }
+
     const transaction = await prisma.transactionPaiement.create({
       data: { montant, devise, statut: "en_attente" },
     });
@@ -90,7 +98,67 @@ export async function obtenirStatutPaiementRdv(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// POST /api/paiements/webhook — appelé UNIQUEMENT par Stripe
+// Un événement "checkout.session.completed" qui ne vient pas de notre
+// flux (ex. `stripe trigger checkout.session.completed` avec la CLI, qui
+// n'a aucune metadata) ne doit PAS provoquer un 500 : Stripe
+// réessaierait pendant des jours. On l'ignore proprement (200).
+async function traiterPaiementReussi(session) {
+  const { transaction_id, rdv_id } = session.metadata ?? {};
+  if (!transaction_id || !rdv_id) {
+    console.warn("[paiement] checkout.session.completed sans metadata APS — ignoré.");
+    return;
+  }
+  if (session.payment_status !== "paid") {
+    console.warn(`[paiement] session ${session.id} non payée (${session.payment_status}) — ignorée.`);
+    return;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const transaction = await tx.transactionPaiement.findUnique({ where: { transaction_id } });
+    if (!transaction) {
+      console.warn(`[paiement] transaction ${transaction_id} introuvable — ignorée.`);
+      return;
+    }
+
+    await tx.transactionPaiement.update({
+      where: { transaction_id },
+      data: { statut: "reussie", stripe_payment_intent_id: session.payment_intent },
+    });
+
+    // upsert : Stripe peut livrer le même événement plusieurs fois (et
+    // le réessayer après un 5xx). Un simple create() levait une
+    // violation d'unicité (rdv_id) au 2e passage -> 500 en boucle.
+    const escrow = await tx.compteEscrow.upsert({
+      where: { rdv_id },
+      create: { rdv_id, transaction_id, montant: transaction.montant, statut: "sequestre" },
+      update: {},
+    });
+    if (escrow.transaction_id !== transaction_id) {
+      // Deux sessions Checkout payées pour le même RDV : la 2e n'a pas
+      // de séquestre associé -> à rembourser manuellement dans Stripe.
+      console.error(
+        `[paiement] DOUBLE PAIEMENT rdv=${rdv_id} : transaction ${transaction_id} ` +
+        `(payment_intent ${session.payment_intent}) à rembourser.`
+      );
+    }
+
+    // Ne confirme que depuis "cree" : un RDV annulé entre-temps ne doit
+    // pas être ressuscité par un webhook tardif.
+    await tx.rendezVous.updateMany({ where: { rdv_id, statut: "cree" }, data: { statut: "confirme" } });
+  });
+}
+
+async function traiterSessionExpiree(session) {
+  const transaction_id = session.metadata?.transaction_id;
+  if (!transaction_id) return;
+  // Ne touche pas une transaction déjà "reussie".
+  await prisma.transactionPaiement.updateMany({
+    where: { transaction_id, statut: "en_attente" },
+    data: { statut: "echouee" },
+  });
+}
+
+// POST /api/paiement/webhook — appelé UNIQUEMENT par Stripe
 export async function traiterWebhookStripe(req, res) {
   const signature = req.headers["stripe-signature"];
   let evenement;
@@ -103,26 +171,9 @@ export async function traiterWebhookStripe(req, res) {
 
   try {
     if (evenement.type === "checkout.session.completed") {
-      const session = evenement.data.object;
-      const { transaction_id, rdv_id } = session.metadata;
-
-      const transaction = await prisma.transactionPaiement.update({
-        where: { transaction_id },
-        data: { statut: "reussie", stripe_payment_intent_id: session.payment_intent },
-      });
-
-      await prisma.$transaction([
-        prisma.compteEscrow.create({
-          data: { rdv_id, transaction_id: transaction.transaction_id, montant: transaction.montant, statut: "sequestre" },
-        }),
-        prisma.rendezVous.update({ where: { rdv_id }, data: { statut: "confirme" } }),
-      ]);
+      await traiterPaiementReussi(evenement.data.object);
     } else if (evenement.type === "checkout.session.expired") {
-      const session = evenement.data.object;
-      await prisma.transactionPaiement.update({
-        where: { transaction_id: session.metadata.transaction_id },
-        data: { statut: "echouee" },
-      });
+      await traiterSessionExpiree(evenement.data.object);
     }
     return res.status(200).json({ received: true });
   } catch (err) {

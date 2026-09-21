@@ -7,7 +7,7 @@ import '@fortawesome/fontawesome-free/css/all.min.css';
 import './assets/styles/style.css';
 import './assets/styles/footer-styles.css';
 import './assets/styles/portail-medecin.css';
-import './assets/styles/onboarding.css';
+import './assets/styles/Onboarding.css';
 import './index.css'
 import { router } from './router.jsx'
 import { AuthProvider } from './context/AuthContext'   // ⬅️ ajout
