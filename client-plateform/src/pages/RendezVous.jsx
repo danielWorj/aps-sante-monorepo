@@ -754,7 +754,7 @@ export default function RendezVous() {
                             </div>
                           </div>
                           <p className="text-faint mb-0" style={{ fontSize: '.78rem' }}>
-                            Déjà un compte ? <Link to={`/connexion?next=${encodeURIComponent(window.location.pathname)}`}>Connectez-vous</Link> puis revenez sur cette page.
+                            Déjà un compte ? <Link to="/login">Connectez-vous</Link> puis revenez sur cette page.
                           </p>
                         </div>
                       )}
@@ -789,9 +789,16 @@ export default function RendezVous() {
                         <div className="ticket">
                           <div className="ticket-top">
                             <div className="ticket-check"><i className="fa-solid fa-check" /></div>
-                            <h3 style={{ fontSize: '1.15rem', marginBottom: '.3rem' }}>Rendez-vous confirmé</h3>
-                            <p style={{ fontSize: '.87rem', marginBottom: 0 }}>
-                              Statut actuel : {rendezVousCree.statut ?? 'créé'}. Un rappel vous sera envoyé avant votre consultation.
+                            <h3 style={{ fontSize: '1.15rem', marginBottom: '.3rem' }}>
++                              {rendezVousCree.statut === 'cree' ? 'Rendez-vous enregistré' : 'Rendez-vous confirmé'}
++                            </h3>
+                            <p  style={{ fontSize: '.87rem', marginBottom: 0 }}>
+                              {rendezVousCree.statut === 'cree'
+                                 ? 'En attente de paiement : il ne sera confirmé qu\'une fois réglé.'
+                                 : 'Un rappel vous sera envoyé avant votre consultation.'
+                              }
+
+
                             </p>
                           </div>
                           <div className="ticket-divider" />
