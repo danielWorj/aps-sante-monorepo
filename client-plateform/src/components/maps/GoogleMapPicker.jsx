@@ -83,7 +83,7 @@ export default function GoogleMapPicker({ latitude, longitude, onPositionChange,
   }
 
   async function gererRecherche(e) {
-    e.preventDefault();
+    if (e && typeof e.preventDefault === "function") e.preventDefault();
     if (!texteRecherche.trim() || rechercheEnCours) return;
 
     setRechercheEnCours(true);
@@ -124,18 +124,30 @@ export default function GoogleMapPicker({ latitude, longitude, onPositionChange,
 
   return (
     <div>
-      <form className="d-flex gap-2 mb-2" onSubmit={gererRecherche}>
+      {/*
+        Pas de <form> ici : ce composant est monté à l'intérieur du <form>
+        principal des pages de création (ex. creationAssurance.jsx), et le
+        HTML interdit d'imbriquer un <form> dans un autre <form>. On
+        reproduit le comportement "Entrée = rechercher" avec onKeyDown
+        plutôt qu'avec onSubmit.
+      */}
+      <div className="d-flex gap-2 mb-2">
         <input
           type="text"
           className="form-control"
           placeholder="Rechercher une adresse (ex. Rue de la Joie, Akwa, Douala)"
           value={texteRecherche}
           onChange={(e) => setTexteRecherche(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              gererRecherche(e);
+            }
+          }}
         />
-        <button type="submit" className="btn btn-outline-primary" disabled={rechercheEnCours}>
+        <button type="button" className="btn btn-outline-primary" onClick={gererRecherche} disabled={rechercheEnCours}>
           {rechercheEnCours ? "Recherche…" : "Rechercher"}
         </button>
-      </form>
+      </div>
       {erreurRecherche && <p className="text-danger small mb-2">{erreurRecherche}</p>}
 
       <GoogleMap
