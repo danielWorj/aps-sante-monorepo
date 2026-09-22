@@ -7,6 +7,7 @@ import {
   creerMiseEnRelation,
 } from "../services/assuranceService";
 import { getAccessToken } from "../lib/apiClient";
+import GoogleMapView from "../components/maps/GoogleMapView";
 
 // Fiche assurance — page de détail d'une compagnie d'assurance ou d'un
 // courtier, avec ses activités (catalogue produits), ses agences et
@@ -78,14 +79,6 @@ function SiegePanel({ insurer }) {
               <td>Localisation</td>
               <td>{insurer.ville?.nom}, {insurer.pays?.nom}</td>
             </tr>
-            {insurer.geolocalisation && (
-              <tr>
-                <td>Coordonnées GPS</td>
-                <td>
-                  {insurer.geolocalisation.latitude?.toFixed(4)}, {insurer.geolocalisation.longitude?.toFixed(4)}
-                </td>
-              </tr>
-            )}
             <tr>
               <td>Téléphone</td>
               <td>
@@ -101,6 +94,19 @@ function SiegePanel({ insurer }) {
           </tbody>
         </table>
       </div>
+
+      {insurer.geolocalisation && (
+        <div className="info-card">
+          <h3>
+            <i className="fa-solid fa-map-location-dot" /> Localisation
+          </h3>
+          <GoogleMapView
+            latitude={insurer.geolocalisation.latitude}
+            longitude={insurer.geolocalisation.longitude}
+            nom={insurer.nom}
+          />
+        </div>
+      )}
 
       {insurer.description && (
         <div className="info-card">

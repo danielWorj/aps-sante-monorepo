@@ -1,86 +1,100 @@
-import React, { useEffect, useRef, useState } from 'react';
-import '../../assets/styles/creationAssurance.css';
+import React, { useEffect, useState } from 'react';
+// Réutilise la feuille de styles générique des formulaires "création
+// de compte pro" (form-shell, stepper, upload-box, confirm-card...),
+// déjà utilisée par creationMedecin.jsx et creationPharmacie.jsx — ces
+// classes ne sont pas spécifiques à un métier, elles portent juste le
+// nom du premier formulaire qui les a introduites. Si le projet en
+// extrait un jour un fichier commun (ex. creer-compte-pro.css),
+// remplacer l'import ci-dessous en conséquence.
+import '../../assets/styles/creer-medecin.css';
 
-import { creerServiceAssurance } from '../../services/assuranceService';
+import { creerCentreSante } from '../../services/structureSanteService';
 import { listerPays, listerVilles } from '../../services/geoService';
-import { connecter } from '../../services/authService';
-import { useGeolocation } from '../../hooks/useGeolocation';
 
 // ───────────────────────────────────────────────────────────────────
-// Ce formulaire suit EXACTEMENT le contrat de POST /services-assurance
-// (assurance.controller.js, creerServiceAssurance) :
+// Ce formulaire calque EXACTEMENT le contrat de creationPharmacie.jsx,
+// adapté à un centre de santé. À ajuster si le contrat réel de
+// POST /centres-sante (centreSante.controller.js, creerCentreSante
+// côté back / creerCentreSante de centreSanteService.js côté front)
+// diffère :
 //
-//   Champs obligatoires du corps de la requête (multipart/form-data) :
-//     nom, pays_id, ville_id, telephone, email, agrement,
-//     type_acteur ('compagnie'|'courtier'),
-//     fonction, agent_nom, agent_prenom, agent_email
-//   Champs optionnels : description, latitude, longitude, agent_telephone, statut_verification
-//   Fichier obligatoire : image_assurance
+//   Corps multipart/form-data — champs obligatoires supposés :
+//     nom, type_etablissement, pays_id, ville_id, telephone,
+//     numero_autorisation, fonction, agent_nom, agent_prenom,
+//     agent_email
+//   Champs optionnels : agent_telephone, latitude, longitude
+//     (statut_verification existe côté back mais est ignoré si
+//     l'appelant n'est pas admin/superadmin — on ne l'envoie donc
+//     jamais depuis ce formulaire public)
+//   Fichiers obligatoires : image_centre, piece_identite,
+//     document_autorisation
 //
-// Étapes du formulaire :
-//   Étape 1 : Infos générales (nom, type acteur, image)
-//   Étape 2 : Localisation (pays, ville)
-//   Étape 3 : Infos de contact (email, téléphone)
-//   Étape 4 : Infos supplémentaires (agrément, description, coordonnées GPS)
-//   Étape 5 : Agent responsable (fonction, nom, prénom, email, téléphone)
-//   Étape 6 : Confirmation
+// Comme pour la pharmacie, la route est supposée créer EN MÊME TEMPS
+// la fiche centre de santé ET le compte de l'agent qui en a la charge
+// (pas forcément la même personne que celle qui remplit le
+// formulaire) : la réponse contient donc
+// { centreSante, agent: { utilisateur, mot_de_passe_temporaire } }.
+// Ce mot de passe temporaire n'est renvoyé qu'une seule fois par le
+// serveur — on ne le stocke nulle part, on l'affiche seulement le
+// temps de l'écran de confirmation (à charge pour la personne de le
+// transmettre à l'agent concerné).
 
-const CreationAssurance = () => {
+const ETAPES = [
+  'Informations',
+  'Localisation',
+  'Agent responsable',
+  'Justificatifs',
+  'Confirmation',
+];
+
+const TYPES_ETABLISSEMENT = [
+  'Centre de santé',
+  'Centre médical',
+  'Clinique',
+  'Hôpital',
+  "Cabinet médical de groupe",
+];
+
+const CreationCentreSante = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [stepError, setStepError] = useState(null);
-  const [compteCree, setCompteCree] = useState(null);
-
-  // Ref pour déclencher programmatiquement le sélecteur de fichier —
-  // fiabilise le clic sur la carte "logo" (fix : le clic ne passait
-  // pas jusqu'à l'input caché derrière l'aperçu visuel).
-  const fileInputRef = useRef(null);
+  const [centreCree, setCentreCree] = useState(null);
+  const [copiedField, setCopiedField] = useState(null);
 
   // Référentiels chargés depuis le backend
   const [pays, setPays] = useState([]);
   const [villes, setVilles] = useState([]);
   const [chargementReferentiels, setChargementReferentiels] = useState(true);
 
-  // Étape 4 — bouton "Utiliser ma position actuelle" (voir
-  // src/hooks/useGeolocation.js). Ne remplace pas la saisie manuelle
-  // des champs latitude/longitude : ne fait que les pré-remplir.
-  const {
-    position: positionActuelle,
-    loading: geoEnCours,
-    error: geoErreur,
-    demanderPosition,
-  } = useGeolocation();
-
   const [formData, setFormData] = useState({
-    // Étape 1 — Infos générales
-    image_assurance: null,
+    // Étape 1 — informations du centre de santé
     nom: '',
-    type_acteur: 'compagnie', // 'compagnie' | 'courtier'
-
-    // Étape 2 — Localisation
+    type_etablissement: '',
+    telephone: '',
     pays_id: '',
     ville_id: '',
+    numero_autorisation: '',
 
-    // Étape 3 — Contact
-    email: '',
-    telephone: '',
-
-    // Étape 4 — Infos supplémentaires
-    agrement: '',
-    description: '',
+    // Étape 2 — localisation (facultative)
     latitude: '',
     longitude: '',
 
-    // Étape 5 — Agent responsable
+    // Étape 3 — agent responsable
     fonction: '',
     agent_nom: '',
     agent_prenom: '',
     agent_email: '',
     agent_telephone: '',
 
-    // Étape 6 — Confirmation
+    // Étape 4 — justificatifs
+    image_centre: null,
+    piece_identite: null,
+    document_autorisation: null,
+
+    // Étape 5
     acceptCGU: false,
   });
 
@@ -90,11 +104,12 @@ const CreationAssurance = () => {
     (async () => {
       try {
         const reponsePays = await listerPays();
-        if (annule) return;
-        setPays(reponsePays.pays || []);
+        if (!annule) setPays(reponsePays.pays || []);
       } catch (err) {
         if (!annule) {
-          setSubmitError("Impossible de charger les pays. Rechargez la page.");
+          setSubmitError(
+            "Impossible de charger la liste des pays. Rechargez la page."
+          );
         }
       } finally {
         if (!annule) setChargementReferentiels(false);
@@ -125,243 +140,247 @@ const CreationAssurance = () => {
     };
   }, [formData.pays_id]);
 
-  // Pré-remplit latitude/longitude dès que le navigateur renvoie une
-  // position (bouton "Utiliser ma position actuelle" de l'étape 4).
-  // Les champs restent modifiables ensuite : on ne fait qu'initialiser
-  // la valeur, l'utilisateur peut toujours l'ajuster à la main.
-  useEffect(() => {
-    if (!positionActuelle) return;
-    setFormData((prev) => ({
-      ...prev,
-      latitude: positionActuelle.latitude,
-      longitude: positionActuelle.longitude,
-    }));
-  }, [positionActuelle]);
-
   const handleChange = (e) => {
-    const { name, value, type, checked, files } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : type === 'file' ? files[0] : value,
-      // fix : si on change de pays, la ville précédemment sélectionnée
-      // n'appartient plus forcément au nouveau pays — on la réinitialise
-      // pour éviter un ville_id incohérent envoyé au serveur.
-      ...(name === 'pays_id' ? { ville_id: '' } : {}),
+      [name]: type === 'checkbox' ? checked : value,
     }));
   };
 
-  const TAILLE_MAX_LOGO = 5 * 1024 * 1024; // 5 MB — annoncé dans le form-hint
-
   const handleFileChange = (e, fieldName) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > TAILLE_MAX_LOGO) {
-      setStepError('Le fichier dépasse la taille maximale de 5 MB.');
-      e.target.value = ''; // permet de re-choisir le même fichier après correction
-      return;
-    }
-    setStepError(null);
+    const file = e.target.files[0] || null;
     setFormData((prev) => ({ ...prev, [fieldName]: file }));
   };
 
-  // Validation par étape
+  const handleCopy = (field, value) => {
+    navigator.clipboard?.writeText(value);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 1500);
+  };
+
+  // Validation par étape — bloque "Continuer"/l'envoi tant que les
+  // champs requis par le backend pour cette étape ne sont pas remplis.
   const validateStep = (step) => {
-    setStepError(null);
-    
     switch (step) {
       case 1:
-        if (!formData.nom.trim()) {
-          setStepError('Le nom de la compagnie/courtier est requis.');
-          return false;
+        if (!formData.nom.trim()) return "Le nom du centre de santé est obligatoire.";
+        if (!formData.type_etablissement) return "Le type d'établissement est obligatoire.";
+        if (!formData.telephone.trim()) return "Le téléphone est obligatoire.";
+        if (!formData.pays_id) return "Le pays est obligatoire.";
+        if (!formData.ville_id) return "La ville est obligatoire.";
+        if (!formData.numero_autorisation.trim())
+          return "Le numéro d'autorisation d'exercice est obligatoire.";
+        return null;
+      case 2: {
+        const latRenseignee = formData.latitude !== '';
+        const lngRenseignee = formData.longitude !== '';
+        if (latRenseignee !== lngRenseignee) {
+          return "Latitude et longitude doivent être renseignées ensemble (ou laissées vides toutes les deux).";
         }
-        if (!formData.image_assurance) {
-          setStepError('Un logo est obligatoire.');
-          return false;
-        }
-        return true;
-
-      case 2:
-        if (!formData.pays_id) {
-          setStepError('Veuillez sélectionner un pays.');
-          return false;
-        }
-        if (!formData.ville_id) {
-          setStepError('Veuillez sélectionner une ville.');
-          return false;
-        }
-        return true;
-
+        return null;
+      }
       case 3:
-        if (!formData.email.trim()) {
-          setStepError('Un email est requis.');
-          return false;
-        }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-          setStepError('Veuillez entrer une adresse email valide.');
-          return false;
-        }
-        if (!formData.telephone.trim()) {
-          setStepError('Un numéro de téléphone est requis.');
-          return false;
-        }
-        return true;
-
+        if (!formData.fonction.trim()) return "La fonction de l'agent est obligatoire.";
+        if (!formData.agent_nom.trim()) return "Le nom de l'agent est obligatoire.";
+        if (!formData.agent_prenom.trim()) return "Le prénom de l'agent est obligatoire.";
+        if (!formData.agent_email.trim()) return "L'e-mail de l'agent est obligatoire.";
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.agent_email.trim()))
+          return "L'e-mail de l'agent n'est pas valide.";
+        return null;
       case 4:
-        if (!formData.agrement.trim()) {
-          setStepError('Un numéro d\'agrément est requis.');
-          return false;
-        }
-        if ((formData.latitude !== '') !== (formData.longitude !== '')) {
-          setStepError(
-            'Latitude et longitude doivent être renseignées ensemble (ou laissées vides toutes les deux).'
-          );
-          return false;
-        }
-        return true;
-
+        if (!formData.image_centre) return "La photo du centre de santé est obligatoire.";
+        if (!formData.piece_identite)
+          return "La pièce d'identité du responsable est obligatoire.";
+        if (!formData.document_autorisation)
+          return "Le document d'autorisation officielle est obligatoire.";
+        return null;
       case 5:
-        if (!formData.fonction.trim()) {
-          setStepError('La fonction de l\'agent est requise.');
-          return false;
-        }
-        if (!formData.agent_nom.trim()) {
-          setStepError('Le nom de l\'agent est requis.');
-          return false;
-        }
-        if (!formData.agent_prenom.trim()) {
-          setStepError('Le prénom de l\'agent est requis.');
-          return false;
-        }
-        if (!formData.agent_email.trim()) {
-          setStepError('Un email pour l\'agent est requis.');
-          return false;
-        }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.agent_email)) {
-          setStepError('Veuillez entrer une adresse email valide pour l\'agent.');
-          return false;
-        }
-        return true;
-
-      case 6:
-        if (!formData.acceptCGU) {
-          setStepError('Vous devez accepter les conditions générales.');
-          return false;
-        }
-        return true;
-
+        if (!formData.acceptCGU)
+          return "Vous devez accepter les CGU et la politique de confidentialité.";
+        return null;
       default:
-        return true;
+        return null;
     }
   };
 
   const nextStep = () => {
-    if (validateStep(currentStep)) {
-      setCurrentStep(currentStep + 1);
-      window.scrollTo(0, 0);
+    const erreur = validateStep(currentStep);
+    if (erreur) {
+      setStepError(erreur);
+      return;
     }
+    setStepError(null);
+    if (currentStep < ETAPES.length) setCurrentStep(currentStep + 1);
   };
 
   const prevStep = () => {
-    setCurrentStep(currentStep - 1);
-    window.scrollTo(0, 0);
+    setStepError(null);
+    if (currentStep > 1) setCurrentStep(currentStep - 1);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateStep(6)) return;
 
-    setIsSubmitting(true);
+    const erreur = validateStep(ETAPES.length);
+    if (erreur) {
+      setStepError(erreur);
+      return;
+    }
+
+    setStepError(null);
     setSubmitError(null);
+    setIsSubmitting(true);
 
     try {
-      // Préparation des données
-      const dataToSend = {
-        nom: formData.nom,
-        type_acteur: formData.type_acteur,
+      // Corps exact attendu par POST /centres-sante (creerCentreSante).
+      // statut_verification n'est volontairement jamais envoyé : le
+      // serveur l'ignore de toute façon pour un appelant non admin.
+      const resultat = await creerCentreSante({
+        nom: formData.nom.trim(),
+        type_etablissement: formData.type_etablissement,
+        telephone: formData.telephone.trim(),
         pays_id: formData.pays_id,
         ville_id: formData.ville_id,
-        email: formData.email,
-        telephone: formData.telephone,
-        agrement: formData.agrement,
-        description: formData.description || undefined,
-        latitude: formData.latitude ? parseFloat(formData.latitude) : undefined,
-        longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
-        image_assurance: formData.image_assurance,
-        fonction: formData.fonction,
-        agent_nom: formData.agent_nom,
-        agent_prenom: formData.agent_prenom,
-        agent_email: formData.agent_email,
-        agent_telephone: formData.agent_telephone || undefined,
-        statut_verification: 'en_cours', // Les nouvelles entrées commencent en révision
-      };
-
-      const response = await creerServiceAssurance(dataToSend);
-
-      // fix : le backend peut renvoyer un 201 avec un avertissement dans
-      // `message` (ex. coordonnées GPS invalides, non bloquant) — ce
-      // message n'était jamais lu ni affiché côté front.
-      const avertissement = response.message?.includes('Avertissement')
-        ? response.message
-        : null;
-
-      setCompteCree({
-        nom_compagnie: response.service_assurance?.nom,
-        agent_email: response.agent?.email,
-        mot_de_passe_temporaire: response.agent?.mot_de_passe_temporaire,
-        avertissement,
+        numero_autorisation: formData.numero_autorisation.trim(),
+        latitude: formData.latitude === '' ? undefined : Number(formData.latitude),
+        longitude: formData.longitude === '' ? undefined : Number(formData.longitude),
+        fonction: formData.fonction.trim(),
+        agent_nom: formData.agent_nom.trim(),
+        agent_prenom: formData.agent_prenom.trim(),
+        agent_email: formData.agent_email.trim(),
+        agent_telephone: formData.agent_telephone.trim() || undefined,
+        image_centre: formData.image_centre,
+        piece_identite: formData.piece_identite,
+        document_autorisation: formData.document_autorisation,
       });
 
+      const { centreSante, agent } = resultat;
+
+      setCentreCree({
+        message: resultat.message,
+        centreNom: centreSante?.nom,
+        agentEmail: agent?.utilisateur?.email,
+        motDePasseTemporaire: agent?.mot_de_passe_temporaire,
+      });
       setIsSubmitted(true);
     } catch (err) {
       setSubmitError(
-        err.data?.message || err.message || 'Une erreur est survenue lors de la création.'
+        err.message || "Une erreur est survenue lors de l'envoi de la demande. Réessayez."
       );
+    } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (isSubmitted && compteCree) {
+  const renderStepper = () => (
+    <div className="stepper">
+      {ETAPES.map((label, index) => {
+        const stepNum = index + 1;
+        let stepClass = 'step';
+
+        if (stepNum === currentStep) stepClass += ' is-active';
+        else if (stepNum < currentStep) stepClass += ' is-done';
+
+        return (
+          <React.Fragment key={stepNum}>
+            <div className={stepClass}>
+              <div className="step-circle">{stepNum}</div>
+              <div className="step-label">{label}</div>
+            </div>
+            {index < ETAPES.length - 1 && <div className="step-line"></div>}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+
+  if (isSubmitted) {
     return (
       <>
-        <main className="main-aps">
-          <section style={{ paddingTop: '3rem', paddingBottom: '3rem' }}>
+        <main>
+          <section style={{ padding: '3.5rem 0' }}>
             <div className="container-aps">
-              <div className="success-card">
-                <div className="success-icon">
-                  <i className="fa-solid fa-circle-check" />
+              <div className="confirm-card">
+                <div className="confirm-check-wrap">
+                  <div className="confirm-check-ring"></div>
+                  <div className="confirm-check-ring"></div>
+                  <div className="confirm-check-circle">
+                    <i className="fa-solid fa-check"></i>
+                  </div>
                 </div>
-                <h2>Compagnie / Courtier enregistré !</h2>
-                <p className="mt-2">
-                  Votre compagnie <strong>{compteCree.nom_compagnie}</strong> a été créée
-                  avec succès. Elle est actuellement en cours de vérification.
+
+                <h3 className="confirm-title">Centre de santé déclaré</h3>
+                <p className="confirm-subtitle">
+                  {centreCree?.message ||
+                    "Votre demande a bien été envoyée. La fiche sera visible dans l'annuaire après vérification par un administrateur."}
                 </p>
 
-                {compteCree.avertissement && (
-                  <div className="alert alert-warning mt-3">
-                    <i className="fa-solid fa-triangle-exclamation" /> {compteCree.avertissement}
+                {centreCree?.agentEmail && (
+                  <div className="confirm-credentials">
+                    <div className="confirm-credentials-title">
+                      <i className="fa-solid fa-shield-halved"></i>
+                      Identifiants de l'agent responsable — à conserver précieusement
+                    </div>
+
+                    <div className="cred-row">
+                      <div className="cred-icon">
+                        <i className="fa-solid fa-envelope"></i>
+                      </div>
+                      <div className="cred-body">
+                        <span className="cred-label">Identifiant</span>
+                        <span className="cred-value">{centreCree.agentEmail}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className={`cred-copy ${copiedField === 'email' ? 'copied' : ''}`}
+                        onClick={() => handleCopy('email', centreCree.agentEmail)}
+                        title="Copier l'identifiant"
+                        aria-label="Copier l'identifiant"
+                      >
+                        <i className={`fa-solid ${copiedField === 'email' ? 'fa-check' : 'fa-clipboard'}`}></i>
+                      </button>
+                    </div>
+
+                    {centreCree.motDePasseTemporaire && (
+                      <div className="cred-row">
+                        <div className="cred-icon">
+                          <i className="fa-solid fa-key"></i>
+                        </div>
+                        <div className="cred-body">
+                          <span className="cred-label">Mot de passe temporaire</span>
+                          <span className="cred-value">
+                            <code>{centreCree.motDePasseTemporaire}</code>
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className={`cred-copy ${copiedField === 'password' ? 'copied' : ''}`}
+                          onClick={() => handleCopy('password', centreCree.motDePasseTemporaire)}
+                          title="Copier le mot de passe"
+                          aria-label="Copier le mot de passe"
+                        >
+                          <i className={`fa-solid ${copiedField === 'password' ? 'fa-check' : 'fa-clipboard'}`}></i>
+                        </button>
+                      </div>
+                    )}
+
+                    <p style={{ marginTop: '.75rem', marginBottom: 0, fontSize: '.85rem' }}>
+                      Ce mot de passe ne sera plus jamais affiché : transmettez-le dès
+                      maintenant à l'agent responsable par un canal sûr. Il devra le
+                      changer à sa première connexion.
+                    </p>
                   </div>
                 )}
 
-                <div className="alert alert-info mt-4">
-                  <strong>Identifiants de connexion :</strong>
-                  <p className="mt-2">
-                    Email de l'agent : <code>{compteCree.agent_email}</code>
-                  </p>
-                  <p>
-                    Mot de passe temporaire :{' '}
-                    <code>{compteCree.mot_de_passe_temporaire}</code>
-                  </p>
-                  <p className="mt-2 mb-0">
-                    <i className="fa-solid fa-triangle-exclamation" /> Conservez précieusement
-                    ce mot de passe. Vous pouvez le changer lors de votre première
-                    connexion.
-                  </p>
-                </div>
+                <a href="#" className="confirm-cta">
+                  Voir ma fiche centre de santé
+                  <i className="fa-solid fa-arrow-right"></i>
+                </a>
 
-                <div className="mt-4" style={{ textAlign: 'center' }}>
-                  <a href="/" className="btn btn-primary">
-                    <i className="fa-solid fa-home" /> Retour à l'accueil
-                  </a>
+                <div className="confirm-hint">
+                  <i className="fa-solid fa-envelope-open-text"></i>
+                  Un e-mail de confirmation vous a été envoyé.
                 </div>
               </div>
             </div>
@@ -371,42 +390,27 @@ const CreationAssurance = () => {
     );
   }
 
-  if (chargementReferentiels) {
-    return (
-      <main className="main-aps">
-        <section style={{ paddingTop: '3rem', paddingBottom: '3rem' }}>
-          <div className="container-aps" style={{ textAlign: 'center' }}>
-            <p>Chargement des référentiels…</p>
-          </div>
-        </section>
-      </main>
-    );
-  }
-
-  const paysLabel = pays.find((p) => p.pays_id === formData.pays_id)?.nom || '';
-  const villeLabel = villes.find((v) => v.ville_id === formData.ville_id)?.nom || '';
-
   return (
     <>
-      <main className="main-aps">
+      <main>
         <section style={{ padding: '2.5rem 0' }}>
           <div className="container-aps">
-            <div className="row">
-              <div className="col-md-4">
+            <div className="form-shell">
+              <div className="form-shell-grid">
                 <aside className="form-side">
-                  <h4>Votre inscription en 6 étapes</h4>
+                  <h4>Déclarer votre centre de santé en 5 étapes</h4>
                   <p>
-                    Quelques minutes suffisent. Votre fiche est publiée dans
-                    l'annuaire dès validation de votre agrément et de vos
-                    justificatifs.
+                    Quelques minutes suffisent. Votre fiche est mise en ligne dès
+                    validation de votre numéro d'autorisation et de vos
+                    justificatifs par un administrateur.
                   </p>
                   <ul className="form-side-list">
                     <li>
-                      <i className="fa-solid fa-building"></i>
+                      <i className="fa-solid fa-hospital"></i>
                       <div>
-                        <strong>Infos générales</strong>
+                        <strong>Informations</strong>
                         <span className="form-side-desc">
-                          Nom, type d'acteur et logo
+                          Nom, type et localisation administrative
                         </span>
                       </div>
                     </li>
@@ -415,34 +419,25 @@ const CreationAssurance = () => {
                       <div>
                         <strong>Localisation</strong>
                         <span className="form-side-desc">
-                          Pays et ville où vous exercez
+                          Facultatif — coordonnées GPS pour la carte
                         </span>
                       </div>
                     </li>
                     <li>
-                      <i className="fa-solid fa-envelope"></i>
+                      <i className="fa-solid fa-id-badge"></i>
                       <div>
-                        <strong>Contact</strong>
+                        <strong>Agent responsable</strong>
                         <span className="form-side-desc">
-                          Email et téléphone de la compagnie
+                          La personne qui aura la charge de la fiche
                         </span>
                       </div>
                     </li>
                     <li>
                       <i className="fa-solid fa-file-circle-check"></i>
                       <div>
-                        <strong>Infos supplémentaires</strong>
+                        <strong>Justificatifs</strong>
                         <span className="form-side-desc">
-                          Agrément, description et coordonnées GPS
-                        </span>
-                      </div>
-                    </li>
-                    <li>
-                      <i className="fa-solid fa-user-tie"></i>
-                      <div>
-                        <strong>Agent responsable</strong>
-                        <span className="form-side-desc">
-                          Le contact qui gérera votre espace
+                          Pièces à télécharger pour vérification
                         </span>
                       </div>
                     </li>
@@ -457,505 +452,368 @@ const CreationAssurance = () => {
                     </li>
                   </ul>
                 </aside>
-              </div>
 
-              <div className="col-md-8">
                 <div className="form-main">
                   <div className="form-header">
-                    <span className="eyebrow">Inscription</span>
-                    <h1>Créer un compte — Compagnie d'assurance ou Courtier</h1>
-                    <p className="mt-2">
-                      Rejoignez l'annuaire APS en tant que compagnie d'assurance
-                      santé ou courtier. Remplissez le formulaire ci-dessous
-                      pour créer votre fiche.
+                    <span className="eyebrow">Espace professionnel</span>
+                    <h1>Déclarer mon centre de santé</h1>
+                    <p>
+                      Complétez les 5 étapes ci-dessous. Un compte est créé pour
+                      l'agent qui aura la charge de la fiche — pas forcément vous.
                     </p>
                   </div>
 
-                  <div className="form-container">
-                    <div className="steps-indicator">
-                      {[1, 2, 3, 4, 5, 6].map((step) => (
-                        <div
-                          key={step}
-                          className={`step ${currentStep === step ? 'active' : ''} ${
-                            currentStep > step ? 'completed' : ''
-                          }`}
-                        >
-                          <span className="step-number">{step}</span>
-                          {currentStep > step && <i className="fa-solid fa-check" />}
-                        </div>
-                      ))}
-                    </div>
+                  {renderStepper()}
 
-                    <div className="form-wrapper">
-                      <form onSubmit={handleSubmit}>
-                        <div className="form-page active">
-                          {/* Étape 1 : Infos générales */}
+                  {submitError && (
+                    <div className="alert alert-danger" role="alert">
+                      {submitError}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSubmit}>
+                    {/* Étape 1 : Informations du centre de santé */}
                     {currentStep === 1 && (
                       <div className="form-page active">
-                        <h2 className="form-title">
-                          Informations générales
-                        </h2>
-
-                        <div className="form-group">
-                          <label className="form-label-aps" htmlFor="nom">
-                            Nom de la compagnie / courtier{' '}
-                            <span className="required-mark">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            id="nom"
-                            name="nom"
-                            value={formData.nom}
-                            onChange={handleChange}
-                            placeholder="Ex: AXA Assurance, Courtier Santé Plus"
-                            required
-                          />
-                        </div>
-
-                        <div className="form-group">
-                          <label className="form-label-aps" htmlFor="type_acteur">
-                            Type d'acteur <span className="required-mark">*</span>
-                          </label>
-                          <select
-                            className="form-select"
-                            id="type_acteur"
-                            name="type_acteur"
-                            value={formData.type_acteur}
-                            onChange={handleChange}
-                            required
-                          >
-                            <option value="compagnie">Compagnie d'assurance</option>
-                            <option value="courtier">Courtier</option>
-                          </select>
-                        </div>
-
-                        <div className="form-group">
-                          <label className="form-label-aps" htmlFor="image_assurance">
-                            Logo de la compagnie{' '}
-                            <span className="required-mark">*</span>
-                          </label>
-                          <div
-                            className="file-input-wrapper"
-                            onClick={() => fileInputRef.current?.click()}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                fileInputRef.current?.click();
-                              }
-                            }}
-                            role="button"
-                            tabIndex={0}
-                            style={{ cursor: 'pointer' }}
-                          >
-                            <input
-                              ref={fileInputRef}
-                              type="file"
-                              className="form-control"
-                              id="image_assurance"
-                              accept="image/*"
-                              onChange={(e) => handleFileChange(e, 'image_assurance')}
-                              // fix : input caché proprement au lieu de compter sur une
-                              // superposition CSS fragile qui empêchait le clic d'atteindre
-                              // l'élément natif ("carte figée").
-                              style={{ display: 'none' }}
-                              required
-                            />
-                            <div className="file-preview">
-                              {formData.image_assurance ? (
-                                <>
-                                  <i className="fa-solid fa-check-circle" />
-                                  <p>{formData.image_assurance.name}</p>
-                                </>
-                              ) : (
-                                <>
-                                  <i className="fa-solid fa-image" />
-                                  <p>Cliquez pour ajouter un logo</p>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          <p className="form-hint">Format recommandé : JPG, PNG. Taille max : 5 MB</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Étape 2 : Localisation */}
-                    {currentStep === 2 && (
-                      <div className="form-page active">
-                        <h2 className="form-title">
-                          Localisation
-                        </h2>
-
-                        <div className="form-group">
-                          <label className="form-label-aps" htmlFor="pays_id">
-                            Pays <span className="required-mark">*</span>
-                          </label>
-                          <select
-                            className="form-select"
-                            id="pays_id"
-                            name="pays_id"
-                            value={formData.pays_id}
-                            onChange={handleChange}
-                            required
-                          >
-                            <option value="">Sélectionner un pays…</option>
-                            {pays.map((p) => (
-                              <option key={p.pays_id} value={p.pays_id}>
-                                {p.nom}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="form-group">
-                          <label className="form-label-aps" htmlFor="ville_id">
-                            Ville <span className="required-mark">*</span>
-                          </label>
-                          <select
-                            className="form-select"
-                            id="ville_id"
-                            name="ville_id"
-                            value={formData.ville_id}
-                            onChange={handleChange}
-                            required
-                            disabled={!formData.pays_id}
-                          >
-                            <option value="">Sélectionner une ville…</option>
-                            {villes.map((v) => (
-                              <option key={v.ville_id} value={v.ville_id}>
-                                {v.nom}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {formData.pays_id && formData.ville_id && (
-                          <div className="form-summary">
-                            <i className="fa-solid fa-map-pin" />
-                            <span>
-                              {villeLabel}, {paysLabel}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Étape 3 : Infos de contact */}
-                    {currentStep === 3 && (
-                      <div className="form-page active">
-                        <h2 className="form-title">
-                          Informations de contact
-                        </h2>
-
-                        <div className="form-group">
-                          <label className="form-label-aps" htmlFor="email">
-                            Email de la compagnie{' '}
-                            <span className="required-mark">*</span>
-                          </label>
-                          <input
-                            type="email"
-                            className="form-control"
-                            id="email"
-                            name="email"
-                            value={formData.email}
-                            onChange={handleChange}
-                            placeholder="contact@exemple.com"
-                            required
-                          />
-                        </div>
-
-                        <div className="form-group">
-                          <label className="form-label-aps" htmlFor="telephone">
-                            Numéro de téléphone{' '}
-                            <span className="required-mark">*</span>
-                          </label>
-                          <input
-                            type="tel"
-                            className="form-control"
-                            id="telephone"
-                            name="telephone"
-                            value={formData.telephone}
-                            onChange={handleChange}
-                            placeholder="+237 XXX XXX XXX"
-                            required
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Étape 4 : Infos supplémentaires */}
-                    {currentStep === 4 && (
-                      <div className="form-page active">
-                        <h2 className="form-title">
-                          Informations supplémentaires
-                        </h2>
-
-                        <div className="form-group">
-                          <label className="form-label-aps" htmlFor="agrement">
-                            Numéro d'agrément{' '}
-                            <span className="required-mark">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            id="agrement"
-                            name="agrement"
-                            value={formData.agrement}
-                            onChange={handleChange}
-                            placeholder="Ex: AG-2024-001"
-                            required
-                          />
-                        </div>
-
-                        <div className="form-group">
-                          <label className="form-label-aps" htmlFor="description">
-                            Description de la compagnie
-                          </label>
-                          <textarea
-                            className="form-control"
-                            id="description"
-                            name="description"
-                            value={formData.description}
-                            onChange={handleChange}
-                            placeholder="Décrivez brièvement votre compagnie, vos services, etc."
-                            rows="4"
-                          />
-                          <p className="form-hint">Champ optionnel</p>
-                        </div>
-
-                        <h3 className="form-subtitle mt-4">Coordonnées GPS (optionnel)</h3>
-
-                        <button
-                          type="button"
-                          className="btn btn-outline-primary btn-sm-aps mb-3"
-                          onClick={demanderPosition}
-                          disabled={geoEnCours}
-                        >
-                          <i className="fa-solid fa-location-crosshairs" />{' '}
-                          {geoEnCours
-                            ? 'Localisation en cours…'
-                            : positionActuelle
-                            ? 'Position mise à jour'
-                            : 'Utiliser ma position actuelle'}
-                        </button>
-                        {geoErreur && (
-                          <p className="minimal-note mb-3">
-                            <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
-                          </p>
-                        )}
-
                         <div className="row g-3">
                           <div className="col-md-6">
-                            <label className="form-label-aps" htmlFor="latitude">
-                              Latitude
+                            <label className="form-label-aps">
+                              Nom du centre de santé <span className="required-mark">*</span>
                             </label>
                             <input
-                              type="number"
+                              type="text"
                               className="form-control"
-                              id="latitude"
+                              name="nom"
+                              value={formData.nom}
+                              onChange={handleChange}
+                              placeholder="Ex. Centre de Santé Intégré de Biyem-Assi"
+                              required
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">
+                              Type d'établissement <span className="required-mark">*</span>
+                            </label>
+                            <select
+                              className="form-select"
+                              name="type_etablissement"
+                              value={formData.type_etablissement}
+                              onChange={handleChange}
+                              required
+                            >
+                              <option value="">Sélectionner…</option>
+                              {TYPES_ETABLISSEMENT.map((type) => (
+                                <option key={type} value={type}>
+                                  {type}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">
+                              Téléphone <span className="required-mark">*</span>
+                            </label>
+                            <input
+                              type="tel"
+                              className="form-control"
+                              name="telephone"
+                              value={formData.telephone}
+                              onChange={handleChange}
+                              placeholder="+237600000000"
+                              required
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">
+                              Numéro d'autorisation d'exercice <span className="required-mark">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control"
+                              name="numero_autorisation"
+                              value={formData.numero_autorisation}
+                              onChange={handleChange}
+                              placeholder="Numéro délivré par le ministère de la Santé"
+                              required
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">
+                              Pays <span className="required-mark">*</span>
+                            </label>
+                            <select
+                              className="form-select"
+                              name="pays_id"
+                              value={formData.pays_id}
+                              onChange={(e) => {
+                                handleChange(e);
+                                setFormData((prev) => ({ ...prev, ville_id: '' }));
+                              }}
+                              required
+                              disabled={chargementReferentiels}
+                            >
+                              <option value="">
+                                {chargementReferentiels ? 'Chargement…' : 'Sélectionner…'}
+                              </option>
+                              {pays.map((p) => (
+                                <option key={p.pays_id} value={p.pays_id}>
+                                  {p.nom}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">
+                              Ville <span className="required-mark">*</span>
+                            </label>
+                            <select
+                              className="form-select"
+                              name="ville_id"
+                              value={formData.ville_id}
+                              onChange={handleChange}
+                              required
+                              disabled={!formData.pays_id}
+                            >
+                              <option value="">
+                                {formData.pays_id ? 'Sélectionner…' : "Choisissez d'abord un pays"}
+                              </option>
+                              {villes.map((v) => (
+                                <option key={v.ville_id} value={v.ville_id}>
+                                  {v.nom}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Étape 2 : Localisation (facultative) */}
+                    {currentStep === 2 && (
+                      <div className="form-page active">
+                        <p className="form-hint" style={{ marginBottom: '1rem' }}>
+                          Facultatif : renseignez les coordonnées GPS pour que le
+                          centre de santé apparaisse précisément sur la carte. Vous
+                          pouvez passer cette étape.
+                        </p>
+                        <div className="row g-3">
+                          <div className="col-md-6">
+                            <label className="form-label-aps">Latitude</label>
+                            <input
+                              type="number"
+                              step="any"
+                              className="form-control"
                               name="latitude"
                               value={formData.latitude}
                               onChange={handleChange}
-                              placeholder="Ex: 3.8667"
-                              step="0.0001"
+                              placeholder="4.0511"
                             />
                           </div>
                           <div className="col-md-6">
-                            <label className="form-label-aps" htmlFor="longitude">
-                              Longitude
-                            </label>
+                            <label className="form-label-aps">Longitude</label>
                             <input
                               type="number"
+                              step="any"
                               className="form-control"
-                              id="longitude"
                               name="longitude"
                               value={formData.longitude}
                               onChange={handleChange}
-                              placeholder="Ex: 11.5167"
-                              step="0.0001"
+                              placeholder="9.7679"
                             />
                           </div>
                         </div>
                       </div>
                     )}
 
-                    {/* Étape 5 : Agent responsable */}
-                    {currentStep === 5 && (
+                    {/* Étape 3 : Agent responsable */}
+                    {currentStep === 3 && (
                       <div className="form-page active">
-                        <h2 className="form-title">
-                          Agent responsable
-                        </h2>
-
-                        <div className="form-group">
-                          <label className="form-label-aps" htmlFor="fonction">
-                            Fonction de l'agent{' '}
-                            <span className="required-mark">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            id="fonction"
-                            name="fonction"
-                            value={formData.fonction}
-                            onChange={handleChange}
-                            placeholder="Ex: Directeur, Responsable Administratif"
-                            required
-                          />
-                        </div>
-
+                        <p className="form-hint" style={{ marginBottom: '1rem' }}>
+                          Un compte est créé pour la personne qui aura la charge
+                          de ce centre de santé (pas forcément vous). Un mot de
+                          passe temporaire lui sera communiqué à la fin de cette
+                          demande.
+                        </p>
                         <div className="row g-3">
                           <div className="col-md-6">
-                            <label className="form-label-aps" htmlFor="agent_nom">
+                            <label className="form-label-aps">
+                              Fonction de l'agent <span className="required-mark">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control"
+                              name="fonction"
+                              value={formData.fonction}
+                              onChange={handleChange}
+                              placeholder="Ex. Directeur, Administrateur"
+                              required
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">
+                              Téléphone de l'agent
+                            </label>
+                            <input
+                              type="tel"
+                              className="form-control"
+                              name="agent_telephone"
+                              value={formData.agent_telephone}
+                              onChange={handleChange}
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">
                               Nom <span className="required-mark">*</span>
                             </label>
                             <input
                               type="text"
                               className="form-control"
-                              id="agent_nom"
                               name="agent_nom"
                               value={formData.agent_nom}
                               onChange={handleChange}
-                              placeholder="Nom"
                               required
                             />
                           </div>
                           <div className="col-md-6">
-                            <label className="form-label-aps" htmlFor="agent_prenom">
+                            <label className="form-label-aps">
                               Prénom <span className="required-mark">*</span>
                             </label>
                             <input
                               type="text"
                               className="form-control"
-                              id="agent_prenom"
                               name="agent_prenom"
                               value={formData.agent_prenom}
                               onChange={handleChange}
-                              placeholder="Prénom"
                               required
                             />
                           </div>
-                        </div>
-
-                        <div className="form-group">
-                          <label className="form-label-aps" htmlFor="agent_email">
-                            Email de l'agent{' '}
-                            <span className="required-mark">*</span>
-                          </label>
-                          <input
-                            type="email"
-                            className="form-control"
-                            id="agent_email"
-                            name="agent_email"
-                            value={formData.agent_email}
-                            onChange={handleChange}
-                            placeholder="agent@exemple.com"
-                            required
-                          />
-                          <p className="form-hint">
-                            Cet email servira de login pour accéder à l'espace agent.
-                          </p>
-                        </div>
-
-                        <div className="form-group">
-                          <label className="form-label-aps" htmlFor="agent_telephone">
-                            Téléphone de l'agent
-                          </label>
-                          <input
-                            type="tel"
-                            className="form-control"
-                            id="agent_telephone"
-                            name="agent_telephone"
-                            value={formData.agent_telephone}
-                            onChange={handleChange}
-                            placeholder="+237 XXX XXX XXX"
-                          />
-                          <p className="form-hint">Champ optionnel</p>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">
+                              Adresse e-mail <span className="required-mark">*</span>
+                            </label>
+                            <input
+                              type="email"
+                              className="form-control"
+                              name="agent_email"
+                              value={formData.agent_email}
+                              onChange={handleChange}
+                              required
+                            />
+                          </div>
                         </div>
                       </div>
                     )}
 
-                    {/* Étape 6 : Confirmation */}
-                    {currentStep === 6 && (
+                    {/* Étape 4 : Justificatifs */}
+                    {currentStep === 4 && (
                       <div className="form-page active">
-                        <h2 className="form-title">
-                          Confirmation
-                        </h2>
-
-                        <div className="form-summary-card">
-                          <h3>Résumé de votre demande</h3>
-                          <div className="summary-row">
-                            <span className="summary-label">Compagnie / Courtier :</span>
-                            <span className="summary-value">{formData.nom}</span>
-                          </div>
-                          <div className="summary-row">
-                            <span className="summary-label">Type :</span>
-                            <span className="summary-value">
-                              {formData.type_acteur === 'compagnie'
-                                ? 'Compagnie d\'assurance'
-                                : 'Courtier'}
-                            </span>
-                          </div>
-                          <div className="summary-row">
-                            <span className="summary-label">Localisation :</span>
-                            <span className="summary-value">
-                              {villeLabel}, {paysLabel}
-                            </span>
-                          </div>
-                          <div className="summary-row">
-                            <span className="summary-label">Email :</span>
-                            <span className="summary-value">{formData.email}</span>
-                          </div>
-                          <div className="summary-row">
-                            <span className="summary-label">Agent responsable :</span>
-                            <span className="summary-value">
-                              {formData.agent_prenom} {formData.agent_nom}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="form-group mt-4">
-                          <div className="form-check">
-                            <input
-                              className="form-check-input"
-                              type="checkbox"
-                              id="acceptCGU"
-                              name="acceptCGU"
-                              checked={formData.acceptCGU}
-                              onChange={handleChange}
-                              required
-                            />
-                            <label className="form-check-label" htmlFor="acceptCGU">
-                              J'accepte les{' '}
-                              <a href="#">Conditions générales d'utilisation</a> et la{' '}
-                              <a href="#">Politique de confidentialité</a>.
+                        <div className="row g-3">
+                          <div className="col-md-4">
+                            <label className="form-label-aps">
+                              Photo du centre de santé <span className="required-mark">*</span>
                             </label>
+                            <div className={`upload-box ${formData.image_centre ? 'has-file' : ''}`}>
+                              <input
+                                type="file"
+                                accept="image/png, image/jpeg"
+                                onChange={(e) => handleFileChange(e, 'image_centre')}
+                              />
+                              <i className="fa-solid fa-cloud-arrow-up"></i>
+                              <strong>Glissez le fichier ici</strong>
+                              <span className="upload-default-text">JPG, PNG — 5 Mo max</span>
+                              <span className="upload-filename">{formData.image_centre?.name}</span>
+                              <button
+                                type="button"
+                                className="upload-remove"
+                                onClick={() => setFormData((prev) => ({ ...prev, image_centre: null }))}
+                              >
+                                <i className="fa-solid fa-xmark"></i>
+                              </button>
+                            </div>
+                          </div>
+                          <div className="col-md-4">
+                            <label className="form-label-aps">
+                              Pièce d'identité du responsable <span className="required-mark">*</span>
+                            </label>
+                            <div className={`upload-box ${formData.piece_identite ? 'has-file' : ''}`}>
+                              <input
+                                type="file"
+                                accept=".pdf, image/png, image/jpeg"
+                                onChange={(e) => handleFileChange(e, 'piece_identite')}
+                              />
+                              <i className="fa-solid fa-cloud-arrow-up"></i>
+                              <strong>Glissez le fichier ici</strong>
+                              <span className="upload-default-text">PDF, JPG — 5 Mo max</span>
+                              <span className="upload-filename">{formData.piece_identite?.name}</span>
+                              <button
+                                type="button"
+                                className="upload-remove"
+                                onClick={() => setFormData((prev) => ({ ...prev, piece_identite: null }))}
+                              >
+                                <i className="fa-solid fa-xmark"></i>
+                              </button>
+                            </div>
+                          </div>
+                          <div className="col-md-4">
+                            <label className="form-label-aps">
+                              Autorisation officielle d'ouverture <span className="required-mark">*</span>
+                            </label>
+                            <div className={`upload-box ${formData.document_autorisation ? 'has-file' : ''}`}>
+                              <input
+                                type="file"
+                                accept=".pdf, image/png, image/jpeg"
+                                onChange={(e) => handleFileChange(e, 'document_autorisation')}
+                              />
+                              <i className="fa-solid fa-cloud-arrow-up"></i>
+                              <strong>Glissez le fichier ici</strong>
+                              <span className="upload-default-text">PDF, JPG — 5 Mo max</span>
+                              <span className="upload-filename">{formData.document_autorisation?.name}</span>
+                              <button
+                                type="button"
+                                className="upload-remove"
+                                onClick={() => setFormData((prev) => ({ ...prev, document_autorisation: null }))}
+                              >
+                                <i className="fa-solid fa-xmark"></i>
+                              </button>
+                            </div>
                           </div>
                         </div>
+                        <p className="form-hint mt-3">
+                          Les 3 pièces sont obligatoires. Votre fiche restera en
+                          attente de vérification tant qu'un administrateur ne
+                          l'a pas validée.
+                        </p>
+                      </div>
+                    )}
 
-                        <div className="banner-info mt-4">
-                          <i className="fa-solid fa-circle-info" />
-                          <span>
-                            Votre fiche sera examinée par notre équipe avant publication
-                            dans l'annuaire.
-                          </span>
+                    {/* Étape 5 : Confirmation */}
+                    {currentStep === 5 && (
+                      <div className="form-page active">
+                        <div className="form-check mb-4">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            name="acceptCGU"
+                            id="acceptCGU"
+                            checked={formData.acceptCGU}
+                            onChange={handleChange}
+                            required
+                          />
+                          <label className="form-check-label" htmlFor="acceptCGU">
+                            J'accepte les <a href="#">Conditions générales d'utilisation</a> et
+                            la <a href="#">Politique de confidentialité</a>.
+                          </label>
                         </div>
                       </div>
                     )}
 
                     {stepError && (
-                      <div className="alert alert-danger mt-3" role="alert">
-                        <i className="fa-solid fa-triangle-exclamation" /> {stepError}
+                      <div className="alert alert-danger" role="alert">
+                        {stepError}
                       </div>
                     )}
 
-                    {submitError && (
-                      <div className="alert alert-danger mt-3" role="alert">
-                        <i className="fa-solid fa-triangle-exclamation" /> {submitError}
-                      </div>
-                    )}
-
-                    <div className="form-nav-actions mt-4">
+                    <div className="form-nav-actions">
                       {currentStep > 1 ? (
                         <button
                           type="button"
@@ -969,38 +827,22 @@ const CreationAssurance = () => {
                         <div></div>
                       )}
 
-                      {currentStep < 6 ? (
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          onClick={nextStep}
-                        >
+                      {currentStep < ETAPES.length ? (
+                        <button type="button" className="btn btn-primary" onClick={nextStep}>
                           Continuer <i className="fa-solid fa-arrow-right"></i>
                         </button>
                       ) : (
-                        <button
-                          type="submit"
-                          className="btn btn-primary"
-                          disabled={isSubmitting}
-                        >
-                          {isSubmitting ? (
-                            'Envoi en cours…'
-                          ) : (
-                            <>
-                              Envoyer ma demande{' '}
-                              <i className="fa-solid fa-paper-plane"></i>
-                            </>
+                        <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                          {isSubmitting ? 'Envoi en cours…' : (
+                            <>Envoyer ma demande <i className="fa-solid fa-paper-plane"></i></>
                           )}
                         </button>
                       )}
                     </div>
-                      </div>
-                    </form>
-                  </div>
+                  </form>
                 </div>
               </div>
             </div>
-          </div>
           </div>
         </section>
       </main>
@@ -1008,4 +850,4 @@ const CreationAssurance = () => {
   );
 };
 
-export default CreationAssurance;
+export default CreationCentreSante;

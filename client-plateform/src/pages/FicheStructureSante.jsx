@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import structure1 from "../assets/img/structure1.jpg";
 import "./../assets/styles/FicheStructureSante.css";
+import GoogleMapView from "../components/maps/GoogleMapView";
 // Services réels — voir src/services/structureSanteService.js. Ce fichier
 // exporte déjà TYPES_STRUCTURE, listerCentresSante et creerCentreSante
 // (page StructureSante.jsx). Pour cette fiche détaillée, il doit en plus
@@ -63,8 +64,12 @@ function Tabs({ active, onChange, tabs }) {
 
 /* ============================ CARTE GOOGLE MAPS ============================ */
 function MapCard({ structure }) {
-  const lat = structure.latitude;
-  const lng = structure.longitude;
+  // Coordonnées imbriquées sous `geolocalisation` (voir
+  // server/src/lib/geo.js — enrichirCentreSante), pas à plat sur
+  // l'objet structure : c'était le bug qui empêchait cette carte de
+  // s'afficher (lecture de structure.latitude, toujours undefined).
+  const lat = structure.geolocalisation?.latitude;
+  const lng = structure.geolocalisation?.longitude;
   const aUneLocalisation = lat != null && lng != null;
 
   return (
@@ -72,31 +77,13 @@ function MapCard({ structure }) {
       <h3>
         <i className="fa-solid fa-map-location-dot" /> Localisation
       </h3>
-      <div className="gmap-frame-wrap">
-        {aUneLocalisation ? (
-          <iframe
-            title={`Localisation de ${structure.nom}`}
-            src={`https://www.google.com/maps?q=${lat},${lng}&hl=fr&z=15&output=embed`}
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-            allowFullScreen
-          />
-        ) : (
-          <div className="gmap-empty">
-            <i className="fa-solid fa-map-location-dot" />
-            <span>Localisation non renseignée par cette structure.</span>
-          </div>
-        )}
-      </div>
-      {aUneLocalisation && (
-        <a
-          href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`}
-          target="_blank"
-          rel="noreferrer"
-          className="btn btn-outline-primary btn-sm-aps btn-block-aps mt-3"
-        >
-          <i className="fa-solid fa-diamond-turn-right" /> Obtenir l&apos;itinéraire
-        </a>
+      {aUneLocalisation ? (
+        <GoogleMapView latitude={lat} longitude={lng} nom={structure.nom} />
+      ) : (
+        <div className="gmap-empty">
+          <i className="fa-solid fa-map-location-dot" />
+          <span>Localisation non renseignée par cette structure.</span>
+        </div>
       )}
     </div>
   );

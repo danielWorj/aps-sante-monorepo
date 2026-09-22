@@ -11,6 +11,7 @@ import '../../assets/styles/creer-medecin.css';
 import { creerPharmacie } from '../../services/pharmacieService';
 import { listerPays, listerVilles } from '../../services/geoService';
 import { useGeolocation } from '../../hooks/useGeolocation';
+import GoogleMapPicker from '../maps/GoogleMapPicker';
 
 // ───────────────────────────────────────────────────────────────────
 // Ce formulaire suit EXACTEMENT le contrat de POST /pharmacies
@@ -102,6 +103,11 @@ const CreationPharmacie = () => {
     // Étape 5
     acceptCGU: false,
   });
+
+  // Biais régional pour le géocodage d'adresse (GoogleMapPicker) : le
+  // pays choisi à l'étape 1 améliore la pertinence des résultats sans
+  // les restreindre strictement (utile pour les zones frontalières).
+  const paysSelectionne = pays.find((p) => p.pays_id === formData.pays_id);
 
   // Chargement des pays au montage
   useEffect(() => {
@@ -589,8 +595,8 @@ const CreationPharmacie = () => {
                     {currentStep === 2 && (
                       <div className="form-page active">
                         <p className="form-hint" style={{ marginBottom: '1rem' }}>
-                          Facultatif : renseignez les coordonnées GPS pour que la
-                          pharmacie apparaisse précisément sur la carte. Vous
+                          Facultatif : positionnez la pharmacie sur la carte pour
+                          qu'elle apparaisse précisément dans l'annuaire. Vous
                           pouvez passer cette étape.
                         </p>
 
@@ -613,32 +619,24 @@ const CreationPharmacie = () => {
                           </p>
                         )}
 
-                        <div className="row g-3">
-                          <div className="col-md-6">
-                            <label className="form-label-aps">Latitude</label>
-                            <input
-                              type="number"
-                              step="any"
-                              className="form-control"
-                              name="latitude"
-                              value={formData.latitude}
-                              onChange={handleChange}
-                              placeholder="4.0511"
-                            />
-                          </div>
-                          <div className="col-md-6">
-                            <label className="form-label-aps">Longitude</label>
-                            <input
-                              type="number"
-                              step="any"
-                              className="form-control"
-                              name="longitude"
-                              value={formData.longitude}
-                              onChange={handleChange}
-                              placeholder="9.7679"
-                            />
-                          </div>
-                        </div>
+                        <GoogleMapPicker
+                          latitude={formData.latitude === '' ? null : Number(formData.latitude)}
+                          longitude={formData.longitude === '' ? null : Number(formData.longitude)}
+                          onPositionChange={(lat, lng) =>
+                            setFormData((prev) => ({ ...prev, latitude: lat, longitude: lng }))
+                          }
+                          region={paysSelectionne?.code_iso2?.toLowerCase()}
+                        />
+
+                        {formData.latitude !== '' && (
+                          <button
+                            type="button"
+                            className="btn btn-link btn-sm p-0 mt-2"
+                            onClick={() => setFormData((prev) => ({ ...prev, latitude: '', longitude: '' }))}
+                          >
+                            Effacer la localisation
+                          </button>
+                        )}
                       </div>
                     )}
 

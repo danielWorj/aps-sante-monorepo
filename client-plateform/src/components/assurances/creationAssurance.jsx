@@ -5,6 +5,7 @@ import { creerServiceAssurance } from '../../services/assuranceService';
 import { listerPays, listerVilles } from '../../services/geoService';
 import { connecter } from '../../services/authService';
 import { useGeolocation } from '../../hooks/useGeolocation';
+import GoogleMapPicker from '../maps/GoogleMapPicker';
 
 // ───────────────────────────────────────────────────────────────────
 // Ce formulaire suit EXACTEMENT le contrat de POST /services-assurance
@@ -78,6 +79,9 @@ const CreationAssurance = () => {
     // Étape 6 — Confirmation
     acceptCGU: false,
   });
+
+  // Biais régional pour le géocodage d'adresse (GoogleMapPicker).
+  const paysSelectionne = pays.find((p) => p.pays_id === formData.pays_id);
 
   // Chargement des pays au montage
   useEffect(() => {
@@ -716,38 +720,14 @@ const CreationAssurance = () => {
                           </p>
                         )}
 
-                        <div className="row g-3">
-                          <div className="col-md-6">
-                            <label className="form-label-aps" htmlFor="latitude">
-                              Latitude
-                            </label>
-                            <input
-                              type="number"
-                              className="form-control"
-                              id="latitude"
-                              name="latitude"
-                              value={formData.latitude}
-                              onChange={handleChange}
-                              placeholder="Ex: 3.8667"
-                              step="0.0001"
-                            />
-                          </div>
-                          <div className="col-md-6">
-                            <label className="form-label-aps" htmlFor="longitude">
-                              Longitude
-                            </label>
-                            <input
-                              type="number"
-                              className="form-control"
-                              id="longitude"
-                              name="longitude"
-                              value={formData.longitude}
-                              onChange={handleChange}
-                              placeholder="Ex: 11.5167"
-                              step="0.0001"
-                            />
-                          </div>
-                        </div>
+                        <GoogleMapPicker
+                          latitude={formData.latitude === '' ? null : Number(formData.latitude)}
+                          longitude={formData.longitude === '' ? null : Number(formData.longitude)}
+                          onPositionChange={(lat, lng) =>
+                            setFormData((prev) => ({ ...prev, latitude: lat, longitude: lng }))
+                          }
+                          region={paysSelectionne?.code_iso2?.toLowerCase()}
+                        />
                       </div>
                     )}
 

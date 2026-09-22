@@ -22,6 +22,7 @@ import gestionApkRoutes from "./src/routes/gestionapk.routes.js"; // Importer le
 import annonceRoutes from "./src/routes/annonce.routes.js"; // Importer les routes d'annonces
 import paiementWebhookRoutes from "./src/routes/paiementWebhook.routes.js";
 import paiementRoutes from "./src/routes/paiement.routes.js";
+import googleMapsRoutes from "./src/routes/googleMaps.routes.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -82,6 +83,19 @@ app.use("/api/auth/login", limiteurAuth);
 app.use("/api/auth/register", limiteurAuth);
 app.use("/api/auth/bootstrap-superadmin", limiteurAuth);
 
+// Chaque appel Geocoding/Directions est facturé par Google : limite
+// dédiée, plus large que l'auth (usage légitime = plusieurs recherches
+// d'adresse par formulaire) mais bornée pour éviter qu'un visiteur
+// (ou un bot) ne fasse exploser la facture via ces endpoints publics.
+const limiteurGoogleMaps = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Trop de requêtes Google Maps, réessayez plus tard." },
+});
+app.use("/api/google-maps", limiteurGoogleMaps);
+
 // ─── Route de test ────────────────────────────────────────────
 app.get("/", (_req, res) => {
   res.json({ message: "Serveur lancé sans erreur" });
@@ -105,6 +119,7 @@ app.use("/api/utilisateurs", utilisateursRoutes);
 app.use("/api/apks", gestionApkRoutes);
 app.use("/api", annonceRoutes); // Ajouter les routes d'annonces
 app.use("/api/paiement", paiementRoutes);
+app.use("/api", googleMapsRoutes);
 // NB : le webhook Stripe (paiementWebhookRoutes) est déjà monté plus
 // haut, avant express.json() — voir commentaire à cet endroit.
 
