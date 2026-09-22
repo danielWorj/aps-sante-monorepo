@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import pharmaPlaceholder from "../assets/img/pharma1.jpg";
 import "./../assets/styles/FicheStructureSante.css";
+import GoogleMapView from "../components/maps/GoogleMapView";
 // Services réels — voir src/services/pharmacieService.js. Ce fichier
 // exporte déjà listerPharmacies / obtenirPharmacie / creerPharmacie
 // (page Pharmacie.jsx) ainsi que listerGardesPharmacie (pour savoir si
@@ -51,8 +52,12 @@ function Tabs({ active, onChange, tabs }) {
 
 /* ============================ CARTE GOOGLE MAPS ============================ */
 function MapCard({ pharmacie }) {
-  const lat = pharmacie.latitude;
-  const lng = pharmacie.longitude;
+  // Le backend renvoie les coordonnées imbriquées sous `geolocalisation`
+  // (voir server/src/lib/geo.js — enrichirPharmacie), pas à plat sur
+  // l'objet pharmacie : c'était le bug qui empêchait cette carte de
+  // s'afficher (lecture de pharmacie.latitude, toujours undefined).
+  const lat = pharmacie.geolocalisation?.latitude;
+  const lng = pharmacie.geolocalisation?.longitude;
   const aUneLocalisation = lat != null && lng != null;
 
   return (
@@ -60,31 +65,13 @@ function MapCard({ pharmacie }) {
       <h3>
         <i className="fa-solid fa-map-location-dot" /> Localisation
       </h3>
-      <div className="gmap-frame-wrap">
-        {aUneLocalisation ? (
-          <iframe
-            title={`Localisation de ${pharmacie.nom}`}
-            src={`https://www.google.com/maps?q=${lat},${lng}&hl=fr&z=15&output=embed`}
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-            allowFullScreen
-          />
-        ) : (
-          <div className="gmap-empty">
-            <i className="fa-solid fa-map-location-dot" />
-            <span>Localisation non renseignée par cette pharmacie.</span>
-          </div>
-        )}
-      </div>
-      {aUneLocalisation && (
-        <a
-          href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`}
-          target="_blank"
-          rel="noreferrer"
-          className="btn btn-outline-primary btn-sm-aps btn-block-aps mt-3"
-        >
-          <i className="fa-solid fa-diamond-turn-right" /> Obtenir l&apos;itinéraire
-        </a>
+      {aUneLocalisation ? (
+        <GoogleMapView latitude={lat} longitude={lng} nom={pharmacie.nom} />
+      ) : (
+        <div className="gmap-empty">
+          <i className="fa-solid fa-map-location-dot" />
+          <span>Localisation non renseignée par cette pharmacie.</span>
+        </div>
       )}
     </div>
   );

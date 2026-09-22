@@ -10,6 +10,7 @@
 import { useState, useRef } from "react";
 import { creerServiceAssurance } from "../../services/assuranceService";
 import { listerPays, listerVilles } from "../../services/geoService";
+import GoogleMapPicker from "../maps/GoogleMapPicker";
 
 const ETAPES = [
   { id: 1, label: "Identité" },
@@ -335,6 +336,15 @@ export default function DeclarerCompagnieModal({ open, onClose, onCreated }) {
                     <i className="fa-solid fa-triangle-exclamation" /> Localisation indisponible ou refusée.
                   </p>
                 )}
+
+                <div className="mt-3">
+                  <GoogleMapPicker
+                    latitude={form.latitude}
+                    longitude={form.longitude}
+                    onPositionChange={(lat, lng) => setForm((f) => ({ ...f, latitude: lat, longitude: lng }))}
+                    region={pays.find((p) => p.pays_id === form.pays_id)?.code_iso2?.toLowerCase()}
+                  />
+                </div>
               </div>
             )}
 
