@@ -174,6 +174,13 @@ export async function traiterWebhookStripe(req, res) {
       await traiterPaiementReussi(evenement.data.object);
     } else if (evenement.type === "checkout.session.expired") {
       await traiterSessionExpiree(evenement.data.object);
+    } else {
+      // Événement reçu mais non traité par notre logique métier (ex.
+      // invoice.*, subscription_schedule.*, entitlements.* — activés côté
+      // Stripe mais aucun flux d'abonnement n'existe encore ici).
+      // On l'acquitte quand même (200) pour éviter que Stripe ne
+      // réessaie indéfiniment, mais on log pour garder de la visibilité.
+      console.info(`[paiement] Événement Stripe ignoré (non géré) : ${evenement.type}`);
     }
     return res.status(200).json({ received: true });
   } catch (err) {

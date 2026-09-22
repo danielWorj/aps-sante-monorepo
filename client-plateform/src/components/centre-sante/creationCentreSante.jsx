@@ -10,6 +10,8 @@ import '../../assets/styles/creer-medecin.css';
 
 import { creerCentreSante } from '../../services/structureSanteService';
 import { listerPays, listerVilles } from '../../services/geoService';
+import { useGeolocation } from '../../hooks/useGeolocation';
+import GoogleMapPicker from '../maps/GoogleMapPicker';
 
 // ───────────────────────────────────────────────────────────────────
 // Ce formulaire calque EXACTEMENT le contrat de creationPharmacie.jsx,
@@ -28,6 +30,13 @@ import { listerPays, listerVilles } from '../../services/geoService';
 //     jamais depuis ce formulaire public)
 //   Fichiers obligatoires : image_centre, piece_identite,
 //     document_autorisation
+//
+// Étape 2 (Localisation) : latitude/longitude sont positionnées via
+// GoogleMapPicker (recherche d'adresse géocodée par le backend, clic
+// ou glisser-déposer du marqueur — voir components/maps/GoogleMapPicker.jsx),
+// avec un raccourci "Utiliser ma position actuelle" (useGeolocation,
+// voir hooks/useGeolocation.js) qui ne fait que pré-remplir le point de
+// départ : la carte reste la source de vérité, ajustable ensuite au clic.
 //
 // Comme pour la pharmacie, la route est supposée créer EN MÊME TEMPS
 // la fiche centre de santé ET le compte de l'agent qui en a la charge
@@ -69,6 +78,17 @@ const CreationCentreSante = () => {
   const [villes, setVilles] = useState([]);
   const [chargementReferentiels, setChargementReferentiels] = useState(true);
 
+  // Étape 2 — bouton "Utiliser ma position actuelle" (voir
+  // src/hooks/useGeolocation.js). Ne remplace pas GoogleMapPicker : ne
+  // fait que pré-remplir son point de départ, la carte/le marqueur
+  // restent modifiables ensuite.
+  const {
+    position: positionActuelle,
+    loading: geoEnCours,
+    error: geoErreur,
+    demanderPosition,
+  } = useGeolocation();
+
   const [formData, setFormData] = useState({
     // Étape 1 — informations du centre de santé
     nom: '',
@@ -97,6 +117,9 @@ const CreationCentreSante = () => {
     // Étape 5
     acceptCGU: false,
   });
+
+  // Biais régional pour le géocodage d'adresse (GoogleMapPicker).
+  const paysSelectionne = pays.find((p) => p.pays_id === formData.pays_id);
 
   // Chargement des pays au montage
   useEffect(() => {
@@ -139,6 +162,19 @@ const CreationCentreSante = () => {
       annule = true;
     };
   }, [formData.pays_id]);
+
+  // Pré-remplit latitude/longitude dès que le navigateur renvoie une
+  // position (bouton "Utiliser ma position actuelle" de l'étape 2).
+  // Les champs restent modifiables ensuite via GoogleMapPicker : on ne
+  // fait qu'initialiser la valeur.
+  useEffect(() => {
+    if (!positionActuelle) return;
+    setFormData((prev) => ({
+      ...prev,
+      latitude: positionActuelle.latitude,
+      longitude: positionActuelle.longitude,
+    }));
+  }, [positionActuelle]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -592,36 +628,38 @@ const CreationCentreSante = () => {
                     {currentStep === 2 && (
                       <div className="form-page active">
                         <p className="form-hint" style={{ marginBottom: '1rem' }}>
-                          Facultatif : renseignez les coordonnées GPS pour que le
-                          centre de santé apparaisse précisément sur la carte. Vous
+                          Facultatif : positionnez le centre de santé sur la carte
+                          pour qu'il apparaisse précisément dans l'annuaire. Vous
                           pouvez passer cette étape.
                         </p>
-                        <div className="row g-3">
-                          <div className="col-md-6">
-                            <label className="form-label-aps">Latitude</label>
-                            <input
-                              type="number"
-                              step="any"
-                              className="form-control"
-                              name="latitude"
-                              value={formData.latitude}
-                              onChange={handleChange}
-                              placeholder="4.0511"
-                            />
-                          </div>
-                          <div className="col-md-6">
-                            <label className="form-label-aps">Longitude</label>
-                            <input
-                              type="number"
-                              step="any"
-                              className="form-control"
-                              name="longitude"
-                              value={formData.longitude}
-                              onChange={handleChange}
-                              placeholder="9.7679"
-                            />
-                          </div>
-                        </div>
+
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-sm-aps mb-3"
+                          onClick={demanderPosition}
+                          disabled={geoEnCours}
+                        >
+                          <i className="fa-solid fa-location-crosshairs" />{' '}
+                          {geoEnCours
+                            ? 'Localisation en cours…'
+                            : positionActuelle
+                            ? 'Position mise à jour'
+                            : 'Utiliser ma position actuelle'}
+                        </button>
+                        {geoErreur && (
+                          <p className="minimal-note mb-3">
+                            <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
+                          </p>
+                        )}
+
+                        <GoogleMapPicker
+                          latitude={formData.latitude === '' ? null : Number(formData.latitude)}
+                          longitude={formData.longitude === '' ? null : Number(formData.longitude)}
+                          onPositionChange={(lat, lng) =>
+                            setFormData((prev) => ({ ...prev, latitude: lat, longitude: lng }))
+                          }
+                          region={paysSelectionne?.code_iso2?.toLowerCase()}
+                        />
                       </div>
                     )}
 
