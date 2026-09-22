@@ -12,7 +12,7 @@ import {
 import { listerPays, listerVilles } from '../services/geoService';
 import './../assets/styles/medecin.css';
 
-const RESULTATS_PAR_PAGE = 10;
+const RESULTATS_PAR_PAGE = 3;
 
 // Photo par défaut si le médecin n'a pas encore de photo_url (nullable
 // en base — voir schema.prisma).
