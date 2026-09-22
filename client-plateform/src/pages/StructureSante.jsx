@@ -17,7 +17,7 @@ import { useGeolocation } from "../hooks/useGeolocation";
 
 // Page "Structures de santé" — annuaire des hôpitaux, cliniques et
 // centres de santé, avec leurs services et l'itinéraire.
-const RESULTATS_PAR_PAGE = 10;
+const RESULTATS_PAR_PAGE = 4;
 
 // Rayons proposés pour le filtre "Autour de moi" (voir
 // server/src/lib/geo.js : rayon par défaut 10 km si non précisé).

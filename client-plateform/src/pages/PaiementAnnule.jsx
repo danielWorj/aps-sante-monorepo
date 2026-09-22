@@ -33,7 +33,11 @@ export default function PaiementAnnule() {
           Votre rendez-vous n&apos;est pas confirmé tant que le paiement n&apos;est pas effectué.
           Vous pouvez réessayer à tout moment.
         </p>
-        {erreur && <p className="status-card-error">{erreur}</p>}
+        {erreur && (
+          <p className="status-card-error">
+            <i className="fa-solid fa-circle-exclamation" /> {erreur}
+          </p>
+        )}
         <div className="status-card-actions">
           {rdvId && (
             <button type="button" className="btn btn-primary btn-lg-aps" onClick={reessayer} disabled={enCours}>
