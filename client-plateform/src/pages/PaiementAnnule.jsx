@@ -24,17 +24,24 @@ export default function PaiementAnnule() {
   };
 
   return (
-    <div className="container-aps" style={{ padding: '2rem 0' }}>
-      <h1>Paiement annulé</h1>
-      <p>Votre rendez-vous n&apos;est pas confirmé tant que le paiement n&apos;est pas effectué.</p>
-      {erreur && <p className="text-danger">{erreur}</p>}
-      <div className="d-flex gap-2">
-        {rdvId && (
-          <button type="button" className="btn btn-primary" onClick={reessayer} disabled={enCours}>
-            {enCours ? 'Redirection…' : 'Réessayer le paiement'}
-          </button>
-        )}
-        <Link to="/portail/patient-rdv" className="btn btn-outline-primary">Mes rendez-vous</Link>
+    <div className="container-aps status-page">
+      <div className="status-card is-cancel">
+        <div className="status-card-icon"><i className="fa-solid fa-xmark" /></div>
+        <span className="status-card-badge">Paiement non abouti</span>
+        <h1>Paiement annulé</h1>
+        <p className="status-card-text">
+          Votre rendez-vous n&apos;est pas confirmé tant que le paiement n&apos;est pas effectué.
+          Vous pouvez réessayer à tout moment.
+        </p>
+        {erreur && <p className="status-card-error">{erreur}</p>}
+        <div className="status-card-actions">
+          {rdvId && (
+            <button type="button" className="btn btn-primary btn-lg-aps" onClick={reessayer} disabled={enCours}>
+              {enCours ? <><i className="fa-solid fa-spinner fa-spin" /> Redirection…</> : <><i className="fa-solid fa-rotate-right" /> Réessayer le paiement</>}
+            </button>
+          )}
+          <Link to="/portail/patient-rdv" className="btn btn-outline-primary btn-lg-aps">Mes rendez-vous</Link>
+        </div>
       </div>
     </div>
   );
