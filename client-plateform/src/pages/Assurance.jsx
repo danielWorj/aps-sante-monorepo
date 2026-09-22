@@ -11,6 +11,10 @@ import { useGeolocation } from "../hooks/useGeolocation";
 // server/src/lib/geo.js : rayon par défaut 10 km si non précisé).
 const RAYONS_KM = [5, 10, 25, 50];
 
+// Pagination côté client — même valeur que Medecin.jsx / StructureSante.jsx
+// pour rester cohérent entre les annuaires de la plateforme.
+const RESULTATS_PAR_PAGE = 3;
+
 const LABEL_TYPE_ACTEUR = {
   compagnie: "Compagnie d'assurance",
   courtier: "Courtier",
@@ -131,6 +135,7 @@ export default function Assurance() {
   const [services, setServices] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState("");
+  const [page, setPage] = useState(1);
 
   const [typeActeur, setTypeActeur] = useState(searchParams.get("type_acteur") || "");
   const [paysId, setPaysId] = useState(searchParams.get("pays_id") || "");
@@ -175,6 +180,7 @@ export default function Assurance() {
         ...filtresProximite,
       });
       setServices(data.services_assurance || []);
+      setPage(1);
     } catch (err) {
       setErreur(err.data?.message || err.message || "Impossible de charger l'annuaire.");
     } finally {
@@ -213,6 +219,12 @@ export default function Assurance() {
       .forEach((s) => s.ville && map.set(s.ville.ville_id, s.ville.nom));
     return [...map.entries()];
   }, [services, paysId]);
+
+  const totalPages = Math.max(1, Math.ceil(services.length / RESULTATS_PAR_PAGE));
+  const servicesPage = useMemo(
+    () => services.slice((page - 1) * RESULTATS_PAR_PAGE, page * RESULTATS_PAR_PAGE),
+    [services, page]
+  );
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -401,7 +413,7 @@ export default function Assurance() {
                 <p className="minimal-note">Aucune compagnie ne correspond à ces critères.</p>
               )}
 
-              {services.map((insurer) => (
+              {servicesPage.map((insurer) => (
                 <InsurerCard
                   key={insurer.service_assurance_id}
                   insurer={insurer}
@@ -409,6 +421,28 @@ export default function Assurance() {
                   demanderPosition={demanderPosition}
                 />
               ))}
+
+              {totalPages > 1 && (
+                <nav aria-label="Pagination des résultats" className="mt-4">
+                  <ul className="pagination justify-content-center">
+                    <li className={`page-item ${page === 1 ? "disabled" : ""}`}>
+                      <button type="button" className="page-link" onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                        Précédent
+                      </button>
+                    </li>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+                      <li className={`page-item ${page === n ? "active" : ""}`} key={n}>
+                        <button type="button" className="page-link" onClick={() => setPage(n)}>{n}</button>
+                      </li>
+                    ))}
+                    <li className={`page-item ${page === totalPages ? "disabled" : ""}`}>
+                      <button type="button" className="page-link" onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                        Suivant
+                      </button>
+                    </li>
+                  </ul>
+                </nav>
+              )}
             </div>
           </div>
         </div>
