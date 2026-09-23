@@ -1,5 +1,6 @@
 import prisma from "../lib/prisma.js";
 import { creerSessionCheckout, verifierSignatureWebhook } from "../lib/stripeService.js";
+import { decomposerMontant, obtenirLignesTarifairesActives } from "../services/tarification.service.js";
 
 const DEVISE_PAR_DEFAUT = process.env.STRIPE_DEVISE_PAR_DEFAUT || "xaf";
 
@@ -31,19 +32,34 @@ export async function creerPaiementRdv(req, res, next) {
       return res.status(409).json({ message: "Un paiement existe déjà pour ce rendez-vous." });
     }
 
-    const montant = rdv.medecin.tarif_indicatif;
+    const honoraires = rdv.medecin.tarif_indicatif;
     const devise = DEVISE_PAR_DEFAUT;
 
     // Stripe refuse un montant nul (et en dessous d'un minimum selon la
     // devise) : on renvoie un message clair plutôt qu'un 500 opaque.
-    if (!(Number(montant) > 0)) {
+    if (!(Number(honoraires) > 0)) {
       return res.status(400).json({
         message: "Ce médecin n'a pas de tarif défini : le paiement en ligne est impossible.",
       });
     }
 
+    // Lignes tarifaires (commission/taxe/frais d'agrégateur) en vigueur
+    // dans le pays d'exercice du médecin — voir Phase 0. Les taux ne
+    // sont jamais dupliqués ni recalculés sur la transaction : seules
+    // les références vers ces 3 lignes sont stockées.
+    const lignesTarifaires = await obtenirLignesTarifairesActives(rdv.medecin.pays_exercice_id);
+    const { total: montant } = decomposerMontant(honoraires, lignesTarifaires);
+
     const transaction = await prisma.transactionPaiement.create({
-      data: { montant, devise, statut: "en_attente" },
+      data: {
+        montant,
+        devise,
+        statut: "en_attente",
+        montant_honoraires: honoraires,
+        ligne_commission_id: lignesTarifaires.commission.ligne_tarifaire_id,
+        ligne_taxe_id: lignesTarifaires.taxe.ligne_tarifaire_id,
+        ligne_frais_agregateur_id: lignesTarifaires.frais_agregateur.ligne_tarifaire_id,
+      },
     });
 
     const base = process.env.FRONTEND_URL || "http://localhost:5173";
@@ -89,11 +105,38 @@ export async function obtenirStatutPaiementRdv(req, res, next) {
     }
 
     const escrow = await prisma.compteEscrow.findUnique({
-      where: { rdv_id: rdv.rdv_id }, include: { transaction: true },
+      where: { rdv_id: rdv.rdv_id },
+      include: {
+        transaction: {
+          include: { ligne_commission: true, ligne_taxe: true, ligne_frais_agregateur: true },
+        },
+      },
     });
+
+    // Décomposition honoraires/commission/taxes/frais d'agrégateur
+    // recalculée à la volée depuis montant_honoraires + les 3 lignes
+    // tarifaires liées — jamais lue depuis une valeur stockée (voir
+    // Phase 0 / tarification.service.js).
+    let decomposition = null;
+    const t = escrow?.transaction;
+    if (t?.montant_honoraires != null && t.ligne_commission && t.ligne_taxe && t.ligne_frais_agregateur) {
+      decomposition = decomposerMontant(t.montant_honoraires, {
+        commission: t.ligne_commission,
+        taxe: t.ligne_taxe,
+        frais_agregateur: t.ligne_frais_agregateur,
+      });
+    }
+
     return res.status(200).json({
       statut_rdv: rdv.statut,
-      paiement: escrow ? { statut: escrow.transaction.statut, montant: escrow.transaction.montant, devise: escrow.transaction.devise } : null,
+      paiement: escrow
+        ? {
+            statut: escrow.transaction.statut,
+            montant: escrow.transaction.montant,
+            devise: escrow.transaction.devise,
+            decomposition,
+          }
+        : null,
     });
   } catch (err) { next(err); }
 }
