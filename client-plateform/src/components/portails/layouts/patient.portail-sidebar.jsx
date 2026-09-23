@@ -8,7 +8,7 @@
 //  l'utilisateur est un patient.
 //
 //  DONNÉES MÉTIER PATIENT (badges rdv / messages / annonces non lus,
-//  solde du portefeuille APS) : à brancher progressivement, soit via
+//  solde du portefeuille ApSa) : à brancher progressivement, soit via
 //  une extension du contrôleur `/auth/me` (ex. include: { patient: true }),
 //  soit via un endpoint dédié consommé par la page qui monte
 //  <PatientPortailSidebar/>. En attendant, ce composant retombe sur les
@@ -109,7 +109,7 @@ const PatientPortailSidebar = ({
         <div className="sidebar-card sidebar-dispo">
           <div className="dispo-row">
             <div>
-              <strong>Portefeuille APS</strong>
+              <strong>Portefeuille ApSa</strong>
               <span className="wallet-mini">{solde}</span>
             </div>
             <Link

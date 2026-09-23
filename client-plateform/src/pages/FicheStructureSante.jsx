@@ -183,7 +183,7 @@ function ContactForm({ structure }) {
       </form>
       <p className="minimal-note mt-2 mb-0">
         <i className="fa-solid fa-circle-info" /> Le message est adressé directement
-        à {structure.nom}. APS ne gère ni rendez-vous ni dossier médical.
+        à {structure.nom}. ApSa ne gère ni rendez-vous ni dossier médical.
       </p>
     </div>
   );

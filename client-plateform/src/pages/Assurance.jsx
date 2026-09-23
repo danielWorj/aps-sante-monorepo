@@ -82,7 +82,7 @@ function InsurerCard({ insurer, positionActuelle, demanderPosition }) {
             <div className="practitioner-tags mt-2">
               {estVerifie && (
                 <span className="chip chip-verifie">
-                  <i className="fa-solid fa-circle-check" /> Vérifiée APS
+                  <i className="fa-solid fa-circle-check" /> Vérifiée ApSa
                 </span>
               )}
               <span className="chip chip-complet">Agrément {insurer.agrement}</span>
@@ -241,7 +241,7 @@ export default function Assurance() {
             Compagnies d'assurance &amp; courtiers santé
           </h1>
           <p className="mt-2" style={{ maxWidth: "660px" }}>
-            Consultez les compagnies, leurs produits et leur réseau d'agences. APS ne
+            Consultez les compagnies, leurs produits et leur réseau d'agences. ApSa ne
             porte aucun service professionnel d'assurance : ni comparateur, ni
             souscription en ligne, ni gestion de sinistre. La mise en relation se fait
             directement avec l'assureur.
@@ -385,7 +385,7 @@ export default function Assurance() {
                 <span>
                   Présentation seulement : aucune comparaison de produits, aucune
                   souscription en ligne, aucune gestion de sinistre ou de réclamation
-                  sur APS.
+                  sur ApSa.
                 </span>
               </div>
 

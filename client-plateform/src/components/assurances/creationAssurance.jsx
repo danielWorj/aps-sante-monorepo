@@ -457,7 +457,7 @@ const CreationAssurance = () => {
                     <span className="eyebrow">Inscription</span>
                     <h1>Créer un compte — Compagnie d'assurance ou Courtier</h1>
                     <p className="mt-2">
-                      Rejoignez l'annuaire APS en tant que compagnie d'assurance
+                      Rejoignez l'annuaire ApSa en tant que compagnie d'assurance
                       santé ou courtier. Remplissez le formulaire ci-dessous
                       pour créer votre fiche.
                     </p>

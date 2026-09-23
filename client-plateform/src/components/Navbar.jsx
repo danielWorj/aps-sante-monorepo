@@ -30,7 +30,7 @@ export default function Navbar() {
     <header className="aps-navbar">
       <div className="container-aps navbar-inner">
         <Link to="/" className="aps-logo" onClick={closeAll}>
-          <span className="mark"><i className="fa-solid fa-staff-snake" /></span> APS
+          <span className="mark"><i className="fa-solid fa-staff-snake" /></span> ApSa
         </Link>
 
         <nav className={open ? 'is-open' : ''}>

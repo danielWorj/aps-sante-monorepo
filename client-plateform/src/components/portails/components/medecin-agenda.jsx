@@ -468,7 +468,7 @@ const MedecinAgenda = () => {
   const regles = [
     { icone: "fa-hourglass-half", titre: "Créneaux du référentiel", description: "Chaque case correspond à un horaire partagé (voir Horaire) — pas de plage libre." },
     { icone: "fa-repeat", titre: "Gabarit récurrent", description: "Les cases cochées ci-dessous définissent les créneaux régénérés chaque semaine via « Générer les créneaux »." },
-    { icone: "fa-eye", titre: "Synchronisation publique", description: "Les créneaux disponibles apparaissent en temps réel sur votre fiche APS." },
+    { icone: "fa-eye", titre: "Synchronisation publique", description: "Les créneaux disponibles apparaissent en temps réel sur votre fiche ApSa." },
     { icone: "fa-ban", titre: "Blocage manuel", description: "Un créneau bloqué reste invisible des patients tant qu'il n'est pas libéré (réversible, le créneau reste enregistré)." },
     { icone: "fa-trash", titre: "Suppression définitive", description: "Retire un créneau libre ou bloqué de l'agenda ; irréversible, et impossible sur un créneau déjà réservé." },
   ];

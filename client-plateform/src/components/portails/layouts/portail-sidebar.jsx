@@ -10,7 +10,7 @@
 //     aucune prop requise pour ça.
 //
 //  2. DONNÉES MÉTIER MÉDECIN (spécialité, statut de vérification à
-//     l'Ordre, solde du portefeuille APS, RDV du jour, disponibilité) :
+//     l'Ordre, solde du portefeuille ApSa, RDV du jour, disponibilité) :
 //     `profil()` côté serveur ne fait actuellement QUE
 //     `include: { role: true }` sur Utilisateur, donc `user.medecin`
 //     n'existe pas dans la réponse de /auth/me (medecin-profil.jsx va
@@ -154,7 +154,7 @@ const PortailSidebar = ({
         <div className="sidebar-card sidebar-dispo">
           <div className="dispo-row">
             <div>
-              <strong>Portefeuille APS</strong>
+              <strong>Portefeuille ApSa</strong>
               <span className="wallet-mini">{solde}</span>
             </div>
             <Link

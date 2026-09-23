@@ -1,7 +1,7 @@
 import ServiceCard from './ServiceCard';
 
 /**
- * Écran 1.1 — Liste des services de APS Santé.
+ * Écran 1.1 — Liste des services de ApSa Santé.
  *
  * Reprend le principe du "cat-grid" de Home.jsx (voir ServiceCard,
  * factorisé pour l'occasion) pour lister les grandes familles
@@ -20,9 +20,9 @@ export default function OnboardingServices() {
   return (
     <section className="onboarding-shell onboarding-shell-top">
       <div className="container-aps onboarding-container-lg">
-        <span className="eyebrow">APS Santé</span>
+        <span className="eyebrow">ApSa Santé</span>
         <h1 style={{ fontSize: '1.6rem', marginTop: '.5rem', marginBottom: '1.6rem' }}>
-          Liste des services de APS Santé
+          Liste des services de ApSa Santé
         </h1>
 
         <div className="cat-grid onboarding-service-list">
