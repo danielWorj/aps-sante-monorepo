@@ -24,6 +24,7 @@ import paiementWebhookRoutes from "./src/routes/paiementWebhook.routes.js";
 import paiementRoutes from "./src/routes/paiement.routes.js";
 import googleMapsRoutes from "./src/routes/googleMaps.routes.js";
 import ligneTarifaireRoutes from "./src/routes/ligneTarifaire.routes.js";
+import portefeuilleRoutes from "./src/routes/portefeuille.routes.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -122,6 +123,7 @@ app.use("/api", annonceRoutes); // Ajouter les routes d'annonces
 app.use("/api/paiement", paiementRoutes);
 app.use("/api", googleMapsRoutes);
 app.use("/api", ligneTarifaireRoutes);
+app.use("/api", portefeuilleRoutes);
 // NB : le webhook Stripe (paiementWebhookRoutes) est déjà monté plus
 // haut, avant express.json() — voir commentaire à cet endroit.
 

@@ -469,12 +469,6 @@ model Medecin {
   disponibilites  DisponibiliteMedecin[]
   creneaux_agenda CreneauAgenda[]
 
-  // Module transverse : Paiements — Phase 1 (portefeuille & grand-livre).
-  // Un seul portefeuille par médecin, créé à l'inscription (ou par la
-  // migration de rattrapage pour les médecins déjà existants) — voir
-  // schema plus bas (PortefeuilleMedecin) et services/portefeuille.service.js.
-  portefeuille PortefeuilleMedecin?
-
   @@index([specialite_id])
   @@index([pays_exercice_id])
   @@index([ville_exercice_id])
@@ -1215,62 +1209,6 @@ model CompteEscrow {
 
   @@map("compte_escrow")
 }
-
-// -----------------------------------------------------------------
-// Phase 1 — Portefeuille médecin & grand-livre (voir politique de
-// gestion des fonds §2). Principe directeur : le solde n'est JAMAIS
-// une colonne stockée, il se recalcule à la demande comme la somme
-// signée des mouvements du grand-livre (voir
-// services/portefeuille.service.js, soldePortefeuille) — élimine tout
-// risque de désynchronisation entre un solde mis en cache et la
-// réalité des mouvements.
-// -----------------------------------------------------------------
-
-model PortefeuilleMedecin {
-  medecin_id    String   @id @db.Uuid
-  date_creation DateTime @default(now())
-
-  medecin    Medecin                 @relation(fields: [medecin_id], references: [medecin_id])
-  mouvements MouvementPortefeuille[]
-
-  @@map("portefeuille_medecin")
-}
-
-enum TypeMouvementPortefeuille {
-  credit_honoraires
-  debit_retenue_annulation_tardive
-  debit_frais_no_show
-  debit_retrait
-}
-
-model MouvementPortefeuille {
-  mouvement_id  String                     @id @default(uuid()) @db.Uuid
-  medecin_id    String                     @db.Uuid
-  type          TypeMouvementPortefeuille
-  montant       Decimal                    @db.Decimal(12, 2) // toujours positif, le signe vient du type (voir portefeuille.service.js)
-  date_creation DateTime                   @default(now())
-
-  // Références vers l'événement d'origine (rendez-vous honoré, demande
-  // de retrait...). Volontairement de simples colonnes UUID SANS
-  // relation Prisma/FK, conformément au plan d'implémentation (Phase 1) :
-  // un mouvement peut référencer soit un rdv_id (crédit honoraires,
-  // retenue), soit un demande_retrait_id (débit retrait — table
-  // introduite en Phase 6), jamais les deux.
-  rdv_id             String? @db.Uuid
-  demande_retrait_id String? @db.Uuid
-
-  // Garantit qu'un même événement métier ne peut jamais créer deux
-  // mouvements (ex. double appel de libererEscrow pour le même rdv_id) —
-  // c'est cette contrainte unique qui rend l'opération idempotente,
-  // voir services/portefeuille.service.js, creerMouvement.
-  reference_idempotence String @unique
-
-  portefeuille PortefeuilleMedecin @relation(fields: [medecin_id], references: [medecin_id])
-
-  @@index([medecin_id])
-  @@map("mouvement_portefeuille")
-}
-
 /// @ref module 07_services_connexes — définition complète à fusionner
 model ServiceAmbulance {
   service_ambulance_id String @id @default(uuid()) @db.Uuid
