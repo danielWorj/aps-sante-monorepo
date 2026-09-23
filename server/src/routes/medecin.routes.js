@@ -82,6 +82,9 @@ import {
   creerRendezVous,
   modifierRendezVous,
   changerStatutRendezVous,
+  // Phase 2 — confirmation effective du service (escrow)
+  scannerQrRendezVous,
+  cloturerTeleconsultationRendezVous,
   supprimerRendezVous,
   // Ordonnances
   listerOrdonnances,
@@ -304,6 +307,17 @@ router.put("/rendez-vous/:id", authentifier, modifierRendezVous);
 // TRANSITIONS_AUTORISEES dans rendezVous.controller.js), contrairement
 // au PUT générique ci-dessus qui accepte "statut" sans ce contrôle.
 router.patch("/rendez-vous/:id/statut", authentifier, changerStatutRendezVous);
+
+// Phase 2 — confirmation effective du service (politique de gestion
+// des fonds §1-2) : un endpoint par type_rdv, réservés au médecin du
+// rendez-vous (autorisation fine dans le contrôleur, même patron que
+// le reste de ce module) ; chacun fait passer le rdv à "honore" et
+// libère l'escrow correspondant (voir rendezVous.controller.js).
+// Volontairement absents de TRANSITIONS_AUTORISEES.medecin sur
+// PATCH .../statut : ce sont désormais la SEULE voie vers "honore"
+// pour un médecin.
+router.post("/rendez-vous/:id/scan-qr", authentifier, scannerQrRendezVous);
+router.post("/rendez-vous/:id/cloturer-teleconsultation", authentifier, cloturerTeleconsultationRendezVous);
 
 // Suppression physique réservée à admin/superadmin — un rendez-vous
 // s'annule normalement via PUT (statut="annule").
