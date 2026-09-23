@@ -274,11 +274,6 @@ model Pays {
   // Module transverse : Moyens de paiement du médecin
   types_mobile_money    TypeMobileMoney[]
 
-  // Module transverse : Paiements & escrow — lignes tarifaires
-  // versionnées (commission APS, taxes, frais d'agrégateur) en vigueur
-  // par pays. Voir LigneTarifaire plus bas.
-  lignes_tarifaires LigneTarifaire[]
-
   @@index([devise_id])
   @@index([langue_id])
   @@map("pays")
@@ -1105,45 +1100,6 @@ model GardePharmacie {
 // -----------------------------------------------------------------
 
 /// @ref module 06_paiement_escrow — définition complète à fusionner
-// Ligne tarifaire versionnée : chaque catégorie de frais (commission,
-// taxe, frais d'agrégateur) est une LIGNE indépendante, pas une colonne
-// fixe. Ajouter/modifier un taux — ou même une nouvelle taxe (ex. une
-// taxe locale en plus de la taxe APS) — ne demande qu'une nouvelle
-// ligne en base via l'API admin, jamais une migration.
-//
-// Versionnement : pour un (pays_id, type_frais) donné, une seule ligne
-// est actif=true à la fois (contrainte imposée en base, voir la
-// migration — index unique partiel WHERE actif). Changer un taux ne
-// réécrit jamais la ligne en cours : on désactive l'ancienne et on en
-// crée une nouvelle — voir ligneTarifaire.controller.js. Les
-// transactions déjà capturées référencent la ligne en vigueur au
-// moment du paiement (une FK par type_frais sur TransactionPaiement)
-// et restent donc correctes même si le taux change ensuite.
-enum TypeFraisTarifaire {
-  commission
-  taxe
-  frais_agregateur
-}
-
-model LigneTarifaire {
-  ligne_tarifaire_id  String             @id @default(uuid()) @db.Uuid
-  pays_id             String             @db.Uuid
-  type_frais          TypeFraisTarifaire
-  libelle             String             @db.VarChar(100) // ex: "Commission APS", "Taxe APS", "Frais Stripe"
-  taux                Decimal            @db.Decimal(5, 4) // ex: 0.15
-  actif               Boolean            @default(true)
-  date_debut_validite DateTime           @default(now())
-
-  pays Pays @relation(fields: [pays_id], references: [pays_id])
-
-  transactions_commission       TransactionPaiement[] @relation("TransactionLigneCommission")
-  transactions_taxe             TransactionPaiement[] @relation("TransactionLigneTaxe")
-  transactions_frais_agregateur TransactionPaiement[] @relation("TransactionLigneFraisAgregateur")
-
-  @@index([pays_id, type_frais])
-  @@map("ligne_tarifaire")
-}
-
 enum StatutTransactionPaiement {
   en_attente
   reussie
@@ -1162,31 +1118,10 @@ model TransactionPaiement {
   date_creation              DateTime                  @default(now())
   date_mise_a_jour           DateTime                  @updatedAt
 
-  // Décomposition du montant capturé — uniquement renseignés pour une
-  // transaction liée à un rendez-vous (compte_escrow non nul) : une
-  // transaction d'abonnement (medecin/pharmacie) n'a pas d'honoraires
-  // ni de lignes tarifaires, d'où le caractère nullable de ces champs.
-  // commission/taxes/frais d'agrégateur ne sont JAMAIS stockés en
-  // montant : ils se recalculent via montant_honoraires × ligne.taux à
-  // la demande (voir services/tarification.service.js). Une FK par
-  // type_frais plutôt qu'une seule, car chaque transaction peut avoir
-  // capturé sa commission, sa taxe et son frais d'agrégateur sous des
-  // lignes tarifaires différentes (versions différentes dans le temps).
-  montant_honoraires      Decimal? @db.Decimal(12, 2)
-  ligne_commission_id     String?  @db.Uuid
-  ligne_taxe_id           String?  @db.Uuid
-  ligne_frais_agregateur_id String? @db.Uuid
+  abonnements_pharmacie AbonnementPharmacie[]
+  abonnements_medecin   AbonnementMedecin[]
+  compte_escrow         CompteEscrow?
 
-  ligne_commission       LigneTarifaire?       @relation("TransactionLigneCommission", fields: [ligne_commission_id], references: [ligne_tarifaire_id])
-  ligne_taxe             LigneTarifaire?       @relation("TransactionLigneTaxe", fields: [ligne_taxe_id], references: [ligne_tarifaire_id])
-  ligne_frais_agregateur LigneTarifaire?       @relation("TransactionLigneFraisAgregateur", fields: [ligne_frais_agregateur_id], references: [ligne_tarifaire_id])
-  abonnements_pharmacie  AbonnementPharmacie[]
-  abonnements_medecin    AbonnementMedecin[]
-  compte_escrow          CompteEscrow?
-
-  @@index([ligne_commission_id])
-  @@index([ligne_taxe_id])
-  @@index([ligne_frais_agregateur_id])
   @@map("transaction_paiement")
 }
 
@@ -1400,7 +1335,7 @@ model RendezVous {
   // plus bas). Nullable : un rendez-vous historique ou créé avant le
   // module Agenda peut ne pas être rattaché à un créneau.
   creneau_agenda CreneauAgenda?
-  // Séquestre Stripe de ce rendez-vous (1-1, créé par le webhook
+  c:\Users\Utilisateur\Downloads\schema (31).prisma// Séquestre Stripe de ce rendez-vous (1-1, créé par le webhook
   // checkout.session.completed — voir paiement.controller.js).
   compte_escrow CompteEscrow?
 
