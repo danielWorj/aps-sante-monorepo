@@ -88,6 +88,11 @@ export {
   creerRendezVous,
   modifierRendezVous,
   changerStatutRendezVous,
+  // Phase 2 — confirmation effective du service + libération de
+  // l'escrow (voir rendezVous.controller.js) : un endpoint par
+  // type_rdv, tous deux réservés au médecin du rendez-vous.
+  scannerQrRendezVous,
+  cloturerTeleconsultationRendezVous,
   supprimerRendezVous,
   listerOrdonnances,
   obtenirOrdonnance,

@@ -14,6 +14,7 @@
 
 import crypto from "crypto";
 import prisma from "../lib/prisma.js";
+import { libererEscrow } from "../services/portefeuille.service.js";
 
 const TYPES_RDV = ["physique", "teleconsultation"];
 const STATUTS_RDV = [
@@ -377,6 +378,16 @@ export async function modifierRendezVous(req, res, next) {
  *   - médecin : fait progresser le rdv (confirmation, passage en
  *     salle d'attente, issue de consultation) et peut annuler avant
  *     l'issue ; ne revient jamais en arrière une fois honore/non_honore.
+ *
+ * Phase 2 — "honore" volontairement ABSENT des transitions médecin
+ * ci-dessous (contrairement à "non_honore", qui y reste : déclarer une
+ * absence ne prouve rien et ne nécessite aucune preuve). Passer à
+ * "honore" sans passer par scannerQrRendezVous / cloturerTeleconsultationRendezVous
+ * court-circuiterait la preuve de service rendu ET la libération de
+ * l'escrow (voir libererEscrow, services/portefeuille.service.js) : le
+ * médecin serait marqué "honore" sans jamais être payé, fonds bloqués
+ * en séquestre indéfiniment. Seuls ces deux endpoints dédiés — et
+ * admin/superadmin, hors de cette matrice — peuvent donc y mener.
  */
 const TRANSITIONS_AUTORISEES = {
   patient: {
@@ -391,7 +402,7 @@ const TRANSITIONS_AUTORISEES = {
   medecin: {
     cree: ["confirme", "annule"],
     confirme: ["en_attente_presence", "annule"],
-    en_attente_presence: ["honore", "non_honore"],
+    en_attente_presence: ["non_honore"],
     honore: [],
     non_honore: [],
     annule: [],
@@ -512,6 +523,182 @@ export async function changerStatutRendezVous(req, res, next) {
     });
 
     return res.status(200).json({ message: "Statut du rendez-vous mis à jour.", rendez_vous: rdvMisAJour });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/* ===================================================================
+ * Phase 2 — Confirmation effective du service (politique de gestion
+ * des fonds §1-2) : deux endpoints dédiés, un par type_rdv, tous deux
+ * réservés au médecin du rendez-vous concerné (jamais le patient, ni
+ * même admin/superadmin — une confirmation de service rendu n'est pas
+ * une correction administrative). Chacun fait passer le rdv à
+ * "honore" PUIS appelle libererEscrow (portefeuille.service.js) pour
+ * créditer le médecin — voir la note sur TRANSITIONS_AUTORISEES
+ * ci-dessus : c'est la SEULE voie légitime vers "honore" pour un
+ * médecin, précisément parce qu'elle est adossée à cette libération.
+ * =================================================================== */
+
+// Statuts depuis lesquels une clôture (scan QR ou fin d'appel) est
+// recevable. "confirme" ET "en_attente_presence" : la politique ne
+// décrit pas de salle d'attente pour la téléconsultation (qui peut
+// donc se clôturer directement depuis "confirme"), et rien n'empêche
+// un rdv physique d'être scanné sans être passé par
+// "en_attente_presence" si l'accueil a été sauté — non précisé par le
+// plan, valeur par défaut permissive en attendant confirmation produit.
+const STATUTS_DEPART_CLOTURE = ["confirme", "en_attente_presence"];
+
+/**
+ * Vérifie que l'utilisateur courant est le médecin propriétaire du
+ * rdv (jamais le patient, jamais admin/superadmin pour cette action
+ * précise — voir le commentaire en tête de section).
+ * @returns {Promise<null|{status:number, message:string}>}
+ */
+async function verifierEstMedecinProprietaire(rdv, utilisateurCourant) {
+  const medecin = await profilMedecinCourant(utilisateurCourant);
+  if (!medecin || medecin.medecin_id !== rdv.medecin_id) {
+    return { status: 403, message: "Seul le médecin de ce rendez-vous peut effectuer cette action." };
+  }
+  return null;
+}
+
+/**
+ * Comparaison à temps constant du token fourni contre qr_token_secret
+ * — évite qu'un écart de latence sur un mismatch caractère-par-caractère
+ * ne renseigne un attaquant sur le secret (le rdv_id, lui, est déjà
+ * public/prévisible dans l'URL). crypto.timingSafeEqual exige deux
+ * buffers de même longueur : un token de longueur différente du
+ * secret est donc rejeté explicitement, sans y être jamais comparé.
+ */
+function tokenQrValide(tokenFourni, secretAttendu) {
+  if (typeof tokenFourni !== "string" || tokenFourni.length === 0) return false;
+  const bufferFourni = Buffer.from(tokenFourni);
+  const bufferAttendu = Buffer.from(secretAttendu);
+  if (bufferFourni.length !== bufferAttendu.length) return false;
+  return crypto.timingSafeEqual(bufferFourni, bufferAttendu);
+}
+
+/**
+ * Clôture commune aux deux endpoints ci-dessous : fait passer le rdv
+ * à "honore" (sauf s'il y est déjà — rejeu idempotent, voir plus bas)
+ * puis libère l'escrow. Factorisée ici pour que scan-qr et
+ * cloturer-teleconsultation ne divergent que sur leurs contrôles
+ * propres (token QR / type_rdv), jamais sur la mécanique de clôture.
+ */
+async function cloturerEtLibererEscrow(rdv) {
+  // Rejeu : déjà honoré (double clic, requête relancée après timeout
+  // réseau...) -> pas de nouvelle transition, mais on relance quand
+  // même libererEscrow, qui est lui-même un no-op sûr si l'escrow
+  // n'est déjà plus "sequestre" — garantit qu'un appel répété ne peut
+  // jamais laisser les fonds bloqués par un simple aléa réseau.
+  if (rdv.statut !== "honore") {
+    await prisma.rendezVous.update({ where: { rdv_id: rdv.rdv_id }, data: { statut: "honore" } });
+  }
+  const { deja_libere, mouvement } = await libererEscrow(rdv.rdv_id);
+
+  const rdvFinal = await prisma.rendezVous.findUnique({
+    where: { rdv_id: rdv.rdv_id },
+    include: INCLUSION_NOMS_RDV,
+  });
+
+  return { rdvFinal, deja_libere, mouvement };
+}
+
+/**
+ * POST /api/rendez-vous/:id/scan-qr
+ * Body: { token: string }  — valeur lue sur le QR code présenté par le
+ * patient à l'accueil, comparée à qr_token_secret (généré côté serveur
+ * à la création, jamais transmis ailleurs que dans cette vérification).
+ * Réservé au médecin du rendez-vous, uniquement pour un rdv "physique".
+ */
+export async function scannerQrRendezVous(req, res, next) {
+  try {
+    const rdv = await prisma.rendezVous.findUnique({ where: { rdv_id: req.params.id } });
+    if (!rdv) {
+      return res.status(404).json({ message: "Rendez-vous introuvable." });
+    }
+
+    const erreurAutorisation = await verifierEstMedecinProprietaire(rdv, req.utilisateur);
+    if (erreurAutorisation) {
+      return res.status(erreurAutorisation.status).json({ message: erreurAutorisation.message });
+    }
+
+    if (rdv.type_rdv !== "physique") {
+      return res.status(400).json({
+        message: `Cet endpoint est réservé aux rendez-vous physiques (type_rdv actuel : "${rdv.type_rdv}"). Utilisez /cloturer-teleconsultation pour une téléconsultation.`,
+      });
+    }
+
+    // Idempotence : un rdv déjà honoré n'a plus besoin d'être re-scanné
+    // pour être reconnu comme tel — seule la libération (déjà, elle
+    // aussi, idempotente) est retentée, sans exiger un nouveau token.
+    if (rdv.statut !== "honore") {
+      if (!STATUTS_DEPART_CLOTURE.includes(rdv.statut)) {
+        return res.status(409).json({
+          message: `Ce rendez-vous ne peut pas être clôturé depuis le statut "${rdv.statut}" (statuts acceptés : ${STATUTS_DEPART_CLOTURE.join(", ")}).`,
+        });
+      }
+
+      const { token } = req.body;
+      if (!tokenQrValide(token, rdv.qr_token_secret)) {
+        return res.status(400).json({ message: "QR code invalide ou expiré." });
+      }
+    }
+
+    const { rdvFinal, deja_libere } = await cloturerEtLibererEscrow(rdv);
+
+    return res.status(200).json({
+      message: deja_libere
+        ? "Ce rendez-vous était déjà honoré et l'escrow déjà libéré."
+        : "Présence confirmée par QR code : rendez-vous honoré, fonds libérés vers le portefeuille du médecin.",
+      rendez_vous: rdvFinal,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/rendez-vous/:id/cloturer-teleconsultation
+ * Pas de body attendu : déclenché côté client par le médecin à la fin
+ * de l'appel (voir visio.controller.js / jitsi.service.js pour
+ * l'établissement de la session elle-même — aucun état de session
+ * persisté côté serveur, cet endpoint est la seule trace de clôture).
+ * Réservé au médecin du rendez-vous, uniquement pour une "teleconsultation".
+ */
+export async function cloturerTeleconsultationRendezVous(req, res, next) {
+  try {
+    const rdv = await prisma.rendezVous.findUnique({ where: { rdv_id: req.params.id } });
+    if (!rdv) {
+      return res.status(404).json({ message: "Rendez-vous introuvable." });
+    }
+
+    const erreurAutorisation = await verifierEstMedecinProprietaire(rdv, req.utilisateur);
+    if (erreurAutorisation) {
+      return res.status(erreurAutorisation.status).json({ message: erreurAutorisation.message });
+    }
+
+    if (rdv.type_rdv !== "teleconsultation") {
+      return res.status(400).json({
+        message: `Cet endpoint est réservé aux téléconsultations (type_rdv actuel : "${rdv.type_rdv}"). Utilisez /scan-qr pour un rendez-vous physique.`,
+      });
+    }
+
+    if (rdv.statut !== "honore" && !STATUTS_DEPART_CLOTURE.includes(rdv.statut)) {
+      return res.status(409).json({
+        message: `Ce rendez-vous ne peut pas être clôturé depuis le statut "${rdv.statut}" (statuts acceptés : ${STATUTS_DEPART_CLOTURE.join(", ")}).`,
+      });
+    }
+
+    const { rdvFinal, deja_libere } = await cloturerEtLibererEscrow(rdv);
+
+    return res.status(200).json({
+      message: deja_libere
+        ? "Cette téléconsultation était déjà clôturée et l'escrow déjà libéré."
+        : "Téléconsultation clôturée : rendez-vous honoré, fonds libérés vers le portefeuille du médecin.",
+      rendez_vous: rdvFinal,
+    });
   } catch (err) {
     next(err);
   }
