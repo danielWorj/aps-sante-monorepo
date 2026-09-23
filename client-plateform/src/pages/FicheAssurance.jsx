@@ -154,7 +154,7 @@ function ActivitesPanel({ activites, chargement }) {
         <p className="minimal-note mb-0">
           <i className="fa-solid fa-circle-info" /> Informations présentées à titre
           informatif uniquement. Aucune comparaison de produits, aucune souscription
-          en ligne sur APS.
+          en ligne sur ApSa.
         </p>
       </div>
     </div>
@@ -305,7 +305,7 @@ function ContactSidebar({ insurer }) {
         <p className="minimal-note mt-2 mb-0">
           <i className="fa-solid fa-circle-info" /> Votre message a été transmis au
           siège de {insurer.nom}. Vous recevrez une réponse directement de leur part —
-          APS n'intervient pas dans le traitement de la demande.
+          ApSa n'intervient pas dans le traitement de la demande.
         </p>
       </div>
     );
@@ -355,7 +355,7 @@ function ContactSidebar({ insurer }) {
       </form>
       <p className="minimal-note mt-2 mb-0">
         <i className="fa-solid fa-circle-info" /> La demande est adressée directement
-        au siège de {insurer.nom}. Aucune souscription n'est effectuée sur APS.
+        au siège de {insurer.nom}. Aucune souscription n'est effectuée sur ApSa.
       </p>
     </div>
   );
@@ -491,7 +491,7 @@ export default function FicheAssurance() {
               <div className="d-flex gap-2 flex-wrap">
                 {insurer.statut_verification === "publie" ? (
                   <span className="chip chip-verifie">
-                    <i className="fa-solid fa-circle-check" /> Vérifiée APS
+                    <i className="fa-solid fa-circle-check" /> Vérifiée ApSa
                   </span>
                 ) : (
                   <span className="chip chip-complet">
@@ -520,7 +520,7 @@ export default function FicheAssurance() {
           <span>
             Présentation seulement : aucune comparaison de produits, aucune
             souscription en ligne, aucune gestion de sinistre ou de
-            réclamation sur APS. La mise en relation se fait directement avec
+            réclamation sur ApSa. La mise en relation se fait directement avec
             l'assureur.
           </span>
         </div>

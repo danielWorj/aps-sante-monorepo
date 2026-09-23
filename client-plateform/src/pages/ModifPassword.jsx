@@ -173,7 +173,7 @@ export default function ModifPassword() {
                 >
                   <i className="fa-solid fa-staff-snake" />
                 </span>
-                APS
+                ApSa
               </div>
               <span
                 className="eyebrow"

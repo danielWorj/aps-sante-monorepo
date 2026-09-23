@@ -51,10 +51,10 @@ export default function Abonnement() {
         <div className="container-aps">
           <span className="eyebrow">Tarification &amp; abonnements</span>
           <h1 style={{ fontSize: "1.9rem", marginTop: ".5rem" }}>
-            Les abonnements de la plateforme APS
+            Les abonnements de la plateforme ApSa
           </h1>
           <p className="mt-2" style={{ maxWidth: "680px" }}>
-            APS repose sur un annuaire gratuit et exhaustif, complété par des
+            ApSa repose sur un annuaire gratuit et exhaustif, complété par des
             abonnements forfaitaires de présence qui enrichissent la fiche de
             chaque acteur (photos, contact direct, fiche détaillée). Le
             palier de base reste gratuit en permanence, quel que soit le
@@ -150,7 +150,7 @@ export default function Abonnement() {
               Une visibilité claire, jamais au détriment de la confiance
             </h2>
             <p>
-              Chez APS, mettre en valeur votre fiche ne se fait jamais au
+              Chez ApSa, mettre en valeur votre fiche ne se fait jamais au
               détriment de l'objectivité de l'annuaire ni de la confiance
               des patients.
             </p>
@@ -163,7 +163,7 @@ export default function Abonnement() {
                 <h3>Une fiche plus riche et plus visible</h3>
                 <p>
                   Photos, description détaillée, contact direct : votre
-                  abonnement enrichit votre présence sur APS, y compris pour
+                  abonnement enrichit votre présence sur ApSa, y compris pour
                   les professions soumises à des règles strictes en matière
                   de communication. Il n'influence jamais votre classement
                   dans les résultats.

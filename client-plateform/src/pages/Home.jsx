@@ -339,12 +339,12 @@ function MedecinForm() {
     <div className="form-shell">
       <div className="form-shell-grid">
         <aside className="form-side">
-          <h4>Pourquoi rejoindre APS ?</h4>
+          <h4>Pourquoi rejoindre ApSa ?</h4>
           <p>Votre fiche est visible dès validation de votre inscription à l&apos;Ordre.</p>
           <ul className="form-side-list">
             <li><i className="fa-solid fa-badge-check" /> Badge de vérification à l&apos;Ordre affiché sur votre fiche</li>
             <li><i className="fa-solid fa-calendar-days" /> Agenda et gestion des créneaux inclus</li>
-            <li><i className="fa-solid fa-wallet" /> Portefeuille APS avec suivi des retraits</li>
+            <li><i className="fa-solid fa-wallet" /> Portefeuille ApSa avec suivi des retraits</li>
             <li><i className="fa-solid fa-chart-line" /> Statistiques de vues et de conversion</li>
           </ul>
         </aside>
@@ -728,7 +728,7 @@ export default function Home() {
               <span className="eyebrow">Santé accessible, partout</span>
               <h1>Le bon soin, <span className="accent">au bon moment</span>, près de chez vous.</h1>
               <p className="lead-text">
-                APS réunit médecins, pharmacies, cliniques, ambulances et assureurs sur une seule plateforme.
+                AZA PROXI SANTÉ ASURANCES (ApSa) réunit médecins, pharmacies, cliniques, ambulances et assureurs sur une seule plateforme.
                 Cherchez, comparez et prenez rendez-vous en quelques minutes, avec un paiement sécurisé à chaque étape.
               </p>
               <div className="d-flex gap-3 flex-wrap">
@@ -803,10 +803,10 @@ export default function Home() {
       <section id="urgences">
         <div className="container-aps">
           <div className="section-head">
-            <span className="eyebrow">À propos d&apos;APS</span>
+            <span className="eyebrow">À propos d&apos;ApSa</span>
             <h2>Toute votre santé, réunie sur une seule plateforme</h2>
             <p>
-              APS met en relation patients et professionnels de santé partout où vous êtes.
+              ApSa met en relation patients et professionnels de santé partout où vous êtes.
               Médecins, pharmacies, cliniques, ambulances et assureurs vérifiés sont réunis
               au même endroit, pour que vous trouviez la bonne réponse sans perdre de temps —
               y compris dans les situations qui ne peuvent pas attendre.
@@ -914,10 +914,10 @@ export default function Home() {
           <div className="app-promo-grid">
             <div>
               <span className="eyebrow">Application mobile</span>
-              <h2>APS dans votre poche, où que vous soyez</h2>
+              <h2>ApSa dans votre poche, où que vous soyez</h2>
               <p className="lead-text">
                 Trouvez un professionnel, prenez rendez-vous et accédez aux numéros d&apos;urgence
-                directement depuis votre téléphone. Téléchargez l&apos;application Android d&apos;APS
+                directement depuis votre téléphone. Téléchargez l&apos;application Android d&apos;ApSa
                 et gardez votre santé à portée de main.
               </p>
 
@@ -942,7 +942,7 @@ export default function Home() {
               <div className="app-phone">
                 <div className="app-phone-notch" />
                 <div className="app-phone-screen">
-                  <img src={mobileApp} alt="Aperçu de l'application APS" />
+                  <img src={mobileApp} alt="Aperçu de l'application ApSa" />
                 </div>
               </div>
               <div className="app-badge-float app-badge-security">

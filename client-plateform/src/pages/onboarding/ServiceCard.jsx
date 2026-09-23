@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 
 /**
- * Carte d'un service de l'annuaire APS Santé (Écran 1.1).
+ * Carte d'un service de l'annuaire ApSa Santé (Écran 1.1).
  *
  * Réutilise les classes déjà stylées `.cat-card / .cat-icon /
  * .cat-title / .cat-sub` (voir Home.jsx et style.css) plutôt que d'en

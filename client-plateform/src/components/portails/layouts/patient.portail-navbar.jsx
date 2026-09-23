@@ -29,7 +29,7 @@ const PatientPortailNavbar = ({ activePage = "" }) => {
             <span className="mark">
               <i className="fa-solid fa-heart-pulse"></i>
             </span>
-            APS
+            ApSa
           </Link>
 
           <nav aria-label="Navigation du portail">

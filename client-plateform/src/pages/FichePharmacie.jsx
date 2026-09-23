@@ -171,7 +171,7 @@ function ContactForm({ pharmacie }) {
       </form>
       <p className="minimal-note mt-2 mb-0">
         <i className="fa-solid fa-circle-info" /> Le message est adressé directement
-        à {pharmacie.nom}. APS ne gère ni commande ni délivrance de médicaments.
+        à {pharmacie.nom}. ApSa ne gère ni commande ni délivrance de médicaments.
       </p>
     </div>
   );

@@ -423,7 +423,7 @@ export default function Pharmacie() {
                 <div className="ad-card">
                   <div className="ad-label">
                     <span>Publicité</span>
-                    <i className="fa-solid fa-circle-info" title="Emplacement commercial APS" />
+                    <i className="fa-solid fa-circle-info" title="Emplacement commercial ApSa" />
                   </div>
                   <a href="#" aria-label="Nourishka Greenlife — Collagène">
                     <img src={pub5} alt="Nourishka Greenlife — Collagène" />
@@ -447,7 +447,7 @@ export default function Pharmacie() {
                   <i className="fa-solid fa-bullhorn" />
                   <p>
                     Cet emplacement est disponible pour les annonceurs
-                    partenaires d'APS.
+                    partenaires d'ApSa.
                   </p>
                   <a href="#" className="btn btn-primary btn-sm-aps btn-block-aps">
                     Réserver cet espace

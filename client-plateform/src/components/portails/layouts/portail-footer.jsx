@@ -5,7 +5,7 @@ const PortailFooter = () => {
   return (
     <footer className="portail-footer">
       <div className="container-aps">
-        <span>© 2026 APS — Espace médecin · Paiement sous séquestre à chaque étape</span>
+        <span>© 2026 AZA PROXI SANTÉ ASURANCES (ApSa) — Espace médecin · Paiement sous séquestre à chaque étape</span>
         <span className="d-flex gap-3">
           <a href="#">Support</a>
           <a href="#">CGU</a>

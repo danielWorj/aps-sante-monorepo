@@ -461,7 +461,7 @@ export default function StructureSante() {
                 <div className="ad-card">
                   <div className="ad-label">
                     <span>Publicité</span>
-                    <i className="fa-solid fa-circle-info" title="Emplacement commercial APS" />
+                    <i className="fa-solid fa-circle-info" title="Emplacement commercial ApSa" />
                   </div>
                   <a href="#" aria-label="Tourisme Médical — Soignez-vous, voyagez, revivez">
                     <img src={pub6} alt="Tourisme Médical — Soignez-vous, voyagez, revivez" />
@@ -482,7 +482,7 @@ export default function StructureSante() {
                   <i className="fa-solid fa-bullhorn" />
                   <p>
                     Cet emplacement est disponible pour les annonceurs
-                    partenaires d'APS.
+                    partenaires d'ApSa.
                   </p>
                   <a href="#" className="btn btn-primary btn-sm-aps btn-block-aps">
                     Réserver cet espace

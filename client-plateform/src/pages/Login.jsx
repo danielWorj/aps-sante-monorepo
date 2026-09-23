@@ -122,7 +122,7 @@ export default function Login() {
                 >
                   <i className="fa-solid fa-staff-snake" />
                 </span>
-                APS
+                ApSa
               </div>
 
               <span

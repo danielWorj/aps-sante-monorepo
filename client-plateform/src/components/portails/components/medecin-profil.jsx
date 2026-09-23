@@ -263,7 +263,7 @@ const MedecinProfil = () => {
               <div>
                 <span className="eyebrow">Espace médecin</span>
                 <h1>Mon profil</h1>
-                <p>Ces informations alimentent votre fiche publique dans l'annuaire APS.</p>
+                <p>Ces informations alimentent votre fiche publique dans l'annuaire ApSa.</p>
                 <div className="chips-row">
                   <span className={`chip ${chipStatut.classe}`}>
                     <i className={`fa-solid ${chipStatut.icone}`}></i> {chipStatut.label}
@@ -405,7 +405,7 @@ const MedecinProfil = () => {
               <div className="info-card">
                 <h3><i className="fa-solid fa-shield-halved"></i> Documents justificatifs</h3>
                 <p className="text-muted small">
-                  Ces documents sont vérifiés par l'administration APS. Remplacer un fichier déclenchera une nouvelle vérification.
+                  Ces documents sont vérifiés par l'administration ApSa. Remplacer un fichier déclenchera une nouvelle vérification.
                 </p>
                 <div className="row g-3">
                   <DocumentInput label="Pièce d'identité (CNI)" currentUrl={profile.cni_url} newFile={cniFile} onChange={(f) => setCniFile(f)} />
@@ -440,7 +440,7 @@ const MedecinProfil = () => {
                 {profile.mobile_moneys.length === 0 && profile.comptes_bancaires.length === 0 && (
                   <div className="note-box">
                     <i className="fa-solid fa-circle-info"></i>
-                    <span>Aucun moyen de paiement configuré. Contactez l'administration APS.</span>
+                    <span>Aucun moyen de paiement configuré. Contactez l'administration ApSa.</span>
                   </div>
                 )}
               </div>

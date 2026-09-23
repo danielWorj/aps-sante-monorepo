@@ -17,7 +17,7 @@ export default function OnboardingAccueil() {
     <section className="onboarding-shell">
       <div className="container-aps onboarding-container">
         <div className="onboarding-intro">
-          <span className="eyebrow">Bienvenue sur APS Santé</span>
+          <span className="eyebrow">Bienvenue sur ApSa Santé</span>
           <h1 style={{ fontSize: '1.7rem', marginTop: '.6rem' }}>Que souhaitez-vous faire ?</h1>
           <p>Choisissez une option pour démarrer, ou passez directement à l&apos;accueil.</p>
         </div>
