@@ -26,6 +26,7 @@ import paiementRoutes from "./src/routes/paiement.routes.js";
 import googleMapsRoutes from "./src/routes/googleMaps.routes.js";
 import ligneTarifaireRoutes from "./src/routes/ligneTarifaire.routes.js";
 import portefeuilleRoutes from "./src/routes/portefeuille.routes.js";
+import { demarrerScheduler } from "./src/lib/scheduler.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -140,4 +141,9 @@ app.use((err, _req, res, _next) => {
 });
 
 // ─── Démarrage ────────────────────────────────────────────────
-app.listen(PORT, () => console.log(`✅ Serveur démarré sur http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`✅ Serveur démarré sur http://localhost:${PORT}`);
+  // Phase 4 — après app.listen() : rien ne justifie de bloquer le
+  // démarrage HTTP en attendant que le scheduler soit prêt.
+  demarrerScheduler();
+});
