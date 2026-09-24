@@ -89,10 +89,19 @@ export {
   modifierRendezVous,
   changerStatutRendezVous,
   // Phase 2 — confirmation effective du service + libération de
-  // l'escrow (voir rendezVous.controller.js) : un endpoint par
-  // type_rdv, tous deux réservés au médecin du rendez-vous.
+  // l'escrow (voir rendezVous.controller.js) : scan du QR par le
+  // médecin (RDV physique) ; la clôture de téléconsultation, elle, ne
+  // passe plus par un endpoint du médecin mais par le webhook de fin de
+  // session Jitsi (visio.controller.js, traiterFinSessionVisio).
+  // NB : cet export référençait encore
+  // cloturerTeleconsultationRendezVous, supprimée du contrôleur au
+  // commit qui a introduit le webhook — l'import échouait donc au
+  // chargement du module et empêchait le serveur de démarrer.
   scannerQrRendezVous,
-  cloturerTeleconsultationRendezVous,
+  // Correction manuelle admin (voir rendezVous.controller.js) : importée
+  // par medecin.routes.js, mais jamais ré-exportée ici — même cause que
+  // la note ci-dessus (le serveur ne démarrait pas).
+  forcerLiberationEscrow,
   supprimerRendezVous,
   listerOrdonnances,
   obtenirOrdonnance,
@@ -149,6 +158,14 @@ const CHAMPS_MODIFIABLES_MEDECIN = [
   "teleconsultation_activee",
   "tarif_indicatif",
 ];
+
+// Phase 3 — paramétrage commercial du médecin, traité à part de
+// CHAMPS_MODIFIABLES_MEDECIN : contrairement à la fiche (identité,
+// spécialité, ordre...), modifier ses frais d'annulation ne remet PAS
+// la fiche en vérification — ce n'est pas une donnée d'identité à
+// revalider, et forcer une re-vérification à chaque ajustement de ce
+// taux retirerait le médecin de l'annuaire pour rien.
+const CHAMP_TAUX_FRAIS_ANNULATION = "taux_frais_annulation_tardive";
 
 // Ne jamais exposer publiquement plus que l'identité de base du
 // compte lié (pas d'email/téléphone dans l'Annuaire public).
@@ -387,6 +404,17 @@ export async function creerMedecin(req, res, next) {
           },
         });
 
+        // Phase 3 (correctif Phase 1) : chaque médecin a exactement un
+        // portefeuille, créé dans la MÊME transaction que le médecin.
+        // Sans lui, toute écriture au grand-livre (libération des
+        // honoraires, frais d'annulation, retenue) échoue sur la FK
+        // mouvement_portefeuille -> portefeuille_medecin : la migration
+        // Phase 1 n'avait créé un portefeuille que pour les médecins
+        // déjà existants à ce moment-là.
+        await tx.portefeuilleMedecin.create({
+          data: { medecin_id: medecinCree.medecin_id },
+        });
+
         return { utilisateur: utilisateurCree, medecin: medecinCree };
       });
 
@@ -616,6 +644,9 @@ export async function obtenirMonProfil(req, res, next) {
  *     absence ne bloque rien. Il ne peut jamais choisir
  *     statut_verification lui-même : toute modification de sa fiche le
  *     repasse automatiquement à "en_cours" pour re-vérification.
+ *     Exception (Phase 3) : taux_frais_annulation_tardive (fraction de
+ *     0 à 1, null pour l'effacer) est un paramétrage commercial et ne
+ *     déclenche PAS cette re-vérification.
  *   - admin/superadmin : peut en plus fixer statut_verification
  *     librement ; cela ne déclenche pas le repassage automatique à
  *     "en_cours".
@@ -671,6 +702,30 @@ export async function modifierMedecin(req, res, next) {
     // ou explicitement vidé (chaîne vide envoyée) pour retirer le lien.
     if (req.body.linkedInUrl !== undefined) {
       donnees.linkedInUrl = req.body.linkedInUrl || null;
+    }
+
+    // taux_frais_annulation_tardive (Phase 3) : fraction de 0 à 1
+    // appliquée aux honoraires quand un patient annule à moins de 24h
+    // (ex. 0.2 = 20 %). null ou chaîne vide = non paramétré = aucun
+    // frais. Volontairement mis à part de `donnees` : il n'entraîne pas
+    // de re-vérification de la fiche (voir plus bas et
+    // CHAMP_TAUX_FRAIS_ANNULATION).
+    const donneesParametrage = {};
+    if (req.body[CHAMP_TAUX_FRAIS_ANNULATION] !== undefined) {
+      const brut = req.body[CHAMP_TAUX_FRAIS_ANNULATION];
+      if (brut === null || brut === "") {
+        donneesParametrage[CHAMP_TAUX_FRAIS_ANNULATION] = null;
+      } else {
+        const taux = Number(brut);
+        if (!Number.isFinite(taux) || taux < 0 || taux > 1) {
+          return res.status(400).json({
+            message: "taux_frais_annulation_tardive doit être un nombre compris entre 0 et 1 (ex. 0.2 pour 20 %).",
+          });
+        }
+        // Decimal(5, 4) en base : on arrondit à 4 décimales plutôt que
+        // de laisser la base le faire silencieusement.
+        donneesParametrage[CHAMP_TAUX_FRAIS_ANNULATION] = Math.round(taux * 10000) / 10000;
+      }
     }
 
     // nom/prenom/telephone : champs du compte utilisateur, distincts de
@@ -735,6 +790,11 @@ export async function modifierMedecin(req, res, next) {
       // en vérification.
       donnees.statut_verification = "en_cours";
     }
+
+    // Appliqué APRÈS le test de re-vérification ci-dessus : le
+    // paramétrage seul ne doit jamais faire repasser la fiche en
+    // "en_cours".
+    Object.assign(donnees, donneesParametrage);
 
     if (Object.keys(donnees).length === 0 && Object.keys(donneesUtilisateur).length === 0) {
       return res.status(400).json({ message: "Aucune donnée valide à mettre à jour." });
