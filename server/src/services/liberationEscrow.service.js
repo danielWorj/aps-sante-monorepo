@@ -14,23 +14,42 @@
 
 import prisma from "../lib/prisma.js";
 import { decomposerMontant } from "./tarification.service.js";
+import { creerMouvement } from "./portefeuille.service.js";
 
-// NB : on n'appelle pas creerMouvement (portefeuille.service.js,
-// Phase 1) ici — il travaille sur le client Prisma global, pas sur un
-// `tx` de transaction, ce qui empêcherait de garantir que la mise à
-// jour du statut de l'escrow/rdv et le crédit du portefeuille sont
-// atomiques (tout ou rien). Plutôt que de modifier silencieusement un
-// fichier déjà livré en Phase 1 pour lui ajouter un paramètre `tx`
-// optionnel, on reproduit ici son motif idempotent minimal (catch de
-// la violation de contrainte unique P2002 sur reference_idempotence).
-// Point à signaler : si d'autres phases ont le même besoin, on pourra
-// centraliser ce motif "creerMouvement(tx, ...)" à ce moment-là.
+// Correctif : creerMouvement (portefeuille.service.js, Phase 1) accepte
+// bien un client transactionnel en second paramètre (`client = prisma`)
+// depuis son tout premier ajout en Phase 2 — voir portefeuille.service.js.
+// Une version antérieure de ce fichier affirmait le contraire et
+// dupliquait donc ici, sur une prémisse fausse, le motif idempotent de
+// creerMouvement (catch de la violation P2002 sur reference_idempotence).
+// On réutilise maintenant creerMouvement(données, tx) directement, comme
+// le fait déjà annulation.service.js (Phase 3) et defaillancePro.service.js
+// (Phase 4) — un seul endroit qui sait comment écrire un mouvement.
+
+// Arrondi à 2 décimales (même motif que tarification.service.js,
+// portefeuille.service.js, annulation.service.js...) — évite les écarts
+// de type 14.999999999999998 lors de la soustraction commission/taxe.
+function arrondir(valeur) {
+  return Math.round(valeur * 100) / 100;
+}
 
 /**
  * Libère l'escrow d'un rendez-vous et crédite le portefeuille du
- * médecin des honoraires (commission/taxes/frais d'agrégateur déjà
- * déduits, jamais stockés — recalculés à la volée via
- * decomposerMontant, voir Phase 0).
+ * médecin des honoraires NETS de la commission APS et de la taxe
+ * (politique §2 : "crédité... commission APS et taxes déjà
+ * déduites") — jamais des frais d'agrégateur, qui restent
+ * exclusivement à la charge du patient (§4) et ne concernent donc pas
+ * ce crédit. Rien n'est stocké : commission et taxe sont recalculées
+ * à la volée via decomposerMontant (Phase 0), à partir des lignes
+ * tarifaires figées sur la transaction au moment de la capture —
+ * jamais les lignes actives à l'instant T — pour rester correct même
+ * si un taux a changé depuis.
+ *
+ * ⚠️ Correctif : une version antérieure créditait ici le montant BRUT
+ * des honoraires (decomposerMontant(...).honoraires, qui n'est pas net
+ * de commission/taxe) — un surpaiement systématique au médecin et une
+ * perte de la commission/taxe pour APS sur toute libération d'escrow.
+ * Voir git blame pour l'historique.
  *
  * Idempotent à deux niveaux, pour supporter un double appel (ex. le
  * patient ET le médecin ferment la session visio à quelques
@@ -76,11 +95,17 @@ export async function libererEscrow(rdv_id) {
     }
 
     const t = escrow.transaction;
-    const montantHonoraires = decomposerMontant(t.montant_honoraires, {
+    const decomposition = decomposerMontant(t.montant_honoraires, {
       commission: t.ligne_commission,
       taxe: t.ligne_taxe,
       frais_agregateur: t.ligne_frais_agregateur,
-    }).honoraires;
+    });
+    // Net de commission ET de taxe (§2) — pas le montant brut. Les
+    // frais d'agrégateur (decomposition.fraisAgregateur) n'entrent pas
+    // dans ce calcul : ils ne sont jamais à la charge du médecin.
+    const montantNetMedecin = arrondir(
+      decomposition.honoraires - decomposition.commission - decomposition.taxes
+    );
 
     await tx.compteEscrow.update({
       where: { escrow_id: escrow.escrow_id },
@@ -92,25 +117,19 @@ export async function libererEscrow(rdv_id) {
       data: { statut: "honore" },
     });
 
-    try {
-      await tx.mouvementPortefeuille.create({
-        data: {
-          medecin_id: rdv.medecin_id,
-          type: "credit_honoraires",
-          montant: montantHonoraires,
-          rdv_id,
-          reference_idempotence: rdv_id,
-        },
-      });
-    } catch (err) {
-      // P2002 sur reference_idempotence : un mouvement pour ce rdv_id
-      // existe déjà (course entre deux appels concurrents) — on ne
-      // relève pas d'erreur, le reste de la transaction (statuts déjà
-      // mis à jour ci-dessus) est conservé normalement.
-      if (!(err.code === "P2002" && err.meta?.target?.includes("reference_idempotence"))) {
-        throw err;
-      }
-    }
+    // creerMouvement (Phase 1) gère déjà l'idempotence (catch P2002 sur
+    // reference_idempotence) : un rejeu concurrent ne relève aucune
+    // erreur, les mises à jour de statut ci-dessus restent acquises.
+    await creerMouvement(
+      {
+        medecin_id: rdv.medecin_id,
+        type: "credit_honoraires",
+        montant: montantNetMedecin,
+        rdv_id,
+        reference_idempotence: rdv_id,
+      },
+      tx
+    );
 
     return { deja_traite: false };
   });
