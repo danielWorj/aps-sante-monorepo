@@ -342,7 +342,18 @@ Component "{{ $XMPP_MUC_DOMAIN }}" "muc"
         {{ if $ENABLE_MUC_RESOURCE_VALIDATE -}}
         "muc_resource_validate";
         {{ end -}}
+        {{ if .Env.MUC_EVENTS_WEBHOOK_URL }}
+        "muc_events_webhook";
+        {{ end }}
     }
+    {{ if .Env.MUC_EVENTS_WEBHOOK_URL }}
+    -- Phase 2 (politique de gestion des fonds, APS) : notifie le
+    -- backend à la clôture d'une session de téléconsultation — voir
+    -- prosody-plugins/mod_muc_events_webhook.lua et, côté backend,
+    -- server/src/routes/visioWebhook.routes.js.
+    muc_events_webhook_url = "{{ .Env.MUC_EVENTS_WEBHOOK_URL }}"
+    muc_events_webhook_secret = "{{ .Env.MUC_EVENTS_WEBHOOK_SECRET }}"
+    {{ end }}
 
     {{ if $ENABLE_MUC_RESOURCE_VALIDATE -}}
     anonymous_strict = {{ if $MUC_RESOURCE_VALIDATE_ANONYMOUS_STRICT }}true{{ else }}false{{ end }};

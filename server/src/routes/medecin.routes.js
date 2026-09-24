@@ -82,9 +82,8 @@ import {
   creerRendezVous,
   modifierRendezVous,
   changerStatutRendezVous,
-  // Phase 2 — confirmation effective du service (escrow)
   scannerQrRendezVous,
-  cloturerTeleconsultationRendezVous,
+  forcerLiberationEscrow,
   supprimerRendezVous,
   // Ordonnances
   listerOrdonnances,
@@ -308,16 +307,21 @@ router.put("/rendez-vous/:id", authentifier, modifierRendezVous);
 // au PUT générique ci-dessus qui accepte "statut" sans ce contrôle.
 router.patch("/rendez-vous/:id/statut", authentifier, changerStatutRendezVous);
 
-// Phase 2 — confirmation effective du service (politique de gestion
-// des fonds §1-2) : un endpoint par type_rdv, réservés au médecin du
-// rendez-vous (autorisation fine dans le contrôleur, même patron que
-// le reste de ce module) ; chacun fait passer le rdv à "honore" et
-// libère l'escrow correspondant (voir rendezVous.controller.js).
-// Volontairement absents de TRANSITIONS_AUTORISEES.medecin sur
-// PATCH .../statut : ce sont désormais la SEULE voie vers "honore"
-// pour un médecin.
+// Phase 2 — Libération conditionnelle de l'escrow (RDV physique) :
+// voir rendezVous.controller.js, scannerQrRendezVous et
+// TRANSITIONS_AUTORISEES (la transition générique vers "honore" a été
+// retirée pour le médecin, précisément pour forcer ce chemin dédié).
 router.post("/rendez-vous/:id/scan-qr", authentifier, scannerQrRendezVous);
-router.post("/rendez-vous/:id/cloturer-teleconsultation", authentifier, cloturerTeleconsultationRendezVous);
+
+// Correction manuelle admin — seul chemin restant pour "honore" quand
+// scan-qr/webhook visio n'ont pas pu se déclencher (voir
+// forcerLiberationEscrow, rendezVous.controller.js).
+router.post(
+  "/rendez-vous/:id/forcer-liberation",
+  authentifier,
+  autoriser("admin", "superadmin"),
+  forcerLiberationEscrow
+);
 
 // Suppression physique réservée à admin/superadmin — un rendez-vous
 // s'annule normalement via PUT (statut="annule").
