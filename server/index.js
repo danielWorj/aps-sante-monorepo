@@ -21,6 +21,7 @@ import utilisateursRoutes from "./src/routes/utilisateurs.routes.js";
 import gestionApkRoutes from "./src/routes/gestionapk.routes.js"; // Importer les routes de gestion des APKs
 import annonceRoutes from "./src/routes/annonce.routes.js"; // Importer les routes d'annonces
 import paiementWebhookRoutes from "./src/routes/paiementWebhook.routes.js";
+import visioWebhookRoutes from "./src/routes/visioWebhook.routes.js";
 import paiementRoutes from "./src/routes/paiement.routes.js";
 import googleMapsRoutes from "./src/routes/googleMaps.routes.js";
 import ligneTarifaireRoutes from "./src/routes/ligneTarifaire.routes.js";
@@ -63,6 +64,11 @@ app.use(
 // vérification de signature échoue à chaque appel. D'où ce montage
 // AVANT le parseur JSON global, exceptionnellement pour cette route.
 app.use("/api/paiement/webhook", paiementWebhookRoutes);
+
+// ─── Webhook fin de session visio (Phase 2, escrow) : même raison ──
+// que ci-dessus — mod_muc_events_webhook.lua (jitsi-host/) signe le
+// corps brut, express.raw() doit donc s'exécuter avant express.json().
+app.use("/api/visio/webhook", visioWebhookRoutes);
 
 // Limite de taille du body pour éviter les payloads abusifs.
 app.use(express.json({ limit: "100kb" }));
