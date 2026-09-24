@@ -91,3 +91,37 @@ export async function creerRemboursement({
     idempotency_key ? { idempotencyKey: idempotency_key } : undefined
   );
 }
+
+// Phase 4 — Défaillance du professionnel (politique de gestion des
+// fonds §3 : "le coût de transaction est imputé au portefeuille du
+// professionnel"). Fichier non listé par le plan pour la Phase 4, mais
+// c'est le seul endroit du code qui encapsule les appels bruts au SDK
+// Stripe (voir creerSessionCheckout/creerRemboursement ci-dessus) :
+// ajouter cette fonction ici plutôt que d'appeler `stripe` directement
+// depuis defaillancePro.service.js maintient cette convention. Écart
+// à signaler, sans quoi le SDK Stripe fuiterait hors de ce fichier.
+//
+// Le frais Stripe (`balance_transaction.fee`) est un FAIT rapporté par
+// Stripe sur la charge d'ORIGINE (jamais recalculé par nous) — il ne
+// change pas quand on rembourse ensuite le patient : Stripe garde sa
+// commission de traitement même si l'argent est rendu, d'où
+// l'imputation de ce coût au médecin défaillant (§3/§5).
+//
+// @param {string} payment_intent_id
+// @returns {Promise<{ fee: number, devise: string } | null>} le frais
+//   dans l'unité mineure Stripe (à convertir via depuisUniteStripe), ou
+//   `null` si la charge n'a pas encore de balance_transaction réglée
+//   (cas limite : l'appelant doit alors réessayer plus tard plutôt que
+//   de deviner un montant).
+export async function obtenirFraisTransactionPaymentIntent(payment_intent_id) {
+  const paymentIntent = await stripe.paymentIntents.retrieve(payment_intent_id, {
+    expand: ["latest_charge.balance_transaction"],
+  });
+
+  const balanceTransaction = paymentIntent.latest_charge?.balance_transaction;
+  if (!balanceTransaction || typeof balanceTransaction.fee !== "number") {
+    return null;
+  }
+
+  return { fee: balanceTransaction.fee, devise: balanceTransaction.currency };
+}
