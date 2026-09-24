@@ -15,6 +15,7 @@
 import crypto from "crypto";
 import prisma from "../lib/prisma.js";
 import { libererEscrow } from "../services/liberationEscrow.service.js";
+import { traiterAnnulation } from "../services/annulation.service.js";
 
 const TYPES_RDV = ["physique", "teleconsultation"];
 const STATUTS_RDV = [
@@ -26,6 +27,19 @@ const STATUTS_RDV = [
   "annule",
   "conteste",
 ];
+
+// Phase 3 — motifs d'annulation (liste fermée, politique de gestion des
+// fonds §3). Doit rester alignée sur l'enum Prisma MotifAnnulation
+// (même duplication assumée que STATUTS_RDV ci-dessus).
+const MOTIFS_ANNULATION = [
+  "changement_horaire_patient",
+  "urgence_personnelle",
+  "erreur_reservation",
+  "professionnel_indisponible",
+  "autre",
+];
+const INITIATEURS_ANNULATION = ["patient", "medecin"];
+const LONGUEUR_MAX_COMMENTAIRE_ANNULATION = 1000;
 
 function estAdmin(utilisateur) {
   return utilisateur?.role === "admin" || utilisateur?.role === "superadmin";
@@ -96,6 +110,93 @@ async function estAutoriseSurRdv(rdv, utilisateurCourant) {
   if (medecin && medecin.medecin_id === rdv.medecin_id) return true;
 
   return false;
+}
+
+/**
+ * Phase 3 — Annulation motivée d'un rendez-vous, commune à
+ * PUT /rendez-vous/:id et PATCH /rendez-vous/:id/statut.
+ *
+ * Appelée UNIQUEMENT une fois verifierTransitionAutorisee passée : ici
+ * on ne juge plus si l'appelant a le droit d'annuler, seulement si la
+ * demande est complète, puis on délègue TOUT le traitement financier à
+ * traiterAnnulation. C'est ce qui garantit qu'un passage à "annule"
+ * déclenche toujours remboursement et écritures du grand-livre, au lieu
+ * d'un simple update de statut.
+ *
+ * Body attendu :
+ *   - motif_annulation (obligatoire, liste fermée MOTIFS_ANNULATION) ;
+ *   - commentaire_annulation (facultatif, texte libre) ;
+ *   - initiateur ("patient" | "medecin") : OBLIGATOIRE pour un
+ *     admin/superadmin, qui annule au nom de l'une des parties et dont
+ *     la politique ne dit rien — on ne devine pas qui est fautif. Pour
+ *     un patient ou un médecin il est déduit du compte, et une valeur
+ *     envoyée par le client est ignorée : sinon un patient pourrait se
+ *     déclarer "medecin" pour obtenir un remboursement intégral.
+ */
+async function annulerRendezVous(req, res, rdv) {
+  const { motif_annulation, commentaire_annulation, initiateur: initiateurDemande } = req.body;
+
+  if (!motif_annulation) {
+    return res.status(400).json({
+      message: `Champ requis manquant : motif_annulation. Valeurs acceptées : ${MOTIFS_ANNULATION.join(", ")}.`,
+    });
+  }
+  if (!MOTIFS_ANNULATION.includes(motif_annulation)) {
+    return res.status(400).json({
+      message: `motif_annulation invalide. Valeurs acceptées : ${MOTIFS_ANNULATION.join(", ")}.`,
+    });
+  }
+
+  let commentaire = null;
+  if (commentaire_annulation !== undefined && commentaire_annulation !== null) {
+    if (typeof commentaire_annulation !== "string") {
+      return res.status(400).json({ message: "commentaire_annulation doit être une chaîne de caractères." });
+    }
+    const commentaireNettoye = commentaire_annulation.trim();
+    if (commentaireNettoye.length > LONGUEUR_MAX_COMMENTAIRE_ANNULATION) {
+      return res.status(400).json({
+        message: `commentaire_annulation trop long (${LONGUEUR_MAX_COMMENTAIRE_ANNULATION} caractères maximum).`,
+      });
+    }
+    commentaire = commentaireNettoye || null;
+  }
+
+  let initiateur;
+  if (estAdmin(req.utilisateur)) {
+    if (!INITIATEURS_ANNULATION.includes(initiateurDemande)) {
+      return res.status(400).json({
+        message: `Un administrateur doit préciser au nom de qui il annule : initiateur = ${INITIATEURS_ANNULATION.join(" ou ")}.`,
+      });
+    }
+    initiateur = initiateurDemande;
+  } else {
+    const patient = await profilPatientCourant(req.utilisateur);
+    initiateur = patient && patient.patient_id === rdv.patient_id ? "patient" : "medecin";
+  }
+
+  const resultat = await traiterAnnulation(rdv, {
+    motif: motif_annulation,
+    commentaire,
+    initiateur,
+  });
+  if (resultat.erreur) {
+    return res.status(resultat.erreur.status).json({ message: resultat.erreur.message });
+  }
+
+  const rdvMisAJour = await prisma.rendezVous.findUnique({
+    where: { rdv_id: rdv.rdv_id },
+    include: INCLUSION_NOMS_RDV,
+  });
+
+  return res.status(200).json({
+    message: "Rendez-vous annulé.",
+    rendez_vous: rdvMisAJour,
+    // Montant réellement remboursé (null si le rendez-vous n'avait pas
+    // été payé) et frais d'annulation retenus, recalculés à la volée —
+    // renvoyés pour l'affichage, jamais stockés.
+    remboursement: resultat.remboursement,
+    frais_annulation: resultat.frais_annulation,
+  });
 }
 
 /* ===================================================================
@@ -272,6 +373,9 @@ export async function creerRendezVous(req, res, next) {
  *     pour une confirmation par le médecin, exige qu'un paiement
  *     Stripe ait déjà été validé pour ce rendez-vous — voir
  *     verifierTransitionAutorisee (partagée avec PATCH .../statut).
+ *   - statut "annule" (Phase 3) : exige motif_annulation (liste
+ *     fermée) et déclenche le remboursement — voir annulerRendezVous.
+ *     Doit être demandé seul (sans date_creneau/structure_id/motif).
  * DELETE reste interdit ici : un rendez-vous s'annule via statut, il
  * ne se supprime pas physiquement une fois créé (voir supprimerRendezVous).
  */
@@ -310,6 +414,22 @@ export async function modifierRendezVous(req, res, next) {
         const erreurTransition = await verifierTransitionAutorisee(rdv, req.utilisateur, statut);
         if (erreurTransition) {
           return res.status(erreurTransition.status).json({ message: erreurTransition.message });
+        }
+
+        // Phase 3 : "annule" n'est plus un simple champ à écrire, c'est
+        // une opération financière (remboursement, grand-livre) traitée
+        // par traiterAnnulation. Elle doit être demandée SEULE : la
+        // mélanger à une reprogrammation ou à une modification de
+        // structure/motif rendrait ambigu ce qui a été appliqué si
+        // l'un des deux échoue.
+        if (statut === "annule") {
+          if (date_creneau !== undefined || structure_id !== undefined || motif !== undefined) {
+            return res.status(400).json({
+              message:
+                "L'annulation doit être demandée seule : n'envoyez ni date_creneau, ni structure_id, ni motif avec statut=\"annule\".",
+            });
+          }
+          return await annulerRendezVous(req, res, rdv);
         }
       }
       donnees.statut = statut;
@@ -397,6 +517,12 @@ export async function modifierRendezVous(req, res, next) {
  * même pour un admin.
  * "non_honore" reste atteignable ici : ce n'est pas une libération de
  * fonds (voir Phase 4, défaillance du professionnel).
+ *
+ * Phase 3 : les transitions vers "annule" restent listées ici (la
+ * matrice dit QUI peut annuler depuis quel statut), mais leur
+ * exécution ne passe plus par un simple update : les deux points
+ * d'entrée (PUT et PATCH) les routent vers annulerRendezVous, qui exige
+ * un motif et délègue le traitement financier à traiterAnnulation.
  */
 const TRANSITIONS_AUTORISEES = {
   patient: {
@@ -513,6 +639,9 @@ async function verifierTransitionAutorisee(rdv, utilisateurCourant, nouveauStatu
  *     est acceptée (correction manuelle), sans verrou paiement.
  * PUT /rendez-vous/:id applique désormais exactement le même contrôle
  * pour le champ "statut" (voir modifierRendezVous ci-dessus).
+ * Phase 3 : statut="annule" exige aussi motif_annulation (et, pour un
+ * admin, initiateur) et déclenche le remboursement — voir
+ * annulerRendezVous.
  */
 export async function changerStatutRendezVous(req, res, next) {
   try {
@@ -542,6 +671,12 @@ export async function changerStatutRendezVous(req, res, next) {
     const erreurTransition = await verifierTransitionAutorisee(rdv, req.utilisateur, statut);
     if (erreurTransition) {
       return res.status(erreurTransition.status).json({ message: erreurTransition.message });
+    }
+
+    // Phase 3 : passer à "annule" exige un motif et déclenche le
+    // traitement financier — voir annulerRendezVous.
+    if (statut === "annule") {
+      return await annulerRendezVous(req, res, rdv);
     }
 
     const rdvMisAJour = await prisma.rendezVous.update({

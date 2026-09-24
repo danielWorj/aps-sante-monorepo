@@ -175,18 +175,6 @@ enum StatutRendezVous {
   conteste
 }
 
-// Motif d'annulation d'un rendez-vous — liste fermée exigée par la
-// politique de gestion des fonds §3 ("toute annulation doit être
-// motivée, motif en liste fermée, commentaire libre facultatif").
-// Le commentaire libre vit dans RendezVous.commentaire_annulation.
-enum MotifAnnulation {
-  changement_horaire_patient
-  urgence_personnelle
-  erreur_reservation
-  professionnel_indisponible
-  autre
-}
-
 // -----------------------------------------------------------------
 // Enums — Agenda médecin
 // -----------------------------------------------------------------
@@ -432,14 +420,6 @@ model Medecin {
   ville_exercice_id         String                    @db.Uuid
   teleconsultation_activee  Boolean
   tarif_indicatif           Decimal                   @db.Decimal(12, 2)
-
-  // Phase 3 — frais d'annulation tardive (moins de 24h avant le RDV),
-  // paramétrés PAR le médecin (politique de gestion des fonds §3) : un
-  // paramétrage saisi, pas une donnée calculable, donc légitime à
-  // stocker tel quel. Fraction de 0 à 1 appliquée aux honoraires (ex.
-  // 0.2000 = 20 %) ; NULL = non paramétré = aucun frais.
-  taux_frais_annulation_tardive Decimal? @db.Decimal(5, 4)
-
   biographie String @default("") @db.Text 
   linkedInUrl               String?                    @db.VarChar(255)
 
@@ -1209,7 +1189,6 @@ model TransactionPaiement {
   abonnements_pharmacie  AbonnementPharmacie[]
   abonnements_medecin    AbonnementMedecin[]
   compte_escrow          CompteEscrow?
-  remboursements         RemboursementPaiement[]
 
   @@index([ligne_commission_id])
   @@index([ligne_taxe_id])
@@ -1238,28 +1217,6 @@ model CompteEscrow {
 }
 
 // -----------------------------------------------------------------
-// Phase 3 — Remboursements (politique de gestion des fonds §3-4).
-// Une ligne = un remboursement réellement effectué chez Stripe : le
-// montant est un FAIT (ce que Stripe a rendu au patient), jamais un
-// calcul refait ici. Le "pourquoi" (>24h, <24h, défaillance) est porté
-// par `motif` ; le délai lui-même n'est jamais stocké, il se
-// recalcule avec RendezVous.date_creneau − date_annulation.
-// -----------------------------------------------------------------
-model RemboursementPaiement {
-  remboursement_id String   @id @default(uuid()) @db.Uuid
-  transaction_id   String   @db.Uuid
-  montant          Decimal  @db.Decimal(12, 2)
-  motif            String   @db.VarChar(50) // annulation_precoce | annulation_tardive | defaillance_pro | litige
-  stripe_refund_id String   @unique
-  date_creation    DateTime @default(now())
-
-  transaction TransactionPaiement @relation(fields: [transaction_id], references: [transaction_id])
-
-  @@index([transaction_id])
-  @@map("remboursement_paiement")
-}
-
-// -----------------------------------------------------------------
 // Phase 1 — Portefeuille médecin & grand-livre (voir politique de
 // gestion des fonds §2). Principe directeur : le solde n'est JAMAIS
 // une colonne stockée, il se recalcule à la demande comme la somme
@@ -1284,7 +1241,6 @@ enum TypeMouvementPortefeuille {
   debit_retenue_annulation_tardive
   debit_frais_no_show
   debit_retrait
-  credit_frais_annulation // Phase 3 : frais d'annulation tardive retenus au patient, crédités au médecin
 }
 
 model MouvementPortefeuille {
@@ -1495,14 +1451,6 @@ model RendezVous {
   motif           String?          @db.Text
   code_unique     String           @unique @db.VarChar(8)
   qr_token_secret String           @db.Text
-
-  // Phase 3 — annulation motivée (politique de gestion des fonds §3).
-  // date_annulation est un FAIT constaté ; le fait que l'annulation
-  // ait eu lieu à plus ou moins de 24h du créneau se recalcule à la
-  // volée (date_creneau − date_annulation), jamais stocké.
-  motif_annulation       MotifAnnulation?
-  commentaire_annulation String?          @db.Text
-  date_annulation        DateTime?
 
   patient   Patient         @relation(fields: [patient_id], references: [patient_id])
   medecin   Medecin         @relation(fields: [medecin_id], references: [medecin_id])
