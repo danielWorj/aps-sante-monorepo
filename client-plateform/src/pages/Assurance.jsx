@@ -380,14 +380,7 @@ export default function Assurance() {
 
             {/* Colonne résultats */}
             <div className="col-md-8">
-              <div className="banner-institutionnel">
-                <i className="fa-solid fa-circle-info" />
-                <span>
-                  Présentation seulement : aucune comparaison de produits, aucune
-                  souscription en ligne, aucune gestion de sinistre ou de réclamation
-                  sur ApSa.
-                </span>
-              </div>
+              
 
               <div className="results-toolbar" style={{ marginTop: 0 }}>
                 <span className="text-muted-soft" style={{ fontSize: ".9rem" }}>

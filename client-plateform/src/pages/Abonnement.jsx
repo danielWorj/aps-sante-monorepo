@@ -66,15 +66,7 @@ export default function Abonnement() {
       {/* ============================ SELECTEUR CLIENT ============================ */}
       <section style={{ paddingTop: "1.5rem", paddingBottom: 0 }}>
         <div className="container-aps">
-          <div className="banner-institutionnel">
-            <i className="fa-solid fa-circle-info" />
-            <span>
-              Tarifs donnés à titre indicatif et pouvant varier selon votre
-              pays. Bonne nouvelle : pour le lancement, l'abonnement est
-              offert à tous les professionnels de santé — médecins,
-              cliniques, hôpitaux, laboratoires et pharmacies.
-            </span>
-          </div>
+          
 
           <div className="plan-selector">
             <label className="form-label-aps" htmlFor="client-type">
