@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'pages/public/publicAcceuil.dart';
+import 'pages/public/onboarding/onboarding_accueil_page.dart';
 
 void main() {
   runApp(
@@ -26,8 +26,13 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      // L'application démarre directement sur l'écran d'accueil public.
-      home: const PublicAcceuilPage(),
+      // L'application démarre sur l'écran de choix de l'onboarding
+      // (Écran 1, portage de OnboardingAccueil.jsx) plutôt que
+      // directement sur l'accueil public : un nouvel arrivant est
+      // orienté entre "Rechercher un professionnel" et "Je suis
+      // professionnel" avant d'atteindre PublicAcceuilPage — qui reste
+      // à une navigation "Passer" près (voir OnboardingAccueilPage).
+      home: const OnboardingAccueilPage(),
     );
   }
 }

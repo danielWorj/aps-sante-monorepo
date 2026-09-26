@@ -28,3 +28,7 @@ export 'alert/app_alert.dart';
 
 // Navigation
 export 'navigation/app_bottom_nav.dart';
+
+// Onboarding
+export 'onboarding/onboarding_header.dart';
+export 'onboarding/onboarding_nav_actions.dart';
