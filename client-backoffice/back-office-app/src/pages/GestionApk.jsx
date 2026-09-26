@@ -220,6 +220,12 @@ export default function GestionApk() {
   const [apkExistant, setApkExistant] = useState(null); // pour connaître l'ancien file_url en édition
   const [enregistrementEnCours, setEnregistrementEnCours] = useState(false);
   const [erreurFormulaire, setErreurFormulaire] = useState(null);
+  // Pourcentage (0-100) de progression du téléversement du fichier APK,
+  // ou null quand aucun envoi n'est en cours. Alimenté par le callback
+  // onProgress transmis à creerApk/modifierApk (voir gestionapkService.js,
+  // apiFetchUpload basé sur XMLHttpRequest — fetch() ne permettant pas
+  // de suivre la progression d'un envoi).
+  const [progressionUpload, setProgressionUpload] = useState(null);
 
   function ouvrirCreation() {
     if (!estSuperadmin) return;
@@ -246,6 +252,7 @@ export default function GestionApk() {
   function fermerModalForm() {
     setModalFormOuverte(false);
     setErreurFormulaire(null);
+    setProgressionUpload(null);
   }
 
   function modifierChampFormulaire(champ, valeur) {
@@ -280,6 +287,10 @@ export default function GestionApk() {
     }
 
     setEnregistrementEnCours(true);
+    // 0 plutôt que null dès le lancement : affiche la barre à 0% tout de
+    // suite (le premier évènement de progression XHR peut mettre un
+    // instant à arriver, notamment sur un gros fichier / réseau lent).
+    setProgressionUpload(0);
     try {
       const donnees = {
         libelle: formulaire.libelle.trim(),
@@ -298,10 +309,10 @@ export default function GestionApk() {
       };
 
       if (enCreation) {
-        const cree = await creerApk(donnees);
+        const cree = await creerApk(donnees, setProgressionUpload);
         setApks((prev) => [cree, ...prev]);
       } else {
-        const misAJour = await modifierApk(formulaire.apk_id, donnees);
+        const misAJour = await modifierApk(formulaire.apk_id, donnees, setProgressionUpload);
         setApks((prev) => prev.map((a) => (a.id === misAJour.id ? misAJour : a)));
       }
       setModalFormOuverte(false);
@@ -309,6 +320,7 @@ export default function GestionApk() {
       setErreurFormulaire(err.message || "Une erreur est survenue lors de l'enregistrement.");
     } finally {
       setEnregistrementEnCours(false);
+      setProgressionUpload(null);
     }
   }
 
@@ -663,6 +675,37 @@ export default function GestionApk() {
               </div>
             )}
           </div>
+
+          {enregistrementEnCours && progressionUpload !== null && (
+            <div className="mb-3">
+              <div className="d-flex justify-content-between align-items-center mb-1">
+                <span className="aps-text-muted" style={{ fontSize: 12 }}>
+                  <i className="fa-solid fa-cloud-arrow-up me-1"></i>
+                  Téléversement en cours…
+                </span>
+                <span className="aps-text-muted" style={{ fontSize: 12 }}>{progressionUpload}%</span>
+              </div>
+              <div
+                className="progress"
+                role="progressbar"
+                aria-label="Progression du téléversement de l'APK"
+                aria-valuenow={progressionUpload}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                style={{ height: 8 }}
+              >
+                <div
+                  className={`progress-bar${progressionUpload < 100 ? ' progress-bar-striped progress-bar-animated' : ' bg-success'}`}
+                  style={{ width: `${progressionUpload}%` }}
+                ></div>
+              </div>
+              {progressionUpload >= 100 && (
+                <div className="aps-text-muted mt-1" style={{ fontSize: 11 }}>
+                  Fichier envoyé, finalisation en cours…
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="form-check form-switch">
             <input

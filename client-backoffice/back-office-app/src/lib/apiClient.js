@@ -138,4 +138,102 @@ export async function apiFetch(path, { body, headers, skipAuthRetry = false, ...
   return data;
 }
 
+/**
+ * Variante de apiFetch dédiée aux téléversements de fichiers (FormData)
+ * dont on veut suivre la progression (ex. upload d'un APK).
+ *
+ * `fetch()` ne donne aucun moyen fiable et multi-navigateurs de suivre
+ * la progression d'un ENVOI (contrairement à la réception, via
+ * ReadableStream) : on utilise donc XMLHttpRequest, seule API du
+ * navigateur exposant `upload.onprogress`.
+ *
+ * Reprend les mêmes garanties que apiFetch :
+ *  - Authorization: Bearer <access_token> ajouté automatiquement ;
+ *  - cookies envoyés (xhr.withCredentials, équivalent de
+ *    credentials: 'include') ;
+ *  - sur 401, tente un refresh puis rejoue la requête une seule fois
+ *    (sauf skipAuthRetry) ;
+ *  - lève une Error (.status, .data) si la réponse finale n'est pas OK.
+ *
+ * @param {string} path - chemin relatif (ex. '/apks')
+ * @param {Object} options
+ * @param {'POST'|'PUT'|'PATCH'} [options.method='POST']
+ * @param {FormData} options.body - corps multipart (obligatoire)
+ * @param {Object} [options.headers] - en-têtes additionnels
+ * @param {(pourcentage: number, evenement: ProgressEvent) => void} [options.onProgress]
+ *   - appelé à chaque évènement de progression avec un pourcentage
+ *   entier (0-100). N'est appelé que si `evenement.lengthComputable`
+ *   est vrai (toujours le cas pour un FormData contenant un File).
+ * @param {boolean} [options.skipAuthRetry=false]
+ * @returns {Promise<any>} le corps JSON de la réponse
+ */
+export function apiFetchUpload(
+  path,
+  { method = 'POST', body, headers = {}, onProgress, skipAuthRetry = false } = {}
+) {
+  const estFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (!estFormData) {
+    return Promise.reject(new Error('apiFetchUpload attend un FormData en body.'));
+  }
+
+  // Exécute une tentative de requête via XHR et résout avec un objet
+  // { status, ok, data } — jamais un rejet pour un statut HTTP d'erreur,
+  // afin de pouvoir décider ici (retry 401) comme le fait apiFetch.
+  const executer = (token) =>
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(method, `${API_BASE_URL}${path}`);
+      xhr.withCredentials = true; // équivalent de credentials: 'include'
+
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      Object.entries(headers).forEach(([cle, valeur]) => xhr.setRequestHeader(cle, valeur));
+
+      if (xhr.upload && typeof onProgress === 'function') {
+        xhr.upload.onprogress = (evenement) => {
+          if (evenement.lengthComputable) {
+            const pourcentage = Math.round((evenement.loaded / evenement.total) * 100);
+            onProgress(pourcentage, evenement);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        let data = null;
+        try {
+          data = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+        } catch {
+          // réponse sans corps JSON (ex: 204)
+        }
+        resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300, data });
+      };
+
+      xhr.onerror = () => reject(new Error('Erreur réseau lors du téléversement.'));
+      xhr.onabort = () => reject(new Error('Téléversement annulé.'));
+
+      xhr.send(body);
+    });
+
+  return (async () => {
+    let reponse = await executer(accessToken);
+
+    if (reponse.status === 401 && !skipAuthRetry) {
+      const nouveauToken = await tenterRefresh();
+      if (nouveauToken) {
+        reponse = await executer(nouveauToken);
+      } else if (onUnauthorized) {
+        onUnauthorized();
+      }
+    }
+
+    if (!reponse.ok) {
+      const error = new Error(reponse.data?.message || `Erreur ${reponse.status}`);
+      error.status = reponse.status;
+      error.data = reponse.data;
+      throw error;
+    }
+
+    return reponse.data;
+  })();
+}
+
 export { API_BASE_URL };
