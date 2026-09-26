@@ -16,13 +16,13 @@ import {
   creerApk,
   listerApks,
   obtenirApk,
-  obtenirApkActive,
   modifierApk,
   supprimerApk,
   telechargerApk,
 } from "../controllers/gestionapk.controller.js";
 import { gererTeleversementApk } from "../middlewares/upload_apk.middleware.js";
-import { autoriser } from "../middlewares/autorisation.middleware.js"; // À adapter selon votre middleware d'auth
+import { authentifier } from "../middlewares/auth.middleware.js";
+import { autoriser } from "../middlewares/autorisation.middleware.js";
 
 const router = express.Router();
 
@@ -56,7 +56,7 @@ const router = express.Router();
  *     }
  *   }
  */
-router.post("/", autoriser("superadmin"), gererTeleversementApk, creerApk);
+router.post("/", authentifier, autoriser("superadmin"), gererTeleversementApk, creerApk);
 
 /**
  * GET /api/apks
@@ -93,26 +93,7 @@ router.post("/", autoriser("superadmin"), gererTeleversementApk, creerApk);
  *     ]
  *   }
  */
-router.get("/", autoriser("superadmin"), listerApks);
-
-/**
- * GET /api/apks/active
- * Renvoie la dernière APK active (status=true) — c'est CETTE route
- * que le site public (client-plateform, bouton "Télécharger
- * l'application" sur la page d'accueil) doit appeler pour obtenir
- * dynamiquement l'URL de téléchargement à jour.
- * - Authentification requise : NON — route PUBLIQUE.
- *
- * ⚠️ Doit rester déclarée AVANT "/:id" ci-dessous, sinon Express
- * interprète "active" comme une valeur de :id (et la route tombe
- * alors sur obtenirApk, protégée SUPERADMIN → 403 pour un visiteur).
- *
- * Réponse (200 OK) :
- *   { message, apk: { id, libelle, description, file_url, status, date_upload } }
- * Erreurs :
- *   - 404 Not Found : aucune APK active
- */
-router.get("/active", obtenirApkActive);
+router.get("/", authentifier, autoriser("superadmin"), listerApks);
 
 /**
  * GET /api/apks/:id
@@ -139,7 +120,7 @@ router.get("/active", obtenirApkActive);
  * Erreurs :
  *   - 404 Not Found : APK introuvable
  */
-router.get("/:id", autoriser("superadmin"), obtenirApk);
+router.get("/:id", authentifier, autoriser("superadmin"), obtenirApk);
 
 /**
  * PUT /api/apks/:id
@@ -176,7 +157,7 @@ router.get("/:id", autoriser("superadmin"), obtenirApk);
  *   - 400 Bad Request : paramètres invalides ou aucun champ à modifier
  *   - 404 Not Found : APK introuvable
  */
-router.put("/:id", autoriser("superadmin"), gererTeleversementApk, modifierApk);
+router.put("/:id", authentifier, autoriser("superadmin"), gererTeleversementApk, modifierApk);
 
 /**
  * DELETE /api/apks/:id
@@ -195,7 +176,7 @@ router.put("/:id", autoriser("superadmin"), gererTeleversementApk, modifierApk);
  * Erreurs :
  *   - 404 Not Found : APK introuvable
  */
-router.delete("/:id", autoriser("superadmin"), supprimerApk);
+router.delete("/:id", authentifier, autoriser("superadmin"), supprimerApk);
 
 // ─────────────────────────────────────────────────────────────────
 // Route de téléchargement (PUBLIC ou AUTHENTIFIÉE selon besoin)
