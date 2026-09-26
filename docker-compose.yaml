@@ -32,6 +32,17 @@ services:
       - "3000:3000"
     volumes:
       - ./server/keys:/app/keys:ro
+      # Stockage des APK : bind mount vers un vrai dossier du VPS
+      # (./server/storage/apk), PAS un volume anonyme. Sans ça, chaque
+      # rebuild/redeploy recrée le conteneur "server" à partir du
+      # Dockerfile (COPY . .) : storage/apk est vide au démarrage
+      # (il est dans .gitignore, donc jamais copié), et tout APK
+      # uploadé avant le déploiement précédent disparaît — alors que
+      # l'entrée correspondante reste en base (Prisma), d'où un 404
+      # au téléchargement pour un APK que l'admin voit pourtant listé.
+      # Le dossier hôte est créé automatiquement par Docker au premier
+      # démarrage s'il n'existe pas encore.
+      - ./server/storage/apk:/app/storage/apk
     depends_on:
       db:
         condition: service_healthy
