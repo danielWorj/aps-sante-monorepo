@@ -12,6 +12,7 @@ server/generated/prisma
 server/keys/jwt_access_private.pem
 server/deploiment_info
 server/guide
+server/storage/apk
 
 # --- commun ---
 .env
