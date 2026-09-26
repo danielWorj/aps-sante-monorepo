@@ -44,7 +44,7 @@
 // répond en erreur — chaque fonction ci-dessous se contente de la
 // laisser remonter telle quelle à l'appelant.
 
-import { apiFetch, API_BASE_URL } from '../lib/apiClient';
+import { apiFetch, apiFetchUpload, API_BASE_URL } from '../lib/apiClient';
 
 // Champ fichier attendu par gererTeleversementApk — nom de la clé
 // multer (upload_apk.middleware.js, .single("file") ou équivalent),
@@ -101,14 +101,21 @@ function construireFormDataApk(donnees = {}) {
  *   status?,              // optionnel, boolean, true par défaut côté serveur
  *   file,                 // requis, File (.apk, max 100 Mo)
  * }
+ * @param {(pourcentage: number) => void} [onProgress] - appelé avec un
+ *   pourcentage entier (0-100) au fil de l'envoi du fichier, pour
+ *   piloter une barre de progression côté UI (voir GestionApk.jsx).
+ *   Repose sur XMLHttpRequest (apiFetchUpload) car `fetch()` ne permet
+ *   pas de suivre la progression d'un envoi.
  * @returns {Promise<Object>} l'APK créée : { id, libelle, description,
  *   file_url (URL de téléchargement prête à l'emploi, ex.
  *   "/api/apks/download/{id}/{nomFichier}"), status, date_upload }
  */
-export function creerApk(donnees) {
-  return apiFetch('/apks', { method: 'POST', body: construireFormDataApk(donnees) }).then(
-    (d) => d.apk
-  );
+export function creerApk(donnees, onProgress) {
+  return apiFetchUpload('/apks', {
+    method: 'POST',
+    body: construireFormDataApk(donnees),
+    onProgress,
+  }).then((d) => d.apk);
 }
 
 /**
@@ -148,13 +155,17 @@ export function obtenirApk(id) {
  * @param {Object} donnees - champs partiels parmi { libelle?, description?,
  *   status?, file? (File) } — au moins un champ doit être fourni, sinon
  *   le serveur renvoie 400 ("Aucun champ à modifier fourni").
+ * @param {(pourcentage: number) => void} [onProgress] - voir creerApk ;
+ *   pertinent surtout quand `donnees.file` est fourni (remplacement du
+ *   fichier), sans effet notable sinon (requête sans corps volumineux).
  * @returns {Promise<Object>} l'APK mise à jour
  * @throws {Error} .status === 404 si l'APK n'existe pas
  */
-export function modifierApk(id, donnees) {
-  return apiFetch(`/apks/${id}`, {
+export function modifierApk(id, donnees, onProgress) {
+  return apiFetchUpload(`/apks/${id}`, {
     method: 'PUT',
     body: construireFormDataApk(donnees),
+    onProgress,
   }).then((d) => d.apk);
 }
 
