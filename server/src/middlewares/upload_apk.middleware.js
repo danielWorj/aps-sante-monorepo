@@ -11,22 +11,53 @@
 //   PUT  /apks/:id      → modifierApk (remplacement fichier optionnel)
 //
 // Validation :
-//   - Type MIME : application/vnd.android.package-archive ou application/octet-stream
-//   - Extension : .apk
-//   - Taille max : 500 Mo par fichier
+//   - Extension : .apk (SOURCE DE VÉRITÉ — voir note MIME ci-dessous)
+//   - Type MIME : indicatif seulement, jamais bloquant à lui seul
+//   - Taille max : voir TAILLE_MAX_APK (source unique, réutilisée par
+//     le contrôleur — gestionapk.controller.js — pour éviter toute
+//     divergence entre la limite appliquée ici par multer et celle
+//     revérifiée côté contrôleur)
 //
 // Le caractère "obligatoire" du fichier (requis en création, optionnel
 // en modification) est vérifié dans le contrôleur, pas ici.
+//
+// ⚠️ Ancien bug corrigé : cette limite valait 500 Mo ici mais 100 Mo
+// dans le contrôleur (TAILLE_MAX_APK de gestionapk.controller.js). Un
+// fichier de, disons, 150 Mo passait donc entièrement le upload (la
+// barre de progression allait jusqu'à 100 %, tout le buffer transitait
+// en mémoire) avant d'être rejeté par le contrôleur — upload lent,
+// bande passante gâchée, et une erreur qui n'apparaît qu'à la toute
+// fin. La limite est maintenant définie UNE SEULE FOIS ici et importée
+// par le contrôleur, afin que multer rejette immédiatement (avant même
+// de recevoir tout le fichier) un envoi qui de toute façon serait
+// refusé ensuite.
+//
+// ⚠️ Ancien bug corrigé : le filtre MIME était strict et n'autorisait
+// que "application/vnd.android.package-archive" ou
+// "application/octet-stream". Beaucoup de systèmes n'ont pas
+// l'extension .apk enregistrée dans leur base MIME locale : le
+// navigateur peut alors envoyer un mimetype différent, voire une
+// chaîne vide (""), pour un .apk pourtant parfaitement valide — ce
+// fichier légitime était alors rejeté à tort. L'extension ".apk" est
+// désormais la validation faisant foi ; le MIME n'est plus qu'un
+// signal indicatif (journalisé), jamais bloquant à lui seul.
 
 import multer from "multer";
 
-// Limite 500 Mo par fichier APK
-const TAILLE_MAX_APK = 500 * 1024 * 1024;
+// Limite unique et partagée avec le contrôleur (voir
+// gestionapk.controller.js, qui importe cette même constante au lieu
+// d'en redéfinir une divergente).
+export const TAILLE_MAX_APK = 100 * 1024 * 1024; // 100 Mo
 
-// Types MIME autorisés pour les APKs (peuvent varier selon la source/le navigateur)
-const TYPES_AUTORISES_APK = [
+// Types MIME habituellement observés pour un .apk — purement indicatif
+// (journalisation), la validation réelle repose sur l'extension.
+const TYPES_MIME_ATTENDUS_APK = [
   "application/vnd.android.package-archive",
-  "application/octet-stream", // fallback pour certains navigateurs/outils
+  "application/octet-stream", // fallback fréquent (OS/navigateur sans association .apk)
+  "application/java-archive", // certains navigateurs traitent l'APK (zip) comme un jar
+  "application/x-zip-compressed",
+  "application/zip",
+  "", // aucune association MIME locale pour .apk : chaîne vide, à ne pas rejeter
 ];
 
 // Stockage en mémoire (buffer)
@@ -34,20 +65,11 @@ const stockage = multer.memoryStorage();
 
 /**
  * Filtre de validation pour les fichiers APK.
- * Vérifie le type MIME et l'extension .apk.
+ * L'extension ".apk" est la seule condition bloquante ; le type MIME
+ * n'est utilisé qu'à titre indicatif (voir note en tête de fichier).
  */
 function filtreApk(_req, file, cb) {
-  // Vérifier le type MIME
-  if (!TYPES_AUTORISES_APK.includes(file.mimetype)) {
-    return cb(
-      new Error(
-        `Type de fichier non autorisé pour "${file.fieldname}" (${file.mimetype}). ` +
-          `Seules les APKs Android (application/vnd.android.package-archive) sont acceptées.`
-      )
-    );
-  }
-
-  // Vérifier l'extension .apk
+  // Vérifier l'extension .apk — condition bloquante
   const extension = file.originalname.toLowerCase().split(".").pop();
   if (extension !== "apk") {
     return cb(
@@ -55,6 +77,14 @@ function filtreApk(_req, file, cb) {
         `Extension de fichier non autorisée pour "${file.fieldname}". ` +
           `Reçu : .${extension}, attendu : .apk`
       )
+    );
+  }
+
+  // Type MIME inattendu : on n'en fait qu'un avertissement, l'extension
+  // .apk ayant déjà validé la nature du fichier ci-dessus.
+  if (!TYPES_MIME_ATTENDUS_APK.includes(file.mimetype)) {
+    console.warn(
+      `⚠️ Type MIME inhabituel pour un .apk : "${file.mimetype}" (fichier "${file.originalname}") — accepté quand même, l'extension fait foi.`
     );
   }
 
@@ -83,6 +113,9 @@ export function gererTeleversementApk(req, res, next) {
   televersementApk(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       // Erreur multer spécifique (taille, encodage, champs, etc.)
+      // Rejetée ICI, dès que la limite est atteinte pendant la
+      // réception du flux — pas besoin d'attendre la fin de l'upload
+      // pour le savoir (voir note en tête de fichier).
       if (err.code === "LIMIT_FILE_SIZE") {
         return res.status(400).json({
           message: `Fichier trop volumineux. Taille maximale : ${(TAILLE_MAX_APK / 1024 / 1024).toFixed(0)} Mo.`,

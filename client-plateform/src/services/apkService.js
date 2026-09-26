@@ -62,7 +62,96 @@ export function obtenirUrlTelechargementApk(apk) {
   return `${base}${apk.file_url}`;
 }
 
+/**
+ * Télécharge le fichier APK en mémoire (Blob) en suivant sa progression,
+ * pour alimenter une barre de progression pilotée par React (voir
+ * Home.jsx, bouton "Télécharger l'application").
+ *
+ * On n'utilise PAS un simple <a href download> ici : cela délègue tout
+ * le téléchargement au navigateur, sans aucun moyen de connaître son
+ * avancement. À la place, on récupère le corps de la réponse comme un
+ * flux (ReadableStream via `fetch`) et on additionne les octets reçus
+ * au fil de l'eau, en les comparant à Content-Length pour calculer un
+ * pourcentage — puis on reconstruit un Blob une fois le flux terminé.
+ *
+ * (Contrairement à un UPLOAD, où suivre la progression impose XHR —
+ * voir apiFetchUpload côté back-office — un TÉLÉCHARGEMENT peut suivre
+ * sa progression directement avec `fetch`, car `response.body` expose
+ * un ReadableStream standard.)
+ *
+ * @param {string} url - URL absolue de téléchargement (voir
+ *   obtenirUrlTelechargementApk)
+ * @param {(pourcentage: number) => void} [onProgress] - appelé avec un
+ *   pourcentage entier (0-100) au fil de la réception. Si le serveur ne
+ *   renvoie pas Content-Length (peu probable ici : telechargerApk,
+ *   gestionapk.controller.js, ne le fixe pas explicitement mais Express
+ *   le déduit automatiquement de la taille du fichier streamé), la
+ *   progression n'est signalée qu'une fois à 100 % en fin de réception.
+ * @returns {Promise<{ blob: Blob, nomFichier: string }>}
+ */
+export async function telechargerApkAvecProgression(url, onProgress) {
+  const reponse = await fetch(url);
+  if (!reponse.ok) {
+    throw new Error(`Échec du téléchargement (HTTP ${reponse.status}).`);
+  }
+
+  // Nom de fichier proposé par le serveur (Content-Disposition, voir
+  // construireUrlTelechargement / telechargerApk côté contrôleur), avec
+  // un repli raisonnable si l'en-tête est absent ou non lisible.
+  const entete = reponse.headers.get('Content-Disposition') || '';
+  const correspondance = /filename="([^"]+)"/.exec(entete);
+  const nomFichier = correspondance ? correspondance[1] : 'ApSa.apk';
+
+  const tailleTotale = Number(reponse.headers.get('Content-Length')) || 0;
+  const lecteur = reponse.body?.getReader?.();
+
+  // Repli si le navigateur ne supporte pas les flux sur `fetch` (très
+  // rare aujourd'hui) : pas de progression détaillée, juste 0 % -> 100 %.
+  if (!lecteur) {
+    const blob = await reponse.blob();
+    onProgress?.(100);
+    return { blob, nomFichier };
+  }
+
+  const morceaux = [];
+  let recu = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { done, value } = await lecteur.read();
+    if (done) break;
+    morceaux.push(value);
+    recu += value.length;
+    if (tailleTotale > 0) {
+      onProgress?.(Math.min(100, Math.round((recu / tailleTotale) * 100)));
+    }
+  }
+
+  onProgress?.(100);
+  return { blob: new Blob(morceaux), nomFichier };
+}
+
+/**
+ * Déclenche l'enregistrement d'un Blob déjà téléchargé (voir
+ * telechargerApkAvecProgression) via un lien caché, sans navigation de
+ * page — même patron que gestionapkService.js côté back-office.
+ * @param {Blob} blob
+ * @param {string} nomFichier
+ */
+export function declencherSauvegardeBlob(blob, nomFichier) {
+  const urlObjet = URL.createObjectURL(blob);
+  const lien = document.createElement('a');
+  lien.href = urlObjet;
+  lien.download = nomFichier;
+  lien.rel = 'noopener';
+  document.body.appendChild(lien);
+  lien.click();
+  document.body.removeChild(lien);
+  URL.revokeObjectURL(urlObjet);
+}
+
 export default {
   obtenirApkActive,
   obtenirUrlTelechargementApk,
+  telechargerApkAvecProgression,
+  declencherSauvegardeBlob,
 };

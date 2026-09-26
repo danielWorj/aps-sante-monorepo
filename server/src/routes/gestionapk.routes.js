@@ -16,6 +16,7 @@ import {
   creerApk,
   listerApks,
   obtenirApk,
+  obtenirApkActive,
   modifierApk,
   supprimerApk,
   telechargerApk,
@@ -94,6 +95,30 @@ router.post("/", authentifier, autoriser("superadmin"), gererTeleversementApk, c
  *   }
  */
 router.get("/", authentifier, autoriser("superadmin"), listerApks);
+
+/**
+ * GET /api/apks/active
+ * Route PUBLIQUE (aucune authentification) : renvoie la dernière APK
+ * active, utilisée par le bouton "Télécharger l'application" de
+ * client-plateform (voir apkService.js / Home.jsx côté public).
+ *
+ * ⚠️ BUG CORRIGÉ : le contrôleur `obtenirApkActive` existait déjà
+ * (gestionapk.controller.js) mais n'était jamais monté sur aucune
+ * route. Le front public appelait donc GET /api/apks/active, qui
+ * tombait par défaut sur la route GET /:id juste en dessous (avec
+ * id = "active") — laquelle exige authentifier + autoriser("superadmin").
+ * Un visiteur non connecté recevait donc un 401/403 (jamais un 404),
+ * ce que le front ne savait pas distinguer d'une vraie erreur : le
+ * bouton de téléchargement de la page d'accueil restait donc TOUJOURS
+ * désactivé pour le grand public, quel que soit l'état des APKs en
+ * base.
+ *
+ * IMPORTANT : cette route doit être déclarée AVANT "/:id" ci-dessous —
+ * express matche les routes dans l'ordre de déclaration, et "/active"
+ * et "/:id" ont le même nombre de segments. La déclarer après referait
+ * réapparaître le même bug.
+ */
+router.get("/active", obtenirApkActive);
 
 /**
  * GET /api/apks/:id

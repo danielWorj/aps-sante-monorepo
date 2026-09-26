@@ -21,15 +21,18 @@ import { createReadStream } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import prisma from "../lib/prisma.js";
+// Taille maximale d'un fichier APK : source UNIQUE, définie dans le
+// middleware multer et réimportée ici — voir la note dans
+// upload_apk.middleware.js. Corrige l'ancienne divergence (500 Mo ici
+// vs 100 Mo côté middleware, ou l'inverse) qui laissait un gros
+// fichier être entièrement envoyé avant d'être rejeté a posteriori.
+import { TAILLE_MAX_APK } from "../middlewares/upload_apk.middleware.js";
 
 // Récupérer le répertoire racine du projet
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "../..");
 const APK_STORAGE_DIR = path.join(PROJECT_ROOT, "storage", "apk");
-
-// Taille maximale d'un fichier APK : 100 Mo
-const TAILLE_MAX_APK = 100 * 1024 * 1024;
 
 // ─────────────────────────────────────────────────────────────────
 // Utilitaires
@@ -58,16 +61,11 @@ function validerFichierApk(file) {
     return { valide: false, erreur: "Aucun fichier fourni." };
   }
 
-  // Vérifier le type MIME
-  const typesAutorises = ["application/vnd.android.package-archive", "application/octet-stream"];
-  if (!typesAutorises.includes(file.mimetype)) {
-    return {
-      valide: false,
-      erreur: `Type de fichier non autorisé (${file.mimetype}). Seules les APKs Android sont acceptées.`,
-    };
-  }
-
-  // Vérifier l'extension .apk
+  // Vérifier l'extension .apk — seule condition bloquante (voir
+  // upload_apk.middleware.js : le type MIME n'est plus revérifié ici
+  // en doublon, il est trop peu fiable selon navigateur/OS pour
+  // justifier un rejet à lui seul ; l'extension est déjà passée par le
+  // même filtre côté middleware avant d'arriver jusqu'ici).
   const extension = path.extname(file.originalname).toLowerCase();
   if (extension !== ".apk") {
     return {
