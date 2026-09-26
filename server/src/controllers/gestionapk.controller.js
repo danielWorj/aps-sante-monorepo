@@ -17,6 +17,7 @@
 //   - Gestion d'erreurs cohérente (400/404/500)
 
 import fs from "fs/promises";
+import { createReadStream } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import prisma from "../lib/prisma.js";
@@ -301,6 +302,46 @@ export async function listerApks(req, res, next) {
 }
 
 /**
+ * GET /api/apks/active
+ * Route PUBLIQUE (aucune authentification requise) : renvoie la
+ * dernière APK active (status=true), destinée au bouton de
+ * téléchargement de la page d'accueil du site public
+ * (client-plateform/src/pages/Home.jsx).
+ *
+ * Ajoutée car listerApks/obtenirApk sont réservées au SUPERADMIN
+ * (voir gestionapk.routes.js) — le front public a besoin d'un moyen
+ * de connaître l'APK courante et son URL de téléchargement sans
+ * authentification, sans pour autant exposer tout le CRUD.
+ *
+ * Retour :
+ *   - 200 OK : { message, apk } — la plus récente des APKs actives
+ *   - 404 Not Found : aucune APK active pour le moment
+ *   - 500 Internal Server Error : erreur BD
+ */
+export async function obtenirApkActive(req, res, next) {
+  try {
+    const apk = await prisma.mobileApk.findFirst({
+      where: { status: true },
+      orderBy: { date_upload: "desc" },
+    });
+
+    if (!apk) {
+      return res.status(404).json({ message: "Aucune APK active pour le moment." });
+    }
+
+    return res.status(200).json({
+      message: "APK active trouvée.",
+      apk: {
+        ...apk,
+        file_url: construireUrlTelechargement(apk.id, apk.file_url),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * GET /api/apks/:id
  * Récupère le détail d'une APK par son ID.
  *
@@ -575,7 +616,7 @@ export async function telechargerApk(req, res, next) {
     );
     res.setHeader("Cache-Control", "public, max-age=31536000"); // Cache 1 an
 
-    const stream = require("fs").createReadStream(cheminFichier);
+    const stream = createReadStream(cheminFichier);
     stream.pipe(res);
 
     stream.on("error", (errStream) => {

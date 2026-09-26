@@ -16,6 +16,7 @@ import {
   creerApk,
   listerApks,
   obtenirApk,
+  obtenirApkActive,
   modifierApk,
   supprimerApk,
   telechargerApk,
@@ -93,6 +94,25 @@ router.post("/", autoriser("superadmin"), gererTeleversementApk, creerApk);
  *   }
  */
 router.get("/", autoriser("superadmin"), listerApks);
+
+/**
+ * GET /api/apks/active
+ * Renvoie la dernière APK active (status=true) — c'est CETTE route
+ * que le site public (client-plateform, bouton "Télécharger
+ * l'application" sur la page d'accueil) doit appeler pour obtenir
+ * dynamiquement l'URL de téléchargement à jour.
+ * - Authentification requise : NON — route PUBLIQUE.
+ *
+ * ⚠️ Doit rester déclarée AVANT "/:id" ci-dessous, sinon Express
+ * interprète "active" comme une valeur de :id (et la route tombe
+ * alors sur obtenirApk, protégée SUPERADMIN → 403 pour un visiteur).
+ *
+ * Réponse (200 OK) :
+ *   { message, apk: { id, libelle, description, file_url, status, date_upload } }
+ * Erreurs :
+ *   - 404 Not Found : aucune APK active
+ */
+router.get("/active", obtenirApkActive);
 
 /**
  * GET /api/apks/:id
