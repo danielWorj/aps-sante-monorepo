@@ -11,6 +11,7 @@
 // (données / chargement / erreur) pour ne pas se bloquer entre elles.
 
 import 'package:flutter/foundation.dart';
+import 'package:riverpod/riverpod.dart';
 
 import '../models/referentiel_models.dart';
 import '../repositories/referentiel_repository.dart';
@@ -223,3 +224,43 @@ class ReferentielController extends ChangeNotifier {
     notifyListeners();
   }
 }
+
+/* =========================================================================
+ * Pont Riverpod (onboarding)
+ * ========================================================================= */
+//
+// [ReferentielController] ci-dessus est un ChangeNotifier "classique",
+// contrairement aux autres modules de l'app (Medecin, Assurance...) qui
+// exposent leur état via des providers Riverpod. Les écrans d'onboarding
+// (lib/pages/public/onboarding/) ont besoin de Pays/Ville sous cette
+// même forme (AsyncValue) pour rester cohérents avec le reste du
+// parcours — d'où ce petit pont, qui ne remplace PAS
+// [ReferentielController] (toujours valable pour un usage ChangeNotifier
+// classique ailleurs dans l'app) mais lui ajoute une façade Riverpod
+// minimale, en s'appuyant directement sur [ReferentielRepository]
+// (jamais sur [ReferentielController]) pour éviter toute gestion d'état
+// en double.
+
+/// Repository référentiel ré-exposé en provider, sur le même principe
+/// que `medecinRepositoryProvider` / `assuranceRepositoryProvider`.
+/// Réutilise [apiClientProvider] (api_client.dart) plutôt que de créer
+/// un [ApiClient] séparé.
+final referentielRepositoryProvider = Provider<ReferentielRepository>((ref) {
+  return ReferentielRepository(ref.watch(apiClientProvider));
+});
+
+/// Liste des pays (GET /referentiels/pays, route publique) — utilisée
+/// par les écrans "Dans quelle ville ?" de l'onboarding (Médecins,
+/// Assurances).
+final listePaysProvider = FutureProvider<List<Pays>>((ref) {
+  return ref.watch(referentielRepositoryProvider).listerPays();
+});
+
+/// Villes d'un pays (GET /referentiels/villes?pays_id=..., route
+/// publique). `.family` : un provider distinct (et son propre cache)
+/// par `paysId`, pour ne pas re-fetcher à chaque changement de
+/// sélection.
+final villesParPaysProvider =
+FutureProvider.family<List<Ville>, String>((ref, paysId) {
+  return ref.watch(referentielRepositoryProvider).listerVilles(paysId: paysId);
+});
