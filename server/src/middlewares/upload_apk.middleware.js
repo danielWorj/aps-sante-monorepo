@@ -13,15 +13,15 @@
 // Validation :
 //   - Type MIME : application/vnd.android.package-archive ou application/octet-stream
 //   - Extension : .apk
-//   - Taille max : 100 Mo par fichier
+//   - Taille max : 500 Mo par fichier
 //
 // Le caractère "obligatoire" du fichier (requis en création, optionnel
 // en modification) est vérifié dans le contrôleur, pas ici.
 
 import multer from "multer";
 
-// Limite 100 Mo par fichier APK
-const TAILLE_MAX_APK = 100 * 1024 * 1024;
+// Limite 500 Mo par fichier APK
+const TAILLE_MAX_APK = 500 * 1024 * 1024;
 
 // Types MIME autorisés pour les APKs (peuvent varier selon la source/le navigateur)
 const TYPES_AUTORISES_APK = [
