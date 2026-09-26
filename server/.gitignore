@@ -6,4 +6,4 @@ node_modules
 /deploiment_info
 keys/jwt_access_private.pem
 npm-debug.log
-storage/apk
+/storage
