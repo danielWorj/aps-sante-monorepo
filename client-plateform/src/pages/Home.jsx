@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import heroBg from '../assets/img/med7.jpg';
 import mobileApp from '../assets/img/mobileapp.png';
-import { obtenirApkActive, obtenirUrlTelechargementApk } from '../services/apkService';
+import {
+  obtenirApkActive,
+  obtenirUrlTelechargementApk,
+  telechargerApkAvecProgression,
+  declencherSauvegardeBlob,
+} from '../services/apkService';
 
 /* ---------------------------- Petits composants réutilisables ---------------------------- */
 
@@ -715,6 +720,32 @@ export default function Home() {
   // dans les deux cas le bouton se désactive proprement (voir plus bas).
   const [apkDownloadUrl, setApkDownloadUrl] = useState(null);
 
+  // Barre de progression du téléchargement de l'APK : null = pas de
+  // téléchargement en cours, sinon 0-100. S'active dès le clic sur
+  // "Télécharger l'application" (voir lancerTelechargementApk) et se
+  // remet à null à la fin (succès ou échec).
+  const [progressionTelechargement, setProgressionTelechargement] = useState(null);
+  const [erreurTelechargement, setErreurTelechargement] = useState(null);
+
+  async function lancerTelechargementApk() {
+    if (!apkDownloadUrl || progressionTelechargement !== null) return;
+    setErreurTelechargement(null);
+    setProgressionTelechargement(0);
+    try {
+      const { blob, nomFichier } = await telechargerApkAvecProgression(
+        apkDownloadUrl,
+        setProgressionTelechargement
+      );
+      declencherSauvegardeBlob(blob, nomFichier);
+    } catch (err) {
+      setErreurTelechargement(
+        err?.message || "Le téléchargement a échoué. Réessayez dans quelques instants."
+      );
+    } finally {
+      setProgressionTelechargement(null);
+    }
+  }
+
   useEffect(() => {
     let annule = false;
     obtenirApkActive()
@@ -952,13 +983,22 @@ export default function Home() {
 
               <div className="d-flex gap-3 flex-wrap align-items-center">
                 {apkDownloadUrl ? (
-                  <a
-                    href={apkDownloadUrl}
-                    download
+                  <button
+                    type="button"
                     className="btn btn-primary btn-lg-aps app-download-btn"
+                    onClick={lancerTelechargementApk}
+                    disabled={progressionTelechargement !== null}
                   >
-                    <i className="fa-solid fa-download" /> Télécharger l&apos;application
-                  </a>
+                    {progressionTelechargement !== null ? (
+                      <>
+                        <i className="fa-solid fa-spinner fa-spin" /> Téléchargement… {progressionTelechargement}%
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-download" /> Télécharger l&apos;application
+                      </>
+                    )}
+                  </button>
                 ) : (
                   <button
                     type="button"
@@ -973,6 +1013,30 @@ export default function Home() {
                   <i className="fa-brands fa-android" /> Fichier APK · Android 7.0 ou plus
                 </span>
               </div>
+
+              {progressionTelechargement !== null && (
+                <div
+                  className="progress mt-3"
+                  role="progressbar"
+                  aria-label="Progression du téléchargement de l'application"
+                  aria-valuenow={progressionTelechargement}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  style={{ height: 8, maxWidth: 320 }}
+                >
+                  <div
+                    className={`progress-bar${progressionTelechargement < 100 ? ' progress-bar-striped progress-bar-animated' : ' bg-success'}`}
+                    style={{ width: `${progressionTelechargement}%` }}
+                  ></div>
+                </div>
+              )}
+
+              {erreurTelechargement && (
+                <div className="alert alert-danger mt-3 mb-0 py-2 px-3" style={{ maxWidth: 420, fontSize: 14 }} role="alert">
+                  <i className="fa-solid fa-circle-exclamation me-2" />
+                  {erreurTelechargement}
+                </div>
+              )}
             </div>
 
             <div className="app-mockup-wrap">

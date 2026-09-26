@@ -76,10 +76,18 @@ import './../assets/style/GestionApk.css';
 const LIBELLE_LONGUEUR_MAX = 255;
 const DESCRIPTION_LONGUEUR_MAX = 2000;
 
-// Extensions acceptées par le sélecteur de fichier : l'APK lui-même,
-// et l'AAB (format de publication Android moderne) au cas où la
-// distribution se ferait aussi via ce format.
-const EXTENSIONS_FICHIER_ACCEPTEES = '.apk,.aab,application/vnd.android.package-archive';
+// Extensions acceptées par le sélecteur de fichier.
+// ⚠️ BUG CORRIGÉ : ".aab" figurait ici alors que le backend
+// (upload_apk.middleware.js / gestionapk.controller.js) n'accepte
+// QUE l'extension ".apk" — tout envoi d'un .aab échouait donc
+// systématiquement (400, "Extension de fichier non autorisée"),
+// après sélection via un sélecteur qui pourtant le proposait. On
+// retire .aab : un .aab n'est de toute façon pas installable par
+// téléchargement direct sur un téléphone (il faut passer par
+// bundletool / le Play Store), ce qui ne correspond pas à l'usage de
+// ce module ("Installation directe, sans passer par un store", voir
+// client-plateform/src/pages/Home.jsx).
+const EXTENSIONS_FICHIER_ACCEPTEES = '.apk,application/vnd.android.package-archive';
 
 /* ────────────────────────── Aides d'affichage ────────────────────────── */
 
