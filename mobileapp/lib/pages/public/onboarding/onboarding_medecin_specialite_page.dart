@@ -17,11 +17,13 @@ import 'onboarding_progress.dart';
 /// (medecin_controller.dart, GET /specialites, public) et le présente
 /// sous forme de cartes sélectionnables.
 ///
-/// Au tap sur « Voir les médecins » : pose les filtres choisis
-/// (ville + pays d'exercice + spécialité) dans [filtresMedecinsProvider]
-/// — porté par [medecinProviderContainer], le même container que
-/// [MedecinPage] — puis pousse cet écran, qui les lira immédiatement au
-/// premier chargement de sa liste.
+/// Au tap sur une carte de spécialité : pose directement les filtres
+/// choisis (ville + pays d'exercice + spécialité) dans
+/// [filtresMedecinsProvider] — porté par [medecinProviderContainer], le
+/// même container que [MedecinPage] — puis pousse cet écran, qui les
+/// lira immédiatement au premier chargement de sa liste. Aucune étape
+/// de confirmation supplémentaire : choisir la spécialité ouvre
+/// directement la liste des médecins.
 class OnboardingMedecinSpecialitePage extends StatefulWidget {
   const OnboardingMedecinSpecialitePage({
     super.key,
@@ -46,14 +48,12 @@ class _OnboardingMedecinSpecialitePageState
   late ProviderSubscription<AsyncValue<List<Specialite>>> _specialitesSub;
   AsyncValue<List<Specialite>> _specialitesState = const AsyncLoading();
 
-  String? _specialiteId;
-
   @override
   void initState() {
     super.initState();
     _specialitesSub = _container.listen<AsyncValue<List<Specialite>>>(
       listeSpecialitesControllerProvider,
-      (previous, next) => setState(() => _specialitesState = next),
+          (previous, next) => setState(() => _specialitesState = next),
       fireImmediately: true,
     );
   }
@@ -64,10 +64,9 @@ class _OnboardingMedecinSpecialitePageState
     super.dispose();
   }
 
-  void _voirLesMedecins() {
-    if (_specialiteId == null) return;
+  void _voirLesMedecins(String specialiteId) {
     _container.read(filtresMedecinsProvider.notifier).state = MedecinFiltres(
-      specialiteId: _specialiteId,
+      specialiteId: specialiteId,
       villeExerciceId: widget.villeExerciceId,
       paysExerciceId: widget.paysExerciceId,
     );
@@ -124,32 +123,37 @@ class _OnboardingMedecinSpecialitePageState
                   ),
                 )
               else if (specialites.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(
-                    child: Text('Aucune spécialité disponible pour le moment.'),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text('Aucune spécialité disponible pour le moment.'),
+                    ),
+                  )
+                else
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      for (final s in specialites)
+                        _SpecialiteChip(
+                          label: s.nom,
+                          onTap: () => _voirLesMedecins(s.specialiteId),
+                        ),
+                    ],
                   ),
-                )
-              else
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    for (final s in specialites)
-                      _SpecialiteChip(
-                        label: s.nom,
-                        selected: _specialiteId == s.specialiteId,
-                        onTap: () =>
-                            setState(() => _specialiteId = s.specialiteId),
-                      ),
-                  ],
-                ),
               const SizedBox(height: 28),
-              OnboardingNavActions(
-                onBack: () => Navigator.of(context).pop(),
-                onNext: _specialiteId == null ? null : _voirLesMedecins,
-                nextLabel: 'Voir les médecins',
-                nextIcon: Icons.search,
+              Material(
+                color: AppColors.card,
+                shape: const CircleBorder(side: BorderSide(color: AppColors.line)),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => Navigator.of(context).pop(),
+                  child: const SizedBox(
+                    width: 46,
+                    height: 46,
+                    child: Icon(Icons.arrow_back_rounded, color: AppColors.ink, size: 20),
+                  ),
+                ),
               ),
             ],
           ),
@@ -159,23 +163,23 @@ class _OnboardingMedecinSpecialitePageState
   }
 }
 
-/// Carte sélectionnable pour une spécialité, équivalent de
-/// `.service-type-opt` / `.opt-card` côté web.
+/// Carte de spécialité, équivalent de `.service-type-opt` / `.opt-card`
+/// côté web. Le tap ouvre directement la liste des médecins pour cette
+/// spécialité — pas d'état "sélectionné" à conserver, une seule
+/// interaction suffit.
 class _SpecialiteChip extends StatelessWidget {
   const _SpecialiteChip({
     required this.label,
-    required this.selected,
     required this.onTap,
   });
 
   final String label;
-  final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? AppColors.primary : AppColors.card,
+      color: AppColors.card,
       borderRadius: AppRadius.smRadius,
       child: InkWell(
         borderRadius: AppRadius.smRadius,
@@ -184,24 +188,22 @@ class _SpecialiteChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: AppRadius.smRadius,
-            border: Border.all(
-              color: selected ? AppColors.primary : AppColors.line,
-            ),
+            border: Border.all(color: AppColors.line),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
+              const Icon(
                 Icons.medical_services_outlined,
                 size: 16,
-                color: selected ? Colors.white : AppColors.primary,
+                color: AppColors.primary,
               ),
               const SizedBox(width: 8),
               Text(
                 label,
                 style: AppTextStyles.cardTitle.copyWith(
                   fontSize: 13,
-                  color: selected ? Colors.white : AppColors.ink,
+                  color: AppColors.ink,
                 ),
               ),
             ],

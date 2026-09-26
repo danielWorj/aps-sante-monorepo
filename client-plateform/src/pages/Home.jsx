@@ -1,10 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import heroBg from '../assets/img/med7.jpg';
 import mobileApp from '../assets/img/mobileapp.png';
-
-/* Lien vers le fichier APK — à remplacer par l'URL réelle d'hébergement du fichier */
-const APK_DOWNLOAD_URL = '/downloads/aps.apk';
+import { obtenirApkActive, obtenirUrlTelechargementApk } from '../services/apkService';
 
 /* ---------------------------- Petits composants réutilisables ---------------------------- */
 
@@ -709,6 +707,30 @@ function ServiceForm() {
 export default function Home() {
   const [proTab, setProTab] = useState('medecin'); // 'medecin' | 'service'
 
+  // URL de téléchargement de l'APK active, récupérée dynamiquement
+  // depuis GET /api/apks/active (route publique — voir
+  // src/services/apkService.js) plutôt qu'un chemin statique en dur
+  // ('/downloads/aps.apk') qui ne correspondait à aucun fichier réel.
+  // null = pas encore chargée / aucune APK active pour le moment ;
+  // dans les deux cas le bouton se désactive proprement (voir plus bas).
+  const [apkDownloadUrl, setApkDownloadUrl] = useState(null);
+
+  useEffect(() => {
+    let annule = false;
+    obtenirApkActive()
+      .then((apk) => {
+        if (!annule) setApkDownloadUrl(obtenirUrlTelechargementApk(apk));
+      })
+      .catch(() => {
+        // Erreur réseau/serveur : on laisse le bouton désactivé plutôt
+        // que de faire planter la page d'accueil pour ça.
+        if (!annule) setApkDownloadUrl(null);
+      });
+    return () => {
+      annule = true;
+    };
+  }, []);
+
   return (
     <>
       {/* ============================ HERO ============================ */}
@@ -929,9 +951,24 @@ export default function Home() {
               </ul>
 
               <div className="d-flex gap-3 flex-wrap align-items-center">
-                <a href={APK_DOWNLOAD_URL} download className="btn btn-primary btn-lg-aps app-download-btn">
-                  <i className="fa-solid fa-download" /> Télécharger l&apos;application
-                </a>
+                {apkDownloadUrl ? (
+                  <a
+                    href={apkDownloadUrl}
+                    download
+                    className="btn btn-primary btn-lg-aps app-download-btn"
+                  >
+                    <i className="fa-solid fa-download" /> Télécharger l&apos;application
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-lg-aps app-download-btn"
+                    disabled
+                    title="Application momentanément indisponible au téléchargement"
+                  >
+                    <i className="fa-solid fa-download" /> Télécharger l&apos;application
+                  </button>
+                )}
                 <span className="app-promo-meta">
                   <i className="fa-brands fa-android" /> Fichier APK · Android 7.0 ou plus
                 </span>
