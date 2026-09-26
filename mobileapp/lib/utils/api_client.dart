@@ -16,6 +16,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:riverpod/riverpod.dart';
 
+import 'endpoint.dart' show ApiRealEndpoints;
+
 /// Regroupe tous les chemins d'API exposés par le backend Express.
 /// Garder les endpoints ici évite de disperser des chaînes de
 /// caractères "en dur" dans les repositories.
@@ -207,30 +209,29 @@ class FichierMultipart {
 /// Centraliser cette valeur ici évite de la dupliquer/hardcoder dans
 /// plusieurs fichiers (repositories, main.dart, tests...).
 ///
-/// ⚠️ Adapte cette valeur à ton environnement :
-///   - Émulateur Android : http://10.0.2.2:3000
-///   - Simulateur iOS / Web / Desktop : http://localhost:3000
-///   - Appareil physique (ou émulateur qui ne route pas 10.0.2.2) :
-///     http://<IP_DE_TA_MACHINE_SUR_LE_RESEAU_LOCAL>:3000
+/// ⚠️ Historique : cette constante pointait auparavant en dur vers
+/// `http://10.0.2.2:3000/api` (alias local, valable UNIQUEMENT depuis
+/// un émulateur Android standard avec un serveur Express lancé en
+/// local sur le port 3000). Sur tout autre environnement (simulateur
+/// iOS, web, desktop, appareil physique, ou simplement pas de serveur
+/// local démarré), chaque requête échouait silencieusement en
+/// SocketException/timeout, transformée en [ApiException] par
+/// [ApiClient._envoyer] — c'est ce qui causait le bug de chargement
+/// de la liste des pays à l'onboarding : [ReferentielRepository] était
+/// le seul module de l'app à passer par [ApiConfig] au lieu de
+/// [ApiRealEndpoints] (endpoint.dart), utilisé partout ailleurs
+/// (médecins, assurances, pharmacies, rendez-vous...).
 ///
-/// 10.0.2.2 est un alias spécial UNIQUEMENT valable depuis un
-/// émulateur Android standard (AVD) — il pointe vers le localhost de
-/// la machine hôte. Sur un appareil physique (ou tout environnement
-/// qui n'est pas cet émulateur précis), cette adresse n'est pas
-/// joignable : chaque requête échoue silencieusement en
-/// SocketException/timeout, capturée et transformée en [ApiException]
-/// par [ApiClient._envoyer] — d'où l'impression que "ApiClient bug"
-/// alors que c'est simplement la mauvaise adresse réseau.
-///
-/// Ici on utilise l'IP réelle de la machine hôte sur le réseau local
-/// (celle avec laquelle l'appel direct http.get() fonctionnait).
+/// Réutilise donc directement [ApiRealEndpoints.baseUrl] comme source
+/// unique de vérité, pour que ce module tape sur la même API (prod)
+/// que le reste de l'application.
 class ApiConfig {
   ApiConfig._();
 
-  /// URL de base du serveur Express, SANS slash final et SANS le
-  /// préfixe des routes (les chemins dans [ApiEndpoints] commencent
-  /// déjà par '/', ex: '/auth/login').
-  static const String baseUrl = 'http://10.0.2.2:3000/api';
+  /// URL de base de l'API, SANS slash final et SANS le préfixe des
+  /// routes (les chemins dans [ApiEndpoints] commencent déjà par '/',
+  /// ex: '/auth/login').
+  static const String baseUrl = ApiRealEndpoints.baseUrl;
 }
 
 /// Client HTTP minimal, sans dépendance à un état global : le token
