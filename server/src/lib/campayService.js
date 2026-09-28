@@ -6,10 +6,17 @@
 import jwt from "jsonwebtoken";
 
 const BASE_URL = (process.env.CAMPAY_BASE_URL || "https://demo.campay.net/api").replace(/\/$/, "");
-const TOKEN = process.env.CAMPAY_TOKEN;
 
-if (!TOKEN) {
-  throw new Error("CAMPAY_TOKEN manquant dans l'environnement.");
+// Le token est lu à l'appel (et non à l'import) : un CAMPAY_TOKEN absent ne doit
+// pas empêcher tout le serveur (Stripe compris) de démarrer, seulement les
+// paiements CamPay d'échouer proprement.
+function tokenCampay() {
+  const token = process.env.CAMPAY_TOKEN;
+  if (!token) {
+    console.error("[campay] CAMPAY_TOKEN manquant dans l'environnement.");
+    throw new CampayError("Le paiement Mobile Money est momentanément indisponible.", { status: 503 });
+  }
+  return token;
 }
 
 export const DEVISE_CAMPAY = "XAF";
@@ -40,6 +47,7 @@ export function normaliserNumeroCM(saisie) {
 }
 
 async function appelCampay(chemin, { method = "GET", body } = {}) {
+  const TOKEN = tokenCampay();
   let res;
   try {
     res = await fetch(`${BASE_URL}${chemin}`, {
