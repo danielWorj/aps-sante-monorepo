@@ -174,7 +174,10 @@ export async function traiterAnnulation(
   }
 
   const t = escrow.transaction;
-  if (t.montant_honoraires == null || !t.stripe_payment_intent_id) {
+  // CamPay (Mobile Money) : pas de PaymentIntent, et pas de remboursement
+  // natif — voir l'enregistrement « a_traiter » plus bas.
+  const estCampay = t.fournisseur === "campay";
+  if (t.montant_honoraires == null || (!estCampay && !t.stripe_payment_intent_id)) {
     // Une transaction liée à un rendez-vous porte toujours ces deux
     // faits (posés à la capture, voir paiement.controller.js) — mieux
     // vaut un 500 clair qu'un remboursement calculé sur du vide.
@@ -213,8 +216,10 @@ export async function traiterAnnulation(
   // 1. Stripe d'abord (voir l'en-tête pour l'ordre). Cas limite : si la
   // retenue absorbait tout le montant (taux = 1 et aucun frais/taxe),
   // il n'y a rien à rembourser et Stripe refuserait un montant nul.
+  // CamPay : aucun appel ici, le remboursement est enregistré « a_traiter »
+  // dans la transaction SQL ci-dessous et exécuté ensuite par un admin.
   let refund = null;
-  if (montantARembourser > 0) {
+  if (montantARembourser > 0 && !estCampay) {
     refund = await creerRemboursement({
       payment_intent_id: t.stripe_payment_intent_id,
       montant: montantARembourser,
@@ -261,7 +266,21 @@ export async function traiterAnnulation(
           stripe_refund_id: refund.id,
         },
       });
-      remboursement = { montant: montantReel, devise: t.devise, motif: motifRemboursement };
+      remboursement = { montant: montantReel, devise: t.devise, motif: motifRemboursement, statut: "effectue" };
+    } else if (estCampay && montantARembourser > 0) {
+      // Pas de remboursement natif chez CamPay : on enregistre la dette envers
+      // le patient (XAF sans décimales). Un admin l'exécute par retrait Mobile
+      // Money vers numero_payeur, puis passe la ligne à « traite ».
+      const montantCampay = Math.round(montantARembourser);
+      await tx.remboursementPaiement.create({
+        data: {
+          transaction_id: t.transaction_id,
+          montant: montantCampay,
+          motif: motifRemboursement,
+          statut: "a_traiter",
+        },
+      });
+      remboursement = { montant: montantCampay, devise: t.devise, motif: motifRemboursement, statut: "a_traiter" };
     }
 
     if (fraisTardifs > 0) {

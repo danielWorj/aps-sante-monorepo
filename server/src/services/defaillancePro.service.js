@@ -71,7 +71,7 @@ import { creerMouvement } from "./portefeuille.service.js";
 export async function traiterDefaillancePro(rdv) {
   const escrow = await prisma.compteEscrow.findUnique({
     where: { rdv_id: rdv.rdv_id },
-    include: { transaction: true },
+    include: { transaction: { include: { ligne_frais_agregateur: true } } },
   });
 
   // Rendez-vous "confirme"/"en_attente_presence" sans escrow : ne
@@ -90,46 +90,66 @@ export async function traiterDefaillancePro(rdv) {
   }
 
   const t = escrow.transaction;
-  if (t.montant_honoraires == null || !t.stripe_payment_intent_id) {
+  // CamPay (Mobile Money) : pas de PaymentIntent, pas de remboursement natif.
+  const estCampay = t.fournisseur === "campay";
+  if (t.montant_honoraires == null || (!estCampay && !t.stripe_payment_intent_id)) {
     throw new Error(
       `Transaction ${t.transaction_id} incomplète (honoraires ou payment_intent manquants) : ` +
       `défaillance pro du rdv ${rdv.rdv_id} impossible à traiter.`
     );
   }
 
-  // 1. Frais de transaction PSP réel — un FAIT à lire chez Stripe,
-  // jamais recalculé (voir stripeService.js). Levée d'erreur explicite
-  // si indisponible plutôt qu'un montant deviné : rien n'a encore été
-  // fait, le job réessaiera ce rendez-vous au prochain passage.
-  const fraisTransaction = await obtenirFraisTransactionPaymentIntent(t.stripe_payment_intent_id);
-  if (!fraisTransaction) {
-    throw new Error(
-      `Frais de transaction Stripe indisponible pour le payment_intent ${t.stripe_payment_intent_id} ` +
-      `(rdv ${rdv.rdv_id}) : la charge n'est probablement pas encore totalement réglée côté Stripe. ` +
-      `Traitement reporté au prochain passage du cron.`
-    );
-  }
-  const montantFraisNoShow = depuisUniteStripe(fraisTransaction.fee, fraisTransaction.devise);
-
-  // 2. Remboursement intégral du montant RÉELLEMENT capturé (fait
-  // constaté sur t.montant — honoraires + commission + taxes + frais
-  // d'agrégateur déjà inclus dedans, cf. Phase 0), jamais recalculé :
-  // même principe que traiterAnnulation (Phase 3), aucune retenue ici
+  // Remboursement intégral du montant RÉELLEMENT capturé (fait constaté sur
+  // t.montant — honoraires + commission + taxes + frais d'agrégateur déjà
+  // inclus dedans, cf. Phase 0), jamais recalculé : aucune retenue ici
   // contrairement à une annulation tardive du patient (§4).
   const montantARembourser = Number(t.montant);
 
-  const refund = await creerRemboursement({
-    payment_intent_id: t.stripe_payment_intent_id,
-    montant: montantARembourser,
-    devise: t.devise,
-    idempotency_key: `refund:${rdv.rdv_id}`,
-    metadata: { rdv_id: rdv.rdv_id, transaction_id: t.transaction_id, motif: "defaillance_pro" },
-  });
-  if (refund.status === "failed" || refund.status === "canceled") {
-    throw new Error(
-      `Remboursement Stripe ${refund.id} en échec (statut ${refund.status}) pour le rdv ${rdv.rdv_id} : ` +
-      `traitement de la défaillance pro non finalisé.`
-    );
+  let montantFraisNoShow;
+  let refund = null;
+
+  if (estCampay) {
+    // CamPay n'expose pas le coût PSP réel : on impute au médecin le frais
+    // d'agrégateur porté par la ligne tarifaire capturée à la réservation
+    // (honoraires × taux), en XAF entiers. Aucun appel externe : rien à
+    // annuler en cas de rejeu.
+    if (!t.ligne_frais_agregateur) {
+      throw new Error(
+        `Ligne « frais d'agrégateur » manquante sur la transaction CamPay ${t.transaction_id} ` +
+        `(rdv ${rdv.rdv_id}) : défaillance pro impossible à traiter.`
+      );
+    }
+    montantFraisNoShow = Math.round(Number(t.montant_honoraires) * Number(t.ligne_frais_agregateur.taux));
+  } else {
+    // 1. Frais de transaction PSP réel — un FAIT à lire chez Stripe,
+    // jamais recalculé (voir stripeService.js). Levée d'erreur explicite
+    // si indisponible plutôt qu'un montant deviné : rien n'a encore été
+    // fait, le job réessaiera ce rendez-vous au prochain passage.
+    const fraisTransaction = await obtenirFraisTransactionPaymentIntent(t.stripe_payment_intent_id);
+    if (!fraisTransaction) {
+      throw new Error(
+        `Frais de transaction Stripe indisponible pour le payment_intent ${t.stripe_payment_intent_id} ` +
+        `(rdv ${rdv.rdv_id}) : la charge n'est probablement pas encore totalement réglée côté Stripe. ` +
+        `Traitement reporté au prochain passage du cron.`
+      );
+    }
+    montantFraisNoShow = depuisUniteStripe(fraisTransaction.fee, fraisTransaction.devise);
+
+    // 2. Remboursement Stripe AVANT l'écriture en base (un appel Stripe ne
+    // peut pas être annulé par un rollback SQL).
+    refund = await creerRemboursement({
+      payment_intent_id: t.stripe_payment_intent_id,
+      montant: montantARembourser,
+      devise: t.devise,
+      idempotency_key: `refund:${rdv.rdv_id}`,
+      metadata: { rdv_id: rdv.rdv_id, transaction_id: t.transaction_id, motif: "defaillance_pro" },
+    });
+    if (refund.status === "failed" || refund.status === "canceled") {
+      throw new Error(
+        `Remboursement Stripe ${refund.id} en échec (statut ${refund.status}) pour le rdv ${rdv.rdv_id} : ` +
+        `traitement de la défaillance pro non finalisé.`
+      );
+    }
   }
 
   // 3. Base de données : tout ou rien.
@@ -146,22 +166,40 @@ export async function traiterDefaillancePro(rdv) {
       return { deja_traite: true, remboursement: null, frais_no_show: null };
     }
 
-    const montantReel = depuisUniteStripe(refund.amount, t.devise);
-    await tx.remboursementPaiement.create({
-      data: {
-        transaction_id: t.transaction_id,
-        montant: montantReel,
-        motif: "defaillance_pro",
-        stripe_refund_id: refund.id,
-      },
-    });
+    let montantReel;
+    let statutRemboursement;
+    if (estCampay) {
+      // Dette envers le patient, exécutée ensuite par un admin (retrait Mobile Money).
+      montantReel = Math.round(montantARembourser);
+      statutRemboursement = "a_traiter";
+      await tx.remboursementPaiement.create({
+        data: {
+          transaction_id: t.transaction_id,
+          montant: montantReel,
+          motif: "defaillance_pro",
+          statut: "a_traiter",
+        },
+      });
+    } else {
+      montantReel = depuisUniteStripe(refund.amount, t.devise);
+      statutRemboursement = "effectue";
+      await tx.remboursementPaiement.create({
+        data: {
+          transaction_id: t.transaction_id,
+          montant: montantReel,
+          motif: "defaillance_pro",
+          stripe_refund_id: refund.id,
+        },
+      });
+    }
 
     await tx.rendezVous.update({
       where: { rdv_id: rdv.rdv_id },
       data: { statut: "non_honore" },
     });
 
-    await creerMouvement(
+    // CamPay : un frais d'agrégateur à 0 ne génère aucun mouvement.
+    if (montantFraisNoShow > 0 || !estCampay) await creerMouvement(
       {
         medecin_id: rdv.medecin_id,
         type: "debit_frais_no_show",
@@ -174,7 +212,7 @@ export async function traiterDefaillancePro(rdv) {
 
     return {
       deja_traite: false,
-      remboursement: { montant: montantReel, devise: t.devise },
+      remboursement: { montant: montantReel, devise: t.devise, statut: statutRemboursement },
       frais_no_show: montantFraisNoShow,
     };
   });

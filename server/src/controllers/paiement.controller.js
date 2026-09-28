@@ -10,6 +10,7 @@ import {
 } from "../lib/stripeService.js";
 import { decomposerMontant, obtenirLignesTarifairesActives } from "../services/tarification.service.js";
 import { finaliserPaiement } from "../services/finalisationPaiement.service.js";
+import { synchroniserCampayPourRdv, derniereTentativeCampay } from "../services/paiementCampay.service.js";
 
 const DEVISE_PAR_DEFAUT = process.env.STRIPE_DEVISE_PAR_DEFAUT || "xaf";
 
@@ -237,6 +238,17 @@ export async function obtenirStatutPaiementRdv(req, res, next) {
       return res.status(403).json({ message: "Accès refusé." });
     }
 
+    // CamPay : auto-guérison. Si une collecte Mobile Money est en attente, on
+    // interroge CamPay ici (throttlé) : le paiement se valide même sans webhook
+    // (ex. en local). Une panne CamPay ne doit jamais faire échouer ce GET.
+    try {
+      await synchroniserCampayPourRdv(rdv.rdv_id);
+    } catch (err) {
+      console.error(`[campay] Synchronisation du rdv ${rdv.rdv_id} impossible :`, err.message);
+    }
+    // Relu APRÈS la synchronisation : le RDV a pu passer de « cree » à « confirme ».
+    const rdvActuel = await prisma.rendezVous.findUnique({ where: { rdv_id: rdv.rdv_id }, select: { statut: true } });
+
     const escrow = await prisma.compteEscrow.findUnique({
       where: { rdv_id: rdv.rdv_id },
       include: {
@@ -261,7 +273,7 @@ export async function obtenirStatutPaiementRdv(req, res, next) {
     }
 
     return res.status(200).json({
-      statut_rdv: rdv.statut,
+      statut_rdv: rdvActuel?.statut ?? rdv.statut,
       paiement: escrow
         ? {
             statut: escrow.transaction.statut,
@@ -270,6 +282,10 @@ export async function obtenirStatutPaiementRdv(req, res, next) {
             decomposition,
           }
         : null,
+      // Dernière tentative Mobile Money (null si le RDV n'en a aucune) :
+      // { fournisseur: "campay", statut: en_attente | reussie | echouee | remboursee, operateur }
+      // -> permet au front d'afficher « en attente de validation », « refusé / expiré ».
+      tentative_campay: await derniereTentativeCampay(rdv.rdv_id),
     });
   } catch (err) { next(err); }
 }
