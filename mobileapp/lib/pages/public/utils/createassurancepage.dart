@@ -35,10 +35,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../components/components.dart';
-// `authTokenProvider` est aussi redéclaré (en stub toujours `null`) dans
-// assurance_controller.dart : on le masque pour lire le vrai token de
-// session, celui de authentification_controller.dart.
-import '../../../controllers/assurance_controller.dart' hide authTokenProvider;
+import '../../../controllers/assurance_controller.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../models/assurance_models.dart';
 import '../../../models/referentiel_models.dart' show Pays, Ville;
@@ -244,7 +241,7 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
     final token = ref.read(authTokenProvider);
     if (token == null) {
       setState(() => _stepError =
-          'Vous devez être connecté(e) pour envoyer cette demande.');
+      'Vous devez être connecté(e) pour envoyer cette demande.');
       return;
     }
 
@@ -331,7 +328,7 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
     return ApsStepBody(
       title: 'Informations générales',
       description:
-          "Rejoignez l'annuaire en tant que compagnie d'assurance santé ou "
+      "Rejoignez l'annuaire en tant que compagnie d'assurance santé ou "
           'courtier. Quelques minutes suffisent.',
       showBack: false,
       error: currentStep == 0 ? _stepError : null,
@@ -498,7 +495,7 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
           padding: EdgeInsets.only(bottom: 14),
           child: Text(
             'Facultatif : latitude et longitude vont ensemble. Laissez les '
-            'deux vides si vous ne connaissez pas la position.',
+                'deux vides si vous ne connaissez pas la position.',
             style: TextStyle(
               fontFamily: AppTextStyles.fontBody,
               fontSize: 10.5,
@@ -512,7 +509,7 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
   }
 
   static final TextInputFormatter _coordonneeFormatter =
-      FilteringTextInputFormatter.allow(RegExp(r'[0-9\-\.,]'));
+  FilteringTextInputFormatter.allow(RegExp(r'[0-9\-\.,]'));
 
   // ---- Étape 5 : Agent responsable ---------------------------------------
 
@@ -603,7 +600,7 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
             ApsSummaryRow(
               label: 'Agent responsable',
               value: '${_agentPrenomCtrl.text.trim()} '
-                      '${_agentNomCtrl.text.trim()}'
+                  '${_agentNomCtrl.text.trim()}'
                   .trim(),
             ),
           ],
@@ -645,8 +642,8 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
             subtitle: message.isNotEmpty
                 ? message
                 : 'Votre ${_typeActeur == TypeActeurAssurance.compagnie ? 'compagnie' : 'fiche de courtier'} '
-                    '$nom a été créée. Elle sera visible dans l\'annuaire '
-                    'après vérification par notre équipe.',
+                '$nom a été créée. Elle sera visible dans l\'annuaire '
+                'après vérification par notre équipe.',
           ),
           if (reponse != null)
             ApsCredentialsCard(
@@ -659,13 +656,13 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
                 icon: Icons.schedule_rounded,
                 title: 'Vérification par notre équipe',
                 description:
-                    "Nous contrôlons votre agrément avant la mise en ligne.",
+                "Nous contrôlons votre agrément avant la mise en ligne.",
               ),
               ApsSuccessNextItem(
                 icon: Icons.notifications_none_rounded,
                 title: 'Notification à la mise en ligne',
                 description:
-                    'Vous serez averti dès que la fiche sera visible.',
+                'Vous serez averti dès que la fiche sera visible.',
                 showDivider: false,
               ),
             ],

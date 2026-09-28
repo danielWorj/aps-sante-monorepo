@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../components/components.dart';
 import '../Medecinpage.dart' show medecinProviderContainer;
+import '../../../controllers/authentification_controller.dart';
 import '../login.dart';
+import '../utils/createassurancepage.dart';
+import '../utils/createcentresantepage.dart';
 import '../utils/createmedecinpage.dart';
+import '../utils/createpharmaciepage.dart';
 
 /// Écran 1.2 — Parcours « Je suis professionnel ».
 ///
@@ -15,6 +20,13 @@ import '../utils/createmedecinpage.dart';
 /// mobile, comme demandé : un professionnel qui a déjà un compte se
 /// connecte ([LoginScreen]), un professionnel qui n'en a pas encore crée
 /// sa fiche ([CreateMedecinScreen], parcours en 6 étapes déjà existant).
+///
+/// Les structures (pharmacie, centre de santé, assurance) se déclarent via
+/// [CreatePharmacieScreen], [CreateCentreSanteScreen] et
+/// [CreateAssuranceScreen]. Contrairement à `POST /medecins` (publique),
+/// ces trois routes exigent une session ouverte : sans session, on passe
+/// d'abord par [LoginScreen], puis on reprend automatiquement sur l'écran
+/// demandé (voir [_ouvrirAvecSession]).
 ///
 /// [CreateMedecinScreen] reçoit explicitement [medecinProviderContainer]
 /// (le même [ProviderContainer] que [MedecinPage]/l'onboarding médecin)
@@ -75,8 +87,65 @@ class OnboardingProChoixPage extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 14),
+              _ProChoiceCard(
+                icon: Icons.local_pharmacy_outlined,
+                title: 'Déclarer ma pharmacie',
+                subtitle: 'Fiche pharmacie — inscription en 5 étapes',
+                onTap: () => _ouvrirAvecSession(
+                  context,
+                      (_) => const CreatePharmacieScreen(),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _ProChoiceCard(
+                icon: Icons.local_hospital_outlined,
+                title: 'Déclarer mon centre de santé',
+                subtitle: 'Clinique, hôpital, laboratoire, dispensaire…',
+                onTap: () => _ouvrirAvecSession(
+                  context,
+                      (_) => const CreateCentreSanteScreen(),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _ProChoiceCard(
+                icon: Icons.shield_outlined,
+                title: 'Déclarer mon assurance',
+                subtitle: 'Compagnie ou courtier',
+                onTap: () => _ouvrirAvecSession(
+                  context,
+                      (_) => const CreateAssuranceScreen(),
+                ),
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Ouvre [destination] si une session est ouverte ; sinon affiche
+  /// [LoginScreen] et, une fois connecté, remplace le login par
+  /// [destination] pour que le professionnel ne perde pas son intention.
+  /// Évite qu'un visiteur remplisse toutes les étapes avant d'apprendre
+  /// à l'envoi que la route exige une connexion.
+  void _ouvrirAvecSession(BuildContext context, WidgetBuilder destination) {
+    final container = ProviderScope.containerOf(context, listen: false);
+    if (container.read(sessionControllerProvider).value != null) {
+      Navigator.of(context).push(MaterialPageRoute(builder: destination));
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (routeContext) => LoginScreen(
+          onLoginSuccess: () {
+            if (container.read(sessionControllerProvider).value == null) {
+              return;
+            }
+            Navigator.of(routeContext).pushReplacement(
+              MaterialPageRoute(builder: destination),
+            );
+          },
         ),
       ),
     );

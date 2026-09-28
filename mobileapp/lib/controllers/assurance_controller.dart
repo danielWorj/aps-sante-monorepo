@@ -55,14 +55,9 @@ final assuranceRepositoryProvider = Provider<AssuranceRepository>((ref) {
   return AssuranceRepository();
 });
 
-/// ⚠️ Si un
-/// `authTokenProvider` global existe déjà ailleurs dans le projet (issu de
-/// l'AuthController de l'app), SUPPRIMER cette déclaration et importer
-/// l'existant à la place — ce provider n'est redéclaré ici que pour que ce
-/// fichier compile de façon autonome et que les écrans du module assurance
-/// (ex: [AssuranceDetailPage]) aient un token à lire pour la mise en
-/// relation. `null` tant qu'aucun utilisateur n'est connecté.
-final authTokenProvider = StateProvider<String?>((ref) => null);
+// Le token de session vient de `authTokenProvider`, déclaré dans
+// authentification_controller.dart. Un ancien stub (toujours `null`) était
+// redéclaré ici : il a été supprimé car il masquait la vraie session.
 
 /* =========================================================================
  * Services d'assurance

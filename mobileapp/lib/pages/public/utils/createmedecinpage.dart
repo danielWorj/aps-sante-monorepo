@@ -73,7 +73,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../components/components.dart';
 import '../../../controllers/medecin_controller.dart';
 import '../../../models/medecin_models.dart';
-import '../../../utils/api_client.dart';
 
 /// Container Riverpod de repli, utilisé uniquement si
 /// [CreateMedecinScreen.container] n'est pas fourni — voir la note sur
@@ -347,11 +346,16 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
   }
 
   String _messageErreur(Object erreur) {
-    // ApiException.toString() renvoie directement le message backend
-    // (409 nom pris, 400 champs manquants, etc.) par convention du
-    // projet — voir medecin_repository.dart / utils/api_client.dart.
-    if (erreur is ApiException) return erreur.toString();
-    return "Impossible de créer le compte pour le moment. Merci de réessayer.";
+    // Chaque repository définit sa propre classe `ApiException` : un test
+    // `erreur is ApiException` (celle d'api_client.dart) ne matche donc
+    // jamais l'exception levée par medecin_repository.dart. On s'appuie
+    // sur `toString()`, qui renvoie directement le message backend
+    // (409 email déjà utilisé, 400 champs manquants, etc.).
+    return apsMessageErreur(
+      erreur,
+      parDefaut:
+      "Impossible de créer le compte pour le moment. Merci de réessayer.",
+    );
   }
 
   // ------------------------------------------------------------------

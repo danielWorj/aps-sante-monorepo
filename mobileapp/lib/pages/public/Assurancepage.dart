@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../components/components.dart';
 import '../../controllers/assurance_controller.dart';
+import '../../controllers/authentification_controller.dart' show authTokenProvider;
 import '../../controllers/publicite_controller.dart';
 import '../../models/assurance_models.dart';
 import '../../models/publicite_models.dart';

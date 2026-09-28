@@ -49,6 +49,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/assurance_models.dart';
 import '../utils/endpoint.dart';
+import '../utils/multipart_utils.dart';
 
 /// Erreur levée quand une requête HTTP échoue (statut hors 2xx) ou
 /// quand un appel est mal formé côté client (ex. rien à mettre à
@@ -190,6 +191,7 @@ class AssuranceRepository {
         fichier.champ,
         fichier.octets,
         filename: fichier.nomFichier,
+        contentType: mediaTypeDepuisNom(fichier.nomFichier),
       ));
     }
     final flux = await requete.send().timeout(_timeout);

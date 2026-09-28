@@ -147,6 +147,20 @@ const LIBELLE_ROLE_MEDECIN = "medecin";
 // medecin — d'où le téléphone/nom jamais mis à jour après création.
 const CHAMPS_MODIFIABLES_UTILISATEUR = ["nom", "prenom", "telephone"];
 
+// En multipart/form-data (POST/PUT /medecins), tous les champs arrivent
+// en chaînes : "false" est une chaîne non vide donc truthy, et
+// Boolean("false") vaut true. On interprète explicitement les valeurs
+// booléennes reçues (JSON natif ou chaîne de formulaire).
+function versBooleen(valeur) {
+  if (typeof valeur === "boolean") return valeur;
+  if (typeof valeur === "string") {
+    const v = valeur.trim().toLowerCase();
+    if (v === "true" || v === "1") return true;
+    if (v === "false" || v === "0" || v === "") return false;
+  }
+  return Boolean(valeur);
+}
+
 // Champs de fiche modifiables par le médecin lui-même ou un admin —
 // statut_verification, cni_url et attestation_url sont traités à part
 // ci-dessous (règles spécifiques).
@@ -394,7 +408,7 @@ export async function creerMedecin(req, res, next) {
             numero_ordre,
             pays_exercice_id,
             ville_exercice_id,
-            teleconsultation_activee: Boolean(teleconsultation_activee),
+            teleconsultation_activee: versBooleen(teleconsultation_activee),
             tarif_indicatif,
             biographie,
             cni_url: resultatCni.nom,
@@ -684,7 +698,9 @@ export async function modifierMedecin(req, res, next) {
     const donnees = {};
 
     for (const champ of CHAMPS_MODIFIABLES_MEDECIN) {
-      if (req.body[champ] !== undefined) donnees[champ] = req.body[champ];
+      if (req.body[champ] === undefined) continue;
+      donnees[champ] =
+        champ === "teleconsultation_activee" ? versBooleen(req.body[champ]) : req.body[champ];
     }
 
     // biographie : NOT NULL en base (contrairement à linkedInUrl et
