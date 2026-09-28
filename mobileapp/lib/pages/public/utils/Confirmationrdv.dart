@@ -43,7 +43,7 @@ const List<String> _moisFrConfirmation = [
 ///   ),
 /// );
 /// ```
-class ConfirmationRdvPage extends StatelessWidget {
+class ConfirmationRdvPage extends StatefulWidget {
   const ConfirmationRdvPage({
     super.key,
     required this.medecinNom,
@@ -56,6 +56,8 @@ class ConfirmationRdvPage extends StatelessWidget {
     this.codeUnique,
     this.compteVientDetreCree = false,
     this.patientPrenom,
+    this.paiementBuilder,
+    this.onPaye,
     this.onVoirMesRendezVous,
     this.onRetourAccueil,
   });
@@ -89,6 +91,22 @@ class ConfirmationRdvPage extends StatelessWidget {
   /// de bienvenue quand [compteVientDetreCree] est vrai.
   final String? patientPrenom;
 
+  /// Si fourni, le rendez-vous est **réservé mais pas encore payé** :
+  /// l'écran affiche « à confirmer par le paiement » et insère le widget
+  /// renvoyé par ce builder (le bouton « Payer »). Le builder reçoit un
+  /// callback à appeler quand le paiement est confirmé par le serveur,
+  /// ce qui bascule l'écran sur « Rendez-vous confirmé ».
+  ///
+  /// Volontairement un builder (et non un `rdvId`) pour que cet écran
+  /// reste sans dépendance aux couches données/paiement — voir la note
+  /// en tête de classe.
+  final Widget Function(BuildContext context, VoidCallback marquerPaye)?
+      paiementBuilder;
+
+  /// Appelé une fois le paiement confirmé (ex. rafraîchir « Mes
+  /// rendez-vous »).
+  final VoidCallback? onPaye;
+
   /// Bouton « Voir mes rendez-vous ». Si `null`, replie sur un retour à la
   /// première route de la pile (l'utilisateur ne doit pas pouvoir revenir
   /// sur l'écran de réservation après une réservation réussie).
@@ -98,23 +116,45 @@ class ConfirmationRdvPage extends StatelessWidget {
   /// [onVoirMesRendezVous] si `null`.
   final VoidCallback? onRetourAccueil;
 
-  String get _dateFormatee =>
-      '${dateRdv.day} ${_moisFrConfirmation[dateRdv.month - 1]}';
+  @override
+  State<ConfirmationRdvPage> createState() => _ConfirmationRdvPageState();
+}
 
-  String get _titre => compteVientDetreCree
-      ? 'Compte créé et rendez-vous confirmé'
-      : 'Rendez-vous confirmé';
+class _ConfirmationRdvPageState extends State<ConfirmationRdvPage> {
+  /// Le serveur a confirmé le paiement (webhook Stripe).
+  bool _paye = false;
+
+  /// Paiement encore attendu : un builder est fourni et le paiement n'a
+  /// pas encore été confirmé.
+  bool get _paiementAttendu => widget.paiementBuilder != null && !_paye;
+
+  String get _dateFormatee =>
+      '${widget.dateRdv.day} ${_moisFrConfirmation[widget.dateRdv.month - 1]}';
+
+  String get _titre {
+    if (_paiementAttendu) return 'Rendez-vous réservé — réglez pour le confirmer';
+    return widget.compteVientDetreCree
+        ? 'Compte créé et rendez-vous confirmé'
+        : 'Rendez-vous confirmé';
+  }
 
   String get _sousTitre {
-    final salutation = (patientPrenom != null && patientPrenom!.trim().isNotEmpty)
-        ? 'Merci ${patientPrenom!.trim()} ! '
+    final prenom = widget.patientPrenom;
+    final salutation = (prenom != null && prenom.trim().isNotEmpty)
+        ? 'Merci ${prenom.trim()} ! '
         : '';
-    final compteTxt = compteVientDetreCree
+    final compteTxt = widget.compteVientDetreCree
         ? 'Votre compte patient a été créé et vous êtes maintenant '
-        'connecté(e). '
+            'connecté(e). '
         : '';
-    return '$salutation${compteTxt}Votre rendez-vous avec $medecinNom est '
-        'confirmé pour le $_dateFormatee à $heure.';
+    if (_paiementAttendu) {
+      return '$salutation${compteTxt}Votre créneau avec ${widget.medecinNom} '
+          'est réservé pour le $_dateFormatee à ${widget.heure}. Il sera '
+          'confirmé dès la réception de votre paiement.';
+    }
+    return '$salutation${compteTxt}Votre rendez-vous avec '
+        '${widget.medecinNom} est confirmé pour le $_dateFormatee à '
+        '${widget.heure}.';
   }
 
   static String _initiales(String nom) {
@@ -124,7 +164,7 @@ class ConfirmationRdvPage extends StatelessWidget {
   }
 
   void _copierCode(BuildContext context) {
-    final code = codeUnique;
+    final code = widget.codeUnique;
     if (code == null) return;
     Clipboard.setData(ClipboardData(text: code));
     HapticFeedback.selectionClick();
@@ -141,19 +181,25 @@ class ConfirmationRdvPage extends StatelessWidget {
   }
 
   void _voirMesRendezVous(BuildContext context) {
-    if (onVoirMesRendezVous != null) {
-      onVoirMesRendezVous!();
+    if (widget.onVoirMesRendezVous != null) {
+      widget.onVoirMesRendezVous!();
       return;
     }
     _replierSurAccueil(context);
   }
 
   void _retourAccueil(BuildContext context) {
-    if (onRetourAccueil != null) {
-      onRetourAccueil!();
+    if (widget.onRetourAccueil != null) {
+      widget.onRetourAccueil!();
       return;
     }
     _replierSurAccueil(context);
+  }
+
+  void _marquerPaye() {
+    if (!mounted || _paye) return;
+    setState(() => _paye = true);
+    widget.onPaye?.call();
   }
 
   @override
@@ -164,7 +210,7 @@ class ConfirmationRdvPage extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 32, 20, 24),
           children: [
-            const Center(child: _SuccessBadge()),
+            Center(child: _SuccessBadge(enAttentePaiement: _paiementAttendu)),
             const SizedBox(height: 22),
             Text(
               _titre,
@@ -186,27 +232,43 @@ class ConfirmationRdvPage extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             _RecapCard(
-              medecinNom: medecinNom,
-              medecinSpecialite: medecinSpecialite,
-              medecinVille: medecinVille,
-              dateLabel: '$_dateFormatee à $heure',
-              typeRdvLabel: typeRdvLabel,
-              tarifFcfa: tarifFcfa,
-              codeUnique: codeUnique,
-              initiales: _initiales(medecinNom),
+              medecinNom: widget.medecinNom,
+              medecinSpecialite: widget.medecinSpecialite,
+              medecinVille: widget.medecinVille,
+              dateLabel: '$_dateFormatee à ${widget.heure}',
+              typeRdvLabel: widget.typeRdvLabel,
+              tarifFcfa: widget.tarifFcfa,
+              codeUnique: widget.codeUnique,
+              initiales: _initiales(widget.medecinNom),
               onCopierCode: () => _copierCode(context),
             ),
             const SizedBox(height: 20),
             _NextStepsList(
-              codeConnu: codeUnique != null,
-              compteVientDetreCree: compteVientDetreCree,
+              codeConnu: widget.codeUnique != null,
+              compteVientDetreCree: widget.compteVientDetreCree,
             ),
             const SizedBox(height: 26),
-            PrimaryButton(
-              label: 'Voir mes rendez-vous',
-              icon: Icons.calendar_month_outlined,
-              onPressed: () => _voirMesRendezVous(context),
-            ),
+            if (_paiementAttendu) ...[
+              widget.paiementBuilder!(context, _marquerPaye),
+              const SizedBox(height: 8),
+              Text(
+                'Vous pourrez aussi régler plus tard depuis « Mes '
+                'rendez-vous », onglet « À payer ».',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.body.copyWith(fontSize: 11.5, height: 1.5),
+              ),
+              const SizedBox(height: 18),
+              SecondaryButton(
+                label: 'Voir mes rendez-vous',
+                icon: Icons.calendar_month_outlined,
+                onPressed: () => _voirMesRendezVous(context),
+              ),
+            ] else
+              PrimaryButton(
+                label: 'Voir mes rendez-vous',
+                icon: Icons.calendar_month_outlined,
+                onPressed: () => _voirMesRendezVous(context),
+              ),
             const SizedBox(height: 10),
             SecondaryButton(
               label: "Retour à l'accueil",
@@ -222,7 +284,11 @@ class ConfirmationRdvPage extends StatelessWidget {
 /// Insigne de succès — reprend `.success-badge` de la maquette : cercle vert
 /// clair avec une icône de validation, cerné d'un anneau pointillé.
 class _SuccessBadge extends StatelessWidget {
-  const _SuccessBadge();
+  const _SuccessBadge({this.enAttentePaiement = false});
+
+  /// Rendez-vous réservé mais pas encore payé : icône « carte » au lieu
+  /// de la coche de validation.
+  final bool enAttentePaiement;
 
   @override
   Widget build(BuildContext context) {
@@ -246,8 +312,10 @@ class _SuccessBadge extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: const Icon(
-              Icons.check_rounded,
+            child: Icon(
+              enAttentePaiement
+                  ? Icons.credit_card_rounded
+                  : Icons.check_rounded,
               size: 36,
               color: AppColors.green700,
             ),

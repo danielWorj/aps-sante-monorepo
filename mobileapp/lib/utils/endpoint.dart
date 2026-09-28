@@ -1,7 +1,15 @@
 class ApiRealEndpoints {
   ApiRealEndpoints._();
 
-  static const String baseUrl = 'https://api.azasante.com/api';
+  /// URL de base de l'API. Surchargeable au lancement pour tester en
+  /// local sans modifier le code :
+  ///   flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000/api
+  /// (10.0.2.2 = machine hôte vue depuis l'émulateur Android). Sans
+  /// argument, on garde la production.
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://api.azasante.com/api',
+  );
   static const String meetbaseUrl = 'https://meet.azasante.com';
 
   // ─── Authentification (module transverse "authentification") ────
@@ -181,6 +189,18 @@ class ApiRealEndpoints {
   static String unRendezVous(String id) => '${baseUrl}/rendez-vous/$id';
   static String statutRendezVous(String id) =>
       '${baseUrl}/rendez-vous/$id/statut';
+
+  // ─── Paiement Stripe (PaymentSheet natif) ────────────────────────
+  // Voir paiement.routes.js / paiement.controller.js : authentifié,
+  // patient propriétaire du rendez-vous uniquement.
+  //   - POST : crée le PaymentIntent → { client_secret, publishable_key }
+  //   - GET  : statut du paiement    → { statut_rdv, paiement | null }
+  // Le RDV n'est confirmé que par le webhook Stripe : le GET est la
+  // seule façon fiable de savoir si le paiement a été pris en compte.
+  static String paiementRdvNatif(String rdvId) =>
+      '${baseUrl}/paiement/rendez-vous/$rdvId/paiement-natif';
+  static String statutPaiementRdv(String rdvId) =>
+      '${baseUrl}/paiement/rendez-vous/$rdvId/paiement';
 
   // ─── Ordonnances (module transverse "Gestion des médecins") ──────
   // Voir rendezVous.controller.js / medecin.routes.js : toutes
