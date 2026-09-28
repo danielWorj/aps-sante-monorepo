@@ -37,6 +37,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/pharmacie_models.dart';
 import '../utils/endpoint.dart';
+import '../utils/multipart_utils.dart';
 
 /// Erreur levée quand une requête HTTP échoue (statut hors 2xx) ou
 /// quand un appel est mal formé côté client (ex. rien à mettre à
@@ -206,6 +207,7 @@ class PharmacieRepository {
         fichier.champ,
         fichier.octets,
         filename: fichier.nomFichier,
+        contentType: mediaTypeDepuisNom(fichier.nomFichier),
       ));
     }
     final flux = await requete.send().timeout(_timeout);
@@ -267,10 +269,11 @@ class PharmacieRepository {
   /// n'apparaît qu'une seule fois : à afficher immédiatement à
   /// l'appelant, ne jamais le restocker (voir [PharmacieCreationResultat]).
   ///
-  /// [statutVerification] est toujours requis côté validation backend,
-  /// mais n'est réellement appliqué que si l'appelant est
-  /// admin/superadmin ; pour tout autre profil, le backend le force à
-  /// `en_cours` quoi qu'il soit envoyé.
+  /// [statutVerification] est optionnel côté backend (défaut `en_cours`)
+  /// et n'est réellement appliqué que si l'appelant est admin/superadmin ;
+  /// pour tout autre profil, le backend le force à `en_cours` quoi qu'il
+  /// soit envoyé. Il reste `required` ici pour garder la signature
+  /// existante des pages et controllers.
   ///
   /// [latitude]/[longitude] sont optionnelles mais doivent être
   /// fournies ensemble ou pas du tout (voir appliquerGeolocalisation

@@ -43,6 +43,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/centresante_models.dart';
 import '../utils/endpoint.dart';
+import '../utils/multipart_utils.dart';
 
 // ─────────────────────────────────────────────────────────────────
 // Aides HTTP internes (remplacent ApiClient)
@@ -207,6 +208,7 @@ class CentreSanteRepository {
         fichier.champ,
         fichier.octets,
         filename: fichier.nomFichier,
+        contentType: mediaTypeDepuisNom(fichier.nomFichier),
       ));
     }
     final flux = await requete.send().timeout(_timeout);

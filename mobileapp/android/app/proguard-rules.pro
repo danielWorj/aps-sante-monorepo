@@ -9,3 +9,8 @@
 -dontwarn org.jitsi.**
 -dontwarn com.giphy.sdk.**
 -dontwarn org.webrtc.**
+
+# Stripe (flutter_stripe)
+-dontwarn com.stripe.android.pushProvisioning.**
+-dontwarn com.google.android.gms.tapandpay.**
+-keep class com.stripe.** { *; }
