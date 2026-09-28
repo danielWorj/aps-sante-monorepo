@@ -9,7 +9,9 @@ import 'package:riverpod/riverpod.dart';
 // import 'package:aps/components/components.dart';
 import '../.././../components/components.dart';
 import './Confirmationrdv.dart';
+import '../../../components/buttons/bouton_payer_rdv.dart';
 import '../../../controllers/authentification_controller.dart';
+import '../../../controllers/paiement_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/authentification_models.dart';
 import '../../../models/rendez_vous_models.dart';
@@ -675,6 +677,24 @@ class _RendezVousPageState extends State<RendezVousPage> {
     return DateTime(date.year, date.month, date.day, heures, minutes);
   }
 
+  /// Accès authentifié utilisé par le bouton « Payer ».
+  ///
+  /// Si une session est ouverte dans [_container] (cas d'un compte créé
+  /// depuis cet écran, voir [_creerCompteEtSeConnecter]), on passe par
+  /// [SessionController.appelAuthentifie] : il rafraîchit l'access token
+  /// s'il a expiré pendant que le patient saisit sa carte. Sinon
+  /// (token fourni par l'hôte via [RendezVousPage.token]), on utilise ce
+  /// token tel quel.
+  ExecuteurAuthentifie _executeurPaiement(String token) {
+    final session = _container.read(sessionControllerProvider).value;
+    if (session != null) {
+      return _container
+          .read(sessionControllerProvider.notifier)
+          .appelAuthentifie;
+    }
+    return executeurAvecTokenFixe(token);
+  }
+
   /// Remplace l'ancien popup muet par un véritable écran de confirmation
   /// ([ConfirmationRdvPage]), poussé au-dessus de cet écran de réservation.
   /// Les boutons de [ConfirmationRdvPage] retombent par défaut sur
@@ -688,6 +708,15 @@ class _RendezVousPageState extends State<RendezVousPage> {
       RendezVous? rdv, {
         bool compteVientDetreCree = false,
       }) {
+    // Le RDV vient d'être créé au statut « cree » : il n'est confirmé
+    // qu'APRÈS paiement (webhook Stripe). Sans `rdv` (réservation
+    // personnalisée via onConfirmerReservation) ou sans token, on ne
+    // sait pas déclencher le paiement : écran de confirmation classique.
+    final rdvId = rdv?.rdvId;
+    final token = _tokenEffectif;
+    final ExecuteurAuthentifie? executeurPaiement =
+        (rdvId != null && token != null) ? _executeurPaiement(token) : null;
+
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ConfirmationRdvPage(
@@ -704,6 +733,17 @@ class _RendezVousPageState extends State<RendezVousPage> {
           compteVientDetreCree: compteVientDetreCree,
           patientPrenom:
           compteVientDetreCree ? _prenomCtrl.text.trim() : null,
+          paiementBuilder: (rdvId == null || executeurPaiement == null)
+              ? null
+              : (ctx, marquerPaye) => BoutonPayerRdv(
+                    rdvId: rdvId,
+                    executer: executeurPaiement,
+                    onPaye: marquerPaye,
+                  ),
+          // Le RDV est passé à « confirme » côté serveur : recharge la
+          // liste « Mes rendez-vous » (déjà invalidée à la création,
+          // mais avec l'ancien statut).
+          onPaye: () => _container.invalidate(listeRendezVousControllerProvider),
           onVoirMesRendezVous: widget.onVoirMesRendezVous,
           onRetourAccueil: widget.onRetourAccueil,
         ),

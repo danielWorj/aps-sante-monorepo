@@ -55,6 +55,54 @@ export async function creerSessionCheckout({
   });
 }
 
+/**
+ * Option B (PaymentSheet natif) — crée un PaymentIntent que l'app mobile
+ * confirme avec `flutter_stripe`. Contrairement au Checkout hébergé, les
+ * `metadata` sont posées directement sur le PaymentIntent : c'est ce qui
+ * permet au webhook `payment_intent.succeeded` de retrouver la
+ * transaction et le rendez-vous (un PaymentIntent créé PAR Checkout n'a
+ * pas ces metadata et est donc ignoré par ce webhook — il est déjà traité
+ * via `checkout.session.completed`).
+ */
+export async function creerPaymentIntent({
+  montant, devise, transaction_id, rdv_id, email_client,
+}) {
+  return stripe.paymentIntents.create(
+    {
+      amount: versUniteStripe(montant, devise),
+      currency: devise.toLowerCase(),
+      payment_method_types: ["card"], // parité avec le Checkout actuel
+      receipt_email: email_client,
+      metadata: { transaction_id, rdv_id },
+    },
+    { idempotencyKey: `pi_${transaction_id}` }
+  );
+}
+
+/**
+ * Cherche un PaymentIntent encore payable (`requires_payment_method`)
+ * déjà créé pour ce rendez-vous, afin de le réutiliser plutôt que
+ * d'empiler une transaction orpheline à chaque ouverture de la
+ * PaymentSheet. L'index de recherche Stripe peut avoir ~1 min de retard :
+ * c'est une optimisation « au mieux », jamais une garantie d'unicité
+ * (celle-ci reste assurée par l'escrow, cf. finaliserPaiement).
+ */
+export async function rechercherPaymentIntentOuvert(rdv_id) {
+  const resultat = await stripe.paymentIntents.search({
+    query: `status:'requires_payment_method' AND metadata['rdv_id']:'${rdv_id}'`,
+    limit: 1,
+  });
+  return resultat.data[0] ?? null;
+}
+
+export async function obtenirPaymentIntent(payment_intent_id) {
+  return stripe.paymentIntents.retrieve(payment_intent_id);
+}
+
+export async function annulerPaymentIntent(payment_intent_id) {
+  return stripe.paymentIntents.cancel(payment_intent_id);
+}
+
 export function verifierSignatureWebhook(corpsBrut, signature) {
   return stripe.webhooks.constructEvent(
     corpsBrut, signature, process.env.STRIPE_WEBHOOK_SECRET

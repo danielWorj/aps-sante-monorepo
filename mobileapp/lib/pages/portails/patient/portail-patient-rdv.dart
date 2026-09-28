@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../components/buttons/bouton_payer_rdv.dart';
 import '../../../components/components.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
@@ -325,13 +326,13 @@ class _SegmentedTabs extends ConsumerWidget {
     final tabs = rdvAsync.when(
       loading: () => const [
         _TabDef(label: 'Confirmé', count: null),
-        _TabDef(label: 'En attente', count: null),
+        _TabDef(label: 'À payer', count: null),
         _TabDef(label: 'Terminés', count: null),
         _TabDef(label: 'Annulés', count: null),
       ],
       error: (_, __) => const [
         _TabDef(label: 'Confirmé', count: 0),
-        _TabDef(label: 'En attente', count: 0),
+        _TabDef(label: 'À payer', count: 0),
         _TabDef(label: 'Terminés', count: 0),
         _TabDef(label: 'Annulés', count: 0),
       ],
@@ -343,7 +344,7 @@ class _SegmentedTabs extends ConsumerWidget {
               .length,
         ),
         _TabDef(
-          label: 'En attente',
+          label: 'À payer',
           count: rdvList
               .where((r) => r.statut == StatutRendezVous.cree)
               .length,
@@ -640,13 +641,18 @@ class _PanelConfirme extends ConsumerWidget {
   }
 }
 
-/// Panneau "En attente" (demande envoyée, pas encore confirmée par le médecin)
+/// Panneau "À payer" : rendez-vous créé (statut `cree`) dont le paiement n'a pas
+/// encore été confirmé par le serveur (webhook Stripe). Le médecin ne le voit
+/// confirmé qu'après paiement.
 class _PanelAttente extends ConsumerWidget {
   const _PanelAttente();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final rdvAsync = ref.watch(listeRendezVousControllerProvider);
+    // appelAuthentifie rafraîchit l'access token s'il a expiré pendant
+    // que le patient saisit sa carte.
+    final executer = ref.read(sessionControllerProvider.notifier).appelAuthentifie;
 
     return rdvAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -657,7 +663,7 @@ class _PanelAttente extends ConsumerWidget {
 
         if (rdvAttente.isEmpty) {
           return const Center(
-            child: Text('Aucune demande en attente'),
+            child: Text('Aucun rendez-vous à payer'),
           );
         }
 
@@ -668,12 +674,11 @@ class _PanelAttente extends ConsumerWidget {
               const AppAlert(
                 type: AppAlertType.primary,
                 message:
-                'Votre demande est en attente de confirmation par le '
-                    'médecin. Vous pouvez l\'annuler à tout moment tant '
-                    'qu\'elle n\'a pas été traitée.',
+                'Réglez le paiement pour confirmer votre rendez-vous. '
+                    'Vous pouvez aussi l\'annuler tant qu\'il n\'est pas payé.',
               ),
               const SizedBox(height: 14),
-              const _SectionHead(title: 'Demandes envoyées'),
+              const _SectionHead(title: 'Rendez-vous à payer'),
               ...rdvAttente.map((rdv) {
                 return _AppointmentCard(
                   time: _formatTime(rdv.dateCreneau),
@@ -691,27 +696,39 @@ class _PanelAttente extends ConsumerWidget {
                   subtitle2: rdv.typeRdv == TypeRdv.teleconsultation
                       ? 'Téléconsultation'
                       : 'Cabinet',
-                  bottom: _Frow(
-                    badge: const BadgeChip(
-                      label: 'En attente',
-                      style: BadgeChipStyle.amber,
-                    ),
-                    action: _DangerOutlineButton(
-                      label: 'Annuler la demande',
-                      onPressed: () => _executerActionRdv(
-                        context: context,
-                        ref: ref,
-                        rdv: rdv,
-                        nouveauStatut: StatutRendezVous.annule,
-                        titreDialogue: 'Annuler la demande ?',
-                        messageDialogue:
-                        'Votre demande de rendez-vous avec Dr '
-                            '${rdv.medecin?.utilisateur?.nom ?? ''} '
-                            'sera annulée.',
-                        labelConfirmer: 'Annuler la demande',
-                        messageSucces: 'Demande annulée.',
+                  bottom: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      BoutonPayerRdv(
+                        rdvId: rdv.rdvId,
+                        executer: executer,
+                        onPaye: () =>
+                            ref.invalidate(listeRendezVousControllerProvider),
                       ),
-                    ),
+                      const SizedBox(height: 10),
+                      _Frow(
+                        badge: const BadgeChip(
+                          label: 'À payer',
+                          style: BadgeChipStyle.amber,
+                        ),
+                        action: _DangerOutlineButton(
+                          label: 'Annuler la demande',
+                          onPressed: () => _executerActionRdv(
+                            context: context,
+                            ref: ref,
+                            rdv: rdv,
+                            nouveauStatut: StatutRendezVous.annule,
+                            titreDialogue: 'Annuler la demande ?',
+                            messageDialogue:
+                            'Votre demande de rendez-vous avec Dr '
+                                '${rdv.medecin?.utilisateur?.nom ?? ''} '
+                                'sera annulée.',
+                            labelConfirmer: 'Annuler la demande',
+                            messageSucces: 'Demande annulée.',
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }).toList(),
