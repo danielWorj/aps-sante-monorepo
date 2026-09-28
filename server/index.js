@@ -23,6 +23,7 @@ import annonceRoutes from "./src/routes/annonce.routes.js"; // Importer les rout
 import paiementWebhookRoutes from "./src/routes/paiementWebhook.routes.js";
 import visioWebhookRoutes from "./src/routes/visioWebhook.routes.js";
 import paiementRoutes from "./src/routes/paiement.routes.js";
+import paiementCampayRoutes from "./src/routes/paiementCampay.routes.js";
 import googleMapsRoutes from "./src/routes/googleMaps.routes.js";
 import ligneTarifaireRoutes from "./src/routes/ligneTarifaire.routes.js";
 import portefeuilleRoutes from "./src/routes/portefeuille.routes.js";
@@ -127,6 +128,8 @@ app.use("/api", visioRoutes);
 app.use("/api/utilisateurs", utilisateursRoutes);
 app.use("/api/apks", gestionApkRoutes);
 app.use("/api", annonceRoutes); // Ajouter les routes d'annonces
+// Webhook CamPay (GET, sans authentification utilisateur) : monté AVANT /api/paiement
+app.use("/api/paiement/campay", paiementCampayRoutes);
 app.use("/api/paiement", paiementRoutes);
 app.use("/api", googleMapsRoutes);
 app.use("/api", ligneTarifaireRoutes);
