@@ -95,6 +95,48 @@ export async function rechercherPaymentIntentOuvert(rdv_id) {
   return resultat.data[0] ?? null;
 }
 
+/**
+ * Annule TOUS les PaymentIntent encore payables d'un rendez-vous (PaymentSheet
+ * natif) : un rendez-vous annulé ne doit plus pouvoir être encaissé. Sont
+ * annulables les états où aucun débit n'a encore abouti
+ * (`requires_payment_method`, `requires_confirmation`, `requires_action`,
+ * `requires_capture`) ; un PaymentIntent `processing` ou `succeeded` ne
+ * l'est plus et est laissé tel quel (le webhook rembourse alors le paiement
+ * tardif, voir finaliserPaiement dans paiement.controller.js).
+ *
+ * « Au mieux » : l'index de recherche Stripe a jusqu'à ~1 min de retard, et
+ * l'échec d'une annulation individuelle est journalisé sans interrompre les
+ * autres. Ne lève jamais pour un PaymentIntent isolé.
+ *
+ * @param {string} rdv_id
+ * @returns {Promise<import("stripe").Stripe.PaymentIntent[]>} les PaymentIntent effectivement annulés
+ */
+export async function annulerPaymentIntentsRdv(rdv_id) {
+  const resultat = await stripe.paymentIntents.search({
+    query: `metadata['rdv_id']:'${rdv_id}'`,
+    limit: 20,
+  });
+
+  const annulables = new Set([
+    "requires_payment_method",
+    "requires_confirmation",
+    "requires_action",
+    "requires_capture",
+  ]);
+
+  const annules = [];
+  for (const pi of resultat.data) {
+    if (!annulables.has(pi.status)) continue;
+    try {
+      annules.push(await stripe.paymentIntents.cancel(pi.id));
+    } catch (err) {
+      // Ex. le paiement a abouti entre la recherche et l'annulation.
+      console.warn(`[paiement] Annulation du PaymentIntent ${pi.id} impossible : ${err.message}`);
+    }
+  }
+  return annules;
+}
+
 export async function obtenirPaymentIntent(payment_intent_id) {
   return stripe.paymentIntents.retrieve(payment_intent_id);
 }

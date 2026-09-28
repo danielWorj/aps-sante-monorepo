@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../components/components.dart';
+import '../../../components/dialogs/dialogue_motif_annulation.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/authentification_models.dart';
@@ -747,11 +748,30 @@ class _PendingRdvActionsState extends ConsumerState<_PendingRdvActions> {
         final token = ref.read(authTokenProvider);
         if (token == null) return;
 
+        // Refuser = annuler : le backend exige un motif_annulation (400
+        // sinon), donc on le demande avant tout appel réseau.
+        ChoixAnnulation? choixAnnulation;
+        if (nouveauStatut == StatutRendezVous.annule) {
+            choixAnnulation = await demanderMotifAnnulation(
+                context,
+                titre: 'Refuser ce rendez-vous ?',
+                message: 'Le rendez-vous sera annulé et le patient en sera '
+                    'informé. Cette action est irréversible.',
+                labelConfirmer: 'Refuser',
+                motifs: MotifAnnulation.pourMedecin,
+            );
+            if (choixAnnulation == null || !mounted) return;
+        }
+
         setState(() => _enCours = true);
         try {
             await ref.read(actionsRendezVousControllerProvider.notifier).changerStatut(
                 widget.rdv.rdvId,
-                payload: ChangerStatutRendezVousPayload(statut: nouveauStatut),
+                payload: ChangerStatutRendezVousPayload(
+                    statut: nouveauStatut,
+                    motifAnnulation: choixAnnulation?.motif,
+                    commentaireAnnulation: choixAnnulation?.commentaire,
+                ),
                 token: token,
             );
             if (!mounted) return;

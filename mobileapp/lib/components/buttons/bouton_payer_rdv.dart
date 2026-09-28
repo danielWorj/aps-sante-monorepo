@@ -52,6 +52,10 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
   /// serveur : on propose « Vérifier » plutôt que de payer une 2e fois.
   bool _paiementEffectueEnAttente = false;
 
+  /// Le serveur indique que le rendez-vous est annulé : plus rien à
+  /// payer ni à vérifier, on n'affiche plus que le message.
+  bool _rdvAnnule = false;
+
   String? _message;
   bool _messageEstErreur = false;
 
@@ -79,6 +83,7 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
       if (!mounted) return;
       setState(() {
         _enCours = false;
+        _rdvAnnule = _estRdvAnnule(e);
         _message = _messageLisible(e);
         _messageEstErreur = true;
       });
@@ -116,10 +121,19 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
       if (!mounted) return;
       setState(() {
         _enCours = false;
+        _rdvAnnule = _estRdvAnnule(e);
         _message = _messageLisible(e);
         _messageEstErreur = true;
       });
     }
+  }
+
+  /// Détecte un refus « rendez-vous annulé » : soit levé par le polling
+  /// ([rdvAnnuleMessage]), soit renvoyé par le serveur (409 sur
+  /// POST …/paiement-natif).
+  bool _estRdvAnnule(Object e) {
+    final texte = '$e';
+    return texte == rdvAnnuleMessage || texte.contains('a été annulé');
   }
 
   String _messageLisible(Object e) {
@@ -142,6 +156,7 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (!_rdvAnnule)
         PrimaryButton(
           label: verifierSeulement ? 'Vérifier mon paiement' : widget.label,
           icon: verifierSeulement ? Icons.refresh_rounded : Icons.lock_outline,
@@ -149,7 +164,7 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
           onPressed: verifierSeulement ? _verifier : _payer,
         ),
         if (_message != null) ...[
-          const SizedBox(height: 8),
+          if (!_rdvAnnule) const SizedBox(height: 8),
           Text(
             _message!,
             textAlign: TextAlign.center,
