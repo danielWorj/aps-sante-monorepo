@@ -32,3 +32,6 @@ export 'navigation/app_bottom_nav.dart';
 // Onboarding
 export 'onboarding/onboarding_header.dart';
 export 'onboarding/onboarding_nav_actions.dart';
+
+// Stepper réutilisable (parcours de création multi-étapes)
+export 'stepper/aps_stepper.dart';
