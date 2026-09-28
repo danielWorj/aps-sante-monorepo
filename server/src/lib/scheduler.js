@@ -7,12 +7,16 @@
 
 import cron from "node-cron";
 import { detecterCreneauxDepasses } from "../jobs/detecterCreneauxDepasses.job.js";
+import { reconcilierCampayEnAttente } from "../services/paiementCampay.service.js";
 
 // Fréquence non précisée par le cahier des charges ni par le plan
 // ("fréquence courte, ex. toutes les 15 min") — valeur par défaut
 // reprise telle quelle du plan, réglable via variable d'environnement
 // sans redéploiement de code.
 const CRON_DETECTION_DEFAILLANCE = process.env.CRON_DETECTION_DEFAILLANCE || "*/15 * * * *";
+
+// Filet de sécurité CamPay : callbacks perdus, serveur redémarré, etc. (chaque minute par défaut).
+const CRON_RECONCILIATION_CAMPAY = process.env.CRON_RECONCILIATION_CAMPAY || "* * * * *";
 
 /**
  * Démarre tous les jobs planifiés du back-end. Appelé une seule fois,
@@ -31,7 +35,13 @@ export function demarrerScheduler() {
     });
   });
 
+  cron.schedule(CRON_RECONCILIATION_CAMPAY, () => {
+    reconcilierCampayEnAttente().catch((err) => {
+      console.error("[scheduler] Échec réconciliation CamPay :", err);
+    });
+  });
+
   console.info(
-    `[scheduler] Démarré — detecterCreneauxDepasses planifié (${CRON_DETECTION_DEFAILLANCE}).`
+    `[scheduler] Démarré — detecterCreneauxDepasses planifié (${CRON_DETECTION_DEFAILLANCE}), reconcilierCampayEnAttente planifié (${CRON_RECONCILIATION_CAMPAY}).`
   );
 }
