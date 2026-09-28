@@ -5,9 +5,12 @@ import PortailNavbar from "./../layouts/portail-navbar";
 import PortailFooter from "./../layouts/portail-footer";
 import PortailSidebar from "./../layouts/portail-sidebar";
 import VisioModal from "./visio-modal";
+import MotifAnnulationModal from "./motif-annulation-modal";
 import {
   listerRendezVousMedecinConnecte,
   modifierRendezVous,
+  annulerRendezVous,
+  MOTIFS_ANNULATION_MEDECIN,
   STATUTS_RENDEZ_VOUS,
   TYPES_RENDEZ_VOUS,
 } from "./../../../services/medecinService";
@@ -271,15 +274,27 @@ const MedecinRdv = () => {
     }
   };
 
-  const refuser = async (id) => {
+  // Refuser = annuler : le serveur exige un motif d'annulation (400
+  // sinon) et déclenche le remboursement du patient.
+  const [rdvARefuser, setRdvARefuser] = useState(null); // rdv_id | null
+  const refuser = (id) => setRdvARefuser(id);
+  const fermerRefus = () => {
+    if (!actionEnCours) setRdvARefuser(null);
+  };
+
+  const confirmerRefus = async ({ motif, commentaire }) => {
+    const id = rdvARefuser;
+    if (!id) return;
     setActionEnCours(id);
     try {
-      await modifierRendezVous(id, { statut: "annule" });
+      await annulerRendezVous(id, { motif, commentaire });
       setRendezVous((prev) =>
         prev.map((r) => (r.rdv_id === id ? { ...r, statut: "annule" } : r))
       );
+      setRdvARefuser(null);
       showToast("Demande refusée — le patient sera remboursé.");
     } catch (err) {
+      setRdvARefuser(null);
       showToast("Erreur : " + (err.message || "impossible de refuser le RDV."));
     } finally {
       setActionEnCours(null);
@@ -732,6 +747,17 @@ const MedecinRdv = () => {
       </div>
 
       {renderDetailModal()}
+
+      <MotifAnnulationModal
+        open={rdvARefuser !== null}
+        titre="Refuser cette demande ?"
+        message="Le rendez-vous sera annulé et le patient remboursé intégralement."
+        labelConfirmer="Refuser"
+        motifs={MOTIFS_ANNULATION_MEDECIN}
+        enCours={actionEnCours !== null && actionEnCours === rdvARefuser}
+        onClose={fermerRefus}
+        onConfirm={confirmerRefus}
+      />
 
       {visioRdv && (
         <VisioModal

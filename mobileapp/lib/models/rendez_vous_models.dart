@@ -429,9 +429,73 @@ class ModifierRendezVousPayload {
 class ChangerStatutRendezVousPayload {
   final StatutRendezVous statut;
 
-  const ChangerStatutRendezVousPayload({required this.statut});
+  /// Motif d'annulation — OBLIGATOIRE quand [statut] vaut
+  /// [StatutRendezVous.annule] : depuis la Phase 3 le backend refuse
+  /// (400) toute annulation sans `motif_annulation`, car c'est lui qui
+  /// pilote le remboursement (voir annulerRendezVous côté serveur).
+  final MotifAnnulation? motifAnnulation;
 
-  Map<String, dynamic> toJson() => {'statut': statut.toApi()};
+  /// Commentaire libre facultatif (1000 caractères maximum côté serveur).
+  final String? commentaireAnnulation;
+
+  const ChangerStatutRendezVousPayload({
+    required this.statut,
+    this.motifAnnulation,
+    this.commentaireAnnulation,
+  }) : assert(
+          statut != StatutRendezVous.annule || motifAnnulation != null,
+          'Un motif est obligatoire pour annuler un rendez-vous.',
+        );
+
+  Map<String, dynamic> toJson() {
+    final commentaire = commentaireAnnulation?.trim();
+    return {
+      'statut': statut.toApi(),
+      if (statut == StatutRendezVous.annule && motifAnnulation != null) ...{
+        'motif_annulation': motifAnnulation!.toApi(),
+        if (commentaire != null && commentaire.isNotEmpty)
+          'commentaire_annulation': commentaire,
+      },
+    };
+  }
+}
+
+/// Miroir de l'enum Prisma `MotifAnnulation` (liste fermée, voir
+/// MOTIFS_ANNULATION dans rendezVous.controller.js). Les valeurs API
+/// doivent rester strictement identiques à celles du serveur.
+enum MotifAnnulation {
+  changementHorairePatient('changement_horaire_patient', 'Changement d\'horaire'),
+  urgencePersonnelle('urgence_personnelle', 'Urgence personnelle'),
+  erreurReservation('erreur_reservation', 'Erreur de réservation'),
+  professionnelIndisponible(
+    'professionnel_indisponible',
+    'Professionnel indisponible',
+  ),
+  autre('autre', 'Autre motif');
+
+  const MotifAnnulation(this.valeurApi, this.libelle);
+
+  /// Valeur envoyée à l'API (`motif_annulation`).
+  final String valeurApi;
+
+  /// Libellé affiché à l'utilisateur.
+  final String libelle;
+
+  String toApi() => valeurApi;
+
+  /// Motifs proposés à un patient qui annule son rendez-vous.
+  static const List<MotifAnnulation> pourPatient = [
+    changementHorairePatient,
+    urgencePersonnelle,
+    erreurReservation,
+    autre,
+  ];
+
+  /// Motifs proposés à un médecin qui refuse / annule un rendez-vous.
+  static const List<MotifAnnulation> pourMedecin = [
+    professionnelIndisponible,
+    autre,
+  ];
 }
 
 /// ─────────────────────────────────────────────────────────────────

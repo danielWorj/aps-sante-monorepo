@@ -25,9 +25,11 @@ import PortailNavbar from "./../layouts/portail-navbar";
 import PortailFooter from "./../layouts/portail-footer";
 import PortailSidebar from "./../layouts/portail-sidebar";
 import VisioModal from "./visio-modal";
+import MotifAnnulationModal from "./motif-annulation-modal";
 import {
   listerRendezVousPatientConnecte,
-  modifierRendezVous,
+  annulerRendezVous,
+  MOTIFS_ANNULATION_PATIENT,
   STATUTS_RENDEZ_VOUS,
   TYPES_RENDEZ_VOUS,
 } from "./../../../services/medecinService";
@@ -253,20 +255,27 @@ const PatientRdv = () => {
   // Le patient ne peut ni "accepter" ni "refuser" (c'est le rôle du
   // médecin) : il peut uniquement annuler une demande en attente ou
   // un rendez-vous déjà confirmé à venir.
-  const annuler = async (id) => {
-    const confirme = window.confirm(
-      "Confirmer l'annulation de ce rendez-vous ?"
-    );
-    if (!confirme) return;
+  // Le serveur exige un motif d'annulation (400 sinon) : on ouvre donc
+  // une modale qui le collecte, au lieu d'un simple window.confirm().
+  const [rdvAAnnuler, setRdvAAnnuler] = useState(null); // rdv_id | null
+  const annuler = (id) => setRdvAAnnuler(id);
+  const fermerAnnulation = () => {
+    if (!actionEnCours) setRdvAAnnuler(null);
+  };
 
+  const confirmerAnnulation = async ({ motif, commentaire }) => {
+    const id = rdvAAnnuler;
+    if (!id) return;
     setActionEnCours(id);
     try {
-      await modifierRendezVous(id, { statut: "annule" });
+      await annulerRendezVous(id, { motif, commentaire });
       setRendezVous((prev) =>
         prev.map((r) => (r.rdv_id === id ? { ...r, statut: "annule" } : r))
       );
+      setRdvAAnnuler(null);
       showToast("Rendez-vous annulé.");
     } catch (err) {
+      setRdvAAnnuler(null);
       showToast("Erreur : " + (err.message || "impossible d'annuler le RDV."));
     } finally {
       setActionEnCours(null);
@@ -723,6 +732,17 @@ const PatientRdv = () => {
       </div>
 
       {renderDetailModal()}
+
+      <MotifAnnulationModal
+        open={rdvAAnnuler !== null}
+        titre="Annuler ce rendez-vous ?"
+        message="Ce rendez-vous sera annulé. Si vous l'avez déjà payé, le remboursement suit la politique d'annulation."
+        labelConfirmer="Annuler le RDV"
+        motifs={MOTIFS_ANNULATION_PATIENT}
+        enCours={actionEnCours !== null && actionEnCours === rdvAAnnuler}
+        onClose={fermerAnnulation}
+        onConfirm={confirmerAnnulation}
+      />
 
       {visioRdv && (
         <VisioModal

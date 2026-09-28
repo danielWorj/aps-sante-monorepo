@@ -13,7 +13,7 @@
 // la date d'annulation, et les mouvements du grand-livre.
 
 import prisma from "../lib/prisma.js";
-import { creerRemboursement, depuisUniteStripe } from "../lib/stripeService.js";
+import { annulerPaymentIntentsRdv, creerRemboursement, depuisUniteStripe } from "../lib/stripeService.js";
 import { creerMouvement } from "./portefeuille.service.js";
 
 // Politique §3 : au-delà de 24h avant le rendez-vous, l'annulation est
@@ -38,6 +38,36 @@ function arrondir(valeur) {
  */
 export function estAnnulationTardive(date_creneau, maintenant) {
   return new Date(date_creneau).getTime() - maintenant.getTime() < DELAI_ANNULATION_SANS_FRAIS_MS;
+}
+
+/**
+ * Rendez-vous annulé sans jamais avoir été payé : neutralise les
+ * paiements encore possibles pour lui. On annule côté Stripe les
+ * PaymentIntent ouverts (le patient ne peut plus valider la
+ * PaymentSheet) et on passe leurs transactions `en_attente` à `echouee`.
+ *
+ * Non bloquant : une panne Stripe ne doit pas empêcher d'annuler le
+ * rendez-vous. Le cas résiduel (paiement déjà en cours, ou PaymentIntent
+ * pas encore indexé) est rattrapé par le webhook : finaliserPaiement
+ * rembourse tout paiement qui arrive sur un rendez-vous annulé.
+ */
+async function neutraliserPaiementsEnCours(rdv_id) {
+  try {
+    const annules = await annulerPaymentIntentsRdv(rdv_id);
+    const transactionIds = annules
+      .map((pi) => pi.metadata?.transaction_id)
+      .filter(Boolean);
+    if (transactionIds.length > 0) {
+      await prisma.transactionPaiement.updateMany({
+        where: { transaction_id: { in: transactionIds }, statut: "en_attente" },
+        data: { statut: "echouee" },
+      });
+    }
+  } catch (err) {
+    console.warn(
+      `[annulation] Neutralisation des paiements en cours impossible pour le rdv ${rdv_id} : ${err.message}`
+    );
+  }
 }
 
 /**
@@ -124,6 +154,9 @@ export async function traiterAnnulation(
   // Rendez-vous jamais payé (pas de séquestre) : rien à rembourser,
   // on enregistre seulement l'annulation motivée.
   if (!escrow) {
+    // Un rendez-vous annulé ne doit plus pouvoir être encaissé : on
+    // annule d'abord les PaymentIntent ouverts, puis on pose "annule".
+    await neutraliserPaiementsEnCours(rdv.rdv_id);
     await prisma.rendezVous.update({ where: { rdv_id: rdv.rdv_id }, data: donneesAnnulation });
     return { remboursement: null, frais_annulation: 0 };
   }

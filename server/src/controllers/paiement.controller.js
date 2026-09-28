@@ -2,6 +2,7 @@ import prisma from "../lib/prisma.js";
 import {
   creerSessionCheckout,
   creerPaymentIntent,
+  creerRemboursement,
   rechercherPaymentIntentOuvert,
   obtenirPaymentIntent,
   annulerPaymentIntent,
@@ -42,6 +43,14 @@ async function verifierRdvPayable(req, res) {
   const patient = await profilPatientAvecEmail(req.utilisateur);
   if (!patient || patient.patient_id !== rdv.patient_id) {
     res.status(403).json({ message: "Ce rendez-vous ne vous appartient pas." });
+    return null;
+  }
+  if (rdv.statut === "annule") {
+    res.status(409).json({
+      message:
+        "Ce rendez-vous a été annulé : il n'est plus possible de le payer. " +
+        "Veuillez réserver un nouveau créneau.",
+    });
     return null;
   }
   if (rdv.statut !== "cree") {
@@ -270,13 +279,39 @@ export async function obtenirStatutPaiementRdv(req, res, next) {
  * `payment_intent.succeeded` (mobile natif) : transaction `reussie`,
  * escrow `sequestre`, RDV `cree` → `confirme`. Idempotent : Stripe peut
  * livrer le même événement plusieurs fois.
+ *
+ * Paiement tardif : si le rendez-vous a été annulé avant que ce paiement
+ * n'aboutisse (PaymentSheet déjà validée au moment de l'annulation,
+ * PaymentIntent non annulable), on n'encaisse rien : aucun escrow n'est
+ * créé et le montant est remboursé intégralement au patient.
  */
 async function finaliserPaiement({ transaction_id, rdv_id, payment_intent_id }) {
-  await prisma.$transaction(async (tx) => {
+  const paiementTardif = await prisma.$transaction(async (tx) => {
     const transaction = await tx.transactionPaiement.findUnique({ where: { transaction_id } });
     if (!transaction) {
       console.warn(`[paiement] transaction ${transaction_id} introuvable — ignorée.`);
-      return;
+      return null;
+    }
+    // Rejeu d'un événement déjà traité jusqu'au remboursement.
+    if (transaction.statut === "remboursee") return null;
+
+    const rdv = await tx.rendezVous.findUnique({ where: { rdv_id }, select: { statut: true } });
+    const escrowExistant = await tx.compteEscrow.findUnique({ where: { rdv_id } });
+
+    // Rejeu d'un paiement déjà finalisé (escrow créé pour CETTE
+    // transaction, éventuellement remboursé depuis par une annulation) :
+    // rien à refaire, et surtout ne pas repasser la transaction à
+    // "reussie" ni la rembourser une 2e fois.
+    if (escrowExistant?.transaction_id === transaction_id) return null;
+
+    if (rdv?.statut === "annule") {
+      // On garde une trace du paiement réellement encaissé par Stripe ;
+      // le remboursement (hors transaction SQL) le passera à "remboursee".
+      await tx.transactionPaiement.update({
+        where: { transaction_id },
+        data: { statut: "reussie", stripe_payment_intent_id: payment_intent_id },
+      });
+      return transaction;
     }
 
     await tx.transactionPaiement.update({
@@ -304,7 +339,49 @@ async function finaliserPaiement({ transaction_id, rdv_id, payment_intent_id }) 
     // Ne confirme que depuis "cree" : un RDV annulé entre-temps ne doit
     // pas être ressuscité par un webhook tardif.
     await tx.rendezVous.updateMany({ where: { rdv_id, statut: "cree" }, data: { statut: "confirme" } });
+    return null;
   });
+
+  if (paiementTardif) {
+    await rembourserPaiementRdvAnnule({ transaction: paiementTardif, rdv_id, payment_intent_id });
+  }
+}
+
+/**
+ * Rembourse intégralement un paiement arrivé APRÈS l'annulation du rendez-vous.
+ * Stripe d'abord, base ensuite (même ordre que annulation.service.js) ; la
+ * clé d'idempotence garantit qu'un rejeu du webhook ne rembourse jamais deux
+ * fois. En cas d'échec Stripe on lève : le webhook répond 500 et Stripe
+ * réessaie (la transaction reste "reussie" tant que le remboursement n'a pas
+ * abouti, ce qui rend le rejeu possible).
+ */
+async function rembourserPaiementRdvAnnule({ transaction, rdv_id, payment_intent_id }) {
+  const remboursement = await creerRemboursement({
+    payment_intent_id,
+    montant: Number(transaction.montant),
+    devise: transaction.devise,
+    idempotency_key: `refund-rdv-annule:${transaction.transaction_id}`,
+    metadata: {
+      rdv_id,
+      transaction_id: transaction.transaction_id,
+      raison: "paiement_apres_annulation",
+    },
+  });
+  if (remboursement.status === "failed" || remboursement.status === "canceled") {
+    throw new Error(
+      `Remboursement Stripe ${remboursement.id} en échec (statut ${remboursement.status}) ` +
+      `pour le paiement tardif du rdv annulé ${rdv_id}.`
+    );
+  }
+
+  await prisma.transactionPaiement.update({
+    where: { transaction_id: transaction.transaction_id },
+    data: { statut: "remboursee" },
+  });
+  console.warn(
+    `[paiement] Paiement reçu après annulation du rdv ${rdv_id} : remboursé intégralement ` +
+    `(transaction ${transaction.transaction_id}, payment_intent ${payment_intent_id}).`
+  );
 }
 
 // Un événement "checkout.session.completed" qui ne vient pas de notre
@@ -335,6 +412,37 @@ async function traiterPaymentIntentReussi(paymentIntent) {
   await finaliserPaiement({ transaction_id, rdv_id, payment_intent_id: paymentIntent.id });
 }
 
+// `payment_intent.payment_failed` (PaymentSheet natif) : carte refusée,
+// 3D Secure échoué… Le PaymentIntent reste réutilisable par le patient
+// (il peut ressaisir une autre carte sur la même feuille, Stripe le
+// repasse à requires_payment_method), donc la transaction n'est PAS
+// définitivement perdue : on ne la marque `echouee` que si le
+// PaymentIntent n'est plus payable (annulé). Ici on se contente de
+// journaliser l'échec pour garder de la visibilité — le RDV reste `cree`
+// et le bouton « Payer » reste proposé côté mobile.
+async function traiterPaiementEchoue(paymentIntent) {
+  const { transaction_id, rdv_id } = paymentIntent.metadata ?? {};
+  if (!transaction_id || !rdv_id) return; // PaymentIntent issu de Checkout : pas le nôtre
+  const erreur = paymentIntent.last_payment_error;
+  console.warn(
+    `[paiement] Paiement échoué rdv=${rdv_id} transaction=${transaction_id} ` +
+    `(payment_intent ${paymentIntent.id}) : ${erreur?.code ?? "inconnu"} — ${erreur?.message ?? "sans détail"}`
+  );
+}
+
+// `payment_intent.canceled` : PaymentIntent annulé (annulation du RDV,
+// tarif périmé remplacé, expiration). La transaction correspondante ne
+// pourra plus jamais aboutir : on la passe à `echouee`. Ne touche jamais
+// une transaction déjà `reussie` ou `remboursee`.
+async function traiterPaymentIntentAnnule(paymentIntent) {
+  const { transaction_id } = paymentIntent.metadata ?? {};
+  if (!transaction_id) return;
+  await prisma.transactionPaiement.updateMany({
+    where: { transaction_id, statut: "en_attente" },
+    data: { statut: "echouee" },
+  });
+}
+
 async function traiterSessionExpiree(session) {
   const transaction_id = session.metadata?.transaction_id;
   if (!transaction_id) return;
@@ -363,6 +471,10 @@ export async function traiterWebhookStripe(req, res) {
       await traiterSessionExpiree(evenement.data.object);
     } else if (evenement.type === "payment_intent.succeeded") {
       await traiterPaymentIntentReussi(evenement.data.object);
+    } else if (evenement.type === "payment_intent.payment_failed") {
+      await traiterPaiementEchoue(evenement.data.object);
+    } else if (evenement.type === "payment_intent.canceled") {
+      await traiterPaymentIntentAnnule(evenement.data.object);
     } else {
       // Événement reçu mais non traité par notre logique métier (ex.
       // invoice.*, subscription_schedule.*, entitlements.* — activés côté

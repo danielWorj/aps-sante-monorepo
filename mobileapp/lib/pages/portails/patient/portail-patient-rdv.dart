@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../components/buttons/bouton_payer_rdv.dart';
 import '../../../components/components.dart';
+import '../../../components/dialogs/dialogue_motif_annulation.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/authentification_models.dart';
@@ -1149,26 +1150,41 @@ Future<void> _executerActionRdv({
   required String labelConfirmer,
   required String messageSucces,
 }) async {
-  final confirme = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(titreDialogue),
-      content: Text(messageDialogue),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Retour'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          style: TextButton.styleFrom(foregroundColor: AppColors.coral600),
-          child: Text(labelConfirmer),
-        ),
-      ],
-    ),
-  );
-
-  if (confirme != true) return;
+  // Une annulation exige un motif (le backend répond 400 sans
+  // `motif_annulation`) : on le demande dans la même boîte que la
+  // confirmation. Les autres transitions gardent la confirmation simple.
+  final estAnnulation = nouveauStatut == StatutRendezVous.annule;
+  ChoixAnnulation? choixAnnulation;
+  if (estAnnulation) {
+    choixAnnulation = await demanderMotifAnnulation(
+      context,
+      titre: titreDialogue,
+      message: messageDialogue,
+      labelConfirmer: labelConfirmer,
+      motifs: MotifAnnulation.pourPatient,
+    );
+    if (choixAnnulation == null) return;
+  } else {
+    final confirme = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(titreDialogue),
+        content: Text(messageDialogue),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Retour'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.coral600),
+            child: Text(labelConfirmer),
+          ),
+        ],
+      ),
+    );
+    if (confirme != true) return;
+  }
 
   final token = ref.read(authTokenProvider);
   if (token == null) return;
@@ -1176,7 +1192,11 @@ Future<void> _executerActionRdv({
   try {
     await ref.read(actionsRendezVousControllerProvider.notifier).changerStatut(
       rdv.rdvId,
-      payload: ChangerStatutRendezVousPayload(statut: nouveauStatut),
+      payload: ChangerStatutRendezVousPayload(
+        statut: nouveauStatut,
+        motifAnnulation: choixAnnulation?.motif,
+        commentaireAnnulation: choixAnnulation?.commentaire,
+      ),
       token: token,
     );
     if (context.mounted) {

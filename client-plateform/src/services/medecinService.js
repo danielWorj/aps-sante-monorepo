@@ -32,6 +32,22 @@ export const STATUTS_RENDEZ_VOUS = [
   { valeur: 'conteste', libelle: 'Contesté' },
 ];
 
+// Motifs d'annulation d'un rendez-vous (liste fermée) — miroir de
+// MOTIFS_ANNULATION dans server/src/controllers/rendezVous.controller.js
+// et de l'enum Prisma MotifAnnulation. Le serveur refuse (400) toute
+// annulation sans l'une de ces valeurs.
+export const MOTIFS_ANNULATION_PATIENT = [
+  { valeur: 'changement_horaire_patient', libelle: "Changement d'horaire" },
+  { valeur: 'urgence_personnelle', libelle: 'Urgence personnelle' },
+  { valeur: 'erreur_reservation', libelle: 'Erreur de réservation' },
+  { valeur: 'autre', libelle: 'Autre motif' },
+];
+
+export const MOTIFS_ANNULATION_MEDECIN = [
+  { valeur: 'professionnel_indisponible', libelle: 'Professionnel indisponible' },
+  { valeur: 'autre', libelle: 'Autre motif' },
+];
+
 // structure_id n'a de sens que pour "physique" (sinon cabinet libéral,
 // structure_id reste null) ; "teleconsultation" exige que le médecin
 // visé ait teleconsultation_activee = true, sans quoi le serveur
@@ -834,9 +850,30 @@ export async function modifierRendezVous(id, donnees = {}) {
 }
 
 /**
+ * PATCH /rendez-vous/:id/statut avec statut = 'annule'.
+ * Depuis la Phase 3, le serveur exige un motif d'annulation (liste
+ * fermée MOTIFS_ANNULATION_*) car c'est lui qui pilote le remboursement.
+ * Ne PAS annuler via modifierRendezVous(id, { statut: 'annule' }) : cet
+ * appel sans motif est rejeté (400).
+ * @param {string} id
+ * @param {{ motif: string, commentaire?: string }} params
+ * @returns {Promise<Object>} le rendez-vous mis à jour
+ */
+export async function annulerRendezVous(id, { motif, commentaire } = {}) {
+  const body = { statut: 'annule', motif_annulation: motif };
+  const texte = typeof commentaire === 'string' ? commentaire.trim() : '';
+  if (texte) body.commentaire_annulation = texte;
+  const data = await apiFetch(`/rendez-vous/${id}/statut`, {
+    method: 'PATCH',
+    body,
+  });
+  return data.rendez_vous;
+}
+
+/**
  * DELETE /rendez-vous/:id
  * Réservé à admin/superadmin — suppression PHYSIQUE. Un rendez-vous
- * s'annule normalement via modifierRendezVous(id, { statut: 'annule' }).
+ * s'annule normalement via annulerRendezVous(id, { motif }).
  * Le serveur renvoie 409 si une ordonnance est encore rattachée à ce
  * rendez-vous.
  */
@@ -981,6 +1018,7 @@ export default {
   obtenirRendezVous,
   creerRendezVous,
   modifierRendezVous,
+  annulerRendezVous,
   supprimerRendezVous,
   // Ordonnances
   listerOrdonnances,

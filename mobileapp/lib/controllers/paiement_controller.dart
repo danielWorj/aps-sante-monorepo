@@ -31,6 +31,12 @@ ExecuteurAuthentifie executeurAvecTokenFixe(String token) {
   return <T>(Future<T> Function(String accessToken) appel) => appel(token);
 }
 
+/// Message affiché quand on tente de payer (ou d'attendre le paiement
+/// d') un rendez-vous déjà annulé.
+const String rdvAnnuleMessage =
+    'Ce rendez-vous a été annulé : il n\'est plus possible de le payer. '
+    'Si un montant a été débité, il vous sera remboursé.';
+
 /// Erreur de paiement au message directement affichable au patient.
 class PaiementException implements Exception {
   const PaiementException(this.message);
@@ -98,16 +104,26 @@ Future<StatutPaiementRdv?> attendreConfirmationPaiement(
   Duration delai = const Duration(milliseconds: 1500),
 }) async {
   for (var i = 0; i < tentativesMax; i++) {
+    StatutPaiementRdv? statut;
     try {
-      final statut = await executer(
+      statut = await executer(
         (token) => repo.obtenirStatut(rdvId: rdvId, token: token),
       );
-      if (statut.estPaye) return statut;
     } on ApiException catch (e) {
       // Erreurs définitives : inutile de réessayer.
       if (e.statusCode == 403 || e.statusCode == 404) rethrow;
     } catch (_) {
       // Erreur réseau transitoire : on retente.
+    }
+
+    if (statut != null) {
+      // Rendez-vous annulé entre-temps : le serveur n'encaisse plus rien
+      // pour lui (et rembourse un éventuel paiement arrivé trop tard).
+      // Inutile d'attendre une confirmation qui ne viendra jamais.
+      if (statut.statutRdv == 'annule') {
+        throw const PaiementException(rdvAnnuleMessage);
+      }
+      if (statut.estPaye) return statut;
     }
     if (i < tentativesMax - 1) await Future<void>.delayed(delai);
   }
