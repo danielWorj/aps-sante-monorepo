@@ -53,8 +53,8 @@ import {
   MOTIF_RENDEZ_VOUS_LONGUEUR_MAX,
 } from '../services/medecinService';
 import { inscrirePatient } from '../services/authService';
-import { demanderPaiementRdv } from '../services/paiementService';
 import PaiementMobileMoney from '../components/paiement/PaiementMobileMoney';
+import ChoixMoyenPaiement from '../components/paiement/ChoixMoyenPaiement';
 // Seul `listerPays` est utilisé ici : inscrirePatient() (authService.js)
 // n'attend que { nom, prenom, email, telephone?, mot_de_passe, pays_id,
 // date_naissance } — pas de ville_id. `listerVilles` (aussi exposé par
@@ -295,10 +295,9 @@ export default function RendezVous() {
   const [rendezVousCree, setRendezVousCree] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  // Paiement Stripe (POST /paiement/rendez-vous/:id/paiement) déclenché
-  // depuis le ticket de confirmation, une fois le rendez-vous créé.
-  const [paiementEnCours, setPaiementEnCours] = useState(false);
-  const [erreurPaiement, setErreurPaiement] = useState(null);
+  // Paiement : le bouton « Payer » du ticket ouvre la pop-up de choix
+  // (Carte bancaire Stripe ou Mobile Money CamPay), une fois le RDV créé.
+  const [choixPaiementOuvert, setChoixPaiementOuvert] = useState(false);
   // Modale Mobile Money (CamPay)
   const [momoOuvert, setMomoOuvert] = useState(false);
 
@@ -452,25 +451,6 @@ export default function RendezVous() {
     }
   };
 
-  // Déclenché depuis le bouton "Payer maintenant" du ticket (étape 3).
-  // Le rendez-vous existe déjà à ce stade (créé par confirmerRendezVous
-  // ci-dessus) ; on demande une session Stripe Checkout pour ce RDV
-  // précis, puis on redirige le navigateur dessus. Le montant n'est
-  // jamais envoyé depuis le client : le serveur le recalcule lui-même
-  // à partir du tarif du médecin (voir paiement.controller.js).
-  const payerRendezVous = async () => {
-    if (!rendezVousCree?.rdv_id) return;
-    setErreurPaiement(null);
-    setPaiementEnCours(true);
-    try {
-      const urlPaiement = await demanderPaiementRdv(rendezVousCree.rdv_id);
-      window.location.href = urlPaiement; // redirection vers Stripe Checkout
-    } catch (err) {
-      setErreurPaiement(err?.message || "Impossible de lancer le paiement. Veuillez réessayer.");
-      setPaiementEnCours(false);
-    }
-  };
-
   const copyCode = async () => {
     if (!rendezVousCree?.code_unique) return;
     try {
@@ -482,7 +462,8 @@ export default function RendezVous() {
     setTimeout(() => setCopied(false), 1800);
   };
 
-  const RecapRows = () => (
+  // Élément JSX (et non composant défini dans le rendu, qui serait recréé à chaque rendu)
+  const recapRows = (
     <>
       <div className="recap-row"><span className="label">Professionnel</span><span className="val">{nomComplet || '—'}</span></div>
       <div className="recap-row"><span className="label">Spécialité</span><span className="val">{specialiteLabel || '—'}</span></div>
@@ -840,25 +821,23 @@ export default function RendezVous() {
                                 <p className="text-faint mb-2" style={{ fontSize: '.85rem' }}>
                                   Ce rendez-vous n&apos;est confirmé qu&apos;une fois le paiement effectué.
                                 </p>
-                                {erreurPaiement && (
-                                  <p className="text-danger mb-2" style={{ fontSize: '.85rem' }}>{erreurPaiement}</p>
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-block-aps w-100"
+                                  onClick={() => setChoixPaiementOuvert(true)}
+                                >
+                                  <i className="fa-solid fa-lock" /> Payer
+                                </button>
+                                {choixPaiementOuvert && (
+                                  <ChoixMoyenPaiement
+                                    rdvId={rendezVousCree.rdv_id}
+                                    onFermer={() => setChoixPaiementOuvert(false)}
+                                    onChoisirMobileMoney={() => {
+                                      setChoixPaiementOuvert(false);
+                                      setMomoOuvert(true);
+                                    }}
+                                  />
                                 )}
-                                <button
-                                  type="button"
-                                  className="btn btn-primary btn-block-aps w-100 mb-2"
-                                  onClick={() => setMomoOuvert(true)}
-                                  disabled={paiementEnCours}
-                                >
-                                  <i className="fa-solid fa-mobile-screen" /> Mobile Money (MTN / Orange)
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-outline-primary btn-block-aps w-100"
-                                  onClick={payerRendezVous}
-                                  disabled={paiementEnCours}
-                                >
-                                  {paiementEnCours ? 'Redirection vers le paiement…' : 'Carte bancaire'}
-                                </button>
                                 {momoOuvert && (
                                   <PaiementMobileMoney
                                     rdvId={rendezVousCree.rdv_id}
@@ -887,7 +866,7 @@ export default function RendezVous() {
                   {step < 3 && (
                     <aside className="recap-card">
                       <h3><i className="fa-solid fa-receipt" /> Récapitulatif</h3>
-                      <RecapRows />
+                      {recapRows}
                     </aside>
                   )}
                 </div>
