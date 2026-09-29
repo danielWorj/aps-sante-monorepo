@@ -790,7 +790,10 @@ const PatientRdv = () => {
         <PaiementMobileMoney
           rdvId={momoRdv.rdv_id}
           telephoneInitial={user?.telephone || ""}
-          onFermer={() => setMomoRdv(null)}
+          onFermer={() => {
+            setMomoRdv(null);
+            chargerRendezVous(); // le paiement a pu aboutir pendant que la modale était ouverte
+          }}
         />
       )}
 

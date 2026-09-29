@@ -65,11 +65,25 @@ export async function finaliserPaiement({ transaction_id, rdv_id, payment_intent
       update: {},
     });
     if (escrow.transaction_id !== transaction_id) {
-      // Deux paiements réussis pour le même RDV : le 2e n'a pas
-      // de séquestre associé -> à rembourser manuellement dans Stripe.
+      // Deux paiements réussis pour le même RDV : le 2e n'a pas de séquestre associé.
+      // On le consigne en base (remboursement « a_traiter ») pour qu'il ne dépende plus
+      // d'une lecture des logs. upsert sur (transaction_id, motif) : idempotent, et sans
+      // erreur P2002 qui ferait avorter cette transaction SQL.
+      const estCampay = Boolean(campay_reference);
+      await tx.remboursementPaiement.upsert({
+        where: { transaction_id_motif: { transaction_id, motif: "double_paiement" } },
+        create: {
+          transaction_id,
+          motif: "double_paiement",
+          montant: estCampay ? Math.round(Number(transaction.montant)) : Number(transaction.montant),
+          statut: "a_traiter",
+        },
+        update: {},
+      });
       console.error(
         `[paiement] DOUBLE PAIEMENT rdv=${rdv_id} : transaction ${transaction_id} ` +
-        `(payment_intent ${payment_intent_id}) à rembourser.`
+        `(${estCampay ? `campay ${campay_reference}` : `payment_intent ${payment_intent_id}`}) ` +
+        `enregistrée en remboursement « a_traiter ».`
       );
     }
 
