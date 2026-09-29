@@ -35,6 +35,8 @@ import {
 } from "./../../../services/medecinService";
 import { useAuth } from "./../../../context/AuthContext";
 import { categoriserRdv } from "./../../../utils/rdv";
+import { demanderPaiementRdv } from "./../../../services/paiementService";
+import PaiementMobileMoney from "./../../paiement/PaiementMobileMoney";
 
 // ─── Helpers de formatage ─────────────────────────────────────
 const TYPE_RDV_LABEL = {
@@ -150,6 +152,23 @@ const PatientRdv = () => {
     setToast(msg);
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 2600);
+  };
+
+  // ─── Paiement d'un RDV « cree » (en attente de paiement) ────
+  const [momoRdv, setMomoRdv] = useState(null); // rdv | null
+  const [paiementCarteEnCours, setPaiementCarteEnCours] = useState(null); // rdv_id | null
+  const ouvrirMobileMoney = (rdv) => {
+    fermerDetail();
+    setMomoRdv(rdv);
+  };
+  const payerParCarte = async (rdv) => {
+    setPaiementCarteEnCours(rdv.rdv_id);
+    try {
+      window.location.href = await demanderPaiementRdv(rdv.rdv_id); // redirection Stripe Checkout
+    } catch (err) {
+      showToast(err?.message || "Impossible de lancer le paiement.");
+      setPaiementCarteEnCours(null);
+    }
   };
 
   // ─── Chargement initial ─────────────────────────────────────
@@ -398,7 +417,7 @@ const PatientRdv = () => {
           <div className="rdv-modal-status">
             {categorie === "attente" && rdv.statut === "cree" && (
               <span className="chip chip-st-attente">
-                <i className="fa-solid fa-hourglass-half"></i> En attente de confirmation par le médecin
+                <i className="fa-solid fa-hourglass-half"></i> En attente de paiement
               </span>
             )}
             {categorie === "avenir" && (
@@ -460,6 +479,29 @@ const PatientRdv = () => {
           </div>
 
           <div className="rdv-modal-actions">
+            {rdv.statut === "cree" && (
+              <>
+                <button
+                  className="btn btn-primary btn-sm-aps"
+                  onClick={() => ouvrirMobileMoney(rdv)}
+                  disabled={paiementCarteEnCours === rdv.rdv_id}
+                >
+                  <i className="fa-solid fa-mobile-screen"></i> Payer par Mobile Money
+                </button>
+                <button
+                  className="btn btn-outline-primary btn-sm-aps"
+                  onClick={() => payerParCarte(rdv)}
+                  disabled={paiementCarteEnCours === rdv.rdv_id}
+                >
+                  {paiementCarteEnCours === rdv.rdv_id ? (
+                    <span className="spinner-border spinner-border-sm me-1"></span>
+                  ) : (
+                    <i className="fa-solid fa-credit-card"></i>
+                  )}
+                  Payer par carte
+                </button>
+              </>
+            )}
             {categorie === "avenir" && isTeleconsultation && (
               <button
                 className="btn btn-primary btn-sm-aps"
@@ -743,6 +785,14 @@ const PatientRdv = () => {
         onClose={fermerAnnulation}
         onConfirm={confirmerAnnulation}
       />
+
+      {momoRdv && (
+        <PaiementMobileMoney
+          rdvId={momoRdv.rdv_id}
+          telephoneInitial={user?.telephone || ""}
+          onFermer={() => setMomoRdv(null)}
+        />
+      )}
 
       {visioRdv && (
         <VisioModal

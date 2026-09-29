@@ -1,5 +1,5 @@
 import { Router } from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { authentifier } from "../middlewares/auth.middleware.js";
 import { creerPaiementRdv, creerPaymentSheetRdv, obtenirStatutPaiementRdv } from "../controllers/paiement.controller.js";
 import { creerPaiementCampayRdv } from "../controllers/paiementCampay.controller.js";
@@ -8,6 +8,10 @@ import { creerPaiementCampayRdv } from "../controllers/paiementCampay.controller
 const limiteurCampay = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
+  // Compteur par utilisateur authentifié (le limiteur est placé après
+  // `authentifier`), avec repli sur l'IP : évite qu'un patient en
+  // bloque un autre derrière le même NAT / réseau mobile.
+  keyGenerator: (req) => req.utilisateur?.utilisateur_id ?? ipKeyGenerator(req.ip),
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Trop de tentatives de paiement, réessayez dans quelques minutes." },
