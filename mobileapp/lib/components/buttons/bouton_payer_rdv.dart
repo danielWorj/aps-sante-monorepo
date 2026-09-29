@@ -1,6 +1,11 @@
 // lib/components/buttons/bouton_payer_rdv.dart
 //
-// Bouton « Payer » d'un rendez-vous (PaymentSheet Stripe native).
+// Bouton « Payer » d'un rendez-vous. Au clic, le patient choisit son moyen
+// de paiement :
+//   - Carte bancaire : PaymentSheet Stripe native ([_payer]) ;
+//   - Mobile Money   : modale CamPay (dialogue_paiement_mobile_money.dart).
+// Dans les deux cas, [onPaye] n'est appelé qu'une fois le paiement
+// confirmé par le SERVEUR (webhook), jamais sur la seule foi du client.
 // Réutilisable : écran de confirmation après réservation, et onglet
 // « À payer » du portail patient (rattrapage d'un paiement annulé).
 //
@@ -12,6 +17,8 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/paiement_controller.dart';
 import '../../repositories/paiement_repository.dart';
+import '../dialogs/dialogue_choix_moyen_paiement.dart';
+import '../dialogs/dialogue_paiement_mobile_money.dart';
 import '../style/colors.dart';
 import '../style/text_styles.dart';
 import 'app_buttons.dart';
@@ -24,6 +31,7 @@ class BoutonPayerRdv extends StatefulWidget {
     this.onPaye,
     this.repository,
     this.label = 'Payer maintenant',
+    this.telephoneInitial,
   });
 
   final String rdvId;
@@ -38,6 +46,10 @@ class BoutonPayerRdv extends StatefulWidget {
   final PaiementRepository? repository;
 
   final String label;
+
+  /// Numéro pré-rempli dans la modale Mobile Money (ex. le téléphone du
+  /// patient). Facultatif, modifiable par le patient.
+  final String? telephoneInitial;
 
   @override
   State<BoutonPayerRdv> createState() => _BoutonPayerRdvState();
@@ -58,6 +70,62 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
 
   String? _message;
   bool _messageEstErreur = false;
+
+  /// Clic sur « Payer » : le patient choisit d'abord son moyen de paiement.
+  Future<void> _choisirMoyen() async {
+    final moyen = await demanderMoyenPaiement(context);
+    if (!mounted || moyen == null) return;
+    switch (moyen) {
+      case MoyenPaiement.carte:
+        await _payer();
+      case MoyenPaiement.mobileMoney:
+        await _payerMobileMoney();
+    }
+  }
+
+  /// Ouvre la modale Mobile Money (saisie, attente de validation, échec,
+  /// délai dépassé) et réagit à son issue.
+  Future<void> _payerMobileMoney() async {
+    setState(() {
+      _message = null;
+      _messageEstErreur = false;
+    });
+    final resultat = await ouvrirPaiementMobileMoney(
+      context,
+      rdvId: widget.rdvId,
+      executer: widget.executer,
+      repository: _repo,
+      telephoneInitial: widget.telephoneInitial,
+    );
+    if (!mounted) return;
+    switch (resultat) {
+      case ResultatMobileMoney.confirme:
+        // Confirmé par le serveur (paiement « reussie »).
+        setState(() {
+          _enCours = false;
+          _paiementEffectueEnAttente = false;
+          _message = null;
+        });
+        widget.onPaye?.call();
+      case ResultatMobileMoney.enAttente:
+        // Demande envoyée mais pas encore confirmée : le patient peut
+        // valider après coup → « Vérifier » plutôt que de repayer.
+        setState(() {
+          _paiementEffectueEnAttente = true;
+          _messageEstErreur = false;
+          _message = 'Demande de paiement envoyée. Une fois validée sur '
+              'votre téléphone, appuyez sur « Vérifier mon paiement ».';
+        });
+      case ResultatMobileMoney.rdvAnnule:
+        setState(() {
+          _rdvAnnule = true;
+          _message = rdvAnnuleMessage;
+          _messageEstErreur = true;
+        });
+      case ResultatMobileMoney.abandonne:
+        break;
+    }
+  }
 
   Future<void> _payer() async {
     setState(() {
@@ -114,7 +182,7 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
       }
       setState(() {
         _enCours = false;
-        _message = 'Paiement reçu, confirmation en cours. '
+        _message = 'Paiement en cours de confirmation. '
             'Appuyez sur « Vérifier mon paiement » dans quelques instants.';
       });
     } catch (e) {
@@ -161,8 +229,25 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
           label: verifierSeulement ? 'Vérifier mon paiement' : widget.label,
           icon: verifierSeulement ? Icons.refresh_rounded : Icons.lock_outline,
           loading: _enCours,
-          onPressed: verifierSeulement ? _verifier : _payer,
+          onPressed: verifierSeulement ? _verifier : _choisirMoyen,
         ),
+        // Sortie de secours : une demande Mobile Money refusée ou ignorée
+        // sur le téléphone ne doit pas laisser le patient bloqué sur
+        // « Vérifier ». Le serveur reste garant : il renvoie la tentative
+        // déjà en cours (même numéro, < 2 min) et refuse un RDV déjà payé
+        // ou annulé.
+        if (verifierSeulement && !_rdvAnnule && !_enCours)
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _paiementEffectueEnAttente = false;
+                _message = null;
+                _messageEstErreur = false;
+              });
+              _choisirMoyen();
+            },
+            child: const Text('Payer autrement / réessayer'),
+          ),
         if (_message != null) ...[
           if (!_rdvAnnule) const SizedBox(height: 8),
           Text(
