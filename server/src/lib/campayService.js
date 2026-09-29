@@ -67,7 +67,16 @@ async function appelCampay(chemin, { method = "GET", body } = {}) {
     });
   }
 
-  const texte = await res.text();
+  let texte;
+  try {
+    texte = await res.text();
+  } catch (err) {
+    // Timeout / coupure PENDANT la lecture du corps : CamPay a reçu la demande
+    // et y a répondu, mais on n'a pas la réponse (donc pas la référence).
+    throw new CampayError("CamPay est momentanément injoignable.", {
+      status: 502, payload: String(err), issueIncertaine: true,
+    });
+  }
   let data = null;
   try { data = texte ? JSON.parse(texte) : null; } catch { data = { brut: texte }; }
 
@@ -83,8 +92,8 @@ async function appelCampay(chemin, { method = "GET", body } = {}) {
 }
 
 /** POST /collect/ — l'opérateur envoie une demande de validation au téléphone du patient. */
-export function initierCollecte({ montant, numero, description, external_reference }) {
-  return appelCampay("/collect/", {
+export async function initierCollecte({ montant, numero, description, external_reference }) {
+  const data = await appelCampay("/collect/", {
     method: "POST",
     body: {
       amount: String(Math.round(Number(montant))), // ER201 si décimales
@@ -94,6 +103,13 @@ export function initierCollecte({ montant, numero, description, external_referen
       external_reference,
     },
   }); // -> { reference, ussd_code, operator }
+  // 2xx sans référence : la demande a peut-être bien été envoyée au patient.
+  if (typeof data?.reference !== "string" || !data.reference) {
+    throw new CampayError("Réponse CamPay inattendue.", {
+      status: 502, payload: data, issueIncertaine: true,
+    });
+  }
+  return data;
 }
 
 /** POST /get_payment_link/ — page hébergée CamPay (variante « lien », voir § 4.9). */
