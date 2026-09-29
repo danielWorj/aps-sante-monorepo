@@ -54,6 +54,7 @@ import {
 } from '../services/medecinService';
 import { inscrirePatient } from '../services/authService';
 import { demanderPaiementRdv } from '../services/paiementService';
+import PaiementMobileMoney from '../components/paiement/PaiementMobileMoney';
 // Seul `listerPays` est utilisé ici : inscrirePatient() (authService.js)
 // n'attend que { nom, prenom, email, telephone?, mot_de_passe, pays_id,
 // date_naissance } — pas de ville_id. `listerVilles` (aussi exposé par
@@ -298,6 +299,8 @@ export default function RendezVous() {
   // depuis le ticket de confirmation, une fois le rendez-vous créé.
   const [paiementEnCours, setPaiementEnCours] = useState(false);
   const [erreurPaiement, setErreurPaiement] = useState(null);
+  // Modale Mobile Money (CamPay)
+  const [momoOuvert, setMomoOuvert] = useState(false);
 
   // Le statut de connexion ne bloque plus l'accès à cette page : la
   // fiche du médecin et le choix du créneau restent consultables par
@@ -842,12 +845,27 @@ export default function RendezVous() {
                                 )}
                                 <button
                                   type="button"
-                                  className="btn btn-primary btn-block-aps w-100"
+                                  className="btn btn-primary btn-block-aps w-100 mb-2"
+                                  onClick={() => setMomoOuvert(true)}
+                                  disabled={paiementEnCours}
+                                >
+                                  <i className="fa-solid fa-mobile-screen" /> Mobile Money (MTN / Orange)
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-primary btn-block-aps w-100"
                                   onClick={payerRendezVous}
                                   disabled={paiementEnCours}
                                 >
-                                  {paiementEnCours ? 'Redirection vers le paiement…' : 'Payer maintenant'}
+                                  {paiementEnCours ? 'Redirection vers le paiement…' : 'Carte bancaire'}
                                 </button>
+                                {momoOuvert && (
+                                  <PaiementMobileMoney
+                                    rdvId={rendezVousCree.rdv_id}
+                                    telephoneInitial={user?.telephone || ''}
+                                    onFermer={() => setMomoOuvert(false)}
+                                  />
+                                )}
                               </div>
                             )}
 
