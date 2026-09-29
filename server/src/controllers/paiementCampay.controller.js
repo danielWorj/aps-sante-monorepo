@@ -4,7 +4,9 @@ import { verifierRdvPayable } from "./paiement.controller.js";
 import {
   CampayError, DEVISE_CAMPAY, initierCollecte, normaliserNumeroCM, signatureCallbackValide,
 } from "../lib/campayService.js";
-import { verifierEtFinaliserTransactionCampay } from "../services/paiementCampay.service.js";
+import {
+  verifierEtFinaliserTransactionCampay, rattacherReferenceCallback,
+} from "../services/paiementCampay.service.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -18,17 +20,24 @@ export async function creerPaiementCampayRdv(req, res, next) {
     const numero = normaliserNumeroCM(req.body?.numero ?? patient.utilisateur.telephone);
     const montantXaf = Math.round(Number(montant)); // CamPay refuse les décimales (ER201)
 
-    // Anti double demande : même RDV, même numéro, moins de 2 min -> on renvoie la tentative en cours
+    // Anti double demande : même RDV, même numéro, moins de 2 min -> on renvoie la tentative en cours.
+    // Inclut les tentatives à issue incertaine (sans campay_reference) : les rejouer risquerait
+    // de débiter deux fois le patient.
     const enCours = await prisma.transactionPaiement.findFirst({
       where: {
         fournisseur: "campay", rdv_id_cible: rdv.rdv_id, statut: "en_attente",
-        numero_payeur: numero, campay_reference: { not: null },
+        numero_payeur: numero,
         date_creation: { gte: new Date(Date.now() - 2 * 60 * 1000) },
       },
       orderBy: { date_creation: "desc" },
     });
     if (enCours) {
-      return res.status(200).json({ reference: enCours.campay_reference, operateur: enCours.campay_operator, deja_initie: true });
+      return res.status(200).json({
+        reference: enCours.campay_reference ?? null,
+        operateur: enCours.campay_operator ?? null,
+        incertain: !enCours.campay_reference,
+        deja_initie: true,
+      });
     }
 
     const transaction = await prisma.transactionPaiement.create({
@@ -55,6 +64,16 @@ export async function creerPaiementCampayRdv(req, res, next) {
         external_reference: transaction.transaction_id,
       });
     } catch (err) {
+      if (err instanceof CampayError && err.issueIncertaine) {
+        // Timeout / coupure / 5xx : CamPay a peut-être envoyé la demande au patient. On NE marque
+        // PAS la transaction « echouee » (sinon un paiement validé ensuite serait perdu, le RDV ne
+        // serait jamais confirmé). Elle reste « en_attente » ; le callback (external_reference =
+        // transaction_id) permettra de la rattacher et de la finaliser.
+        console.warn(
+          `[campay] Collecte à issue incertaine transaction=${transaction.transaction_id} : ${err.message}`
+        );
+        return res.status(202).json({ reference: null, ussd_code: null, operateur: null, incertain: true });
+      }
       await prisma.transactionPaiement.update({
         where: { transaction_id: transaction.transaction_id },
         data: { statut: "echouee" },
@@ -104,6 +123,13 @@ export async function traiterWebhookCampay(req, res) {
     // Inconnue (ex. withdraw, ligne de mass_payout — CamPay envoie un callback par ligne —, test) :
     // on acquitte pour éviter des relances inutiles. La Phase 3 (§ 9) traitera ces cas.
     if (!transaction) return res.status(200).json({ received: true, ignore: true });
+
+    // Collecte à issue incertaine (pas encore de référence) : on la rattache après contrôle
+    // de l'external_reference auprès de CamPay (voir rattacherReferenceCallback).
+    if (!transaction.campay_reference) {
+      transaction = await rattacherReferenceCallback(transaction, reference);
+      if (!transaction) return res.status(200).json({ received: true, ignore: true });
+    }
 
     // On ignore `status` du callback : on interroge CamPay.
     await verifierEtFinaliserTransactionCampay(transaction, { force: true });

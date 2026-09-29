@@ -51,6 +51,48 @@ export async function verifierEtFinaliserTransactionCampay(transaction, { force 
   return "PENDING";
 }
 
+/**
+ * Transaction dont la collecte a eu une issue INCERTAINE (timeout / 5xx sur POST /collect/) :
+ * elle est restée « en_attente » sans campay_reference alors que CamPay a peut-être bien
+ * envoyé la demande au patient. Quand le callback arrive avec la `reference`, on la rattache
+ * à la transaction pour que la vérification habituelle puisse la finaliser.
+ *
+ * La `reference` vient d'une URL non authentifiée : on ne l'accepte QUE si CamPay, interrogé
+ * directement, confirme que cette référence porte notre `external_reference` (= transaction_id).
+ * Sinon un tiers pourrait rattacher à notre transaction la référence d'un autre paiement réussi.
+ * ⚠️ Suppose que GET /transaction/{reference}/ renvoie `external_reference` (à vérifier en démo) ;
+ * s'il est absent, on ne rattache rien (sans danger : le patient n'est simplement pas confirmé
+ * automatiquement et le cas est journalisé).
+ *
+ * @returns {Promise<object|null>} la transaction à jour, ou null si non rattachée.
+ */
+export async function rattacherReferenceCallback(transaction, reference) {
+  if (transaction.fournisseur !== "campay" || transaction.campay_reference) return null;
+  if (transaction.statut !== "en_attente") return null;
+  if (typeof reference !== "string" || !reference) return null;
+
+  const st = await obtenirStatutTransaction(reference);
+  if (st?.external_reference !== transaction.transaction_id) {
+    console.warn(
+      `[campay] Référence ${reference} non rattachée à la transaction ${transaction.transaction_id} : ` +
+      `external_reference renvoyé par CamPay = ${st?.external_reference ?? "absent"}.`
+    );
+    return null;
+  }
+
+  try {
+    const { count } = await prisma.transactionPaiement.updateMany({
+      where: { transaction_id: transaction.transaction_id, campay_reference: null },
+      data: { campay_reference: reference, campay_operator: st.operator ?? null },
+    });
+    if (count === 0) return null; // déjà rattachée entre-temps
+  } catch (err) {
+    if (err.code === "P2002") return null; // référence déjà utilisée par une autre transaction
+    throw err;
+  }
+  return prisma.transactionPaiement.findUnique({ where: { transaction_id: transaction.transaction_id } });
+}
+
 /** Auto-guérison : appelée par GET /paiement/rendez-vous/:id/paiement (fonctionne même sans webhook, ex. en local). */
 export async function synchroniserCampayPourRdv(rdv_id) {
   const enAttente = await prisma.transactionPaiement.findMany({

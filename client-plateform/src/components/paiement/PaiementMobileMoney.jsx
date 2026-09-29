@@ -47,12 +47,20 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
     };
   }, []);
 
-  // Échap = fermer
+  // Pendant l'envoi ou l'attente de validation, un clic sur le fond ou Échap ne doit PAS
+  // fermer la modale : on perdrait le suivi (polling arrêté) alors que le patient est en
+  // train de valider sur son téléphone. Seul le bouton « Fermer » reste volontaire.
+  const fermetureAccidentelleBloquee = etape === 'attente' || envoiEnCours;
+  const fermetureDouce = useCallback(() => {
+    if (!fermetureAccidentelleBloquee) onFermer?.();
+  }, [fermetureAccidentelleBloquee, onFermer]);
+
+  // Échap = fermer (sauf pendant l'attente)
   useEffect(() => {
-    const onKeyDown = (e) => { if (e.key === 'Escape') onFermer?.(); };
+    const onKeyDown = (e) => { if (e.key === 'Escape') fermetureDouce(); };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onFermer]);
+  }, [fermetureDouce]);
 
   const surveiller = useCallback(function boucle(essai = 0) {
     clearTimeout(timer.current);
@@ -127,7 +135,7 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
   // Rendue dans <body> (portail) : hors du <form> et des conteneurs animés de
   // la page appelante, pour que position:fixed couvre bien tout l'écran.
   return createPortal(
-    <div className="rdv-modal-overlay" onClick={onFermer}>
+    <div className="rdv-modal-overlay" onClick={fermetureDouce}>
       <div
         className="rdv-modal"
         role="dialog"
@@ -199,6 +207,13 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
               <br />
               Validez-la sur votre téléphone avec votre code secret.
             </p>
+            {info?.incertain && (
+              <p className="text-faint" style={{ fontSize: '.85rem' }}>
+                Nous n&apos;avons pas pu confirmer l&apos;envoi de la demande à l&apos;opérateur.
+                Si vous la recevez, vous pouvez la valider : votre paiement sera pris en compte.
+                Inutile de renvoyer une demande.
+              </p>
+            )}
             {info?.ussd_code && (
               <p className="text-faint" style={{ fontSize: '.85rem' }}>
                 Sinon, composez : <strong>{info.ussd_code}</strong>

@@ -29,12 +29,16 @@ const MESSAGES = {
 };
 
 export class CampayError extends Error {
-  constructor(message, { status = 500, code = null, payload = null } = {}) {
+  // issueIncertaine : on ne sait PAS si CamPay a traité la demande (timeout,
+  // coupure réseau, réponse 5xx). Pour une collecte, l'argent peut donc quand
+  // même être débité : l'appelant ne doit surtout pas conclure à un échec.
+  constructor(message, { status = 500, code = null, payload = null, issueIncertaine = false } = {}) {
     super(message);
     this.name = "CampayError";
     this.status = status;
     this.code = code;
     this.payload = payload;
+    this.issueIncertaine = issueIncertaine;
   }
 }
 
@@ -58,7 +62,9 @@ async function appelCampay(chemin, { method = "GET", body } = {}) {
     });
   } catch (err) {
     // réseau / timeout : 502 côté API, on ne sait pas si CamPay a reçu la demande
-    throw new CampayError("CamPay est momentanément injoignable.", { status: 502, payload: String(err) });
+    throw new CampayError("CamPay est momentanément injoignable.", {
+      status: 502, payload: String(err), issueIncertaine: true,
+    });
   }
 
   const texte = await res.text();
@@ -69,6 +75,8 @@ async function appelCampay(chemin, { method = "GET", body } = {}) {
     const code = JSON.stringify(data ?? {}).match(/ER\d{3}/)?.[0] ?? null;
     throw new CampayError(MESSAGES[code] ?? "Le paiement Mobile Money a été refusé.", {
       status: res.status, code, payload: data,
+      // Un 5xx sans code ERxxx ne prouve pas que la demande a été rejetée.
+      issueIncertaine: res.status >= 500 && !code,
     });
   }
   return data;

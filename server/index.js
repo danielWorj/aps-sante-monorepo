@@ -32,6 +32,11 @@ import { demarrerScheduler } from "./src/lib/scheduler.js";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Derrière nginx (1 seul proxy) : sans cela req.ip vaut l'IP de la passerelle Docker et tous les
+// clients partagent le même compteur des limiteurs de débit (connexion, inscription, Google Maps).
+// nginx pose X-Forwarded-For (voir nginx/reverse-proxy.conf). Passer à 2 si un CDN/LB s'ajoute devant.
+app.set("trust proxy", 1);
+
 // ─── Sécurité HTTP de base ─────────────────────────────────────
 app.use(helmet());
 
