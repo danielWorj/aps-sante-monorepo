@@ -14,6 +14,7 @@
 // Règle d'or : le client ne confirme jamais rien lui-même. Le montant n'est
 // pas envoyé non plus : le serveur le recalcule.
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   demanderPaiementCampay,
@@ -123,7 +124,9 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
     surveiller();
   };
 
-  return (
+  // Rendue dans <body> (portail) : hors du <form> et des conteneurs animés de
+  // la page appelante, pour que position:fixed couvre bien tout l'écran.
+  return createPortal(
     <div className="rdv-modal-overlay" onClick={onFermer}>
       <div
         className="rdv-modal"
@@ -155,7 +158,7 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
               placeholder="6XX XXX XXX"
               value={numero}
               onChange={(e) => setNumero(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') payer(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); payer(); } }}
               disabled={envoiEnCours}
             />
             {numero && !numeroValide && (
@@ -237,6 +240,7 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
           Fermer
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
