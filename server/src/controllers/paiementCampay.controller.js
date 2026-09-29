@@ -7,6 +7,7 @@ import {
 import {
   verifierEtFinaliserTransactionCampay, rattacherReferenceCallback,
 } from "../services/paiementCampay.service.js";
+import { rattacherReferenceRetrait, verifierEtFinaliserRetrait } from "../services/retrait.service.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -100,6 +101,27 @@ export async function creerPaiementCampayRdv(req, res, next) {
   }
 }
 
+// Callback d'un retrait médecin : retrouve la demande (par référence, sinon par external_reference),
+// la rattache si besoin (issue incertaine) puis re-interroge CamPay. `status` du callback est ignoré.
+// @returns {Promise<boolean>} true si le callback concernait un retrait connu
+async function traiterCallbackRetrait({ reference, external_reference }) {
+  let demande = null;
+  if (typeof reference === "string" && reference) {
+    demande = await prisma.demandeRetrait.findUnique({ where: { campay_reference: reference } });
+  }
+  if (!demande && typeof external_reference === "string" && UUID.test(external_reference)) {
+    demande = await prisma.demandeRetrait.findUnique({ where: { demande_retrait_id: external_reference } });
+  }
+  if (!demande) return false;
+
+  if (!demande.campay_reference) {
+    demande = await rattacherReferenceRetrait(demande, reference);
+    if (!demande) return true; // retrait connu mais référence non confirmée : acquitté, journalisé
+  }
+  await verifierEtFinaliserRetrait(demande, { force: true });
+  return true;
+}
+
 // GET /api/paiement/campay/webhook — appelé par CamPay (aucune authentification utilisateur)
 export async function traiterWebhookCampay(req, res) {
   const { reference, external_reference, signature } = req.query;
@@ -120,9 +142,14 @@ export async function traiterWebhookCampay(req, res) {
     if (!transaction && typeof external_reference === "string" && UUID.test(external_reference)) {
       transaction = await prisma.transactionPaiement.findUnique({ where: { transaction_id: external_reference } });
     }
-    // Inconnue (ex. withdraw, ligne de mass_payout — CamPay envoie un callback par ligne —, test) :
-    // on acquitte pour éviter des relances inutiles. La Phase 3 (§ 9) traitera ces cas.
-    if (!transaction) return res.status(200).json({ received: true, ignore: true });
+    // Pas une collecte : peut-être un RETRAIT MÉDECIN (withdraw, external_reference = demande_retrait_id).
+    if (!transaction) {
+      const traite = await traiterCallbackRetrait({ reference, external_reference });
+      if (traite) return res.status(200).json({ received: true });
+      // Inconnue (ligne de mass_payout — CamPay envoie un callback par ligne —, test…) :
+      // on acquitte pour éviter des relances inutiles.
+      return res.status(200).json({ received: true, ignore: true });
+    }
 
     // Collecte à issue incertaine (pas encore de référence) : on la rattache après contrôle
     // de l'external_reference auprès de CamPay (voir rattacherReferenceCallback).

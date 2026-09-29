@@ -8,6 +8,7 @@
 import cron from "node-cron";
 import { detecterCreneauxDepasses } from "../jobs/detecterCreneauxDepasses.job.js";
 import { reconcilierCampayEnAttente } from "../services/paiementCampay.service.js";
+import { reconcilierRetraitsEnCours } from "../services/retrait.service.js";
 
 // Fréquence non précisée par le cahier des charges ni par le plan
 // ("fréquence courte, ex. toutes les 15 min") — valeur par défaut
@@ -17,6 +18,9 @@ const CRON_DETECTION_DEFAILLANCE = process.env.CRON_DETECTION_DEFAILLANCE || "*/
 
 // Filet de sécurité CamPay : callbacks perdus, serveur redémarré, etc. (chaque minute par défaut).
 const CRON_RECONCILIATION_CAMPAY = process.env.CRON_RECONCILIATION_CAMPAY || "* * * * *";
+
+// Phase 6 : retraits médecins envoyés à CamPay dont le résultat n'est pas encore connu (callback perdu…).
+const CRON_RECONCILIATION_RETRAITS = process.env.CRON_RECONCILIATION_RETRAITS || "*/2 * * * *";
 
 /**
  * Démarre tous les jobs planifiés du back-end. Appelé une seule fois,
@@ -41,7 +45,13 @@ export function demarrerScheduler() {
     });
   });
 
+  cron.schedule(CRON_RECONCILIATION_RETRAITS, () => {
+    reconcilierRetraitsEnCours().catch((err) => {
+      console.error("[scheduler] Échec réconciliation des retraits :", err);
+    });
+  });
+
   console.info(
-    `[scheduler] Démarré — detecterCreneauxDepasses planifié (${CRON_DETECTION_DEFAILLANCE}), reconcilierCampayEnAttente planifié (${CRON_RECONCILIATION_CAMPAY}).`
+    `[scheduler] Démarré — detecterCreneauxDepasses planifié (${CRON_DETECTION_DEFAILLANCE}), reconcilierCampayEnAttente planifié (${CRON_RECONCILIATION_CAMPAY}), reconcilierRetraitsEnCours planifié (${CRON_RECONCILIATION_RETRAITS}).`
   );
 }
