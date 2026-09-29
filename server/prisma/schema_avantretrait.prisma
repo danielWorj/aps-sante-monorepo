@@ -495,9 +495,6 @@ model Medecin {
   // schema plus bas (PortefeuilleMedecin) et services/portefeuille.service.js.
   portefeuille PortefeuilleMedecin?
 
-  // Phase 6 : demandes de retrait (décaissement Mobile Money via CamPay).
-  demandes_retrait DemandeRetrait[]
-
   @@index([specialite_id])
   @@index([pays_exercice_id])
   @@index([ville_exercice_id])
@@ -1305,7 +1302,6 @@ enum TypeMouvementPortefeuille {
   debit_frais_no_show
   debit_retrait
   credit_frais_annulation // Phase 3 : frais d'annulation tardive retenus au patient, crédités au médecin
-  credit_annulation_retrait // Phase 6 : retrait rejeté / échoué -> le montant réservé est recrédité
 }
 
 model MouvementPortefeuille {
@@ -1334,55 +1330,6 @@ model MouvementPortefeuille {
 
   @@index([medecin_id])
   @@map("mouvement_portefeuille")
-}
-
-// -----------------------------------------------------------------
-// Phase 6 — Retrait du médecin (décaissement Mobile Money via CamPay).
-// Le montant est RÉSERVÉ dès la création de la demande (mouvement
-// debit_retrait, reference_idempotence = "retrait:<id>"), dans la même
-// transaction SQL que la demande, sous verrou du portefeuille. Il est
-// recrédité (credit_annulation_retrait) si la demande est rejetée ou
-// échoue définitivement. Voir services/retrait.service.js.
-// -----------------------------------------------------------------
-
-enum StatutDemandeRetrait {
-  en_attente_validation // créée, montant réservé, en attente d'approbation admin
-  en_cours              // envoyée à CamPay (ou issue incertaine) : attend le résultat
-  reussie
-  echouee
-  rejetee
-}
-
-model DemandeRetrait {
-  demande_retrait_id String @id @default(uuid()) @db.Uuid
-  medecin_id         String @db.Uuid
-
-  // Simple colonne UUID sans FK : la fiche MobileMoney peut être
-  // modifiée/supprimée ensuite, `numero` ci-dessous est le cliché figé.
-  mobile_money_id String? @db.Uuid
-
-  montant Decimal @db.Decimal(12, 2) // XAF, entier
-  numero  String  @db.VarChar(20)    // format CamPay normalisé (237XXXXXXXXX)
-
-  titulaire_declare   String?   @db.VarChar(255) // saisi par le médecin (MobileMoney.titulaire)
-  titulaire_campay    String?   @db.VarChar(255) // holder_info CamPay (best effort)
-  titulaire_concordant Boolean?                  // null = non vérifiable
-
-  statut           StatutDemandeRetrait @default(en_attente_validation)
-  campay_reference String?              @unique @db.VarChar(100)
-  motif_rejet      String?              @db.VarChar(500)
-  derniere_erreur  String?              @db.VarChar(500)
-  traite_par       String?              @db.Uuid // utilisateur_id de l'admin
-
-  date_creation   DateTime  @default(now())
-  date_envoi      DateTime?
-  date_cloture    DateTime?
-
-  medecin Medecin @relation(fields: [medecin_id], references: [medecin_id])
-
-  @@index([medecin_id, statut])
-  @@index([statut, date_creation])
-  @@map("demande_retrait")
 }
 
 /// @ref module 07_services_connexes — définition complète à fusionner

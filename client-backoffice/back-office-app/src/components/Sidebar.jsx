@@ -69,7 +69,8 @@ const APS_MENU = [
         children: [
           { key: "avis-medecin", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-medecin" },
           { key: "abonnement-medecin", label: "Abonnements", icon: "fa-solid fa-id-card-clip", to: "/abonnement-medecin" },
-          { key: "ordonnance", label: "Ordonnances", icon: "fa-solid fa-file-prescription", to: "/ordonnance" }
+          { key: "ordonnance", label: "Ordonnances", icon: "fa-solid fa-file-prescription", to: "/ordonnance" },
+          { key: "retraits", label: "Retraits", icon: "fa-solid fa-money-bill-transfer", to: "/retraits" }
         ]
       }
 

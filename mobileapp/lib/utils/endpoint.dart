@@ -212,6 +212,15 @@ class ApiRealEndpoints {
   static String paiementRdvCampay(String rdvId) =>
       '${baseUrl}/paiement/rendez-vous/$rdvId/paiement-campay';
 
+  // ─── Retraits des honoraires du médecin (CamPay withdraw) ─────────
+  // Voir retrait.controller.js : authentifié, médecin propriétaire.
+  //   - GET  → { solde, retraits: [...], mobile_moneys: [...], limites }
+  //   - POST { mobile_money_id, montant } → 201, demande créée (montant réservé,
+  //       en attente de validation admin). 409 : solde insuffisant ou demande déjà en cours.
+  // Le numéro de destination vient TOUJOURS d'une fiche Mobile Money du médecin.
+  static String retraitsMedecin(String medecinId) =>
+      '${baseUrl}/medecins/$medecinId/retraits';
+
   // ─── Ordonnances (module transverse "Gestion des médecins") ──────
   // Voir rendezVous.controller.js / medecin.routes.js : toutes
   // authentifiées. Création réservée au médecin du rendez-vous

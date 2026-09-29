@@ -766,3 +766,14 @@ RESPONSIVE
 @media (prefers-reduced-motion:reduce){
   *{ animation:none !important; transition:none !important; scroll-behavior:auto !important; }
 }
+/* ── Portefeuille & retraits (medecin-portefeuille.jsx) ───────────── */
+.wallet-solde{ display:flex; flex-direction:column; gap:.15rem; padding:.9rem 1.1rem; margin-bottom:1rem;
+  background:var(--primary-tint); border-radius:12px; }
+.wallet-solde-label{ font-size:.8rem; color:var(--ink-soft); }
+.wallet-solde-valeur{ font-family:var(--font-mono); font-size:1.5rem; color:var(--primary-dark); }
+.retrait-liste{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.5rem; }
+.retrait-ligne{ display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:.7rem .9rem;
+  border:1px solid var(--line, #e5e7eb); border-radius:10px; }
+.retrait-date{ font-size:.78rem; color:var(--ink-faint); }
+.retrait-motif{ font-size:.8rem; color:var(--urgence-dark); margin-top:.15rem; }
+@media (max-width:640px){ .retrait-ligne{ flex-direction:column; align-items:flex-start; } }

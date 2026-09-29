@@ -36,6 +36,7 @@ import Medecin from './pages/Medecin';
 import AvisMedecin from './pages/avisMedecin';
 import AbonnementMedecin from './pages/AbonnementMedecin';
 import Ordonnance from './pages/Ordonnance';
+import Retraits from './pages/Retraits';
 
 // RENDEZ VOUS
 import RendezVous from './pages/RendezVous';
@@ -93,6 +94,7 @@ export const router = createBrowserRouter([
           { path: '/avis-medecin', element: <AvisMedecin /> },
           { path: '/abonnement-medecin', element: <AbonnementMedecin /> },
           { path: '/ordonnance', element: <Ordonnance /> },
+          { path: '/retraits', element: <Retraits /> },
           // RENDEZ VOUS 
           { path: '/rendez-vous', element: <RendezVous /> },
           // APK

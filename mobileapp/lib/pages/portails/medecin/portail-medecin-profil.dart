@@ -9,6 +9,7 @@ import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/medecin_controller.dart';
 import '../../../models/medecin_models.dart';
 import '../../../repositories/medecin_repository.dart' show ApiException;
+import 'portefeuille_retraits_card.dart';
 
 /// ============================================================
 /// portail-medecin-profil.dart — VERSION ADAPTÉE
@@ -152,6 +153,9 @@ class _PortailMedecinProfilState extends ConsumerState<PortailMedecinProfil>
           children: [
             const _PageHead(),
             _ProfileHero(medecin: medecin, statistiques: statistiques),
+            const SizedBox(height: 10),
+            // Solde & retraits Mobile Money (CamPay) — voir portefeuille_retraits_card.dart.
+            PortefeuilleRetraitsCard(medecinId: medecin.medecinId),
             const SizedBox(height: 2),
             _SegmentedTabs(controller: _tabController, tabs: tabs),
             const SizedBox(height: 16),

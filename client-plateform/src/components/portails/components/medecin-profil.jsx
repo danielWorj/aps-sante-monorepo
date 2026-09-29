@@ -6,6 +6,7 @@ import PortailFooter from "../layouts/portail-footer";
 import PortailSidebar from "../layouts/portail-sidebar";
 import { useAuth } from "./../../../context/AuthContext";
 import * as medecinService from "../../../services/medecinService";
+import MedecinPortefeuille from "./medecin-portefeuille";
 import { listerPays, listerVilles } from "../../../services/geoService";
 
 const MedecinProfil = () => {
@@ -109,6 +110,9 @@ const MedecinProfil = () => {
 
     chargerDonnees();
   }, [authStatus, navigate]);
+
+  // Solde du portefeuille (renvoyé par MedecinPortefeuille, affiché dans la sidebar).
+  const [soldePortefeuille, setSoldePortefeuille] = useState(null);
 
   const updateProfile = (field, value) => {
     setProfile((prev) => ({ ...prev, [field]: value }));
@@ -279,6 +283,12 @@ const MedecinProfil = () => {
                 <i className="fa-solid fa-eye"></i> Voir ma fiche publique
               </Link>
             </header>
+
+            <MedecinPortefeuille
+              medecinId={profile.medecin_id}
+              mobileMoneys={profile.mobile_moneys}
+              onSoldeChange={setSoldePortefeuille}
+            />
 
             <form onSubmit={handleSubmit}>
               {/* Photo & identité */}
@@ -464,7 +474,7 @@ const MedecinProfil = () => {
               </div>
             </form>
           </main>
-          <PortailSidebar />
+          <PortailSidebar solde={soldePortefeuille !== null ? `${new Intl.NumberFormat("fr-FR").format(soldePortefeuille)} FCFA` : undefined} />
         </div>
       </div>
 

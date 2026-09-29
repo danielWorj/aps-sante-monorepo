@@ -32,10 +32,13 @@ function arrondir(valeur) {
  * Solde du portefeuille d'un médecin, recalculé à la demande comme la
  * somme signée de tous ses mouvements — jamais mis en cache.
  * @param {string} medecin_id
+ * @param {import("../../generated/prisma/client.js").PrismaClient} [client] client Prisma à utiliser
+ *   (passer le `tx` d'un `$transaction` pour lire le solde dans la même transaction que
+ *   l'écriture d'un mouvement — voir retrait.service.js, creerDemandeRetrait).
  * @returns {Promise<number>}
  */
-export async function soldePortefeuille(medecin_id) {
-  const totauxParType = await prisma.mouvementPortefeuille.groupBy({
+export async function soldePortefeuille(medecin_id, client = prisma) {
+  const totauxParType = await client.mouvementPortefeuille.groupBy({
     by: ["type"],
     where: { medecin_id },
     _sum: { montant: true },
