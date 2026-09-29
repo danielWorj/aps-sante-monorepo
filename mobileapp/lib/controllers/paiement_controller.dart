@@ -1,6 +1,9 @@
 // lib/controllers/paiement_controller.dart
 //
-// Orchestration du paiement d'un rendez-vous par PaymentSheet Stripe.
+// Orchestration du paiement d'un rendez-vous :
+//   - carte bancaire : PaymentSheet Stripe ;
+//   - Mobile Money   : collecte CamPay (demande de validation sur le
+//                      téléphone) + polling adapté.
 //
 // Volontairement SANS provider Riverpod : l'app utilise plusieurs
 // ProviderContainer distincts (rendezVousProviderContainer,
@@ -8,12 +11,15 @@
 // est donc fourni par l'appelant via un [ExecuteurAuthentifie], ce qui
 // fonctionne quel que soit le container (ou l'absence de container).
 
+import 'dart:async' show TimeoutException;
+
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_stripe/flutter_stripe.dart'
     show FailureCode, SetupPaymentSheetParameters, Stripe, StripeException;
 
 import '../repositories/paiement_repository.dart';
 import '../repositories/rendez_vous_repository.dart' show ApiException;
+import '../utils/mobile_money.dart';
 
 /// Exécute un appel authentifié en lui fournissant un access token.
 ///
@@ -128,4 +134,130 @@ Future<StatutPaiementRdv?> attendreConfirmationPaiement(
     if (i < tentativesMax - 1) await Future<void>.delayed(delai);
   }
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Mobile Money (CamPay)
+// ─────────────────────────────────────────────────────────────────────
+
+/// Détecte un refus « rendez-vous annulé », qu'il vienne du polling
+/// ([rdvAnnuleMessage]) ou du serveur (409 sur POST …/paiement-campay).
+bool estErreurRdvAnnule(Object e) {
+  final texte = '$e';
+  return texte == rdvAnnuleMessage || texte.contains('a été annulé');
+}
+
+/// Envoie la demande de validation Mobile Money au [numero] (numéro
+/// saisi, normalisé ici au format CamPay `2376XXXXXXXX`).
+///
+/// Lève [PaiementException] (message lisible) si le numéro est invalide,
+/// ou [ApiException] si le serveur refuse (429 : trop de tentatives, 409 :
+/// RDV annulé, 400/502 : refus CamPay…).
+///
+/// Un timeout CLIENT est traité comme une issue incertaine (`incertain`)
+/// et non comme une erreur : la demande a pu partir. Rejouer risquerait un
+/// double débit, alors que le polling ([attendreConfirmationMobileMoney])
+/// verra le résultat de la tentative déjà créée.
+///
+/// ⚠️ Ne confirme RIEN : enchaîner avec
+/// [attendreConfirmationMobileMoney].
+Future<CollecteCampay> lancerCollecteMobileMoney(
+  PaiementRepository repo, {
+  required String rdvId,
+  required String numero,
+  required ExecuteurAuthentifie executer,
+}) async {
+  final normalise = normaliserNumeroCM(numero);
+  if (normalise == null) {
+    throw const PaiementException(
+      'Saisissez un numéro camerounais valide (format 6XXXXXXXX).',
+    );
+  }
+  try {
+    return await executer(
+      (token) => repo.demanderPaiementCampay(
+        rdvId: rdvId,
+        numero: normalise,
+        token: token,
+      ),
+    );
+  } on TimeoutException {
+    return const CollecteCampay(incertain: true);
+  }
+}
+
+/// Issue du polling Mobile Money.
+enum IssueMobileMoney {
+  /// Le SERVEUR a enregistré le paiement (`paiement.statut == 'reussie'`).
+  reussie,
+
+  /// Refus ou expiration de la dernière tentative
+  /// (`tentative_campay.statut == 'echouee'`) : le patient peut réessayer.
+  echouee,
+
+  /// Aucune réponse définitive dans le temps imparti. Ce n'est PAS un
+  /// échec : le patient peut encore valider, on propose de revérifier.
+  delaiDepasse,
+
+  /// Le polling a été interrompu par l'appelant ([doitContinuer]).
+  interrompue,
+}
+
+/// Interroge le serveur jusqu'à connaître l'issue d'une collecte Mobile
+/// Money. Contrairement à [attendreConfirmationPaiement] (~18 s, suffisant
+/// pour un webhook Stripe), on laisse ~90 s (30 × 3 s, comme le web) : le
+/// temps de saisir son code secret sur le téléphone.
+///
+/// S'arrête :
+/// - sur `reussie` → [IssueMobileMoney.reussie] ;
+/// - sur `tentative_campay.statut == 'echouee'` → [IssueMobileMoney.echouee] ;
+/// - sur RDV `annule` → lève [PaiementException] ([rdvAnnuleMessage]) ;
+/// - au bout des tentatives → [IssueMobileMoney.delaiDepasse].
+///
+/// Les erreurs 403/404 sont relancées (définitives) ; les autres erreurs
+/// (réseau, 5xx) sont transitoires et le polling continue.
+///
+/// [doitContinuer] permet à l'UI de stopper la boucle (fenêtre fermée) :
+/// une boucle Dart n'est pas liée au cycle de vie d'un widget.
+Future<IssueMobileMoney> attendreConfirmationMobileMoney(
+  PaiementRepository repo, {
+  required String rdvId,
+  required ExecuteurAuthentifie executer,
+  int tentativesMax = 30,
+  Duration delai = const Duration(seconds: 3),
+  bool Function()? doitContinuer,
+}) async {
+  for (var i = 0; i < tentativesMax; i++) {
+    // Délai AVANT chaque lecture (comme le web) : la collecte vient d'être
+    // lancée, une lecture immédiate ne montrerait rien de neuf.
+    await Future<void>.delayed(delai);
+    if (doitContinuer != null && !doitContinuer()) {
+      return IssueMobileMoney.interrompue;
+    }
+
+    StatutPaiementRdv? statut;
+    try {
+      statut = await executer(
+        (token) => repo.obtenirStatut(rdvId: rdvId, token: token),
+      );
+    } on ApiException catch (e) {
+      if (e.statusCode == 403 || e.statusCode == 404) rethrow;
+    } catch (_) {
+      // Erreur réseau transitoire : on retente.
+    }
+    if (doitContinuer != null && !doitContinuer()) {
+      return IssueMobileMoney.interrompue;
+    }
+
+    if (statut != null) {
+      // RDV annulé d'abord (comme attendreConfirmationPaiement) : un
+      // paiement arrivé trop tard est remboursé, ce n'est pas un succès.
+      if (statut.statutRdv == 'annule') {
+        throw const PaiementException(rdvAnnuleMessage);
+      }
+      if (statut.estPaye) return IssueMobileMoney.reussie;
+      if (statut.tentativeCampayEchouee) return IssueMobileMoney.echouee;
+    }
+  }
+  return IssueMobileMoney.delaiDepasse;
 }

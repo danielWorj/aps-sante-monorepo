@@ -654,6 +654,9 @@ class _PanelAttente extends ConsumerWidget {
     // appelAuthentifie rafraîchit l'access token s'il a expiré pendant
     // que le patient saisit sa carte.
     final executer = ref.read(sessionControllerProvider.notifier).appelAuthentifie;
+    // Pré-remplit le numéro de la modale Mobile Money (modifiable).
+    final telephone =
+        ref.read(sessionControllerProvider).value?.utilisateur.telephone;
 
     return rdvAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -703,6 +706,7 @@ class _PanelAttente extends ConsumerWidget {
                       BoutonPayerRdv(
                         rdvId: rdv.rdvId,
                         executer: executer,
+                        telephoneInitial: telephone,
                         onPaye: () =>
                             ref.invalidate(listeRendezVousControllerProvider),
                       ),

@@ -695,6 +695,19 @@ class _RendezVousPageState extends State<RendezVousPage> {
     return executeurAvecTokenFixe(token);
   }
 
+  /// Téléphone à pré-remplir dans la modale Mobile Money : celui saisi à
+  /// la création de compte, sinon celui de la session ouverte (modifiable
+  /// par le patient dans la modale).
+  String? get _telephonePatient {
+    final saisi = _telephoneCtrl.text.trim();
+    if (saisi.isNotEmpty) return saisi;
+    return _container
+        .read(sessionControllerProvider)
+        .value
+        ?.utilisateur
+        .telephone;
+  }
+
   /// Remplace l'ancien popup muet par un véritable écran de confirmation
   /// ([ConfirmationRdvPage]), poussé au-dessus de cet écran de réservation.
   /// Les boutons de [ConfirmationRdvPage] retombent par défaut sur
@@ -716,6 +729,9 @@ class _RendezVousPageState extends State<RendezVousPage> {
     final token = _tokenEffectif;
     final ExecuteurAuthentifie? executeurPaiement =
         (rdvId != null && token != null) ? _executeurPaiement(token) : null;
+    // Lu ICI (et non dans le builder) : le contrôleur de saisie sera
+    // libéré avec cet écran, alors que le bouton vit plus longtemps.
+    final telephonePatient = _telephonePatient;
 
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -738,6 +754,7 @@ class _RendezVousPageState extends State<RendezVousPage> {
               : (ctx, marquerPaye) => BoutonPayerRdv(
                     rdvId: rdvId,
                     executer: executeurPaiement,
+                    telephoneInitial: telephonePatient,
                     onPaye: marquerPaye,
                   ),
           // Le RDV est passé à « confirme » côté serveur : recharge la

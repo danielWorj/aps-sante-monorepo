@@ -202,6 +202,16 @@ class ApiRealEndpoints {
   static String statutPaiementRdv(String rdvId) =>
       '${baseUrl}/paiement/rendez-vous/$rdvId/paiement';
 
+  // ─── Paiement Mobile Money (CamPay) ───────────────────────────────
+  // Voir paiementCampay.controller.js : authentifié, patient propriétaire.
+  //   - POST { numero } : envoie la demande de validation au téléphone
+  //       201 → { reference, ussd_code, operateur }
+  //       200 → { …, deja_initie: true }  (tentative < 2 min, même numéro)
+  //       202 → { …, incertain: true }    (issue incertaine, ne PAS rejouer)
+  // La confirmation se lit toujours via [statutPaiementRdv] (GET).
+  static String paiementRdvCampay(String rdvId) =>
+      '${baseUrl}/paiement/rendez-vous/$rdvId/paiement-campay';
+
   // ─── Ordonnances (module transverse "Gestion des médecins") ──────
   // Voir rendezVous.controller.js / medecin.routes.js : toutes
   // authentifiées. Création réservée au médecin du rendez-vous
