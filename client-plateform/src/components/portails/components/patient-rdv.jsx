@@ -19,10 +19,8 @@
 //     les téléconsultations à venir — réutilise le même VisioModal /
 //     ConsultationRoom, seul le nom affiché en tête de modale change
 //     (celui du médecin plutôt que celui du patient).
-import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
-import PortailNavbar from "./../layouts/portail-navbar";
-import PortailFooter from "./../layouts/portail-footer";
 import PortailSidebar from "./../layouts/portail-sidebar";
 import VisioModal from "./visio-modal";
 import MotifAnnulationModal from "./motif-annulation-modal";
@@ -30,23 +28,17 @@ import {
   listerRendezVousPatientConnecte,
   annulerRendezVous,
   MOTIFS_ANNULATION_PATIENT,
-  STATUTS_RENDEZ_VOUS,
-  TYPES_RENDEZ_VOUS,
 } from "./../../../services/medecinService";
 import { useAuth } from "./../../../context/AuthContext";
 import { categoriserRdv } from "./../../../utils/rdv";
-import { demanderPaiementRdv } from "./../../../services/paiementService";
 import PaiementMobileMoney from "./../../paiement/PaiementMobileMoney";
+import ChoixMoyenPaiement from "./../../paiement/ChoixMoyenPaiement";
 
 // ─── Helpers de formatage ─────────────────────────────────────
 const TYPE_RDV_LABEL = {
   physique: "Consultation physique",
   teleconsultation: "Téléconsultation",
 };
-
-const STATUT_LABEL = Object.fromEntries(
-  STATUTS_RENDEZ_VOUS.map((s) => [s.valeur, s.libelle])
-);
 
 /**
  * Formate une date ISO en libellé lisible : "Auj.", "Demain", "Lun 25", etc.
@@ -155,23 +147,16 @@ const PatientRdv = () => {
   };
 
   // ─── Paiement d'un RDV « cree » (en attente de paiement) ────
+  const [choixRdv, setChoixRdv] = useState(null); // rdv | null : pop-up de choix du moyen de paiement
   const [momoRdv, setMomoRdv] = useState(null); // rdv | null
-  const [paiementCarteEnCours, setPaiementCarteEnCours] = useState(null); // rdv_id | null
-  const ouvrirMobileMoney = (rdv) => {
+  const ouvrirChoixPaiement = (rdv) => {
     fermerDetail();
-    setMomoRdv(rdv);
-  };
-  const payerParCarte = async (rdv) => {
-    setPaiementCarteEnCours(rdv.rdv_id);
-    try {
-      window.location.href = await demanderPaiementRdv(rdv.rdv_id); // redirection Stripe Checkout
-    } catch (err) {
-      showToast(err?.message || "Impossible de lancer le paiement.");
-      setPaiementCarteEnCours(null);
-    }
+    setChoixRdv(rdv);
   };
 
   // ─── Chargement initial ─────────────────────────────────────
+  // Rechargement déclenché par l'utilisateur (bouton « Réessayer », fermeture
+  // de la modale Mobile Money) : on réaffiche l'état de chargement.
   const chargerRendezVous = useCallback(async () => {
     setChargement(true);
     setErreur(null);
@@ -186,11 +171,27 @@ const PatientRdv = () => {
     }
   }, []);
 
+  // Chargement initial : récupération inline dans l'effet, avec setState
+  // uniquement après l'await (chargement vaut déjà true et erreur null au
+  // montage), et annulation si le composant est démonté entre-temps.
   useEffect(() => {
-    if (estPatient) {
-      chargerRendezVous();
-    }
-  }, [estPatient, chargerRendezVous]);
+    if (!estPatient) return undefined;
+    let annule = false;
+    (async () => {
+      try {
+        const data = await listerRendezVousPatientConnecte();
+        if (!annule) setRendezVous(Array.isArray(data) ? data : []);
+      } catch (err) {
+        if (!annule) {
+          setErreur(err.message || "Impossible de charger vos rendez-vous.");
+          setRendezVous([]);
+        }
+      } finally {
+        if (!annule) setChargement(false);
+      }
+    })();
+    return () => { annule = true; };
+  }, [estPatient]);
 
   // ─── Répartition par onglet ─────────────────────────────────
   const rdvParCategorie = useMemo(() => {
@@ -483,22 +484,9 @@ const PatientRdv = () => {
               <>
                 <button
                   className="btn btn-primary btn-sm-aps"
-                  onClick={() => ouvrirMobileMoney(rdv)}
-                  disabled={paiementCarteEnCours === rdv.rdv_id}
+                  onClick={() => ouvrirChoixPaiement(rdv)}
                 >
-                  <i className="fa-solid fa-mobile-screen"></i> Payer par Mobile Money
-                </button>
-                <button
-                  className="btn btn-outline-primary btn-sm-aps"
-                  onClick={() => payerParCarte(rdv)}
-                  disabled={paiementCarteEnCours === rdv.rdv_id}
-                >
-                  {paiementCarteEnCours === rdv.rdv_id ? (
-                    <span className="spinner-border spinner-border-sm me-1"></span>
-                  ) : (
-                    <i className="fa-solid fa-credit-card"></i>
-                  )}
-                  Payer par carte
+                  <i className="fa-solid fa-lock"></i> Payer
                 </button>
               </>
             )}
@@ -785,6 +773,17 @@ const PatientRdv = () => {
         onClose={fermerAnnulation}
         onConfirm={confirmerAnnulation}
       />
+
+      {choixRdv && (
+        <ChoixMoyenPaiement
+          rdvId={choixRdv.rdv_id}
+          onFermer={() => setChoixRdv(null)}
+          onChoisirMobileMoney={() => {
+            setMomoRdv(choixRdv);
+            setChoixRdv(null);
+          }}
+        />
+      )}
 
       {momoRdv && (
         <PaiementMobileMoney
