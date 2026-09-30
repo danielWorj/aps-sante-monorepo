@@ -26,9 +26,9 @@ export async function obtenirPortefeuilleMedecin(req, res, next) {
       return res.status(403).json({ message: "Accès refusé : ce portefeuille ne vous appartient pas." });
     }
 
-    const { solde, mouvements } = await obtenirPortefeuille(medecin.medecin_id);
+    const { solde, mouvements, amendes_en_attente } = await obtenirPortefeuille(medecin.medecin_id);
 
-    return res.status(200).json({ medecin_id: medecin.medecin_id, solde, mouvements });
+    return res.status(200).json({ medecin_id: medecin.medecin_id, solde, mouvements, amendes_en_attente });
   } catch (err) {
     next(err);
   }

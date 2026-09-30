@@ -233,6 +233,24 @@ function exigerDates(dateCreneau, maintenant, evenement) {
   }
 }
 
+/**
+ * Répartition d'une libération de fonds (§1) : honoraires = commission
+ * APS + crédit net du médecin (AVANT amendes). Fonction pure, utilisée
+ * par liberationEscrow.service.js pour tout versement au médecin
+ * (RDV honoré, annulation patient < 24h, patient absent). Même formule
+ * que `decider` (commission plafonnée aux honoraires).
+ * @param {{ honoraires: number|string, commission: { taux: number|string }, decimales?: 0|2 }} p
+ * @returns {{ honoraires:number, commissionAps:number, netMedecin:number }}
+ */
+export function repartirLiberation({ honoraires, commission, decimales = 2 }) {
+  if (!commission || commission.taux == null) {
+    throw new Error("Ligne de commission manquante : répartition de la libération impossible.");
+  }
+  const h = arrondir(honoraires, decimales);
+  const commissionAps = Math.min(h, arrondir(Number(honoraires) * Number(commission.taux), decimales));
+  return { honoraires: h, commissionAps, netMedecin: arrondir(h - commissionAps, decimales) };
+}
+
 // -----------------------------------------------------------------
 // §7 — Amendes du médecin (calcul pur ; l'écriture en base est faite
 // par amende.service.js à l'étape 4).

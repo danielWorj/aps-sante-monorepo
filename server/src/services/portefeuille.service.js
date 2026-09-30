@@ -101,17 +101,27 @@ export const NB_MOUVEMENTS_PAR_DEFAUT = 50;
 
 /**
  * @param {string} medecin_id
- * @returns {Promise<{ solde: number, mouvements: object[] }>}
+ * @returns {Promise<{ solde: number, mouvements: object[], amendes_en_attente: object[] }>}
+ *   amendes_en_attente (politique de fonds v2 §7) : amendes pas encore
+ *   imputées ; sans montant (il se calcule à la prochaine libération,
+ *   point ouvert F), seul le taux retenu est exposé.
  */
 export async function obtenirPortefeuille(medecin_id) {
-  const [solde, mouvements] = await Promise.all([
+  const [solde, mouvements, amendes_en_attente] = await Promise.all([
     soldePortefeuille(medecin_id),
     prisma.mouvementPortefeuille.findMany({
       where: { medecin_id },
       orderBy: { date_creation: "desc" },
       take: NB_MOUVEMENTS_PAR_DEFAUT,
     }),
+    // Requête locale (et non amende.service.js) : amende.service importe
+    // déjà creerMouvement d'ici — éviter un import circulaire.
+    prisma.amendeMedecin.findMany({
+      where: { medecin_id, statut: { in: ["en_attente", "partielle"] } },
+      orderBy: { date_creation: "asc" },
+      select: { amende_id: true, rdv_id: true, taux_applique: true, statut: true, date_creation: true },
+    }),
   ]);
 
-  return { solde, mouvements };
+  return { solde, mouvements, amendes_en_attente };
 }

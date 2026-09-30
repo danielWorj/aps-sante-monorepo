@@ -1,136 +1,134 @@
 // src/services/liberationEscrow.service.js
-// Phase 2 — Libération conditionnelle (voir politique de gestion des
-// fonds §1-2) : bascule CompteEscrow.statut "sequestre" -> "libere",
-// RendezVous.statut -> "honore", et crédite le portefeuille du
-// médecin — le tout dans une seule transaction Prisma, appelée
-// UNIQUEMENT par les deux déclencheurs légitimes de la politique :
-//   - le scan du QR code par le médecin (RDV physique) ;
-//   - la clôture de la session de téléconsultation (RDV visio).
-// Ni l'un ni l'autre appelant ne repasse par PATCH .../statut : voir
-// rendezVous.controller.js, TRANSITIONS_AUTORISEES, où la transition
-// medecin "en_attente_presence" -> "honore" a été retirée du chemin
-// générique pour garantir qu'un passage à "honoré" déclenche TOUJOURS
-// cette fonction (et donc la libération des fonds).
+// Politique de fonds v2 §1, §3, §5, §7 — Libération de l'escrow vers le
+// médecin.
+//
+// Crédit du médecin = honoraires − commission APS − amendes imputées :
+//   1. la commission APS (ligne_commission FIGÉE sur la transaction à la
+//      capture) est prélevée ICI, à la libération, et enregistrée comme
+//      fait de versement à APS (CommissionApsVersee) ;
+//   2. le net (honoraires − commission) est crédité au portefeuille
+//      (`credit_honoraires`) ;
+//   3. les amendes en attente du médecin sont ensuite imputées sur ce
+//      crédit (`debit_amende`, reversé à APS), plafonnées au crédit.
+// Les frais d'envoi de l'agrégateur restent à la charge du patient : ils
+// n'entrent jamais dans ce calcul. Rien n'est stocké en dérivé : la
+// commission se recalcule depuis montant_honoraires × ligne_commission.taux.
+//
+// Appelée par :
+//   - libererEscrow(rdv_id) : RDV honoré (scan QR, clôture visio,
+//     forcer-liberation) — comportement historique conservé ;
+//   - libererFonds(rdv_id, { statutRdv }, tx) : annulation patient < 24h
+//     et patient absent (statut « annule » / « non_honore »), étape 5,
+//     éventuellement dans la transaction de l'appelant.
 
 import prisma from "../lib/prisma.js";
-import { decomposerMontant } from "./tarification.service.js";
+import { decimalesPourMontant } from "../utils/montants.js";
+import { repartirLiberation } from "./politiqueFonds.service.js";
 import { creerMouvement } from "./portefeuille.service.js";
+import { appliquerAmendesEnAttente } from "./amende.service.js";
 
-// Correctif : creerMouvement (portefeuille.service.js, Phase 1) accepte
-// bien un client transactionnel en second paramètre (`client = prisma`)
-// depuis son tout premier ajout en Phase 2 — voir portefeuille.service.js.
-// Une version antérieure de ce fichier affirmait le contraire et
-// dupliquait donc ici, sur une prémisse fausse, le motif idempotent de
-// creerMouvement (catch de la violation P2002 sur reference_idempotence).
-// On réutilise maintenant creerMouvement(données, tx) directement, comme
-// le fait déjà annulation.service.js (Phase 3) et defaillancePro.service.js
-// (Phase 4) — un seul endroit qui sait comment écrire un mouvement.
-
-// Arrondi à 2 décimales (même motif que tarification.service.js,
-// portefeuille.service.js, annulation.service.js...) — évite les écarts
-// de type 14.999999999999998 lors de la soustraction commission/taxe.
-function arrondir(valeur) {
-  return Math.round(valeur * 100) / 100;
-}
+const STATUTS_RDV_LIBERATION = ["honore", "annule", "non_honore"];
 
 /**
- * Libère l'escrow d'un rendez-vous et crédite le portefeuille du
- * médecin des honoraires NETS de la commission APS et de la taxe
- * (politique §2 : "crédité... commission APS et taxes déjà
- * déduites") — jamais des frais d'agrégateur, qui restent
- * exclusivement à la charge du patient (§4) et ne concernent donc pas
- * ce crédit. Rien n'est stocké : commission et taxe sont recalculées
- * à la volée via decomposerMontant (Phase 0), à partir des lignes
- * tarifaires figées sur la transaction au moment de la capture —
- * jamais les lignes actives à l'instant T — pour rester correct même
- * si un taux a changé depuis.
+ * Libère l'escrow d'un rendez-vous vers le médecin (voir en-tête).
  *
- * ⚠️ Correctif : une version antérieure créditait ici le montant BRUT
- * des honoraires (decomposerMontant(...).honoraires, qui n'est pas net
- * de commission/taxe) — un surpaiement systématique au médecin et une
- * perte de la commission/taxe pour APS sur toute libération d'escrow.
- * Voir git blame pour l'historique.
- *
- * Idempotent à deux niveaux, pour supporter un double appel (ex. le
- * patient ET le médecin ferment la session visio à quelques
- * millisecondes d'écart, ou le webhook Jitsi est livré deux fois) :
- *   1. Si le CompteEscrow n'est plus "sequestre" (déjà libéré,
- *      remboursé ou gelé par un litige), on sort sans rien faire.
- *   2. `creerMouvement` (Phase 1) est lui-même protégé par la
- *      contrainte unique `reference_idempotence = rdv_id` : même si
- *      l'étape 1 était contournée par une course, le grand-livre ne
- *      peut recevoir qu'un seul crédit `credit_honoraires` par rdv_id.
+ * Idempotence : l'escrow est « réservé » par un UPDATE conditionnel
+ * (`WHERE statut = 'sequestre'`). Un second appel (double clôture visio,
+ * webhook rejoué, course scan QR / forcer-liberation) obtient count = 0
+ * et sort sans rien écrire. Escrow absent, déjà libéré, remboursé ou
+ * gelé par un litige -> `deja_traite: true`, jamais d'exception.
  *
  * @param {string} rdv_id
- * @returns {Promise<{ deja_traite: boolean }>}
+ * @param {{ statutRdv?: "honore"|"annule"|"non_honore" }} [options]
+ * @param {object} [tx] transaction Prisma de l'appelant (sinon une est ouverte)
+ * @returns {Promise<{ deja_traite: boolean, honoraires?: number, commission_aps?: number,
+ *   net_medecin?: number, amendes_imputees?: number, credit_final?: number }>}
  */
-export async function libererEscrow(rdv_id) {
-  return prisma.$transaction(async (tx) => {
-    const [rdv, escrow] = await Promise.all([
-      tx.rendezVous.findUnique({ where: { rdv_id }, select: { medecin_id: true } }),
-      tx.compteEscrow.findUnique({
-        where: { rdv_id },
-        include: {
-          transaction: {
-            include: { ligne_commission: true, ligne_taxe: true, ligne_frais_agregateur: true },
-          },
-        },
-      }),
-    ]);
+export async function libererFonds(rdv_id, { statutRdv = "honore" } = {}, tx) {
+  if (!STATUTS_RDV_LIBERATION.includes(statutRdv)) {
+    throw new Error(`Statut de RDV invalide pour une libération : "${statutRdv}".`);
+  }
 
-    // Pas d'escrow du tout (rdv jamais payé) : rien à libérer. Ne
-    // devrait pas arriver si l'appelant a déjà vérifié le statut du
-    // rdv en amont, mais on reste défensif — jamais d'exception pour
-    // un webhook qui pourrait être rejoué par Jitsi/Stripe.
-    if (!escrow) {
-      return { deja_traite: true };
-    }
-
-    // Déjà libéré (double appel), déjà remboursé (annulation
-    // entre-temps), ou gelé (litige ouvert, Phase 5) : on ne touche à
-    // rien. C'est cette vérification qui rend l'opération idempotente
-    // au niveau de l'escrow lui-même.
-    if (escrow.statut !== "sequestre") {
-      return { deja_traite: true };
-    }
+  const executer = async (db) => {
+    const escrow = await db.compteEscrow.findUnique({
+      where: { rdv_id },
+      include: { transaction: { include: { ligne_commission: true } } },
+    });
+    if (!escrow || escrow.statut !== "sequestre") return { deja_traite: true };
 
     const t = escrow.transaction;
-    const decomposition = decomposerMontant(t.montant_honoraires, {
-      commission: t.ligne_commission,
-      taxe: t.ligne_taxe,
-      frais_agregateur: t.ligne_frais_agregateur,
-    });
-    // Net de commission ET de taxe (§2) — pas le montant brut. Les
-    // frais d'agrégateur (decomposition.fraisAgregateur) n'entrent pas
-    // dans ce calcul : ils ne sont jamais à la charge du médecin.
-    const montantNetMedecin = arrondir(
-      decomposition.honoraires - decomposition.commission - decomposition.taxes
-    );
+    if (t.montant_honoraires == null || !t.ligne_commission) {
+      throw new Error(
+        `Transaction ${t.transaction_id} sans honoraires ou sans ligne de commission figée : libération impossible.`
+      );
+    }
 
-    await tx.compteEscrow.update({
-      where: { escrow_id: escrow.escrow_id },
+    // Réservation atomique de l'escrow (voir « Idempotence »).
+    const { count } = await db.compteEscrow.updateMany({
+      where: { escrow_id: escrow.escrow_id, statut: "sequestre" },
       data: { statut: "libere" },
     });
+    if (count !== 1) return { deja_traite: true };
 
-    await tx.rendezVous.update({
+    const rdv = await db.rendezVous.update({
       where: { rdv_id },
-      data: { statut: "honore" },
+      data: { statut: statutRdv },
+      select: { medecin_id: true },
     });
 
-    // creerMouvement (Phase 1) gère déjà l'idempotence (catch P2002 sur
-    // reference_idempotence) : un rejeu concurrent ne relève aucune
-    // erreur, les mises à jour de statut ci-dessus restent acquises.
+    const decimales = decimalesPourMontant({ fournisseur: t.fournisseur, devise: t.devise });
+    const { honoraires, commissionAps, netMedecin } = repartirLiberation({
+      honoraires: t.montant_honoraires,
+      commission: t.ligne_commission,
+      decimales,
+    });
+
+    // Fait de versement à APS (une seule ligne par RDV : rdv_id unique).
+    if (commissionAps > 0) {
+      await db.commissionApsVersee.create({
+        data: {
+          rdv_id,
+          transaction_id: t.transaction_id,
+          ligne_commission_id: t.ligne_commission.ligne_tarifaire_id,
+          montant: commissionAps,
+        },
+      });
+    }
+
     await creerMouvement(
       {
         medecin_id: rdv.medecin_id,
         type: "credit_honoraires",
-        montant: montantNetMedecin,
+        montant: netMedecin,
         rdv_id,
         reference_idempotence: rdv_id,
       },
-      tx
+      db
     );
 
-    return { deja_traite: false };
-  });
+    const amendes = await appliquerAmendesEnAttente(
+      { medecin_id: rdv.medecin_id, creditNet: netMedecin, decimales },
+      db
+    );
+
+    return {
+      deja_traite: false,
+      honoraires,
+      commission_aps: commissionAps,
+      net_medecin: netMedecin,
+      amendes_imputees: amendes.totalImpute,
+      credit_final: amendes.creditApres,
+    };
+  };
+
+  return tx ? executer(tx) : prisma.$transaction(executer);
+}
+
+/**
+ * RDV honoré : libération standard (scan QR, clôture de téléconsultation,
+ * forcer-liberation). Signature historique conservée pour les appelants.
+ * @param {string} rdv_id
+ */
+export function libererEscrow(rdv_id) {
+  return libererFonds(rdv_id, { statutRdv: "honore" });
 }
