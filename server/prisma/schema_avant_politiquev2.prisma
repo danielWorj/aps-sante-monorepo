@@ -173,19 +173,6 @@ enum StatutRendezVous {
   non_honore
   annule
   conteste
-  // Politique de fonds v2 §5 : les deux parties étaient absentes. Les
-  // fonds restent en séquestre ; les deux parties ont 48h (à compter de
-  // RendezVous.a_reprogrammer_le) pour convenir d'une nouvelle date,
-  // faute de quoi le cron rembourse le patient (honoraires − frais
-  // d'agrégateur − commission APS).
-  a_reprogrammer
-}
-
-// Partie à l'origine d'une proposition de reprogrammation (§5) : l'autre
-// partie est celle qui doit l'accepter.
-enum PartieRendezVous {
-  patient
-  medecin
 }
 
 // Motif d'annulation d'un rendez-vous — liste fermée exigée par la
@@ -303,10 +290,6 @@ model Pays {
   // versionnées (commission APS, taxes, frais d'agrégateur) en vigueur
   // par pays. Voir LigneTarifaire plus bas.
   lignes_tarifaires LigneTarifaire[]
-
-  // Politique de fonds v2 §7 : taux d'amende du médecin, versionné par
-  // pays (voir ParametreAmende plus bas).
-  parametres_amende ParametreAmende[]
 
   @@index([devise_id])
   @@index([langue_id])
@@ -450,6 +433,13 @@ model Medecin {
   teleconsultation_activee  Boolean
   tarif_indicatif           Decimal                   @db.Decimal(12, 2)
 
+  // Phase 3 — frais d'annulation tardive (moins de 24h avant le RDV),
+  // paramétrés PAR le médecin (politique de gestion des fonds §3) : un
+  // paramétrage saisi, pas une donnée calculable, donc légitime à
+  // stocker tel quel. Fraction de 0 à 1 appliquée aux honoraires (ex.
+  // 0.2000 = 20 %) ; NULL = non paramétré = aucun frais.
+  taux_frais_annulation_tardive Decimal? @db.Decimal(5, 4)
+
   biographie String @default("") @db.Text 
   linkedInUrl               String?                    @db.VarChar(255)
 
@@ -504,10 +494,6 @@ model Medecin {
   // migration de rattrapage pour les médecins déjà existants) — voir
   // schema plus bas (PortefeuilleMedecin) et services/portefeuille.service.js.
   portefeuille PortefeuilleMedecin?
-
-  // Politique de fonds v2 §7 : amendes dues par ce médecin (une par RDV
-  // fautif), imputées sur sa prochaine libération de fonds.
-  amendes AmendeMedecin[]
 
   // Phase 6 : demandes de retrait (décaissement Mobile Money via CamPay).
   demandes_retrait DemandeRetrait[]
@@ -1147,15 +1133,11 @@ model GardePharmacie {
 // (voir plus haut), qui n'a plus besoin d'être stubée ici.
 // -----------------------------------------------------------------
 
-// Ligne tarifaire versionnée : chaque catégorie de frais est une LIGNE
-// indépendante, pas une colonne fixe. Ajouter/modifier un taux ne
-// demande qu'une nouvelle ligne en base via l'API admin, jamais une
-// migration.
-//
-// Politique de fonds v2 : seule la COMMISSION APS subsiste ici (par
-// pays, prélevée à la libération vers le médecin). La taxe est
-// supprimée définitivement ; les frais d'agrégateur vivent désormais
-// dans FraisAgregateur (par agrégateur, pas par pays).
+// Ligne tarifaire versionnée : chaque catégorie de frais (commission,
+// taxe, frais d'agrégateur) est une LIGNE indépendante, pas une colonne
+// fixe. Ajouter/modifier un taux — ou même une nouvelle taxe (ex. une
+// taxe locale en plus de la taxe APS) — ne demande qu'une nouvelle
+// ligne en base via l'API admin, jamais une migration.
 //
 // Versionnement : pour un (pays_id, type_frais) donné, une seule ligne
 // est actif=true à la fois (contrainte imposée en base, voir la
@@ -1163,103 +1145,31 @@ model GardePharmacie {
 // réécrit jamais la ligne en cours : on désactive l'ancienne et on en
 // crée une nouvelle — voir ligneTarifaire.controller.js. Les
 // transactions déjà capturées référencent la ligne en vigueur au
-// moment du paiement (TransactionPaiement.ligne_commission_id) et
-// restent donc correctes même si le taux change ensuite.
-//
-// L'enum est conservé à une seule valeur (plutôt que supprimé) pour que
-// l'API admin et l'index (pays_id, type_frais) restent inchangés si un
-// autre type de ligne par pays devait revenir.
+// moment du paiement (une FK par type_frais sur TransactionPaiement)
+// et restent donc correctes même si le taux change ensuite.
 enum TypeFraisTarifaire {
   commission
+  taxe
+  frais_agregateur
 }
 
 model LigneTarifaire {
   ligne_tarifaire_id  String             @id @default(uuid()) @db.Uuid
   pays_id             String             @db.Uuid
   type_frais          TypeFraisTarifaire
-  libelle             String             @db.VarChar(100) // ex: "Commission APS"
+  libelle             String             @db.VarChar(100) // ex: "Commission APS", "Taxe APS", "Frais Stripe"
   taux                Decimal            @db.Decimal(5, 4) // ex: 0.15
   actif               Boolean            @default(true)
   date_debut_validite DateTime           @default(now())
 
   pays Pays @relation(fields: [pays_id], references: [pays_id])
 
-  transactions_commission TransactionPaiement[] @relation("TransactionLigneCommission")
-  commissions_versees     CommissionApsVersee[]
+  transactions_commission       TransactionPaiement[] @relation("TransactionLigneCommission")
+  transactions_taxe             TransactionPaiement[] @relation("TransactionLigneTaxe")
+  transactions_frais_agregateur TransactionPaiement[] @relation("TransactionLigneFraisAgregateur")
 
   @@index([pays_id, type_frais])
   @@map("ligne_tarifaire")
-}
-
-// -----------------------------------------------------------------
-// Politique de fonds v2 §1 — Frais d'agrégateur, par agrégateur et par
-// type. Saisis par un administrateur (aucun seed, aucune valeur codée
-// en dur) : si la ligne active manque, le code lève une erreur
-// explicite (voir services/fraisAgregateur.service.js, étape 2).
-//
-//   - envoi          : frais facturés au patient EN PLUS des honoraires.
-//   - remboursement  : frais retenus sur un remboursement au patient.
-//
-// Les deux se calculent sur les HONORAIRES : taux × honoraires
-// + montant_fixe. Jamais stockés en montant (principe « aucune valeur
-// dérivée stockée ») : TransactionPaiement fige seulement la LIGNE en
-// vigueur à la capture (frais_envoi_id / frais_remboursement_id).
-//
-// Versionnement identique à LigneTarifaire : une seule ligne active par
-// (agregateur, type_frais), imposée en base par un index unique partiel
-// WHERE actif (voir la migration) ; changer un frais = désactiver
-// l'ancienne ligne et en créer une nouvelle.
-// montant_fixe est exprimé dans la devise de la transaction (XAF pour
-// CamPay).
-// -----------------------------------------------------------------
-enum AgregateurPaiement {
-  stripe
-  campay
-}
-
-enum TypeFraisAgregateur {
-  envoi
-  remboursement
-}
-
-model FraisAgregateur {
-  frais_agregateur_id String              @id @default(uuid()) @db.Uuid
-  agregateur          AgregateurPaiement
-  type_frais          TypeFraisAgregateur
-  libelle             String              @db.VarChar(100) // ex: "Frais d'envoi Stripe"
-  taux                Decimal             @default(0) @db.Decimal(5, 4) // ex: 0.025 = 2,5 %
-  montant_fixe        Decimal             @default(0) @db.Decimal(12, 2)
-  actif               Boolean             @default(true)
-  date_debut_validite DateTime            @default(now())
-
-  transactions_envoi         TransactionPaiement[] @relation("TransactionFraisEnvoi")
-  transactions_remboursement TransactionPaiement[] @relation("TransactionFraisRemboursement")
-
-  @@index([agregateur, type_frais])
-  @@map("frais_agregateur")
-}
-
-// -----------------------------------------------------------------
-// Politique de fonds v2 §7 — Taux d'amende du médecin, par pays et
-// versionné (même mécanique que LigneTarifaire : index unique partiel
-// WHERE actif sur pays_id, voir la migration). Saisi par un
-// administrateur, aucun seed : sans ligne active pour le pays du
-// médecin, la création d'une amende échoue explicitement.
-// -----------------------------------------------------------------
-model ParametreAmende {
-  parametre_amende_id String   @id @default(uuid()) @db.Uuid
-  pays_id             String   @db.Uuid
-  libelle             String   @db.VarChar(100) // ex: "Amende annulation tardive / absence"
-  taux                Decimal  @db.Decimal(5, 4) // ex: 0.10 = 10 % du crédit de la prochaine libération
-  actif               Boolean  @default(true)
-  date_debut_validite DateTime @default(now())
-
-  pays Pays @relation(fields: [pays_id], references: [pays_id])
-
-  amendes AmendeMedecin[]
-
-  @@index([pays_id])
-  @@map("parametre_amende")
 }
 
 /// @ref module 06_paiement_escrow — définition complète à fusionner
@@ -1295,38 +1205,28 @@ model TransactionPaiement {
   // transaction liée à un rendez-vous (compte_escrow non nul) : une
   // transaction d'abonnement (medecin/pharmacie) n'a pas d'honoraires
   // ni de lignes tarifaires, d'où le caractère nullable de ces champs.
-  //
-  // Politique de fonds v2 : le patient paie honoraires + frais d'envoi
-  // de l'agrégateur ; la commission APS est prélevée à la libération
-  // vers le médecin (plus de taxe). Commission et frais ne sont JAMAIS
-  // stockés en montant : ils se recalculent via montant_honoraires ×
-  // ligne.taux (+ montant_fixe) à la demande — on fige seulement les
-  // LIGNES en vigueur à la capture :
-  //   - ligne_commission_id     : commission APS (LigneTarifaire, par pays)
-  //   - frais_envoi_id          : frais d'envoi de l'agrégateur choisi
-  //   - frais_remboursement_id  : frais de remboursement du même agrégateur
-  //     (figés dès la capture pour que le remboursement de cette
-  //     transaction ne dépende pas d'un changement de barème ultérieur)
-  montant_honoraires     Decimal? @db.Decimal(12, 2)
-  ligne_commission_id    String?  @db.Uuid
-  frais_envoi_id         String?  @db.Uuid
-  frais_remboursement_id String?  @db.Uuid
+  // commission/taxes/frais d'agrégateur ne sont JAMAIS stockés en
+  // montant : ils se recalculent via montant_honoraires × ligne.taux à
+  // la demande (voir services/tarification.service.js). Une FK par
+  // type_frais plutôt qu'une seule, car chaque transaction peut avoir
+  // capturé sa commission, sa taxe et son frais d'agrégateur sous des
+  // lignes tarifaires différentes (versions différentes dans le temps).
+  montant_honoraires        Decimal? @db.Decimal(12, 2)
+  ligne_commission_id       String?  @db.Uuid
+  ligne_taxe_id             String?  @db.Uuid
+  ligne_frais_agregateur_id String?  @db.Uuid
 
-  ligne_commission      LigneTarifaire?       @relation("TransactionLigneCommission", fields: [ligne_commission_id], references: [ligne_tarifaire_id])
-  frais_envoi           FraisAgregateur?      @relation("TransactionFraisEnvoi", fields: [frais_envoi_id], references: [frais_agregateur_id])
-  frais_remboursement   FraisAgregateur?      @relation("TransactionFraisRemboursement", fields: [frais_remboursement_id], references: [frais_agregateur_id])
-  abonnements_pharmacie AbonnementPharmacie[]
-  abonnements_medecin   AbonnementMedecin[]
-  compte_escrow         CompteEscrow?
-  remboursements        RemboursementPaiement[]
-
-  // Politique de fonds v2 §5 : commission APS effectivement versée à
-  // APS pour cette transaction (au plus une par RDV).
-  commission_aps_versee CommissionApsVersee?
+  ligne_commission       LigneTarifaire?       @relation("TransactionLigneCommission", fields: [ligne_commission_id], references: [ligne_tarifaire_id])
+  ligne_taxe             LigneTarifaire?       @relation("TransactionLigneTaxe", fields: [ligne_taxe_id], references: [ligne_tarifaire_id])
+  ligne_frais_agregateur LigneTarifaire?       @relation("TransactionLigneFraisAgregateur", fields: [ligne_frais_agregateur_id], references: [ligne_tarifaire_id])
+  abonnements_pharmacie  AbonnementPharmacie[]
+  abonnements_medecin    AbonnementMedecin[]
+  compte_escrow          CompteEscrow?
+  remboursements         RemboursementPaiement[]
 
   @@index([ligne_commission_id])
-  @@index([frais_envoi_id])
-  @@index([frais_remboursement_id])
+  @@index([ligne_taxe_id])
+  @@index([ligne_frais_agregateur_id])
   @@index([fournisseur, statut])
   @@index([rdv_id_cible])
   @@map("transaction_paiement")
@@ -1370,15 +1270,7 @@ model RemboursementPaiement {
   // et un admin effectue le retrait Mobile Money ("traite").
   stripe_refund_id String?  @unique
   statut           String   @default("effectue") @db.VarChar(20) // effectue | a_traiter | traite
-
-  // Politique de fonds v2 §2 (CamPay) : frais RÉELS du retrait Mobile
-  // Money constatés par l'admin à la clôture (a_traiter -> traite).
-  // Fait stocké, NULL tant que la ligne n'est pas clôturée (et toujours
-  // NULL pour Stripe). Le net versé au patient = montant (brut :
-  // honoraires) − frais_reels, plancher à 0 — recalculé, jamais stocké.
-  frais_reels Decimal? @db.Decimal(12, 2)
-
-  date_creation DateTime @default(now())
+  date_creation    DateTime @default(now())
 
   transaction TransactionPaiement @relation(fields: [transaction_id], references: [transaction_id])
 
@@ -1409,20 +1301,11 @@ model PortefeuilleMedecin {
 
 enum TypeMouvementPortefeuille {
   credit_honoraires
-  // OBSOLÈTE (politique de fonds v2) — plus jamais écrit ; conservé car
-  // l'historique du grand-livre le référence (portefeuille.service.js
-  // doit continuer à le sommer avec son signe d'origine).
   debit_retenue_annulation_tardive
-  // OBSOLÈTE (politique de fonds v2) — remplacé par debit_amende.
   debit_frais_no_show
   debit_retrait
-  // OBSOLÈTE (politique de fonds v2) — plus de frais d'annulation
-  // crédités au médecin ; conservé pour l'historique.
-  credit_frais_annulation
+  credit_frais_annulation // Phase 3 : frais d'annulation tardive retenus au patient, crédités au médecin
   credit_annulation_retrait // Phase 6 : retrait rejeté / échoué -> le montant réservé est recrédité
-  // Politique de fonds v2 §7 : amende imputée sur une libération de
-  // fonds (montant positif, signe débit — voir portefeuille.service.js).
-  debit_amende
 }
 
 model MouvementPortefeuille {
@@ -1451,76 +1334,6 @@ model MouvementPortefeuille {
 
   @@index([medecin_id])
   @@map("mouvement_portefeuille")
-}
-
-// -----------------------------------------------------------------
-// Politique de fonds v2 §7 — Amende du médecin (annulation médecin
-// < 24h, médecin absent). Une amende par RDV fautif (rdv_id unique :
-// idempotence). Elle est créée `en_attente` puis imputée sur la
-// PROCHAINE libération de fonds du médecin ; son montant est calculé
-// à l'imputation (taux × base, voir baseCalculAmende) et n'est jamais
-// stocké à la création. Due même si le RDV fautif n'avait pas
-// d'escrow (elle ne dépend pas des fonds de ce RDV).
-//
-// Statuts :
-//   - en_attente : aucune imputation encore.
-//   - partielle  : plafonnée au crédit d'une libération (le crédit
-//                  médecin ne peut pas devenir négatif) ; le reliquat
-//                  reste dû pour la libération suivante.
-//   - imputee    : intégralement imputée.
-// montant_impute = CUMUL déjà imputé (fait) ; le détail par libération
-// est dans le grand-livre (mouvement debit_amende). Le montant total
-// dû reste recalculable (taux_applique × base) et n'est pas stocké.
-// taux_applique fige le taux du ParametreAmende retenu à la création
-// (parametre_amende_id garde la ligne source pour l'audit).
-// -----------------------------------------------------------------
-enum StatutAmende {
-  en_attente
-  partielle
-  imputee
-}
-
-model AmendeMedecin {
-  amende_id           String       @id @default(uuid()) @db.Uuid
-  medecin_id          String       @db.Uuid
-  rdv_id              String       @unique @db.Uuid
-  parametre_amende_id String       @db.Uuid
-  taux_applique       Decimal      @db.Decimal(5, 4)
-  statut              StatutAmende @default(en_attente)
-  montant_impute      Decimal?     @db.Decimal(12, 2)
-  date_creation       DateTime     @default(now())
-  date_imputation     DateTime? // date de la dernière imputation
-
-  medecin           Medecin         @relation(fields: [medecin_id], references: [medecin_id])
-  rendez_vous       RendezVous      @relation(fields: [rdv_id], references: [rdv_id])
-  parametre_amende  ParametreAmende @relation(fields: [parametre_amende_id], references: [parametre_amende_id])
-
-  @@index([medecin_id, statut])
-  @@index([parametre_amende_id])
-  @@map("amende_medecin")
-}
-
-// -----------------------------------------------------------------
-// Politique de fonds v2 §1/§3/§5 — Commission APS effectivement versée
-// à APS : fait de versement (libération d'un RDV honoré, annulation
-// patient < 24h, patient absent, deux absents sans reprogrammation).
-// Un seul versement par RDV (rdv_id unique : idempotence). La
-// commission n'est pas versée sur les remboursements simples.
-// -----------------------------------------------------------------
-model CommissionApsVersee {
-  commission_versee_id String   @id @default(uuid()) @db.Uuid
-  rdv_id               String   @unique @db.Uuid
-  transaction_id       String   @unique @db.Uuid
-  ligne_commission_id  String   @db.Uuid
-  montant              Decimal  @db.Decimal(12, 2)
-  date_versement       DateTime @default(now())
-
-  rendez_vous  RendezVous          @relation(fields: [rdv_id], references: [rdv_id])
-  transaction  TransactionPaiement @relation(fields: [transaction_id], references: [transaction_id])
-  ligne_commission LigneTarifaire  @relation(fields: [ligne_commission_id], references: [ligne_tarifaire_id])
-
-  @@index([ligne_commission_id])
-  @@map("commission_aps_versee")
 }
 
 // -----------------------------------------------------------------
@@ -1761,23 +1574,6 @@ model RendezVous {
   commentaire_annulation String?          @db.Text
   date_annulation        DateTime?
 
-  // Politique de fonds v2 §5 — présences : FAITS enregistrés (jamais un
-  // « absent » stocké) ; l'absence se déduit de l'absence d'horodatage.
-  // Aucun horodatage du tout => les deux sont traités absents.
-  medecin_present_le DateTime?
-  patient_present_le DateTime?
-
-  // Politique de fonds v2 §5 — reprogrammation (deux absents).
-  //   - a_reprogrammer_le : date d'entrée en statut a_reprogrammer, point
-  //     de départ du délai de 48h (fait ; l'échéance se recalcule).
-  //   - nouvelle_date_proposee / proposee_par / date_proposition : la
-  //     proposition en cours (une nouvelle proposition remplace la
-  //     précédente, sans prolonger le délai). L'autre partie l'accepte.
-  a_reprogrammer_le      DateTime?
-  nouvelle_date_proposee DateTime?
-  proposee_par           PartieRendezVous?
-  date_proposition       DateTime?
-
   patient   Patient         @relation(fields: [patient_id], references: [patient_id])
   medecin   Medecin         @relation(fields: [medecin_id], references: [medecin_id])
   structure StructureSante? @relation(fields: [structure_id], references: [structure_id])
@@ -1791,19 +1587,6 @@ model RendezVous {
   // Séquestre Stripe de ce rendez-vous (1-1, créé par le webhook
   // checkout.session.completed — voir paiement.controller.js).
   compte_escrow CompteEscrow?
-
-  // Politique de fonds v2 : amende due par le médecin pour ce RDV et
-  // commission APS versée (au plus une de chaque, voir modèles plus haut).
-  amende_medecin        AmendeMedecin?
-  commission_aps_versee CommissionApsVersee?
-
-  // Politique de fonds v2 §6 : un index unique PARTIEL sur
-  // (medecin_id, date_creneau) pour les RDV actifs (statuts cree,
-  // confirme, en_attente_presence, a_reprogrammer) interdit deux RDV
-  // actifs sur le même créneau d'un médecin. Prisma ne sait pas
-  // exprimer un index partiel : il n'est déclaré que dans la migration
-  // (nom : rendez_vous_medecin_creneau_actif_key), comme l'index
-  // partiel de LigneTarifaire.
 
   @@index([patient_id])
   @@index([medecin_id])
