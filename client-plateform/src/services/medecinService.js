@@ -30,6 +30,7 @@ export const STATUTS_RENDEZ_VOUS = [
   { valeur: 'non_honore', libelle: 'Non honoré' },
   { valeur: 'annule', libelle: 'Annulé' },
   { valeur: 'conteste', libelle: 'Contesté' },
+  { valeur: 'a_reprogrammer', libelle: 'À reprogrammer' },
 ];
 
 // Motifs d'annulation d'un rendez-vous (liste fermée) — miroir de

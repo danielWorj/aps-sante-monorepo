@@ -38,6 +38,8 @@ export function categoriserRdv(rdv) {
     case "confirme":
     case "en_attente_presence":
       return "avenir";
+    case "a_reprogrammer": // deux absents : reste dans « À venir », avec le panneau de reprogrammation
+      return "avenir";
     case "honore":
     case "non_honore":
       return "passes";

@@ -8,14 +8,37 @@
 //   - Mobile Money (CamPay)    : appelle onChoisirMobileMoney, le parent ferme
 //                                cette pop-up et ouvre <PaiementMobileMoney />.
 //
+// Politique de fonds v2 §1 — devis AVANT paiement : sous chaque moyen, le patient
+// voit « total = honoraires + frais d'envoi » (GET /paiement/rendez-vous/:id/devis).
+// Aucune taxe ni commission APS dans ce qu'il paie. Un moyen dont le barème n'est
+// pas encore saisi côté admin (503) est grisé avec le message du serveur.
+//
 // Le montant n'est jamais envoyé : le serveur le recalcule.
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { demanderPaiementRdv } from '../../services/paiementService';
+import { demanderPaiementRdv, obtenirDevisPaiement } from '../../services/paiementService';
+import { montantDevise } from '../../utils/fonds';
+
+// Détail du devis sous un moyen de paiement. `d` : undefined = chargement, { erreur } = indisponible.
+function DetailDevis({ d }) {
+  if (d === undefined) return <small>Calcul du montant…</small>;
+  if (d.erreur) return <small className="text-danger">{d.erreur}</small>;
+  return (
+    <small>
+      <strong>{montantDevise(d.total, d.devise)}</strong>
+      {' '}= honoraires {montantDevise(d.honoraires, d.devise)} + frais d’envoi {montantDevise(d.frais_envoi, d.devise)}
+      <br />
+      Annulation possible avec remboursement d’environ {montantDevise(d.remboursement_estime, d.devise)}
+      {d.remboursement_indicatif && ' (estimation)'}
+    </small>
+  );
+}
 
 export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMoney }) {
   const [redirection, setRedirection] = useState(false);
   const [erreur, setErreur] = useState(null);
+  // Devis par agrégateur : undefined = en cours de calcul, { erreur } = indisponible.
+  const [devis, setDevis] = useState({ stripe: undefined, campay: undefined });
 
   // Pendant la redirection vers Stripe, on ne ferme plus par accident.
   const fermer = useCallback(() => {
@@ -27,6 +50,22 @@ export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMon
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [fermer]);
+
+  // Chargement des deux devis en parallèle ; l'échec de l'un n'affecte pas l'autre.
+  useEffect(() => {
+    if (!rdvId) return undefined;
+    let annule = false;
+    setDevis({ stripe: undefined, campay: undefined });
+    ['stripe', 'campay'].forEach(async (agregateur) => {
+      try {
+        const d = await obtenirDevisPaiement(rdvId, agregateur);
+        if (!annule) setDevis((p) => ({ ...p, [agregateur]: d }));
+      } catch (err) {
+        if (!annule) setDevis((p) => ({ ...p, [agregateur]: { erreur: err?.message || 'Montant indisponible.' } }));
+      }
+    });
+    return () => { annule = true; };
+  }, [rdvId]);
 
   const payerParCarte = async () => {
     if (redirection || !rdvId) return;
@@ -67,11 +106,12 @@ export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMon
         )}
 
         <div className="choix-paiement-options">
+          {/* Carte bancaire (Stripe) */}
           <button
             type="button"
             className="choix-paiement-option"
             onClick={payerParCarte}
-            disabled={redirection}
+            disabled={redirection || !!devis.stripe?.erreur}
           >
             <span className="choix-paiement-option-icon">
               {redirection
@@ -80,23 +120,24 @@ export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMon
             </span>
             <span className="choix-paiement-option-body">
               <strong>Carte bancaire</strong>
-              <small>{redirection ? 'Redirection vers Stripe…' : 'Visa, Mastercard — paiement via Stripe'}</small>
+              {redirection ? <small>Redirection vers Stripe…</small> : <DetailDevis d={devis.stripe} />}
             </span>
             <i className="fa-solid fa-chevron-right choix-paiement-option-arrow" />
           </button>
 
+          {/* Mobile Money (CamPay) */}
           <button
             type="button"
             className="choix-paiement-option"
             onClick={() => onChoisirMobileMoney?.()}
-            disabled={redirection}
+            disabled={redirection || !!devis.campay?.erreur}
           >
             <span className="choix-paiement-option-icon">
               <i className="fa-solid fa-mobile-screen" />
             </span>
             <span className="choix-paiement-option-body">
               <strong>Mobile Money</strong>
-              <small>MTN / Orange — paiement via CamPay</small>
+              <DetailDevis d={devis.campay} />
             </span>
             <i className="fa-solid fa-chevron-right choix-paiement-option-arrow" />
           </button>
