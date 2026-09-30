@@ -24,6 +24,20 @@
 //              normalement via PUT statut="annule"). 409 si une
 //              ordonnance est encore rattachée.
 //
+// Politique de fonds v2 (cf. GUIDE_FRONT_POLITIQUE_FONDS_V2, A6) :
+//   - ANNULATION : `PUT/PATCH statut="annule"` exige un motif fermé et,
+//     pour un admin, `initiateur` (au nom de qui il annule). Elle passe
+//     donc par AnnulationAdminModal + fondsService.annulerRendezVousAdmin,
+//     qui renvoie le résultat financier réel (remboursement, versement
+//     médecin, commission APS, amende) affiché dans une bannière.
+//   - `honore` n'est JAMAIS posé via le PUT/PATCH générique : seule la
+//     libération forcée (POST .../forcer-liberation, admin) le fait, en
+//     libérant aussi les fonds vers le médecin.
+//   - `a_reprogrammer` est posé par le traitement d'absence (deux
+//     absents) ; la nouvelle date ne se fixe que par proposition +
+//     acceptation de l'autre partie (portail patient/médecin), jamais
+//     par un PUT unilatéral (409).
+//
 // `code_unique` (contrôle de présence à l'accueil) est affiché tel que
 // renvoyé par le serveur ; `qr_token_secret` n'est JAMAIS affiché ici,
 // même si le serveur le renvoie dans le corps de la réponse — c'est un
@@ -130,7 +144,6 @@ const STATUT_META = {
   annule: { badge: 'is-muted', icone: 'fa-ban' },
   conteste: { badge: 'is-danger', icone: 'fa-triangle-exclamation' },
   a_reprogrammer: { badge: 'is-warning', icone: 'fa-calendar-xmark' },
-
 };
 
 const TYPE_META = {
@@ -162,7 +175,15 @@ function statutsProposes(role, statutActuel) {
   }
   const ensemble = new Set(autorises);
   if (statutActuel) ensemble.add(statutActuel);
-  return STATUTS_RENDEZ_VOUS.filter((s) => ensemble.has(s.valeur));
+  // Cibles refusées par le PUT/PATCH générique côté serveur :
+  //   - annule          → bouton dédié (motif + initiateur + remboursement) ;
+  //   - honore          → libération forcée (libère aussi les fonds) ;
+  //   - a_reprogrammer  → posé par le traitement d'absence uniquement.
+  // Le statut ACTUEL reste toujours affiché, même s'il fait partie de la liste.
+  const CIBLES_REFUSEES = ['annule', 'honore', 'a_reprogrammer'];
+  return STATUTS_RENDEZ_VOUS.filter(
+    (s) => ensemble.has(s.valeur) && (!CIBLES_REFUSEES.includes(s.valeur) || s.valeur === statutActuel)
+  );
 }
 
 /* ────────────────────────── Aides d'affichage ────────────────────────── */
@@ -196,6 +217,35 @@ function libelleMedecin(m) {
   if (nomComplet && specialite) return `Dr ${nomComplet} — ${specialite}`;
   if (nomComplet) return `Dr ${nomComplet}`;
   return m.medecin_id || '—';
+}
+
+// Un RDV terminé ou déjà annulé ne peut plus être annulé. `a_reprogrammer`
+// reste annulable (point G : remboursement moins frais et commission APS).
+const STATUTS_NON_ANNULABLES = ['annule', 'honore', 'non_honore', 'conteste'];
+function peutAnnulerStatut(statut) {
+  return !STATUTS_NON_ANNULABLES.includes(statut);
+}
+
+// P4 du guide : libération forcée proposée sur ces statuts ; le serveur
+// renvoie de toute façon un 409 clair (pas d'escrow / déjà traité).
+const STATUTS_LIBERATION_FORCEE = ['confirme', 'en_attente_presence'];
+
+// Échéance (passage à « a_reprogrammer » + 48 h, jamais prolongée) et
+// proposition de nouvelle date en cours, s'il y en a une.
+function InfoReprogrammation({ rdv }) {
+  if (rdv.statut !== 'a_reprogrammer' || !rdv.a_reprogrammer_le) return null;
+  const echeance = new Date(new Date(rdv.a_reprogrammer_le).getTime() + DELAI_REPROGRAMMATION_H * 3600 * 1000);
+  return (
+    <div className="small aps-text-muted mt-1">
+      Échéance : {dateHeure(echeance)}
+      {rdv.nouvelle_date_proposee && (
+        <>
+          <br />
+          Proposition ({rdv.proposee_par || '—'}) : {dateHeure(rdv.nouvelle_date_proposee)}
+        </>
+      )}
+    </div>
+  );
 }
 
 /* ────────────────────────── Modale générique ────────────────────────── */
@@ -499,13 +549,47 @@ export default function RendezVous() {
     }
   }
 
-  async function annulerRapide(rdv) {
-    setErreurChargement(null);
+  /* ─── Annulation admin + libération forcée (politique de fonds v2) ── */
+
+  const [rdvAAnnuler, setRdvAAnnuler] = useState(null);
+  const [annulationEnCours, setAnnulationEnCours] = useState(false);
+  const [erreurAnnulation, setErreurAnnulation] = useState(null);
+  const [messageFonds, setMessageFonds] = useState(null); // { type: 'success'|'danger', texte }
+
+  function ouvrirAnnulation(rdv) {
+    setErreurAnnulation(null);
+    setRdvAAnnuler(rdv);
+  }
+
+  async function confirmerAnnulationAdmin({ initiateur, motif, commentaire }) {
+    if (!rdvAAnnuler) return;
+    setAnnulationEnCours(true);
+    setErreurAnnulation(null);
     try {
-      await modifierRendezVous(rdv.rdv_id, { statut: 'annule' });
+      const data = await annulerRendezVousAdmin(rdvAAnnuler.rdv_id, { initiateur, motif, commentaire });
+      setRdvAAnnuler(null);
+      setModalDetailOuverte(false);
+      setMessageFonds({ type: 'success', texte: resumerAnnulation(data) });
       await chargerRendezVous();
     } catch (err) {
-      setErreurChargement(err.message || "Impossible d'annuler ce rendez-vous.");
+      // Message du serveur affiché tel quel (400 motif/initiateur, 409 transition…).
+      setErreurAnnulation(err.message || "Impossible d'annuler ce rendez-vous.");
+    } finally {
+      setAnnulationEnCours(false);
+    }
+  }
+
+  // Arbitrage admin : « les deux présents mais RDV jamais clôturé » (spec §5).
+  async function libererFonds(rdv) {
+    if (!window.confirm('Marquer ce rendez-vous comme honoré et libérer les fonds vers le médecin ? Action définitive.')) return;
+    setMessageFonds(null);
+    try {
+      const rep = await forcerLiberation(rdv.rdv_id);
+      setMessageFonds({ type: 'success', texte: rep?.message || 'Fonds libérés.' });
+      setModalDetailOuverte(false);
+      await chargerRendezVous();
+    } catch (err) {
+      setMessageFonds({ type: 'danger', texte: err.message || 'Libération impossible.' }); // 409 : pas d'escrow / déjà traité
     }
   }
 
@@ -575,6 +659,13 @@ export default function RendezVous() {
             </button>
           )}
         </div>
+
+        {messageFonds && (
+          <div className={`alert alert-${messageFonds.type} alert-dismissible`} role="status">
+            {messageFonds.texte}
+            <button type="button" className="btn-close" aria-label="Fermer" onClick={() => setMessageFonds(null)} />
+          </div>
+        )}
 
         <div className="row g-3 mb-4">
           <div className="col-6 col-lg-3">
@@ -741,8 +832,11 @@ export default function RendezVous() {
                   <tbody>
                     {lignesTable.map((rdv) => {
                       const meta = STATUT_META[rdv.statut] || {};
-                      const peutAnnulerRapide =
-                        peutModifier(rdv) && !['annule', 'honore', 'non_honore', 'conteste'].includes(rdv.statut);
+                      // Annulation : admin uniquement dans le back-office (le serveur
+                      // exige `initiateur` d'un admin ; patient/médecin annulent
+                      // depuis leur portail, qui déduit l'initiateur du token).
+                      const peutAnnulerRapide = estAdmin && peutAnnulerStatut(rdv.statut);
+                      const peutLiberer = estAdmin && STATUTS_LIBERATION_FORCEE.includes(rdv.statut);
                       return (
                         <tr key={rdv.rdv_id}>
                           <td>{formaterDateHeure(rdv.date_creneau)}</td>
@@ -761,6 +855,7 @@ export default function RendezVous() {
                             <span className={`aps-badge ${meta.badge || 'is-info'}`}>
                               <i className={`fa-solid ${meta.icone || 'fa-circle'}`}></i> {libelleStatut(rdv.statut)}
                             </span>
+                            <InfoReprogrammation rdv={rdv} />
                           </td>
                           <td className="text-end">
                             <div className="d-flex gap-1 justify-content-end">
@@ -771,9 +866,18 @@ export default function RendezVous() {
                                 <button
                                   className="btn btn-sm btn-light"
                                   title="Annuler le rendez-vous"
-                                  onClick={() => annulerRapide(rdv)}
+                                  onClick={() => ouvrirAnnulation(rdv)}
                                 >
                                   <i className="fa-solid fa-ban"></i>
+                                </button>
+                              )}
+                              {peutLiberer && (
+                                <button
+                                  className="btn btn-sm btn-light"
+                                  title="Forcer la libération des fonds (arbitrage)"
+                                  onClick={() => libererFonds(rdv)}
+                                >
+                                  <i className="fa-solid fa-hand-holding-dollar"></i>
                                 </button>
                               )}
                               {peutSupprimer && (
@@ -928,6 +1032,16 @@ export default function RendezVous() {
             <button className="btn btn-light" onClick={() => setModalDetailOuverte(false)} disabled={enregistrementEnCours}>
               Fermer
             </button>
+            {rdvActif && estAdmin && peutAnnulerStatut(rdvActif.statut) && !modeEdition && (
+              <button className="btn btn-outline-danger" onClick={() => ouvrirAnnulation(rdvActif)} disabled={enregistrementEnCours}>
+                <i className="fa-solid fa-ban me-1"></i>Annuler le RDV
+              </button>
+            )}
+            {rdvActif && estAdmin && STATUTS_LIBERATION_FORCEE.includes(rdvActif.statut) && !modeEdition && (
+              <button className="btn btn-outline-secondary" onClick={() => libererFonds(rdvActif)} disabled={enregistrementEnCours}>
+                <i className="fa-solid fa-hand-holding-dollar me-1"></i>Libérer les fonds
+              </button>
+            )}
             {rdvActif && peutSupprimer && (
               <button className="btn btn-outline-danger" onClick={() => askDelete(rdvActif)} disabled={enregistrementEnCours}>
                 <i className="fa-solid fa-trash me-1"></i>Supprimer
@@ -982,12 +1096,20 @@ export default function RendezVous() {
               <div className="col-md-6">
                 <label className="form-label">Date et heure</label>
                 {modeEdition ? (
-                  <input
-                    type="datetime-local"
-                    className="form-control"
-                    value={formEdition.date_creneau}
-                    onChange={(e) => setFormEdition((f) => ({ ...f, date_creneau: e.target.value }))}
-                  />
+                  <>
+                    <input
+                      type="datetime-local"
+                      className="form-control"
+                      value={formEdition.date_creneau}
+                      disabled={rdvActif.statut === 'a_reprogrammer'}
+                      onChange={(e) => setFormEdition((f) => ({ ...f, date_creneau: e.target.value }))}
+                    />
+                    {rdvActif.statut === 'a_reprogrammer' && (
+                      <div className="aps-text-muted mt-1" style={{ fontSize: 12 }}>
+                        La nouvelle date se propose depuis le portail et doit être acceptée par l'autre partie.
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="form-control-plaintext" style={{ fontSize: 14 }}>
                     {formaterDateHeure(rdvActif.date_creneau)}
@@ -1014,6 +1136,7 @@ export default function RendezVous() {
                       <i className={`fa-solid ${STATUT_META[rdvActif.statut]?.icone || 'fa-circle'}`}></i>{' '}
                       {libelleStatut(rdvActif.statut)}
                     </span>
+                    <InfoReprogrammation rdv={rdvActif} />
                   </div>
                 )}
               </div>
@@ -1065,6 +1188,15 @@ export default function RendezVous() {
           </>
         )}
       </Modal>
+
+      {/* ===================== MODAL ANNULATION ADMIN ===================== */}
+      <AnnulationAdminModal
+        rdv={rdvAAnnuler}
+        occupe={annulationEnCours}
+        erreur={erreurAnnulation}
+        onFermer={() => setRdvAAnnuler(null)}
+        onConfirmer={confirmerAnnulationAdmin}
+      />
 
       {/* ===================== MODAL SUPPRESSION ===================== */}
       <Modal

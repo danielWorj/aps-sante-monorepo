@@ -1,32 +1,38 @@
 // medecin-rdv.jsx
+//
+// Politique de fonds v2 (voir GUIDE_FRONT_POLITIQUE_FONDS_V2.md) :
+//   - B3 : « Refuser » (et l'annulation d'un RDV à reprogrammer) est une
+//     annulation médecin — avertissement financier AVANT (remboursement du
+//     patient, amende si < 24 h), résultat réel du serveur APRÈS (toast 9 s) ;
+//   - B4 : statut « a_reprogrammer » (deux absents) — chip dédié, bandeau,
+//     panneau de reprogrammation (48 h), pas de visio ;
+//   - B7 : dans la modale de détail d'un RDV payé, « Vous recevrez X
+//     (honoraires − commission APS Y) », lu dans paiement.decomposition
+//     (renvoyé au seul médecin concerné). Net AVANT amendes éventuelles.
+//   - le client n'invente aucun montant : il affiche ce que le serveur renvoie.
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
-import PortailNavbar from "./../layouts/portail-navbar";
-import PortailFooter from "./../layouts/portail-footer";
 import PortailSidebar from "./../layouts/portail-sidebar";
 import VisioModal from "./visio-modal";
 import MotifAnnulationModal from "./motif-annulation-modal";
+import AvertissementAnnulation from "./avertissement-annulation";
+import ReprogrammationPanel from "./reprogrammation-panel";
 import {
   listerRendezVousMedecinConnecte,
   modifierRendezVous,
-  annulerRendezVous,
   MOTIFS_ANNULATION_MEDECIN,
-  STATUTS_RENDEZ_VOUS,
-  TYPES_RENDEZ_VOUS,
 } from "./../../../services/medecinService";
+import { annulerRendezVousDetaille } from "./../../../services/fondsService";
 import { obtenirStatutPaiementRdv } from "./../../../services/paiementService";
 import { useAuth } from "./../../../context/AuthContext";
 import { categoriserRdv } from "./../../../utils/rdv";
+import { montantDevise, resumerAnnulation } from "./../../../utils/fonds";
 
 // ─── Helpers de formatage ─────────────────────────────────────
 const TYPE_RDV_LABEL = {
   physique: "Consultation physique",
   teleconsultation: "Téléconsultation",
 };
-
-const STATUT_LABEL = Object.fromEntries(
-  STATUTS_RENDEZ_VOUS.map((s) => [s.valeur, s.libelle])
-);
 
 /**
  * Formate une date ISO en libellé lisible : "Auj.", "Demain", "Lun 25", etc.
@@ -131,11 +137,36 @@ const MedecinRdv = () => {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [detailRdv]);
 
-  const showToast = (msg) => {
+  // Durée optionnelle : un résumé financier (annulation) doit rester lisible
+  // plus longtemps qu'un simple message de confirmation.
+  const showToast = (msg, dureeMs = 2600) => {
     setToast(msg);
     clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2600);
+    toastTimer.current = setTimeout(() => setToast(null), dureeMs);
   };
+
+  // ─── Paiement du RDV affiché dans la modale de détail (B7) ──────
+  // { rdvId, paiement } | null. `paiement.decomposition` contient, pour le
+  // médecin concerné, { honoraires, frais_envoi, total, commission_aps,
+  // net_medecin } ; null pour une transaction antérieure à la v2.
+  // Échec silencieux : ce bloc est purement informatif.
+  const [paiementDetail, setPaiementDetail] = useState(null);
+  useEffect(() => {
+    if (!detailRdv || detailRdv.categorie === "annules") return undefined;
+    const rdvId = detailRdv.rdv.rdv_id;
+    let annule = false;
+    (async () => {
+      try {
+        const { paiement } = await obtenirStatutPaiementRdv(rdvId);
+        if (!annule) setPaiementDetail({ rdvId, paiement });
+      } catch {
+        if (!annule) setPaiementDetail(null);
+      }
+    })();
+    return () => {
+      annule = true;
+    };
+  }, [detailRdv]);
 
   // ─── Chargement initial ─────────────────────────────────────
   const chargerRendezVous = useCallback(async () => {
@@ -194,17 +225,23 @@ const MedecinRdv = () => {
     const finSemaine = new Date(debutSemaine);
     finSemaine.setDate(finSemaine.getDate() + 7);
 
-    const aujourdhuiCount = rdvParCategorie.avenir.filter((r) => {
+    // « a_reprogrammer » reste dans « À venir » mais son créneau initial est
+    // passé : on l'exclut des compteurs de la journée / semaine / visio.
+    const avenirPlanifies = rdvParCategorie.avenir.filter(
+      (r) => r.statut !== "a_reprogrammer"
+    );
+
+    const aujourdhuiCount = avenirPlanifies.filter((r) => {
       const d = new Date(r.date_creneau);
       return d >= aujourdhui && d < finJournee;
     }).length;
 
-    const semaineCount = rdvParCategorie.avenir.filter((r) => {
+    const semaineCount = avenirPlanifies.filter((r) => {
       const d = new Date(r.date_creneau);
       return d >= aujourdhui && d < finSemaine;
     }).length;
 
-    const teleconsultations = rdvParCategorie.avenir.filter(
+    const teleconsultations = avenirPlanifies.filter(
       (r) => r.type_rdv === "teleconsultation"
     ).length;
 
@@ -275,24 +312,29 @@ const MedecinRdv = () => {
   };
 
   // Refuser = annuler : le serveur exige un motif d'annulation (400
-  // sinon) et déclenche le remboursement du patient.
+  // sinon) et déclenche le remboursement du patient. À moins de 24 h du
+  // RDV, une amende est enregistrée au nom du médecin (déduite de sa
+  // prochaine libération de fonds). Le même parcours sert à annuler un
+  // RDV « a_reprogrammer » (aucune amende dans ce cas).
   const [rdvARefuser, setRdvARefuser] = useState(null); // rdv_id | null
   const refuser = (id) => setRdvARefuser(id);
   const fermerRefus = () => {
     if (!actionEnCours) setRdvARefuser(null);
   };
+  // RDV visé par la modale d'annulation (avertissement + libellés).
+  const rdvACibler = rendezVous.find((r) => r.rdv_id === rdvARefuser) ?? null;
 
   const confirmerRefus = async ({ motif, commentaire }) => {
     const id = rdvARefuser;
     if (!id) return;
     setActionEnCours(id);
     try {
-      await annulerRendezVous(id, { motif, commentaire });
+      const data = await annulerRendezVousDetaille(id, { motif, commentaire });
       setRendezVous((prev) =>
         prev.map((r) => (r.rdv_id === id ? { ...r, statut: "annule" } : r))
       );
       setRdvARefuser(null);
-      showToast("Demande refusée — le patient sera remboursé.");
+      showToast(resumerAnnulation(data, "medecin"), 9000);
     } catch (err) {
       setRdvARefuser(null);
       showToast("Erreur : " + (err.message || "impossible de refuser le RDV."));
@@ -345,6 +387,11 @@ const MedecinRdv = () => {
               <i className={`fa-solid ${typeIcon}`}></i>
               {typeLabel}
             </span>
+            {rdv.statut === "a_reprogrammer" && (
+              <span className="chip chip-st-attente">
+                <i className="fa-solid fa-calendar-xmark"></i> À reprogrammer
+              </span>
+            )}
           </div>
         </div>
         <i className="fa-solid fa-chevron-right rdv-chevron" aria-hidden="true"></i>
@@ -373,6 +420,16 @@ const MedecinRdv = () => {
     const lieu = isTeleconsultation ? "Téléconsultation" : rdv.structure?.nom || "Cabinet";
     const lieuIcon = isTeleconsultation ? "fa-video" : "fa-location-dot";
     const typeIcon = isTeleconsultation ? "fa-video" : "fa-stethoscope";
+
+    // B7 : net perçu, uniquement si le RDV est payé et que le serveur a
+    // renvoyé la décomposition (absente pour les transactions pré-v2).
+    const paiement =
+      paiementDetail?.rdvId === rdv.rdv_id ? paiementDetail.paiement : null;
+    const decomposition =
+      paiement?.statut === "reussie" &&
+      paiement.decomposition?.net_medecin != null
+        ? paiement.decomposition
+        : null;
 
     return (
       <div className="rdv-modal-overlay" onClick={fermerDetail}>
@@ -403,9 +460,14 @@ const MedecinRdv = () => {
                 <i className="fa-solid fa-hourglass-half"></i> En attente de votre validation
               </span>
             )}
-            {categorie === "avenir" && (
+            {categorie === "avenir" && rdv.statut !== "a_reprogrammer" && (
               <span className="chip chip-st-confirme">
                 <i className="fa-solid fa-circle-check"></i> Confirmé
+              </span>
+            )}
+            {rdv.statut === "a_reprogrammer" && (
+              <span className="chip chip-st-attente">
+                <i className="fa-solid fa-calendar-xmark"></i> À reprogrammer
               </span>
             )}
             {categorie === "passes" && (
@@ -427,6 +489,17 @@ const MedecinRdv = () => {
               </span>
             )}
           </div>
+
+          {rdv.statut === "a_reprogrammer" && (
+            <ReprogrammationPanel
+              rdv={rdv}
+              role="medecin"
+              onChange={() => {
+                fermerDetail();
+                chargerRendezVous();
+              }}
+            />
+          )}
 
           <div className="rdv-modal-details">
             <div className="rdv-modal-row">
@@ -461,6 +534,23 @@ const MedecinRdv = () => {
             )}
           </div>
 
+          {decomposition && (
+            <div className="note-box">
+              <i className="fa-solid fa-wallet"></i>
+              <span>
+                Vous recevrez{" "}
+                <strong>
+                  {montantDevise(decomposition.net_medecin, paiement.devise)}
+                </strong>{" "}
+                (honoraires{" "}
+                {montantDevise(decomposition.honoraires, paiement.devise)} −
+                commission APS{" "}
+                {montantDevise(decomposition.commission_aps, paiement.devise)}
+                ). Montant avant amendes éventuelles.
+              </span>
+            </div>
+          )}
+
           <div className="rdv-modal-actions">
             {categorie === "attente" && rdv.statut === "cree" && (
               <>
@@ -491,15 +581,20 @@ const MedecinRdv = () => {
                 </button>
               </>
             )}
-            {categorie === "avenir" && isTeleconsultation && (
-              <button
-                className="btn btn-primary btn-sm-aps"
-                onClick={() => ouvrirVisio(rdv)}
-              >
-                <i className="fa-solid fa-video"></i> Démarrer la visio
-              </button>
-            )}
-            {categorie === "avenir" && !isTeleconsultation && (
+            {/* Pas de visio pour « a_reprogrammer » : le créneau initial est passé. */}
+            {categorie === "avenir" &&
+              isTeleconsultation &&
+              rdv.statut !== "a_reprogrammer" && (
+                <button
+                  className="btn btn-primary btn-sm-aps"
+                  onClick={() => ouvrirVisio(rdv)}
+                >
+                  <i className="fa-solid fa-video"></i> Démarrer la visio
+                </button>
+              )}
+            {categorie === "avenir" &&
+              !isTeleconsultation &&
+              rdv.statut !== "a_reprogrammer" && (
               <>
                 <button className="btn btn-outline-primary btn-sm-aps">
                   <i className="fa-solid fa-folder-open"></i> Dossier
@@ -508,6 +603,18 @@ const MedecinRdv = () => {
                   <i className="fa-solid fa-rotate"></i>
                 </button>
               </>
+            )}
+            {rdv.statut === "a_reprogrammer" && (
+              <button
+                className="btn btn-ghost btn-sm-aps"
+                onClick={() => {
+                  refuser(rdv.rdv_id);
+                  fermerDetail();
+                }}
+                disabled={actionEnCours === rdv.rdv_id}
+              >
+                <i className="fa-solid fa-xmark"></i> Annuler le rendez-vous
+              </button>
             )}
             {categorie === "passes" && (
               <button className="btn btn-outline-primary btn-sm-aps">
@@ -613,6 +720,16 @@ const MedecinRdv = () => {
                 </div>
               ))}
             </div>
+
+            {/* Bandeau : RDV à reprogrammer (visible sans ouvrir le détail) */}
+            {rdvParCategorie.avenir.some((r) => r.statut === "a_reprogrammer") && (
+              <div className="alert alert-warning" role="status">
+                <i className="fa-solid fa-triangle-exclamation me-2"></i>
+                {rdvParCategorie.avenir.filter((r) => r.statut === "a_reprogrammer").length}{" "}
+                rendez-vous à reprogrammer : ouvrez-le pour proposer ou accepter
+                une date (délai de 48 h).
+              </div>
+            )}
 
             {/* Bandeau d'erreur */}
             {erreur && (
@@ -750,9 +867,20 @@ const MedecinRdv = () => {
 
       <MotifAnnulationModal
         open={rdvARefuser !== null}
-        titre="Refuser cette demande ?"
-        message="Le rendez-vous sera annulé et le patient remboursé intégralement."
-        labelConfirmer="Refuser"
+        titre={
+          rdvACibler?.statut === "a_reprogrammer"
+            ? "Annuler ce rendez-vous ?"
+            : "Refuser cette demande ?"
+        }
+        message="Le rendez-vous sera annulé et le patient remboursé selon la politique de fonds."
+        avertissement={
+          rdvACibler ? (
+            <AvertissementAnnulation key={rdvACibler.rdv_id} rdv={rdvACibler} role="medecin" />
+          ) : null
+        }
+        labelConfirmer={
+          rdvACibler?.statut === "a_reprogrammer" ? "Annuler le RDV" : "Refuser"
+        }
         motifs={MOTIFS_ANNULATION_MEDECIN}
         enCours={actionEnCours !== null && actionEnCours === rdvARefuser}
         onClose={fermerRefus}

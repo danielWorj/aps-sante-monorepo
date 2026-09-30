@@ -19,16 +19,27 @@
 //     les téléconsultations à venir — réutilise le même VisioModal /
 //     ConsultationRoom, seul le nom affiché en tête de modale change
 //     (celui du médecin plutôt que celui du patient).
+//
+// Politique de fonds v2 (voir GUIDE_FRONT_POLITIQUE_FONDS_V2.md) :
+//   - B3 : avertissement financier AVANT l'annulation (AvertissementAnnulation)
+//     et résultat réel renvoyé par le serveur APRÈS (resumerAnnulation, toast
+//     de 9 s) ;
+//   - B4 : statut « a_reprogrammer » (deux absents) — chip dédié, bandeau
+//     d'alerte, panneau de reprogrammation (48 h), pas de visio ni d'itinéraire ;
+//   - le client n'invente aucun montant : il affiche ce que le serveur renvoie.
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import PortailSidebar from "./../layouts/portail-sidebar";
 import VisioModal from "./visio-modal";
 import MotifAnnulationModal from "./motif-annulation-modal";
+import AvertissementAnnulation from "./avertissement-annulation";
+import ReprogrammationPanel from "./reprogrammation-panel";
 import {
   listerRendezVousPatientConnecte,
-  annulerRendezVous,
   MOTIFS_ANNULATION_PATIENT,
 } from "./../../../services/medecinService";
+import { annulerRendezVousDetaille } from "./../../../services/fondsService";
+import { resumerAnnulation } from "./../../../utils/fonds";
 import { useAuth } from "./../../../context/AuthContext";
 import { categoriserRdv } from "./../../../utils/rdv";
 import PaiementMobileMoney from "./../../paiement/PaiementMobileMoney";
@@ -140,10 +151,12 @@ const PatientRdv = () => {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [detailRdv]);
 
-  const showToast = (msg) => {
+  // Durée optionnelle : un résumé financier (annulation) doit rester lisible
+  // plus longtemps qu'un simple message de confirmation.
+  const showToast = (msg, dureeMs = 2600) => {
     setToast(msg);
     clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2600);
+    toastTimer.current = setTimeout(() => setToast(null), dureeMs);
   };
 
   // ─── Paiement d'un RDV « cree » (en attente de paiement) ────
@@ -229,17 +242,23 @@ const PatientRdv = () => {
     const finSemaine = new Date(debutSemaine);
     finSemaine.setDate(finSemaine.getDate() + 7);
 
-    const aujourdhuiCount = rdvParCategorie.avenir.filter((r) => {
+    // « a_reprogrammer » reste dans « À venir » mais son créneau initial est
+    // passé : on l'exclut des compteurs de la journée / semaine / visio.
+    const avenirPlanifies = rdvParCategorie.avenir.filter(
+      (r) => r.statut !== "a_reprogrammer"
+    );
+
+    const aujourdhuiCount = avenirPlanifies.filter((r) => {
       const d = new Date(r.date_creneau);
       return d >= aujourdhui && d < finJournee;
     }).length;
 
-    const semaineCount = rdvParCategorie.avenir.filter((r) => {
+    const semaineCount = avenirPlanifies.filter((r) => {
       const d = new Date(r.date_creneau);
       return d >= aujourdhui && d < finSemaine;
     }).length;
 
-    const teleconsultations = rdvParCategorie.avenir.filter(
+    const teleconsultations = avenirPlanifies.filter(
       (r) => r.type_rdv === "teleconsultation"
     ).length;
 
@@ -277,6 +296,8 @@ const PatientRdv = () => {
   // un rendez-vous déjà confirmé à venir.
   // Le serveur exige un motif d'annulation (400 sinon) : on ouvre donc
   // une modale qui le collecte, au lieu d'un simple window.confirm().
+  // La modale affiche d'abord la conséquence financière (AvertissementAnnulation),
+  // puis le toast final restitue le résultat réel décidé par le serveur.
   const [rdvAAnnuler, setRdvAAnnuler] = useState(null); // rdv_id | null
   const annuler = (id) => setRdvAAnnuler(id);
   const fermerAnnulation = () => {
@@ -288,12 +309,12 @@ const PatientRdv = () => {
     if (!id) return;
     setActionEnCours(id);
     try {
-      await annulerRendezVous(id, { motif, commentaire });
+      const data = await annulerRendezVousDetaille(id, { motif, commentaire });
       setRendezVous((prev) =>
         prev.map((r) => (r.rdv_id === id ? { ...r, statut: "annule" } : r))
       );
       setRdvAAnnuler(null);
-      showToast("Rendez-vous annulé.");
+      showToast(resumerAnnulation(data, "patient"), 9000);
     } catch (err) {
       setRdvAAnnuler(null);
       showToast("Erreur : " + (err.message || "impossible d'annuler le RDV."));
@@ -319,8 +340,11 @@ const PatientRdv = () => {
       rdv.type_rdv === "teleconsultation"
         ? "fa-video"
         : "fa-stethoscope";
+    // Pas de visio pour « a_reprogrammer » : le créneau initial est passé.
     const peutRejoindreVisio =
-      categorie === "avenir" && rdv.type_rdv === "teleconsultation";
+      categorie === "avenir" &&
+      rdv.type_rdv === "teleconsultation" &&
+      rdv.statut !== "a_reprogrammer";
 
     return (
       <article
@@ -348,6 +372,11 @@ const PatientRdv = () => {
               <i className={`fa-solid ${typeIcon}`}></i>
               {typeLabel}
             </span>
+            {rdv.statut === "a_reprogrammer" && (
+              <span className="chip chip-st-attente">
+                <i className="fa-solid fa-calendar-xmark"></i> À reprogrammer
+              </span>
+            )}
           </div>
         </div>
         {peutRejoindreVisio && (
@@ -421,9 +450,14 @@ const PatientRdv = () => {
                 <i className="fa-solid fa-hourglass-half"></i> En attente de paiement
               </span>
             )}
-            {categorie === "avenir" && (
+            {categorie === "avenir" && rdv.statut !== "a_reprogrammer" && (
               <span className="chip chip-st-confirme">
                 <i className="fa-solid fa-circle-check"></i> Confirmé
+              </span>
+            )}
+            {rdv.statut === "a_reprogrammer" && (
+              <span className="chip chip-st-attente">
+                <i className="fa-solid fa-calendar-xmark"></i> À reprogrammer
               </span>
             )}
             {categorie === "passes" && (
@@ -445,6 +479,17 @@ const PatientRdv = () => {
               </span>
             )}
           </div>
+
+          {rdv.statut === "a_reprogrammer" && (
+            <ReprogrammationPanel
+              rdv={rdv}
+              role="patient"
+              onChange={() => {
+                fermerDetail();
+                chargerRendezVous();
+              }}
+            />
+          )}
 
           <div className="rdv-modal-details">
             <div className="rdv-modal-row">
@@ -490,15 +535,19 @@ const PatientRdv = () => {
                 </button>
               </>
             )}
-            {categorie === "avenir" && isTeleconsultation && (
-              <button
-                className="btn btn-primary btn-sm-aps"
-                onClick={() => ouvrirVisio(rdv)}
-              >
-                <i className="fa-solid fa-video"></i> Rejoindre la visio
-              </button>
-            )}
-            {categorie === "avenir" && !isTeleconsultation && (
+            {categorie === "avenir" &&
+              isTeleconsultation &&
+              rdv.statut !== "a_reprogrammer" && (
+                <button
+                  className="btn btn-primary btn-sm-aps"
+                  onClick={() => ouvrirVisio(rdv)}
+                >
+                  <i className="fa-solid fa-video"></i> Rejoindre la visio
+                </button>
+              )}
+            {categorie === "avenir" &&
+              !isTeleconsultation &&
+              rdv.statut !== "a_reprogrammer" && (
               <button className="btn btn-outline-primary btn-sm-aps">
                 <i className="fa-solid fa-location-dot"></i> Itinéraire
               </button>
@@ -624,6 +673,16 @@ const PatientRdv = () => {
                 </div>
               ))}
             </div>
+
+            {/* Bandeau : RDV à reprogrammer (visible sans ouvrir le détail) */}
+            {rdvParCategorie.avenir.some((r) => r.statut === "a_reprogrammer") && (
+              <div className="alert alert-warning" role="status">
+                <i className="fa-solid fa-triangle-exclamation me-2"></i>
+                {rdvParCategorie.avenir.filter((r) => r.statut === "a_reprogrammer").length}{" "}
+                rendez-vous à reprogrammer : ouvrez-le pour proposer ou accepter
+                une date (délai de 48 h).
+              </div>
+            )}
 
             {/* Bandeau d'erreur */}
             {erreur && (
@@ -767,6 +826,12 @@ const PatientRdv = () => {
         open={rdvAAnnuler !== null}
         titre="Annuler ce rendez-vous ?"
         message="Ce rendez-vous sera annulé. Si vous l'avez déjà payé, le remboursement suit la politique d'annulation."
+        avertissement={(() => {
+          const cible = rendezVous.find((r) => r.rdv_id === rdvAAnnuler);
+          return cible ? (
+            <AvertissementAnnulation key={cible.rdv_id} rdv={cible} role="patient" />
+          ) : null;
+        })()}
         labelConfirmer="Annuler le RDV"
         motifs={MOTIFS_ANNULATION_PATIENT}
         enCours={actionEnCours !== null && actionEnCours === rdvAAnnuler}

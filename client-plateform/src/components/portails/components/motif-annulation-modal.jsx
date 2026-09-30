@@ -8,6 +8,11 @@
 // le motif pilote le traitement financier (remboursement, frais). Cette
 // modale remplace l'ancien window.confirm(), qui n'en collectait aucun.
 //
+// Politique de fonds v2 (§3-§4) : la prop `avertissement` permet d'afficher,
+// AVANT confirmation, la conséquence financière de l'annulation (voir
+// avertissement-annulation.jsx). Elle est purement indicative : le serveur
+// applique la règle et le résultat réel est affiché après l'annulation.
+//
 // Réutilise les styles de la modale de détail (.rdv-modal-*, portail-medecin.css).
 import React, { useEffect, useState } from "react";
 
@@ -18,6 +23,7 @@ const LONGUEUR_MAX_COMMENTAIRE = 1000; // limite côté serveur
  * @param {boolean} props.open
  * @param {string} props.titre
  * @param {string} props.message
+ * @param {React.ReactNode} [props.avertissement] - conséquence financière affichée entre le message et le motif
  * @param {string} props.labelConfirmer
  * @param {Array<{valeur: string, libelle: string}>} props.motifs
  * @param {boolean} [props.enCours] - appel réseau en cours (désactive les boutons)
@@ -28,6 +34,7 @@ const MotifAnnulationModal = ({
   open,
   titre,
   message,
+  avertissement,
   labelConfirmer,
   motifs,
   enCours = false,
@@ -86,6 +93,7 @@ const MotifAnnulationModal = ({
           {titre}
         </h3>
         <p className="mb-3">{message}</p>
+        {avertissement && <div className="mb-3">{avertissement}</div>}
 
         <label htmlFor="motif-annulation-select" className="form-label fw-semibold">
           Motif de l&apos;annulation <span aria-hidden="true">*</span>

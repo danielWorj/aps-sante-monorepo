@@ -6,6 +6,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { listerMesRetraits, demanderRetrait } from '../../../services/retraitService';
+import { obtenirPortefeuille } from '../../../services/fondsService';
 
 const STATUTS = {
   en_attente_validation: { label: 'En attente de validation', classe: 'chip-st-attente', icone: 'fa-hourglass-half' },
@@ -16,6 +17,21 @@ const STATUTS = {
 };
 const ACTIFS = ['en_attente_validation', 'en_cours'];
 
+// Libellés des mouvements du portefeuille. Le signe vient du préfixe du type (credit_* / debit_*),
+// comme dans portefeuille.service.js côté serveur.
+const MOUVEMENTS = {
+  credit_honoraires: 'Honoraires libérés (moins commission APS)',
+  debit_retrait: 'Retrait',
+  credit_annulation_retrait: 'Retrait rejeté ou échoué (recrédit)',
+  debit_amende: 'Amende (reversée à APS)',
+  // Obsolètes (historique de l'ancienne politique) : conservés pour lire d'anciens mouvements.
+  debit_retenue_annulation_tardive: 'Retenue pour annulation tardive (ancienne politique)',
+  debit_frais_no_show: 'Frais d’absence (ancienne politique)',
+  credit_frais_annulation: 'Frais d’annulation (ancienne politique)',
+};
+const estCredit = (type) => String(type || '').startsWith('credit_');
+const pourcent = (t) => `${(Number(t) * 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} %`;
+
 const fcfa = (n) => `${new Intl.NumberFormat('fr-FR').format(Math.round(Number(n) || 0))} FCFA`;
 const dateCourte = (iso) =>
   iso ? new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
@@ -25,6 +41,7 @@ export default function MedecinPortefeuille({ medecinId, mobileMoneys = [], onSo
   const { hash } = useLocation();
   const racine = useRef(null);
   const [donnees, setDonnees] = useState(null); // { solde, retraits, limites }
+  const [ledger, setLedger] = useState(null); // { solde, mouvements, amendes_en_attente }
   const [erreurChargement, setErreurChargement] = useState(null);
   const [mobileMoneyId, setMobileMoneyId] = useState(mobileMoneys[0]?.id || '');
   const [montant, setMontant] = useState('');
@@ -37,12 +54,20 @@ export default function MedecinPortefeuille({ medecinId, mobileMoneys = [], onSo
       setDonnees(d);
       setErreurChargement(null);
       onSoldeChange?.(d.solde);
+      // Mouvements et amendes en attente : échec non bloquant, le portefeuille reste utilisable.
+      try { setLedger(await obtenirPortefeuille(medecinId)); } catch { /* ignoré */ }
     } catch (err) {
       setErreurChargement(err.message || 'Impossible de charger votre portefeuille.');
     }
   }, [medecinId, onSoldeChange]);
 
-  useEffect(() => { charger(); }, [charger]);
+  // Chargement initial + rafraîchissement lent (60 s, onglet visible uniquement) pour que
+  // une amende ou un crédit de libération apparaisse sans recharger la page.
+  useEffect(() => {
+    charger();
+    const id = setInterval(() => { if (!document.hidden) charger(); }, 60000);
+    return () => clearInterval(id);
+  }, [charger]);
 
   useEffect(() => {
     if (!mobileMoneyId && mobileMoneys[0]?.id) setMobileMoneyId(mobileMoneys[0].id);
@@ -169,6 +194,37 @@ export default function MedecinPortefeuille({ medecinId, mobileMoneys = [], onSo
                   </li>
                 );
               })}
+            </ul>
+          )}
+
+          {ledger?.amendes_en_attente?.length > 0 && (
+            <div className="alert alert-warning mt-4 mb-0" role="status">
+              <strong>{ledger.amendes_en_attente.length} amende(s) en attente.</strong> Elle(s) sera(ont) déduite(s) de votre
+              prochaine libération de fonds (montant calculé à ce moment-là).
+              <ul className="mb-0 mt-2 small">
+                {ledger.amendes_en_attente.map((a) => (
+                  <li key={a.amende_id}>Taux {pourcent(a.taux_applique)} · enregistrée le {dateCourte(a.date_creation)}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <h4 className="h6 text-muted mt-4 mb-2">Derniers mouvements</h4>
+          {!ledger?.mouvements?.length ? (
+            <p className="text-muted mb-0">Aucun mouvement.</p>
+          ) : (
+            <ul className="retrait-liste">
+              {ledger.mouvements.map((m) => (
+                <li key={m.mouvement_id} className="retrait-ligne">
+                  <div>
+                    <span>{MOUVEMENTS[m.type] || m.type}</span>
+                    <div className="retrait-date">{dateCourte(m.date_creation)}</div>
+                  </div>
+                  <strong className={estCredit(m.type) ? 'text-success' : 'text-danger'}>
+                    {estCredit(m.type) ? '+' : '−'}{fcfa(m.montant)}
+                  </strong>
+                </li>
+              ))}
             </ul>
           )}
         </>
