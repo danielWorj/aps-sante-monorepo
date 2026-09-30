@@ -52,6 +52,9 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import AnnulationAdminModal from '../components/AnnulationAdminModal';
+import { annulerRendezVousAdmin, forcerLiberation } from '../services/fondsService';
+import { DELAI_REPROGRAMMATION_H, dateHeure, resumerAnnulation } from '../utils/fonds';
 import {
   listerRendezVous,
   creerRendezVous,
@@ -126,6 +129,8 @@ const STATUT_META = {
   non_honore: { badge: 'is-danger', icone: 'fa-user-xmark' },
   annule: { badge: 'is-muted', icone: 'fa-ban' },
   conteste: { badge: 'is-danger', icone: 'fa-triangle-exclamation' },
+  a_reprogrammer: { badge: 'is-warning', icone: 'fa-calendar-xmark' },
+
 };
 
 const TYPE_META = {

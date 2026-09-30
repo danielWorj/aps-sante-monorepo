@@ -148,6 +148,7 @@ export const STATUTS_RENDEZ_VOUS = [
   { valeur: 'non_honore', libelle: 'Non honoré' },
   { valeur: 'annule', libelle: 'Annulé' },
   { valeur: 'conteste', libelle: 'Contesté' },
+  { valeur: 'a_reprogrammer', libelle: 'À reprogrammer' },
 ];
 
 // Confirmé par rendezVous.controller.js (TYPES_RDV). structure_id n'a
