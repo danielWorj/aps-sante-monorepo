@@ -1,7 +1,7 @@
 import { Router } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { authentifier } from "../middlewares/auth.middleware.js";
-import { creerPaiementRdv, creerPaymentSheetRdv, obtenirStatutPaiementRdv } from "../controllers/paiement.controller.js";
+import { creerPaiementRdv, creerPaymentSheetRdv, obtenirStatutPaiementRdv, obtenirDevisPaiementRdv } from "../controllers/paiement.controller.js";
 import { creerPaiementCampayRdv } from "../controllers/paiementCampay.controller.js";
 
 // Limiteur anti-spam : chaque appel déclenche une demande USSD sur le téléphone du payeur.
@@ -22,4 +22,6 @@ router.post("/rendez-vous/:id/paiement", authentifier, creerPaiementRdv);
 router.post("/rendez-vous/:id/paiement-natif", authentifier, creerPaymentSheetRdv);
 router.post("/rendez-vous/:id/paiement-campay", authentifier, limiteurCampay, creerPaiementCampayRdv);
 router.get("/rendez-vous/:id/paiement", authentifier, obtenirStatutPaiementRdv);
+// Devis avant paiement : honoraires + frais d'envoi de l'agrégateur choisi (lecture seule).
+router.get("/rendez-vous/:id/devis", authentifier, obtenirDevisPaiementRdv);
 export default router;
