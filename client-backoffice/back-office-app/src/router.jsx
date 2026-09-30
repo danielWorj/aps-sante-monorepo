@@ -53,6 +53,12 @@ import GestionApk from './pages/GestionApk';
 // import Pharmacie from './pages/Pharmacie';
 // import Assurance from './pages/Assurances';
 
+// FONDS
+import FraisAgregateur from './pages/FraisAgregateur';
+import LignesTarifaires from './pages/LignesTarifaires';
+import ParametreAmende from './pages/ParametreAmende';
+import RemboursementsCampay from './pages/RemboursementsCampay';
+
 export const router = createBrowserRouter([
   // ─── Espace public : pas de Navbar/Sidebar ───────────────────
   {
@@ -95,6 +101,11 @@ export const router = createBrowserRouter([
           { path: '/abonnement-medecin', element: <AbonnementMedecin /> },
           { path: '/ordonnance', element: <Ordonnance /> },
           { path: '/retraits', element: <Retraits /> },
+          { path: '/frais-agregateur', element: <FraisAgregateur /> },
+          { path: '/lignes-tarifaires', element: <LignesTarifaires /> },
+          { path: '/parametre-amende', element: <ParametreAmende /> },
+          { path: '/remboursements-campay', element: <RemboursementsCampay /> },
+
           // RENDEZ VOUS 
           { path: '/rendez-vous', element: <RendezVous /> },
           // APK
