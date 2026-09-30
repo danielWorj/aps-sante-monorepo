@@ -188,6 +188,17 @@ enum PartieRendezVous {
   medecin
 }
 
+// Politique de fonds v2 §5 (étape 6, point ouvert E) — types de notification
+// in-app. Liste fermée : un nouveau type = une valeur ajoutée ici + migration.
+enum TypeNotification {
+  // Les deux parties étaient absentes : elles ont 48h pour reprogrammer.
+  rdv_a_reprogrammer
+  // L'autre partie a proposé une nouvelle date : à accepter (ou à contre-proposer).
+  rdv_reprogrammation_proposee
+  // La partie qui avait proposé apprend que sa proposition est acceptée.
+  rdv_reprogrammation_acceptee
+}
+
 // Motif d'annulation d'un rendez-vous — liste fermée exigée par la
 // politique de gestion des fonds §3 ("toute annulation doit être
 // motivée, motif en liste fermée, commentaire libre facultatif").
@@ -390,6 +401,9 @@ model Utilisateur {
 
   role Role @relation(fields: [role_id], references: [role_id])
   pays Pays @relation(fields: [pays_id], references: [pays_id])
+
+  // Étape 6 : notifications in-app reçues.
+  notifications Notification[]
 
   medecin                 Medecin?
   patient                 Patient?
@@ -1797,6 +1811,9 @@ model RendezVous {
   amende_medecin        AmendeMedecin?
   commission_aps_versee CommissionApsVersee?
 
+  // Étape 6 : notifications in-app liées à ce RDV (reprogrammation).
+  notifications Notification[]
+
   // Politique de fonds v2 §6 : un index unique PARTIEL sur
   // (medecin_id, date_creneau) pour les RDV actifs (statuts cree,
   // confirme, en_attente_presence, a_reprogrammer) interdit deux RDV
@@ -1809,6 +1826,42 @@ model RendezVous {
   @@index([medecin_id])
   @@index([structure_id])
   @@map("rendez_vous")
+}
+
+// -----------------------------------------------------------------
+// Notification — Politique de fonds v2 §5, étape 6 (point ouvert E).
+// Canal in-app uniquement (aucune infrastructure e-mail/push n'existe
+// dans le dépôt) ; notification.service.js est le point unique
+// d'émission, un canal e-mail/push pourra s'y brancher sans toucher aux
+// appelants. On stocke des FAITS d'émission :
+//   - cle : clé d'idempotence unique (ex. « a_reprogrammer:<rdv>:<date
+//     d'entrée en a_reprogrammer>:<utilisateur> ») — un rejeu du cron ou
+//     une reprise après échec ne crée jamais de doublon, et un second
+//     cycle de reprogrammation du même RDV produit de nouvelles lignes ;
+//   - donnees : uniquement ce qui ne se retrouve plus ailleurs (la date
+//     proposée, remplacée par une contre-proposition) — jamais l'échéance
+//     des 48h, qui se recalcule (a_reprogrammer_le + 48h).
+// -----------------------------------------------------------------
+model Notification {
+  notification_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id String           @db.Uuid
+  type           TypeNotification
+  rdv_id         String?          @db.Uuid
+  titre          String           @db.VarChar(200)
+  message        String           @db.Text
+  donnees        Json?
+  cle            String           @unique @db.VarChar(255)
+
+  lue_le        DateTime?
+  date_creation DateTime  @default(now())
+
+  utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
+  rendez_vous RendezVous? @relation(fields: [rdv_id], references: [rdv_id])
+
+  @@index([utilisateur_id, lue_le, date_creation])
+  @@index([rdv_id])
+  @@map("notification")
 }
 
 // -----------------------------------------------------------------

@@ -4,12 +4,15 @@
 // partie ne se présente pas, ce job comble ce vide en scrutant
 // périodiquement (voir lib/scheduler.js). Il délègue à traiterAbsence
 // (absence.service.js), qui déduit l'événement des présences enregistrées.
-// Étape 5 : ne traite QUE les statuts confirme / en_attente_presence ;
-// l'expiration des 48h (a_reprogrammer) et l'enregistrement des présences
-// sont ajoutés à l'étape 6.
+// Ne traite QUE les statuts confirme / en_attente_presence. Les présences
+// sont enregistrées en amont (visio : webhook Jitsi ; RDV physique : scan QR
+// et passage du médecin en « en_attente_presence », étape 6). Un RDV qui
+// passe à « a_reprogrammer » (deux absents) est notifié ici aux deux
+// parties ; son expiration à 48h est traitée par traiterReprogrammations.job.js.
 
 import prisma from "../lib/prisma.js";
 import { traiterAbsence } from "../services/absence.service.js";
+import { notifierReprogrammation } from "../services/notification.service.js";
 
 // Délai de grâce après `date_creneau` avant de considérer un rendez-vous
 // comme défaillant — non précisé par le cahier des charges ni par le
@@ -59,6 +62,20 @@ export async function detecterCreneauxDepasses() {
         );
       } else if (!resultat.deja_traite) {
         traites += 1;
+        // Deux absents : note « reprogrammer » aux deux parties (§5). Un échec
+        // n'annule pas le traitement de fonds (déjà validé) : le RDV n'étant
+        // plus sélectionné ici, c'est le balayage de traiterReprogrammations.job.js
+        // qui rattrape la notification manquante (clé d'idempotence => pas de doublon).
+        if (resultat.notifier_reprogrammation) {
+          try {
+            await notifierReprogrammation(rdv.rdv_id);
+          } catch (errNotif) {
+            console.error(
+              `[absence] rdv ${rdv.rdv_id} : notification « reprogrammer » non envoyée (rattrapée au prochain balayage) :`,
+              errNotif
+            );
+          }
+        }
       }
     } catch (err) {
       // Log et passage au suivant — voir en-tête. Le rendez-vous reste

@@ -116,6 +116,11 @@ import {
   modifierCreneauAgenda,
   supprimerCreneauAgenda,
 } from "../controllers/medecin.controller.js";
+// Politique de fonds v2 §5 (étape 6) : reprogrammation « deux absents ».
+import {
+  proposerReprogrammation,
+  accepterReprogrammation,
+} from "../controllers/reprogrammation.controller.js";
 
 const router = Router();
 
@@ -312,6 +317,13 @@ router.patch("/rendez-vous/:id/statut", authentifier, changerStatutRendezVous);
 // TRANSITIONS_AUTORISEES (la transition générique vers "honore" a été
 // retirée pour le médecin, précisément pour forcer ce chemin dédié).
 router.post("/rendez-vous/:id/scan-qr", authentifier, scannerQrRendezVous);
+
+// Politique de fonds v2 §5 (étape 6) — reprogrammation d'un RDV « a_reprogrammer »
+// (les deux parties absentes) : l'une des parties PROPOSE une nouvelle date,
+// l'AUTRE l'ACCEPTE, dans les 48h. Réservé au patient et au médecin du RDV
+// (contrôlé dans reprogrammation.service.js ; un admin n'est pas une partie).
+router.post("/rendez-vous/:id/reprogrammation/proposer", authentifier, proposerReprogrammation);
+router.post("/rendez-vous/:id/reprogrammation/accepter", authentifier, accepterReprogrammation);
 
 // Correction manuelle admin — seul chemin restant pour "honore" quand
 // scan-qr/webhook visio n'ont pas pu se déclencher (voir

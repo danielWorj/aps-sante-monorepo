@@ -16,6 +16,7 @@ import crypto from "crypto";
 import prisma from "../lib/prisma.js";
 import { libererEscrow } from "../services/liberationEscrow.service.js";
 import { traiterAnnulation } from "../services/annulation.service.js";
+import { enregistrerPresence } from "../services/presence.service.js";
 import { estViolationCreneauActif, MESSAGE_CRENEAU_PRIS } from "../utils/erreursPrisma.js";
 
 const TYPES_RDV = ["physique", "teleconsultation"];
@@ -73,6 +74,25 @@ async function profilMedecinCourant(utilisateurCourant) {
   return prisma.medecin.findUnique({
     where: { utilisateur_id: utilisateurCourant.utilisateur_id },
   });
+}
+
+/**
+ * Politique de fonds v2 §5 (étape 6) — présence du MÉDECIN à un RDV PHYSIQUE.
+ * Le passage « confirme » -> « en_attente_presence » par le médecin du RDV
+ * est le fait qui la constate (`medecin_present_le`). Retourne les champs à
+ * écrire dans la MÊME mise à jour que le statut (jamais l'un sans l'autre).
+ *
+ * Ne pose rien si : ce n'est pas cette transition, le RDV est une
+ * téléconsultation (sa présence vient de l'entrée dans la room Jitsi), ou
+ * l'acteur n'est pas le médecin du RDV (un admin qui force le statut ne
+ * constate la présence de personne).
+ */
+async function donneesPresenceTransition(rdv, utilisateurCourant, nouveauStatut, maintenant = new Date()) {
+  if (nouveauStatut !== "en_attente_presence" || rdv.statut !== "confirme") return {};
+  if (rdv.type_rdv !== "physique") return {};
+  const medecin = await profilMedecinCourant(utilisateurCourant);
+  if (!medecin || medecin.medecin_id !== rdv.medecin_id) return {};
+  return { medecin_present_le: rdv.medecin_present_le ?? maintenant };
 }
 
 /**
@@ -448,9 +468,21 @@ export async function modifierRendezVous(req, res, next) {
         }
       }
       donnees.statut = statut;
+      Object.assign(donnees, await donneesPresenceTransition(rdv, req.utilisateur, statut));
     }
 
     if (date_creneau !== undefined) {
+      // Politique de fonds v2 §5 : un RDV « a_reprogrammer » ne change de date
+      // QUE par proposition + acceptation de l'autre partie (POST
+      // .../reprogrammation/proposer puis .../accepter). Un PUT unilatéral
+      // contournerait ce protocole.
+      if (rdv.statut === "a_reprogrammer") {
+        return res.status(409).json({
+          message:
+            "Ce rendez-vous est à reprogrammer : la nouvelle date se propose via POST .../reprogrammation/proposer " +
+            "et doit être acceptée par l'autre partie.",
+        });
+      }
       const dateCreneau = new Date(date_creneau);
       if (Number.isNaN(dateCreneau.getTime())) {
         return res.status(400).json({ message: "date_creneau invalide." });
@@ -711,7 +743,7 @@ export async function changerStatutRendezVous(req, res, next) {
 
     const rdvMisAJour = await prisma.rendezVous.update({
       where: { rdv_id: req.params.id },
-      data: { statut },
+      data: { statut, ...(await donneesPresenceTransition(rdv, req.utilisateur, statut)) },
       include: INCLUSION_NOMS_RDV,
     });
 
@@ -788,6 +820,13 @@ export async function scannerQrRendezVous(req, res, next) {
         message: `Ce rendez-vous ne peut pas être marqué "honoré" depuis son statut actuel (${rdv.statut}).`,
       });
     }
+
+    // Politique de fonds v2 §5 (étape 6) : un scan valide constate les DEUX
+    // présences — le patient (son QR est scanné) et le médecin (il scanne).
+    // Faits enregistrés AVANT la libération : si celle-ci échoue, ils restent
+    // vrais et un nouveau scan ne réécrit rien (UPDATE conditionnel).
+    await enregistrerPresence(rdv.rdv_id, "patient");
+    await enregistrerPresence(rdv.rdv_id, "medecin");
 
     await libererEscrow(rdv.rdv_id);
 
