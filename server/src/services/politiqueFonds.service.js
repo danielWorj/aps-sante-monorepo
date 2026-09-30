@@ -275,10 +275,10 @@ export function baseCalculAmende({ honoraires, commission, decimales = 2 }) {
  *    libération (voir baseCalculAmende) ; toutes sur la MÊME base ;
  *  - imputées de la PLUS ANCIENNE à la plus récente ;
  *  - la somme imputée ne dépasse jamais le crédit : une amende est
- *    imputée en entier ou pas du tout. Dès qu'une amende ne tient plus
- *    dans le crédit restant, on s'arrête : elle et les suivantes restent
- *    « en_attente » pour la libération suivante (aucun reliquat à
- *    mémoriser, donc aucune colonne supplémentaire en base).
+ *    imputée en entier ou pas du tout. Une amende qui ne tient pas dans
+ *    le crédit restant est SAUTÉE (elle reste « en_attente » pour la
+ *    libération suivante) et on essaie les suivantes, qui peuvent encore
+ *    tenir (aucun reliquat à mémoriser, donc aucune colonne en base).
  *
  * @param {object} p
  * @param {number} p.creditNet   crédit net de la libération (avant amendes)
@@ -304,7 +304,7 @@ export function imputerAmendes({ creditNet, amendes, decimales = 2 }) {
   const imputations = [];
   for (const a of ordonnees) {
     const montant = arrondir(credit * Number(a.taux), decimales);
-    if (montant > capacite) break; // ne tient plus : reste en attente
+    if (montant > capacite) continue; // ne tient pas : reste en attente, on essaie la suivante
     capacite = arrondir(capacite - montant, decimales);
     imputations.push({ amende_id: a.amende_id, montant });
   }

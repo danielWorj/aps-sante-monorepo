@@ -1477,20 +1477,22 @@ model MouvementPortefeuille {
 // d'escrow (elle ne dépend pas des fonds de ce RDV).
 //
 // Statuts :
-//   - en_attente : aucune imputation encore.
-//   - partielle  : plafonnée au crédit d'une libération (le crédit
-//                  médecin ne peut pas devenir négatif) ; le reliquat
-//                  reste dû pour la libération suivante.
+//   - en_attente : pas encore imputée. Lors d'une libération, les amendes
+//                  en attente sont imputées de la plus ancienne à la plus
+//                  récente, EN ENTIER ou pas du tout ; une amende qui ne
+//                  tient pas dans le crédit restant est sautée et reste
+//                  en attente pour la libération suivante (pas de
+//                  reliquat, pas d'imputation partielle).
 //   - imputee    : intégralement imputée.
-// montant_impute = CUMUL déjà imputé (fait) ; le détail par libération
-// est dans le grand-livre (mouvement debit_amende). Le montant total
-// dû reste recalculable (taux_applique × base) et n'est pas stocké.
+// montant_impute = montant imputé (fait), renseigné à l'imputation ; le
+// mouvement correspondant est dans le grand-livre (debit_amende). Le
+// montant dû se recalcule à l'imputation (taux_applique × base) et n'est
+// pas stocké à la création.
 // taux_applique fige le taux du ParametreAmende retenu à la création
 // (parametre_amende_id garde la ligne source pour l'audit).
 // -----------------------------------------------------------------
 enum StatutAmende {
   en_attente
-  partielle
   imputee
 }
 

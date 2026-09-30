@@ -117,7 +117,7 @@ export async function obtenirPortefeuille(medecin_id) {
     // Requête locale (et non amende.service.js) : amende.service importe
     // déjà creerMouvement d'ici — éviter un import circulaire.
     prisma.amendeMedecin.findMany({
-      where: { medecin_id, statut: { in: ["en_attente", "partielle"] } },
+      where: { medecin_id, statut: "en_attente" },
       orderBy: { date_creation: "asc" },
       select: { amende_id: true, rdv_id: true, taux_applique: true, statut: true, date_creation: true },
     }),
