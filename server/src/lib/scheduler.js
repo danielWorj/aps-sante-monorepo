@@ -7,6 +7,7 @@
 
 import cron from "node-cron";
 import { detecterCreneauxDepasses } from "../jobs/detecterCreneauxDepasses.job.js";
+import { traiterReprogrammations } from "../jobs/traiterReprogrammations.job.js";
 import { reconcilierCampayEnAttente } from "../services/paiementCampay.service.js";
 import { reconcilierRetraitsEnCours } from "../services/retrait.service.js";
 
@@ -15,6 +16,12 @@ import { reconcilierRetraitsEnCours } from "../services/retrait.service.js";
 // reprise telle quelle du plan, réglable via variable d'environnement
 // sans redéploiement de code.
 const CRON_DETECTION_DEFAILLANCE = process.env.CRON_DETECTION_DEFAILLANCE || "*/15 * * * *";
+
+// Politique de fonds v2 §5 (étape 6) : expiration des 48h de reprogrammation
+// (deux absents) et rattrapage des notifications. Non précisé par la spec :
+// même fréquence que la détection des créneaux dépassés (l'échéance est donc
+// traitée avec au plus ~15 min de retard), réglable sans redéploiement.
+const CRON_REPROGRAMMATIONS = process.env.CRON_REPROGRAMMATIONS || "*/15 * * * *";
 
 // Filet de sécurité CamPay : callbacks perdus, serveur redémarré, etc. (chaque minute par défaut).
 const CRON_RECONCILIATION_CAMPAY = process.env.CRON_RECONCILIATION_CAMPAY || "* * * * *";
@@ -39,6 +46,12 @@ export function demarrerScheduler() {
     });
   });
 
+  cron.schedule(CRON_REPROGRAMMATIONS, () => {
+    traiterReprogrammations().catch((err) => {
+      console.error("[scheduler] Échec inattendu du job traiterReprogrammations :", err);
+    });
+  });
+
   cron.schedule(CRON_RECONCILIATION_CAMPAY, () => {
     reconcilierCampayEnAttente().catch((err) => {
       console.error("[scheduler] Échec réconciliation CamPay :", err);
@@ -52,6 +65,6 @@ export function demarrerScheduler() {
   });
 
   console.info(
-    `[scheduler] Démarré — detecterCreneauxDepasses planifié (${CRON_DETECTION_DEFAILLANCE}), reconcilierCampayEnAttente planifié (${CRON_RECONCILIATION_CAMPAY}), reconcilierRetraitsEnCours planifié (${CRON_RECONCILIATION_RETRAITS}).`
+    `[scheduler] Démarré — detecterCreneauxDepasses planifié (${CRON_DETECTION_DEFAILLANCE}), traiterReprogrammations planifié (${CRON_REPROGRAMMATIONS}), reconcilierCampayEnAttente planifié (${CRON_RECONCILIATION_CAMPAY}), reconcilierRetraitsEnCours planifié (${CRON_RECONCILIATION_RETRAITS}).`
   );
 }

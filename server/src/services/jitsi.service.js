@@ -21,7 +21,7 @@ if (!JITSI_APP_ID || !JITSI_APP_SECRET) {
 const DUREE_VALIDITE_SECONDES = 60 * 60; // 1h — largement suffisant pour une téléconsultation
 
 /**
- * @param {{ nom: string, prenom: string, email: string, estModerateur: boolean }} participant
+ * @param {{ utilisateur_id?: string, nom: string, prenom: string, email: string, estModerateur: boolean }} participant
  * @param {string} roomName
  * @returns {string} JWT signé HS256, à transmettre tel quel au client Jitsi
  */
@@ -31,6 +31,10 @@ export function genererJitsiToken(participant, roomName) {
   const payload = {
     context: {
       user: {
+        // Étape 6 (politique de fonds v2 §5) : Prosody relaie `id` dans le
+        // webhook d'entrée d'un occupant ; le backend en déduit la partie
+        // (patient / médecin) sans dépendre de l'e-mail affiché.
+        id: participant.utilisateur_id,
         name: `${participant.prenom} ${participant.nom}`,
         email: participant.email,
         moderator: participant.estModerateur,

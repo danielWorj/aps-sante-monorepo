@@ -1,12 +1,19 @@
 -- mod_muc_events_webhook
 --
 -- Notifie le backend APS (server/, voir src/routes/visioWebhook.routes.js
--- et src/controllers/visio.controller.js, traiterFinSessionVisio) quand
--- une room de téléconsultation est détruite — c'est-à-dire, en
--- pratique, quand le dernier participant l'a quittée. C'est ce signal
--- qui déclenche la libération de l'escrow côté backend (politique de
--- gestion des fonds §2 : "la libération intervient à la clôture de la
--- session").
+-- et src/controllers/visio.controller.js, traiterFinSessionVisio) de deux
+-- événements d'une room de téléconsultation :
+--
+--   * muc-occupant-joined : un participant IDENTIFIÉ PAR SON JWT entre dans
+--     la room (politique de fonds v2 §5, étape 6). Le backend en déduit sa
+--     partie (médecin / patient) et enregistre sa PRÉSENCE. Les occupants
+--     sans identité JWT (jicofo, jibri…) sont ignorés.
+--
+--   * muc-room-destroyed : la room est détruite — c'est-à-dire, en
+--     pratique, quand le dernier participant l'a quittée. C'est ce signal
+--     qui déclenche la libération de l'escrow côté backend (politique de
+--     gestion des fonds §2 : "la libération intervient à la clôture de la
+--     session"), si les deux présences sont enregistrées.
 --
 -- ⚠️ Limite connue (à signaler côté produit, pas résolue par ce
 -- module) : cet événement ne se déclenche que quand TOUS les
@@ -44,18 +51,24 @@ if not webhook_secret or webhook_secret == "" then
 	return;
 end
 
-local function envoyer_evenement(room_jid)
+local function envoyer_evenement(nom_evenement, room_jid, extra)
 	local node = jid_split(room_jid);
 	if not node then
 		return;
 	end
 
-	local corps = json.encode({
-		event = "muc-room-destroyed",
+	local charge = {
+		event = nom_evenement,
 		room = node,
 		domain = module.host,
 		timestamp = os.time(),
-	});
+	};
+	if extra then
+		for cle, valeur in pairs(extra) do
+			charge[cle] = valeur;
+		end
+	end
+	local corps = json.encode(charge);
 
 	local signature = hashes.hmac_sha256(webhook_secret, corps, true); -- true = sortie hex
 
@@ -71,8 +84,8 @@ local function envoyer_evenement(room_jid)
 			if not response_code or response_code >= 300 then
 				module:log(
 					"warn",
-					"webhook fin de session (room=%s) a échoué : code=%s corps=%s",
-					node, tostring(response_code), tostring(response_body)
+					"webhook %s (room=%s) a échoué : code=%s corps=%s",
+					nom_evenement, node, tostring(response_code), tostring(response_body)
 				);
 			end
 		end);
@@ -80,8 +93,8 @@ local function envoyer_evenement(room_jid)
 	if not ok then
 		-- Ne jamais faire remonter d'erreur jusqu'au cycle de vie de la
 		-- room : un webhook qui échoue ne doit pas empêcher la room de
-		-- se détruire normalement.
-		module:log("error", "échec d'envoi du webhook fin de session (room=%s) : %s", node, tostring(err));
+		-- se détruire normalement, ni un participant d'y entrer.
+		module:log("error", "échec d'envoi du webhook %s (room=%s) : %s", nom_evenement, node, tostring(err));
 	end
 end
 
@@ -90,5 +103,27 @@ end
 -- "fin de la téléconsultation" disponible nativement, sans coupler ce
 -- module à la logique applicative des occupants un par un.
 module:hook("muc-room-destroyed", function (event)
-	envoyer_evenement(event.room.jid);
+	envoyer_evenement("muc-room-destroyed", event.room.jid);
+end);
+
+-- Étape 6 (politique de fonds v2 §5) — présence en téléconsultation.
+-- Déclenché quand un occupant entre dans la room. L'identité vient du JWT
+-- vérifié à la connexion : mod_auth_token pose `jitsi_meet_context_user`
+-- (= context.user du JWT généré par server/src/services/jitsi.service.js,
+-- qui porte `id` = utilisateur_id et `email`) sur la session de l'occupant.
+-- Sans identité (jicofo, jibri, transcriber…), on n'envoie rien : ce ne
+-- sont pas des parties au rendez-vous.
+--
+-- ⚠️ À valider sur l'instance Jitsi réelle : ce hook n'a pas pu être exécuté
+-- dans l'environnement de développement de l'étape 6 (voir rapport).
+module:hook("muc-occupant-joined", function (event)
+	local session = event.origin;
+	local utilisateur = session and session.jitsi_meet_context_user;
+	if not utilisateur then
+		return;
+	end
+	envoyer_evenement("muc-occupant-joined", event.room.jid, {
+		user_id = utilisateur.id,
+		email = utilisateur.email,
+	});
 end);

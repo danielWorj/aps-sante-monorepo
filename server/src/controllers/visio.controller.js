@@ -14,6 +14,8 @@ import prisma from "../lib/prisma.js";
 import { genererJitsiToken } from "../services/jitsi.service.js";
 import { libererEscrow } from "../services/liberationEscrow.service.js";
 import { verifierSignatureWebhookVisio } from "../lib/jitsiWebhookService.js";
+import { enregistrerPresence } from "../services/presence.service.js";
+import { partieDepuisParticipant } from "../services/reglesPresenceReprogrammation.service.js";
 
 const STATUTS_AUTORISES_VISIO = ["confirme", "en_attente_presence"];
 // Doit rester identique au roomName généré dans obtenirTokenVisio
@@ -21,6 +23,8 @@ const STATUTS_AUTORISES_VISIO = ["confirme", "en_attente_presence"];
 // qui permet à traiterFinSessionVisio de retrouver le rendez-vous à
 // partir du nom de room envoyé par le webhook Jitsi/Prosody.
 const PREFIXE_ROOM_RDV = "rdv-";
+// Événements émis par mod_muc_events_webhook.lua que ce contrôleur traite.
+const EVENEMENTS_VISIO_TRAITES = ["muc-room-destroyed", "muc-occupant-joined"];
 
 export async function obtenirTokenVisio(req, res, next) {
   try {
@@ -66,6 +70,7 @@ export async function obtenirTokenVisio(req, res, next) {
 
     const token = genererJitsiToken(
       {
+        utilisateur_id: participantInfo.utilisateur_id,
         nom: participantInfo.nom,
         prenom: participantInfo.prenom,
         email: participantInfo.email,
@@ -86,25 +91,34 @@ export async function obtenirTokenVisio(req, res, next) {
 
 /**
  * POST /api/visio/webhook — appelé UNIQUEMENT par le module Prosody
- * mod_muc_events_webhook.lua (jitsi-host/prosody/rootfs/
- * prosody-plugins/), sur l'événement `muc-room-destroyed` — c'est-à-
- * dire quand la room Jitsi de la téléconsultation est détruite
- * (dernier participant parti). Déclencheur téléconsultation de la
- * Phase 2 (politique de gestion des fonds §2 : "la libération
- * intervient à la clôture de la session").
+ * mod_muc_events_webhook.lua (jitsi-host/prosody/rootfs/prosody-plugins/).
+ * Deux événements signés (politique de fonds v2, étape 6) :
  *
- * ⚠️ Limite connue à signaler : `muc-room-destroyed` ne se déclenche
- * que quand TOUS les participants sont partis. Si seul le patient
- * quitte (perte de connexion) alors que le médecin reste dans la
- * room, la libération n'a donc pas encore lieu — comportement voulu
- * ou à ajuster selon le produit réel (ex. détecter plutôt le départ
- * du médecin spécifiquement) ?
+ *   - `muc-occupant-joined` : un participant identifié par son JWT entre
+ *     dans la room. On enregistre sa PRÉSENCE (`medecin_present_le` /
+ *     `patient_present_le`, premier passage gagnant, idempotent) — c'est le
+ *     fait dont se déduit l'absence (§5), voir presence.service.js.
  *
- * Signature vérifiée sur le corps brut (voir visioWebhook.routes.js,
- * monté avant express.json() comme le webhook Stripe) — même motif
- * que traiterWebhookStripe (paiement.controller.js) : jamais de 500
- * pour un événement qu'on choisit d'ignorer, pour ne pas provoquer de
- * ré-essais en boucle côté émetteur.
+ *   - `muc-room-destroyed` : dernier participant parti. Déclencheur de la
+ *     libération (§2 : « à la clôture de la session »), MAIS uniquement si
+ *     les DEUX présences sont enregistrées. Sinon on ne libère rien : le
+ *     cron (detecterCreneauxDepasses.job.js) tranche après le délai de
+ *     grâce selon la matrice §5 (médecin absent, patient absent, deux
+ *     absents). Libérer ici sur une seule présence paierait le médecin
+ *     d'une consultation à laquelle le patient n'a pas assisté (ou l'inverse).
+ *
+ * ⚠️ Déploiement : le module Lua ET l'émission de l'identifiant dans le JWT
+ * (jitsi.service.js) doivent être en place avant ce contrôleur ; sans
+ * événement d'entrée, aucune présence n'est enregistrée et toute session
+ * serait traitée « deux absents ».
+ *
+ * ⚠️ Limite connue : `muc-room-destroyed` ne se déclenche que quand TOUS les
+ * participants sont partis (voir mod_muc_events_webhook.lua).
+ *
+ * Signature vérifiée sur le corps brut (voir visioWebhook.routes.js, monté
+ * avant express.json() comme le webhook Stripe). Jamais de 500 pour un
+ * événement qu'on choisit d'ignorer, pour ne pas provoquer de ré-essais en
+ * boucle côté émetteur.
  */
 export async function traiterFinSessionVisio(req, res, next) {
   try {
@@ -129,9 +143,8 @@ export async function traiterFinSessionVisio(req, res, next) {
       return res.status(400).json({ message: "Corps JSON invalide." });
     }
 
-    if (payload.event !== "muc-room-destroyed") {
-      // Le plugin n'émet aujourd'hui que cet événement ; on reste
-      // tolérant à une extension future plutôt que de répondre en
+    if (!EVENEMENTS_VISIO_TRAITES.includes(payload.event)) {
+      // On reste tolérant à une extension future plutôt que de répondre en
       // erreur pour un type d'événement qu'on choisit d'ignorer.
       return res.status(200).json({ ignore: true });
     }
@@ -143,20 +156,46 @@ export async function traiterFinSessionVisio(req, res, next) {
     }
     const rdv_id = room.slice(PREFIXE_ROOM_RDV.length);
 
-    const rdv = await prisma.rendezVous.findUnique({ where: { rdv_id } });
+    const rdv = await prisma.rendezVous.findUnique({
+      where: { rdv_id },
+      include: {
+        medecin: { select: { utilisateur: { select: { utilisateur_id: true, email: true } } } },
+        patient: { select: { utilisateur: { select: { utilisateur_id: true, email: true } } } },
+      },
+    });
     if (!rdv) {
-      console.warn(`[visio] webhook fin de session pour un rdv_id introuvable : ${rdv_id}.`);
+      console.warn(`[visio] webhook ${payload.event} pour un rdv_id introuvable : ${rdv_id}.`);
       return res.status(200).json({ ignore: true });
     }
     if (rdv.type_rdv !== "teleconsultation") {
-      console.warn(`[visio] webhook fin de session pour un rdv non-téléconsultation : ${rdv_id}.`);
+      console.warn(`[visio] webhook ${payload.event} pour un rdv non-téléconsultation : ${rdv_id}.`);
       return res.status(200).json({ ignore: true });
     }
     if (!STATUTS_AUTORISES_VISIO.includes(rdv.statut)) {
-      // Déjà honoré (double événement), annulé, contesté... :
-      // libererEscrow est de toute façon idempotent via
-      // CompteEscrow.statut, mais on évite l'appel inutile.
+      // Déjà honoré (double événement), annulé, à reprogrammer, contesté... :
+      // rien à enregistrer ni à libérer (libererEscrow est de toute façon
+      // idempotent via CompteEscrow.statut, mais on évite l'appel inutile).
       return res.status(200).json({ ignore: true });
+    }
+
+    if (payload.event === "muc-occupant-joined") {
+      const partie = partieDepuisParticipant(rdv, { user_id: payload.user_id, email: payload.email });
+      if (!partie) {
+        console.warn(`[visio] entrée dans la room du rdv ${rdv_id} par un participant qui n'est ni son médecin ni son patient — ignorée.`);
+        return res.status(200).json({ ignore: true });
+      }
+      const { enregistree } = await enregistrerPresence(rdv_id, partie);
+      return res.status(200).json({ traite: true, partie, enregistree });
+    }
+
+    // muc-room-destroyed : libération seulement si les DEUX parties sont venues.
+    if (!rdv.medecin_present_le || !rdv.patient_present_le) {
+      console.warn(
+        `[visio] fin de session du rdv ${rdv_id} avec présences incomplètes ` +
+        `(médecin : ${rdv.medecin_present_le ? "oui" : "non"}, patient : ${rdv.patient_present_le ? "oui" : "non"}) — ` +
+        `aucune libération : le cron d'absence tranchera après le délai de grâce.`
+      );
+      return res.status(200).json({ ignore: true, raison: "presences_incompletes" });
     }
 
     await libererEscrow(rdv_id);

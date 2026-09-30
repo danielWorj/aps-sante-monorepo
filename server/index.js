@@ -31,6 +31,7 @@ import parametreAmendeRoutes from "./src/routes/parametreAmende.routes.js";
 import portefeuilleRoutes from "./src/routes/portefeuille.routes.js";
 import retraitRoutes from "./src/routes/retrait.routes.js";
 import remboursementRoutes from "./src/routes/remboursement.routes.js";
+import notificationRoutes from "./src/routes/notification.routes.js";
 import { demarrerScheduler } from "./src/lib/scheduler.js";
 
 const app = express();
@@ -147,6 +148,7 @@ app.use("/api", parametreAmendeRoutes);
 app.use("/api", portefeuilleRoutes);
 app.use("/api", retraitRoutes);
 app.use("/api", remboursementRoutes);
+app.use("/api", notificationRoutes);
 // NB : le webhook Stripe (paiementWebhookRoutes) est déjà monté plus
 // haut, avant express.json() — voir commentaire à cet endroit.
 
