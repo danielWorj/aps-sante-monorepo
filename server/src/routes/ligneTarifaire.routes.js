@@ -1,9 +1,7 @@
 // src/routes/ligneTarifaire.routes.js
-// Phase 0 — Lignes tarifaires (commission APS, taxes, frais
-// d'agrégateur), versionnées par pays et par type de frais. Réservé à
-// admin/superadmin : ces taux déterminent directement ce qui est
-// facturé/crédité, ce n'est pas un paramétrage médecin (à la
-// différence de taux_frais_annulation_tardive, voir Phase 3).
+// Lignes tarifaires (commission APS uniquement depuis la politique de
+// fonds v2), versionnées par pays. Réservé à admin/superadmin : ces
+// taux déterminent directement ce qui est crédité au médecin.
 
 import { Router } from "express";
 import {

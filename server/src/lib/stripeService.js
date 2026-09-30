@@ -56,6 +56,24 @@ export async function creerSessionCheckout({
 }
 
 /**
+ * Invalide une session Checkout encore ouverte (le patient a fermé la
+ * page puis réessaie) pour qu'elle ne puisse plus être payée en double.
+ * @returns {Promise<"expiree"|"payee">} "payee" : la session a été payée
+ *   entre-temps (le webhook finalisera) — ne PAS en ouvrir une autre.
+ */
+export async function expirerSessionCheckout(session_id) {
+  try {
+    await stripe.checkout.sessions.expire(session_id);
+    return "expiree";
+  } catch (err) {
+    const session = await stripe.checkout.sessions.retrieve(session_id);
+    if (session.status === "expired") return "expiree";
+    if (session.status === "complete") return "payee";
+    throw err;
+  }
+}
+
+/**
  * Option B (PaymentSheet natif) — crée un PaymentIntent que l'app mobile
  * confirme avec `flutter_stripe`. Contrairement au Checkout hébergé, les
  * `metadata` sont posées directement sur le PaymentIntent : c'est ce qui

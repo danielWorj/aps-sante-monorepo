@@ -16,6 +16,7 @@ import crypto from "crypto";
 import prisma from "../lib/prisma.js";
 import { libererEscrow } from "../services/liberationEscrow.service.js";
 import { traiterAnnulation } from "../services/annulation.service.js";
+import { estViolationCreneauActif, MESSAGE_CRENEAU_PRIS } from "../utils/erreursPrisma.js";
 
 const TYPES_RDV = ["physique", "teleconsultation"];
 const STATUTS_RDV = [
@@ -355,6 +356,9 @@ export async function creerRendezVous(req, res, next) {
 
     return res.status(201).json({ message: "Rendez-vous créé.", rendez_vous: rdv });
   } catch (err) {
+    // Politique de fonds v2 §6 : index unique partiel — un seul RDV actif
+    // par (médecin, créneau). Course entre deux réservations simultanées.
+    if (estViolationCreneauActif(err)) return res.status(409).json({ message: MESSAGE_CRENEAU_PRIS });
     next(err);
   }
 }
@@ -481,6 +485,8 @@ export async function modifierRendezVous(req, res, next) {
 
     return res.status(200).json({ message: "Rendez-vous mis à jour.", rendez_vous: rdvMisAJour });
   } catch (err) {
+    // Déplacement vers un créneau déjà occupé par un autre RDV actif du médecin (§6).
+    if (estViolationCreneauActif(err)) return res.status(409).json({ message: MESSAGE_CRENEAU_PRIS });
     next(err);
   }
 }
@@ -687,6 +693,8 @@ export async function changerStatutRendezVous(req, res, next) {
 
     return res.status(200).json({ message: "Statut du rendez-vous mis à jour.", rendez_vous: rdvMisAJour });
   } catch (err) {
+    // Un admin qui réactive un RDV sur un créneau repris entre-temps (§6).
+    if (estViolationCreneauActif(err)) return res.status(409).json({ message: MESSAGE_CRENEAU_PRIS });
     next(err);
   }
 }

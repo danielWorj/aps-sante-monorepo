@@ -7,8 +7,12 @@ import {
   annulerPaymentIntent,
   versUniteStripe,
   verifierSignatureWebhook,
+  expirerSessionCheckout,
 } from "../lib/stripeService.js";
 import { decomposerMontant, obtenirLignesTarifairesActives } from "../services/tarification.service.js";
+import { obtenirFraisActifs } from "../services/fraisAgregateur.service.js";
+import { creerTransactionSansDoublon, invaliderCheckoutsOuverts, PaiementDejaExistantError } from "../services/antiDoublePaiement.service.js";
+import { decimalesPourMontant } from "../utils/montants.js";
 import { finaliserPaiement } from "../services/finalisationPaiement.service.js";
 import { synchroniserCampayPourRdv, derniereTentativeCampay } from "../services/paiementCampay.service.js";
 
@@ -22,16 +26,25 @@ async function profilPatientAvecEmail(utilisateurCourant) {
 }
 
 /**
- * Vérifications communes aux deux parcours de paiement (Checkout hébergé
- * ET PaymentSheet natif) : RDV existant, patient propriétaire, statut
- * `cree`, pas d'escrow, tarif > 0, puis calcul du montant total.
+ * Vérifications communes aux parcours de paiement (Checkout hébergé,
+ * PaymentSheet natif, CamPay) : RDV existant, patient propriétaire,
+ * statut `cree`, pas d'escrow, tarif > 0, puis calcul du montant total.
+ *
+ * Politique de fonds v2 §1 : total = honoraires + frais d'envoi de
+ * l'AGRÉGATEUR choisi (`agregateur` : "stripe" | "campay"). Plus de
+ * taxe ni de commission à la charge du patient.
  *
  * Répond elle-même (404/403/409/400) et renvoie `null` si le paiement
  * n'est pas possible : l'appelant n'a alors plus rien à faire.
- * Ne crée AUCUNE transaction (voir creerTransactionEnAttente) : le
- * parcours natif doit pouvoir réutiliser une transaction existante.
+ * Ne crée AUCUNE transaction (voir creerTransactionEnAttente) : les
+ * parcours natif et CamPay doivent pouvoir réutiliser une tentative
+ * existante avant d'en créer une. Le contrôle anti double paiement
+ * (§6) est donc fait à la CRÉATION, pas ici.
  */
-export async function verifierRdvPayable(req, res) {
+export async function verifierRdvPayable(req, res, agregateur) {
+  if (agregateur !== "stripe" && agregateur !== "campay") {
+    throw new Error(`verifierRdvPayable : agrégateur inconnu "${agregateur}".`);
+  }
   const rdv = await prisma.rendezVous.findUnique({
     where: { rdv_id: req.params.id },
     include: { medecin: { include: { utilisateur: true } } },
@@ -65,7 +78,8 @@ export async function verifierRdvPayable(req, res) {
   }
 
   const honoraires = rdv.medecin.tarif_indicatif;
-  const devise = DEVISE_PAR_DEFAUT;
+  // CamPay débite toujours en XAF ; Stripe : devise configurée.
+  const devise = agregateur === "campay" ? "xaf" : DEVISE_PAR_DEFAUT;
 
   // Stripe refuse un montant nul (et en dessous d'un minimum selon la
   // devise) : on renvoie un message clair plutôt qu'un 500 opaque.
@@ -76,27 +90,65 @@ export async function verifierRdvPayable(req, res) {
     return null;
   }
 
-  // Lignes tarifaires (commission/taxe/frais d'agrégateur) en vigueur
-  // dans le pays d'exercice du médecin — voir Phase 0. Les taux ne
-  // sont jamais dupliqués ni recalculés sur la transaction : seules
-  // les références vers ces 3 lignes sont stockées.
+  // Lignes en vigueur : commission APS (par pays d'exercice du médecin)
+  // et frais d'agrégateur (envoi ET remboursement). Elles sont FIGÉES
+  // sur la transaction (références, jamais de montants) : un changement
+  // de barème ultérieur ne touche pas cette transaction. Une ligne
+  // absente lève une erreur explicite (saisie admin requise).
   const lignesTarifaires = await obtenirLignesTarifairesActives(rdv.medecin.pays_exercice_id);
-  const { total: montant } = decomposerMontant(honoraires, lignesTarifaires);
+  const fraisActifs = await obtenirFraisActifs(agregateur);
+  const decimales = decimalesPourMontant({ fournisseur: agregateur, devise });
+  const decomposition = decomposerMontant(
+    honoraires,
+    { commission: lignesTarifaires.commission, frais_envoi: fraisActifs.envoi },
+    decimales
+  );
 
-  return { rdv, patient, honoraires, devise, lignesTarifaires, montant };
+  return {
+    rdv, patient, honoraires, devise, agregateur,
+    lignesTarifaires, fraisActifs, decomposition,
+    montant: decomposition.total,
+  };
 }
 
-function creerTransactionEnAttente({ montant, devise, honoraires, lignesTarifaires }) {
-  return prisma.transactionPaiement.create({
-    data: {
+/**
+ * Crée la transaction `en_attente` du RDV, après contrôle anti double
+ * paiement (§6) et sous verrou de créneau — voir antiDoublePaiement.
+ * Lève PaiementDejaExistantError (409) si un paiement existe déjà.
+ * `extra` : champs propres au fournisseur (CamPay : numéro, montant
+ * arrondi…). `rdv_id_cible` est posé pour TOUS les fournisseurs : il
+ * permet de retrouver une transaction `en_attente` par RDV.
+ */
+export function creerTransactionEnAttente(ctx, extra = {}) {
+  const { rdv, montant, devise, honoraires, lignesTarifaires, fraisActifs } = ctx;
+  return creerTransactionSansDoublon({
+    rdv,
+    donnees: {
       montant,
       devise,
       statut: "en_attente",
+      rdv_id_cible: rdv.rdv_id,
       montant_honoraires: honoraires,
       ligne_commission_id: lignesTarifaires.commission.ligne_tarifaire_id,
-      ligne_taxe_id: lignesTarifaires.taxe.ligne_tarifaire_id,
-      ligne_frais_agregateur_id: lignesTarifaires.frais_agregateur.ligne_tarifaire_id,
+      frais_envoi_id: fraisActifs.envoi.frais_agregateur_id,
+      frais_remboursement_id: fraisActifs.remboursement.frais_agregateur_id,
+      ...extra,
     },
+  });
+}
+
+/** 409 clair pour un doublon de paiement ; renvoie true si l'erreur a été traitée. */
+export function repondreSiPaiementExistant(err, res) {
+  if (!(err instanceof PaiementDejaExistantError)) return false;
+  res.status(409).json({ message: err.message });
+  return true;
+}
+
+/** Une transaction dont la création chez le fournisseur a échoué ne doit pas bloquer une nouvelle tentative. */
+async function marquerTransactionEchouee(transaction_id) {
+  await prisma.transactionPaiement.updateMany({
+    where: { transaction_id, statut: "en_attente" },
+    data: { statut: "echouee" },
   });
 }
 
@@ -104,22 +156,35 @@ function creerTransactionEnAttente({ montant, devise, honoraires, lignesTarifair
 // (Checkout hébergé — parcours web, option A)
 export async function creerPaiementRdv(req, res, next) {
   try {
-    const ctx = await verifierRdvPayable(req, res);
+    const ctx = await verifierRdvPayable(req, res, "stripe");
     if (!ctx) return;
     const { rdv, patient, devise, montant } = ctx;
 
+    // Réessai après fermeture de la page Checkout : pas de paiement ->
+    // on invalide l'ancienne session et on en ouvre une nouvelle ; un
+    // paiement aboutissant entre-temps -> 409 (voir antiDoublePaiement).
+    await invaliderCheckoutsOuverts({ rdv, expirer: expirerSessionCheckout });
+
     const transaction = await creerTransactionEnAttente(ctx);
 
-    const base = process.env.FRONTEND_URL || "http://localhost:5173";
-    const session = await creerSessionCheckout({
-      montant, devise,
-      transaction_id: transaction.transaction_id,
-      rdv_id: rdv.rdv_id,
-      libelle: `Consultation — Dr. ${rdv.medecin.utilisateur.nom} ${rdv.medecin.utilisateur.prenom}`,
-      email_client: patient.utilisateur.email,
-      url_succes: `${base}/paiement/succes?rdv_id=${rdv.rdv_id}`,
-      url_annulation: `${base}/paiement/annule?rdv_id=${rdv.rdv_id}`,
-    });
+    let session;
+    try {
+      const base = process.env.FRONTEND_URL || "http://localhost:5173";
+      session = await creerSessionCheckout({
+        montant, devise,
+        transaction_id: transaction.transaction_id,
+        rdv_id: rdv.rdv_id,
+        libelle: `Consultation — Dr. ${rdv.medecin.utilisateur.nom} ${rdv.medecin.utilisateur.prenom}`,
+        email_client: patient.utilisateur.email,
+        url_succes: `${base}/paiement/succes?rdv_id=${rdv.rdv_id}`,
+        url_annulation: `${base}/paiement/annule?rdv_id=${rdv.rdv_id}`,
+      });
+    } catch (err) {
+      // Stripe a refusé : sans session, cette transaction ne peut jamais
+      // aboutir — on la clôt pour ne pas bloquer la nouvelle tentative (§6).
+      await marquerTransactionEchouee(transaction.transaction_id);
+      throw err;
+    }
 
     await prisma.transactionPaiement.update({
       where: { transaction_id: transaction.transaction_id },
@@ -127,7 +192,10 @@ export async function creerPaiementRdv(req, res, next) {
     });
 
     return res.status(201).json({ url: session.url });
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (repondreSiPaiementExistant(err, res)) return;
+    next(err);
+  }
 }
 
 /**
@@ -183,7 +251,7 @@ export async function creerPaymentSheetRdv(req, res, next) {
       return res.status(500).json({ message: "Paiement en ligne momentanément indisponible." });
     }
 
-    const ctx = await verifierRdvPayable(req, res);
+    const ctx = await verifierRdvPayable(req, res, "stripe");
     if (!ctx) return;
     const { rdv, patient, devise, montant } = ctx;
 
@@ -197,12 +265,18 @@ export async function creerPaymentSheetRdv(req, res, next) {
 
     const transaction = await creerTransactionEnAttente(ctx);
 
-    const intent = await creerPaymentIntent({
-      montant, devise,
-      transaction_id: transaction.transaction_id,
-      rdv_id: rdv.rdv_id,
-      email_client: patient.utilisateur.email,
-    });
+    let intent;
+    try {
+      intent = await creerPaymentIntent({
+        montant, devise,
+        transaction_id: transaction.transaction_id,
+        rdv_id: rdv.rdv_id,
+        email_client: patient.utilisateur.email,
+      });
+    } catch (err) {
+      await marquerTransactionEchouee(transaction.transaction_id); // voir creerPaiementRdv
+      throw err;
+    }
 
     await prisma.transactionPaiement.update({
       where: { transaction_id: transaction.transaction_id },
@@ -213,7 +287,10 @@ export async function creerPaymentSheetRdv(req, res, next) {
       client_secret: intent.client_secret,
       publishable_key: publishableKey,
     });
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (repondreSiPaiementExistant(err, res)) return;
+    next(err);
+  }
 }
 
 // GET /api/rendez-vous/:id/paiement — statut (pour la page de retour
@@ -253,23 +330,31 @@ export async function obtenirStatutPaiementRdv(req, res, next) {
       where: { rdv_id: rdv.rdv_id },
       include: {
         transaction: {
-          include: { ligne_commission: true, ligne_taxe: true, ligne_frais_agregateur: true },
+          include: { ligne_commission: true, frais_envoi: true },
         },
       },
     });
 
-    // Décomposition honoraires/commission/taxes/frais d'agrégateur
-    // recalculée à la volée depuis montant_honoraires + les 3 lignes
-    // tarifaires liées — jamais lue depuis une valeur stockée (voir
-    // Phase 0 / tarification.service.js).
+    // Décomposition recalculée à la volée depuis montant_honoraires + les
+    // lignes figées sur la transaction — jamais lue depuis une valeur
+    // stockée (voir tarification.service.js). v2 : le patient voit
+    // honoraires + frais d'envoi = total. La commission APS (prélevée
+    // sur le médecin à la libération) et le net médecin ne sont exposés
+    // qu'au médecin concerné et aux admins. Une transaction antérieure à
+    // la v2 n'a pas de ligne de frais d'envoi : pas de décomposition.
     let decomposition = null;
     const t = escrow?.transaction;
-    if (t?.montant_honoraires != null && t.ligne_commission && t.ligne_taxe && t.ligne_frais_agregateur) {
-      decomposition = decomposerMontant(t.montant_honoraires, {
-        commission: t.ligne_commission,
-        taxe: t.ligne_taxe,
-        frais_agregateur: t.ligne_frais_agregateur,
-      });
+    if (t?.montant_honoraires != null && t.ligne_commission && t.frais_envoi) {
+      const d = decomposerMontant(
+        t.montant_honoraires,
+        { commission: t.ligne_commission, frais_envoi: t.frais_envoi },
+        decimalesPourMontant({ fournisseur: t.fournisseur, devise: t.devise })
+      );
+      decomposition = { honoraires: d.honoraires, frais_envoi: d.fraisEnvoi, total: d.total };
+      if (estAdmin || estMedecinConcerne) {
+        decomposition.commission_aps = d.commission;
+        decomposition.net_medecin = d.netMedecin;
+      }
     }
 
     return res.status(200).json({

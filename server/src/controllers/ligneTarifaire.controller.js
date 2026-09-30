@@ -1,13 +1,17 @@
 // src/controllers/ligneTarifaire.controller.js
-// Phase 0 — Gestion admin des lignes tarifaires (commission APS,
-// taxes, frais d'agrégateur), versionnées par pays et par type de
-// frais. Modèle générique : ajouter/renommer une taxe ne demande
-// qu'une nouvelle ligne, jamais une migration.
+// Gestion admin des lignes tarifaires, versionnées par pays et par
+// type de frais.
+//
+// Politique de fonds v2 : la taxe est supprimée et les frais
+// d'agrégateur vivent dans leur propre table (voir
+// fraisAgregateur.controller.js). Il ne reste ici que la COMMISSION
+// APS, prélevée à la libération vers le médecin. Le modèle reste
+// générique (par type_frais) : un futur type = une valeur d'enum.
 //
 // Champs réels du modèle (voir schema.prisma) :
 //   LigneTarifaire { ligne_tarifaire_id, pays_id, type_frais, libelle,
 //     taux, actif, date_debut_validite }
-//   type_frais ∈ { commission, taxe, frais_agregateur }
+//   type_frais ∈ { commission }
 //
 // Réservé à admin/superadmin (voir routes/ligneTarifaire.routes.js) :
 // ces taux engagent directement ce qui est facturé au patient et
@@ -15,7 +19,7 @@
 
 import prisma from "../lib/prisma.js";
 
-const TYPES_FRAIS_VALIDES = ["commission", "taxe", "frais_agregateur"];
+const TYPES_FRAIS_VALIDES = ["commission"];
 
 function tauxValide(valeur) {
   const n = Number(valeur);
