@@ -27,6 +27,7 @@ const STATUTS_RDV = [
   "non_honore",
   "annule",
   "conteste",
+  "a_reprogrammer",
 ];
 
 // Phase 3 — motifs d'annulation (liste fermée, politique de gestion des
@@ -192,11 +193,21 @@ async function annulerRendezVous(req, res, rdv) {
   return res.status(200).json({
     message: "Rendez-vous annulé.",
     rendez_vous: rdvMisAJour,
-    // Montant réellement remboursé (null si le rendez-vous n'avait pas
-    // été payé) et frais d'annulation retenus, recalculés à la volée —
-    // renvoyés pour l'affichage, jamais stockés.
+    // Politique de fonds v2 — renvoyés pour l'affichage, jamais stockés :
+    //   remboursement     : null si rien à rembourser (jamais payé, ou
+    //                       annulation patient < 24h) ; CamPay : statut
+    //                       "a_traiter", montant = brut et montant_estime_net
+    //                       (le net définitif dépend des frais réels du retrait) ;
+    //   versement_medecin : honoraires − commission APS libérés au médecin
+    //                       (annulation patient < 24h), avant amendes ;
+    //   commission_aps    : commission versée à APS ;
+    //   amende            : true si une amende a été enregistrée au médecin.
+    // (`frais_annulation` de l'ancienne politique n'existe plus.)
+    tardif: resultat.tardif,
     remboursement: resultat.remboursement,
-    frais_annulation: resultat.frais_annulation,
+    versement_medecin: resultat.versement_medecin,
+    commission_aps: resultat.commission_aps,
+    amende: resultat.amende,
   });
 }
 
@@ -539,6 +550,7 @@ const TRANSITIONS_AUTORISEES = {
     non_honore: ["conteste"],
     annule: [],
     conteste: [],
+    a_reprogrammer: ["annule"], // point G : annulable, remboursement moins frais et commission APS
   },
   medecin: {
     cree: ["confirme", "annule"],
@@ -548,6 +560,7 @@ const TRANSITIONS_AUTORISEES = {
     non_honore: [],
     annule: [],
     conteste: [],
+    a_reprogrammer: ["annule"], // point G
   },
 };
 
@@ -592,6 +605,17 @@ async function verifierTransitionAutorisee(rdv, utilisateurCourant, nouveauStatu
       status: 400,
       message:
         'Le statut "honore" ne peut pas être posé directement : utilisez POST .../scan-qr (RDV physique), la clôture de la visio, ou POST .../forcer-liberation (admin/superadmin) — ces chemins libèrent aussi les fonds vers le médecin.',
+    };
+  }
+
+  // Politique de fonds v2 §5 : « a_reprogrammer » n'est posé que par le
+  // traitement d'absence (absence.service.js), qui renseigne aussi
+  // a_reprogrammer_le (point de départ des 48h). Forcé à la main, le RDV
+  // n'aurait pas de délai calculable : refusé pour tout le monde.
+  if (nouveauStatut === "a_reprogrammer") {
+    return {
+      status: 400,
+      message: 'Le statut "a_reprogrammer" ne peut pas être posé directement : il résulte du traitement d\'absence (deux absents).',
     };
   }
 

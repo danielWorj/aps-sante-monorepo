@@ -34,6 +34,23 @@ export async function obtenirParametreAmendeActif(pays_id, client = prisma) {
 }
 
 /**
+ * Contrôle amont : lève l'erreur explicite si aucun taux d'amende actif
+ * n'existe pour le pays du médecin. À appeler AVANT tout appel Stripe :
+ * un échec dans la transaction SQL après un remboursement déjà émis
+ * laisserait l'argent rendu sans amende enregistrée.
+ * @param {string} medecin_id
+ * @param {object} [client]
+ */
+export async function exigerParametreAmende(medecin_id, client = prisma) {
+  const medecin = await client.medecin.findUnique({
+    where: { medecin_id },
+    select: { pays_exercice_id: true },
+  });
+  if (!medecin) throw new Error(`Médecin introuvable (${medecin_id}) : amende impossible.`);
+  return obtenirParametreAmendeActif(medecin.pays_exercice_id, client);
+}
+
+/**
  * Crée l'amende d'un médecin pour un RDV fautif (§7). Idempotent sur
  * `rdv_id` : un second appel renvoie l'amende existante sans erreur.
  * `createMany({ skipDuplicates })` (INSERT … ON CONFLICT DO NOTHING) est

@@ -311,3 +311,63 @@ export function imputerAmendes({ creditNet, amendes, decimales = 2 }) {
 
   return { totalImpute: arrondir(credit - capacite, decimales), creditApres: capacite, imputations };
 }
+
+// -----------------------------------------------------------------
+// Étape 5 — compléments purs utilisés par traitementFonds.service.js
+// et absence.service.js.
+// -----------------------------------------------------------------
+
+/** Statuts d'un RDV « actif » (miroir de l'index unique partiel, étape 1). */
+export const STATUTS_RDV_ACTIFS = Object.freeze([
+  "cree",
+  "confirme",
+  "en_attente_presence",
+  "a_reprogrammer",
+]);
+
+/**
+ * §5 — Événement d'absence déduit des FAITS de présence enregistrés
+ * (`medecin_present_le`, `patient_present_le`). Aucun horodatage du tout
+ * => « deux absents » (pas de fautif désigné par défaut). Les deux
+ * présents mais RDV jamais clôturé => `null` : jamais décidé
+ * automatiquement, signalé pour arbitrage admin (forcer-liberation).
+ * @returns {string|null} une valeur de EVENEMENTS, ou null
+ */
+export function determinerEvenementAbsence({ medecin_present_le, patient_present_le }) {
+  const medecin = Boolean(medecin_present_le);
+  const patient = Boolean(patient_present_le);
+  if (medecin && patient) return null;
+  if (medecin) return EVENEMENTS.PATIENT_ABSENT; // seul le médecin est venu
+  if (patient) return EVENEMENTS.MEDECIN_ABSENT; // seul le patient est venu
+  return EVENEMENTS.DEUX_ABSENTS;
+}
+
+/**
+ * Décision pour un RDV SANS escrow (jamais payé) : aucun fonds ne
+ * bouge, mais le statut du RDV et l'amende (point ouvert D : due même
+ * sans escrow) restent décidés ici, une seule fois.
+ * @returns {{ evenement:string, tardif:boolean|null, amende:boolean, statutRdv:string }}
+ */
+export function decisionSansFonds({ evenement, dateCreneau, maintenant }) {
+  switch (evenement) {
+    case EVENEMENTS.ANNULATION_PATIENT: {
+      exigerDates(dateCreneau, maintenant, evenement);
+      return { evenement, tardif: estAnnulationTardive(dateCreneau, maintenant), amende: false, statutRdv: "annule" };
+    }
+    case EVENEMENTS.ANNULATION_MEDECIN: {
+      exigerDates(dateCreneau, maintenant, evenement);
+      const tardif = estAnnulationTardive(dateCreneau, maintenant);
+      return { evenement, tardif, amende: tardif, statutRdv: "annule" };
+    }
+    case EVENEMENTS.MEDECIN_ABSENT:
+      return { evenement, tardif: null, amende: true, statutRdv: "non_honore" };
+    case EVENEMENTS.PATIENT_ABSENT:
+    case EVENEMENTS.DEUX_ABSENTS:
+    case EVENEMENTS.DEUX_ABSENTS_SANS_REPROGRAMMATION:
+      // Sans escrow, rien à séquestrer ni à reprogrammer : défensif (un
+      // RDV n'atteint « confirme » qu'avec un escrow, sauf forçage admin).
+      return { evenement, tardif: null, amende: false, statutRdv: "non_honore" };
+    default:
+      throw new Error(`Événement \"${evenement}\" sans objet pour un rendez-vous non payé.`);
+  }
+}
