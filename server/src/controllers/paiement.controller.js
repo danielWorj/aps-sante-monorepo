@@ -10,9 +10,9 @@ import {
   expirerSessionCheckout,
 } from "../lib/stripeService.js";
 import { decomposerMontant, obtenirLignesTarifairesActives } from "../services/tarification.service.js";
-import { obtenirFraisActifs } from "../services/fraisAgregateur.service.js";
+import { obtenirFraisActifs, calculerFrais } from "../services/fraisAgregateur.service.js";
 import { creerTransactionSansDoublon, invaliderCheckoutsOuverts, PaiementDejaExistantError } from "../services/antiDoublePaiement.service.js";
-import { decimalesPourMontant } from "../utils/montants.js";
+import { decimalesPourMontant, arrondir } from "../utils/montants.js";
 import { finaliserPaiement } from "../services/finalisationPaiement.service.js";
 import { synchroniserCampayPourRdv, derniereTentativeCampay } from "../services/paiementCampay.service.js";
 
@@ -141,6 +141,23 @@ export function creerTransactionEnAttente(ctx, extra = {}) {
 export function repondreSiPaiementExistant(err, res) {
   if (!(err instanceof PaiementDejaExistantError)) return false;
   res.status(409).json({ message: err.message });
+  return true;
+}
+
+/**
+ * Barème non saisi par l'admin (frais d'agrégateur ou commission APS du
+ * pays du médecin, voir fraisAgregateur / tarification) : 503 avec un
+ * message clair pour le patient, détail technique dans les logs.
+ * Sans cela le gestionnaire global renverrait un 500 « Erreur interne »
+ * opaque. Renvoie true si l'erreur a été traitée.
+ */
+const BAREME_ABSENT = /^(Aucune ligne|Ligne de commission manquante)/;
+export function repondreSiBaremeAbsent(err, res) {
+  if (!BAREME_ABSENT.test(err?.message ?? "")) return false;
+  console.error("[paiement] Barème non configuré :", err.message);
+  res.status(503).json({
+    message: "Le paiement par ce moyen n'est pas encore disponible. Veuillez réessayer plus tard ou contacter l'assistance.",
+  });
   return true;
 }
 
@@ -478,5 +495,47 @@ export async function traiterWebhookStripe(req, res) {
   } catch (err) {
     console.error("[paiement] Erreur traitement webhook :", err);
     return res.status(500).json({ message: "Erreur de traitement du webhook." }); // Stripe réessaiera
+  }
+}
+
+// GET /api/paiement/rendez-vous/:id/devis?agregateur=stripe|campay
+// Politique de fonds v2 §1 — devis AVANT paiement : honoraires + frais
+// d'envoi de l'agrégateur choisi = total. Réutilise verifierRdvPayable :
+// mêmes contrôles que le paiement (404, 403 si le RDV n'est pas celui du
+// patient, 409 si déjà payé/annulé, 400 sans tarif), même calcul, AUCUNE
+// écriture en base (pas de transaction créée). Le total renvoyé est celui
+// qui serait débité (CamPay : déjà arrondi à l'unité XAF).
+// La commission APS (prélevée sur le médecin à la libération) n'est
+// volontairement PAS exposée au patient.
+// `remboursement_estime` = honoraires − frais de remboursement (§2),
+// plancher 0, arrondi comme decider() (politiqueFonds) ; indicatif pour
+// CamPay (frais réels connus à la clôture du retrait).
+export async function obtenirDevisPaiementRdv(req, res, next) {
+  try {
+    const agregateur = req.query.agregateur;
+    if (agregateur !== "stripe" && agregateur !== "campay") {
+      return res.status(400).json({ message: "agregateur invalide. Valeurs acceptées : stripe, campay." });
+    }
+
+    const ctx = await verifierRdvPayable(req, res, agregateur); // répond seul en cas de refus
+    if (!ctx) return;
+
+    const { honoraires, devise, decomposition, fraisActifs } = ctx;
+    const decimales = decimalesPourMontant({ fournisseur: agregateur, devise });
+    const fraisRemboursement = calculerFrais(honoraires, fraisActifs.remboursement, decimales);
+    const remboursementEstime = Math.max(0, arrondir(decomposition.honoraires - fraisRemboursement, decimales));
+
+    return res.status(200).json({
+      agregateur,
+      devise,
+      honoraires: decomposition.honoraires,
+      frais_envoi: decomposition.fraisEnvoi,
+      total: decomposition.total,
+      remboursement_estime: remboursementEstime,
+      remboursement_indicatif: agregateur === "campay",
+    });
+  } catch (err) {
+    if (repondreSiBaremeAbsent(err, res)) return;
+    next(err);
   }
 }
