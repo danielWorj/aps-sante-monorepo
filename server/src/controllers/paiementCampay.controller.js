@@ -1,6 +1,6 @@
 // src/controllers/paiementCampay.controller.js
 import prisma from "../lib/prisma.js";
-import { verifierRdvPayable } from "./paiement.controller.js";
+import { verifierRdvPayable, creerTransactionEnAttente, repondreSiPaiementExistant } from "./paiement.controller.js";
 import {
   CampayError, DEVISE_CAMPAY, initierCollecte, normaliserNumeroCM, signatureCallbackValide,
 } from "../lib/campayService.js";
@@ -14,9 +14,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // POST /api/paiement/rendez-vous/:id/paiement-campay   body: { numero }
 export async function creerPaiementCampayRdv(req, res, next) {
   try {
-    const ctx = await verifierRdvPayable(req, res); // 404/403/409/400 déjà gérés
+    const ctx = await verifierRdvPayable(req, res, "campay"); // 404/403/409/400 déjà gérés
     if (!ctx) return;
-    const { rdv, patient, honoraires, lignesTarifaires, montant } = ctx;
+    const { rdv, patient, montant } = ctx;
 
     const numero = normaliserNumeroCM(req.body?.numero ?? patient.utilisateur.telephone);
     const montantXaf = Math.round(Number(montant)); // CamPay refuse les décimales (ER201)
@@ -41,19 +41,14 @@ export async function creerPaiementCampayRdv(req, res, next) {
       });
     }
 
-    const transaction = await prisma.transactionPaiement.create({
-      data: {
-        montant: montantXaf, // le montant arrondi EST le montant réellement débité
-        devise: DEVISE_CAMPAY.toLowerCase(),
-        statut: "en_attente",
-        fournisseur: "campay",
-        rdv_id_cible: rdv.rdv_id,
-        numero_payeur: numero,
-        montant_honoraires: honoraires,
-        ligne_commission_id: lignesTarifaires.commission.ligne_tarifaire_id,
-        ligne_taxe_id: lignesTarifaires.taxe.ligne_tarifaire_id,
-        ligne_frais_agregateur_id: lignesTarifaires.frais_agregateur.ligne_tarifaire_id,
-      },
+    // §6 : contrôle anti double paiement + création sous verrou de créneau
+    // (409 si un paiement existe déjà). Total = honoraires + frais d'envoi
+    // CamPay, déjà arrondi à l'unité (XAF) par verifierRdvPayable.
+    const transaction = await creerTransactionEnAttente(ctx, {
+      montant: montantXaf, // le montant arrondi EST le montant réellement débité
+      devise: DEVISE_CAMPAY.toLowerCase(),
+      fournisseur: "campay",
+      numero_payeur: numero,
     });
 
     let collecte;
@@ -93,6 +88,7 @@ export async function creerPaiementCampayRdv(req, res, next) {
       operateur: collecte.operator ?? null,
     });
   } catch (err) {
+    if (repondreSiPaiementExistant(err, res)) return;
     if (err instanceof CampayError) {
       console.error("[campay] collecte refusée :", err.code, err.payload);
       return res.status(err.status >= 500 ? 502 : 400).json({ message: err.message, code: err.code });
