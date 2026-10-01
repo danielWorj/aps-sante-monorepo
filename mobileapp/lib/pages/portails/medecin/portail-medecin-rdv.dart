@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../components/components.dart';
+import '../../../components/dialogs/avertissement_annulation.dart';
 import '../../../components/dialogs/dialogue_motif_annulation.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/authentification_models.dart';
 import '../../../models/rendez_vous_models.dart';
+import '../../../repositories/paiement_repository.dart';
 import '../../../repositories/rendez_vous_repository.dart' show ApiException;
+import '../../../utils/fonds.dart';
 import '../teleconsultation_screen.dart';
 
 /// ============================================================
@@ -751,7 +754,11 @@ class _PendingRdvActionsState extends ConsumerState<_PendingRdvActions> {
         // Refuser = annuler : le backend exige un motif_annulation (400
         // sinon), donc on le demande avant tout appel réseau.
         ChoixAnnulation? choixAnnulation;
-        if (nouveauStatut == StatutRendezVous.annule) {
+        final estAnnulation = nouveauStatut == StatutRendezVous.annule;
+        if (estAnnulation) {
+            // appelAuthentifie rafraîchit le token s'il a expiré.
+            final executer =
+                ref.read(sessionControllerProvider.notifier).appelAuthentifie;
             choixAnnulation = await demanderMotifAnnulation(
                 context,
                 titre: 'Refuser ce rendez-vous ?',
@@ -759,29 +766,54 @@ class _PendingRdvActionsState extends ConsumerState<_PendingRdvActions> {
                     'informé. Cette action est irréversible.',
                 labelConfirmer: 'Refuser',
                 motifs: MotifAnnulation.pourMedecin,
+                // Conséquence financière indicative ; son échec ne bloque pas
+                // le refus (le serveur tranche).
+                avertissement: AvertissementAnnulation(
+                    rdv: widget.rdv,
+                    role: RoleAnnulation.medecin,
+                    chargerPaiement: () => executer(
+                        (jeton) => PaiementRepository().obtenirStatut(
+                            rdvId: widget.rdv.rdvId,
+                            token: jeton,
+                        ),
+                    ),
+                ),
             );
             if (choixAnnulation == null || !mounted) return;
         }
 
         setState(() => _enCours = true);
         try {
-            await ref.read(actionsRendezVousControllerProvider.notifier).changerStatut(
-                widget.rdv.rdvId,
-                payload: ChangerStatutRendezVousPayload(
-                    statut: nouveauStatut,
-                    motifAnnulation: choixAnnulation?.motif,
-                    commentaireAnnulation: choixAnnulation?.commentaire,
-                ),
-                token: token,
+            final actions = ref.read(actionsRendezVousControllerProvider.notifier);
+            final payload = ChangerStatutRendezVousPayload(
+                statut: nouveauStatut,
+                motifAnnulation: choixAnnulation?.motif,
+                commentaireAnnulation: choixAnnulation?.commentaire,
             );
+            // Refus = annulation : on affiche le résultat RÉEL du serveur
+            // (remboursement du patient, amende éventuelle).
+            String texte = 'Rendez-vous confirmé.';
+            if (estAnnulation) {
+                final resultat = await actions.annuler(
+                    widget.rdv.rdvId,
+                    payload: payload,
+                    token: token,
+                );
+                texte = resumerAnnulation(resultat, RoleAnnulation.medecin);
+            } else {
+                await actions.changerStatut(
+                    widget.rdv.rdvId,
+                    payload: payload,
+                    token: token,
+                );
+            }
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                    content: Text(
-                        nouveauStatut == StatutRendezVous.confirme
-                            ? 'Rendez-vous confirmé.'
-                            : 'Rendez-vous refusé.',
-                    ),
+                    content: Text(texte),
+                    duration: estAnnulation
+                        ? const Duration(seconds: 9)
+                        : const Duration(seconds: 4),
                 ),
             );
             // Seule la confirmation fait basculer vers "Confirmé" — un
