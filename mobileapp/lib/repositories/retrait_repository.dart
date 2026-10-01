@@ -11,6 +11,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../models/rendez_vous_models.dart' show PortefeuilleMedecin;
 import '../utils/endpoint.dart';
 import 'rendez_vous_repository.dart' show ApiException;
 
@@ -195,6 +196,26 @@ class RetraitRepository {
       throw const ApiException('Réponse de portefeuille invalide.');
     }
     return PortefeuilleRetraits.fromJson(corps);
+  }
+
+  /// GET /medecins/:id/portefeuille — mouvements du grand-livre (50 maximum) et
+  /// amendes en attente (politique de fonds v2).
+  ///
+  /// /retraits ne renvoie NI mouvements NI amendes : c'est un second appel, que
+  /// l'appelant isole du premier (son échec ne doit pas invalider solde et retraits).
+  Future<PortefeuilleMedecin> obtenirPortefeuille({
+    required String medecinId,
+    required String token,
+  }) async {
+    final r = await http
+        .get(Uri.parse(ApiRealEndpoints.portefeuilleMedecin(medecinId)),
+            headers: _entetes(token))
+        .timeout(_timeout);
+    final corps = _decoder(r);
+    if (corps is! Map<String, dynamic>) {
+      throw const ApiException('Réponse de portefeuille invalide.');
+    }
+    return PortefeuilleMedecin.fromJson(corps);
   }
 
   /// POST /medecins/:id/retraits — crée la demande et réserve le montant.
