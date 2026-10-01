@@ -254,6 +254,35 @@ class ActionsRendezVousController extends AsyncNotifier<void> {
     }
   }
 
+  /// Annulation avec résultat financier complet (politique de fonds v2).
+  ///
+  /// À utiliser à la place de [changerStatut] pour toute annulation :
+  /// renvoie le [ResultatAnnulation] décidé par le serveur, à résumer avec
+  /// `resumerAnnulation` (utils/fonds.dart). Lève [ApiException] avec le
+  /// message du serveur en cas d'échec ; la liste des RDV est invalidée
+  /// seulement en cas de succès.
+  Future<ResultatAnnulation> annuler(
+      String id, {
+        required ChangerStatutRendezVousPayload payload,
+        required String token,
+      }) async {
+    state = const AsyncLoading<void>().copyWithPrevious(state);
+    try {
+      final resultat =
+          await ref.read(rendezVousRepositoryProvider).annulerRendezVous(
+        id: id,
+        payload: payload,
+        token: token,
+      );
+      state = const AsyncData(null);
+      ref.invalidate(listeRendezVousControllerProvider);
+      return resultat;
+    } catch (e, pile) {
+      state = AsyncError<void>(e, pile);
+      rethrow;
+    }
+  }
+
   /// Suppression physique, réservée admin/superadmin côté backend.
   /// Lève une [ApiException] (statusCode 409) si une ordonnance est
   /// encore rattachée à ce rendez-vous.

@@ -260,6 +260,39 @@ class RendezVousRepository {
     return RendezVous.fromJson(donnees['rendez_vous'] as Map<String, dynamic>);
   }
 
+  /// PATCH /rendez-vous/:id/statut avec `statut: annule`.
+  ///
+  /// Politique de fonds v2 : la réponse porte le résultat financier
+  /// décidé par le serveur (`tardif`, `remboursement`, `versement_medecin`,
+  /// `commission_aps`, `amende`), que [changerStatutRendezVous] perd. Le
+  /// client n'envoie ni montant ni décision : seulement le motif.
+  /// Le RDV imbriqué est parsé de façon tolérante ([ResultatAnnulation]) :
+  /// une annulation déjà effectuée côté serveur ne doit jamais apparaître
+  /// comme un échec à cause d'un champ illisible.
+  ///
+  /// Lève [ApiException] (403 transition interdite, 400 motif manquant ou
+  /// statut déjà annulé, etc.) avec le message du serveur.
+  Future<ResultatAnnulation> annulerRendezVous({
+    required String id,
+    required ChangerStatutRendezVousPayload payload,
+    required String token,
+  }) async {
+    assert(
+      payload.statut == StatutRendezVous.annule,
+      'annulerRendezVous ne sert qu\'à annuler.',
+    );
+    final donnees = await _patch(
+      ApiRealEndpoints.statutRendezVous(id),
+      body: payload.toJson(),
+      token: token,
+    );
+    if (donnees is! Map<String, dynamic>) {
+      // 2xx sans corps exploitable : l'annulation a eu lieu, résultat inconnu.
+      return const ResultatAnnulation();
+    }
+    return ResultatAnnulation.fromJson(donnees);
+  }
+
   /// DELETE /rendez-vous/:id
   /// Réservé à admin/superadmin côté backend — un rendez-vous s'annule
   /// via [changerStatutRendezVous]/[modifierRendezVous] (statut

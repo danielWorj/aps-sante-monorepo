@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../components/buttons/bouton_payer_rdv.dart';
 import '../../../components/components.dart';
+import '../../../components/dialogs/avertissement_annulation.dart';
 import '../../../components/dialogs/dialogue_motif_annulation.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/authentification_models.dart';
 import '../../../models/rendez_vous_models.dart';
+import '../../../repositories/paiement_repository.dart';
+import '../../../utils/fonds.dart';
 import '../teleconsultation_screen.dart';
 
 /// ============================================================
@@ -1160,12 +1163,25 @@ Future<void> _executerActionRdv({
   final estAnnulation = nouveauStatut == StatutRendezVous.annule;
   ChoixAnnulation? choixAnnulation;
   if (estAnnulation) {
+    // Conséquence financière indicative AVANT confirmation. La lecture du
+    // statut de paiement passe par appelAuthentifie (refresh du token si
+    // expiré) ; son échec n'affiche rien et ne bloque pas l'annulation.
+    final executer =
+        ref.read(sessionControllerProvider.notifier).appelAuthentifie;
     choixAnnulation = await demanderMotifAnnulation(
       context,
       titre: titreDialogue,
       message: messageDialogue,
       labelConfirmer: labelConfirmer,
       motifs: MotifAnnulation.pourPatient,
+      avertissement: AvertissementAnnulation(
+        rdv: rdv,
+        role: RoleAnnulation.patient,
+        chargerPaiement: () => executer(
+          (token) => PaiementRepository()
+              .obtenirStatut(rdvId: rdv.rdvId, token: token),
+        ),
+      ),
     );
     if (choixAnnulation == null) return;
   } else {
@@ -1194,18 +1210,31 @@ Future<void> _executerActionRdv({
   if (token == null) return;
 
   try {
-    await ref.read(actionsRendezVousControllerProvider.notifier).changerStatut(
-      rdv.rdvId,
-      payload: ChangerStatutRendezVousPayload(
-        statut: nouveauStatut,
-        motifAnnulation: choixAnnulation?.motif,
-        commentaireAnnulation: choixAnnulation?.commentaire,
-      ),
-      token: token,
+    final actions = ref.read(actionsRendezVousControllerProvider.notifier);
+    final payload = ChangerStatutRendezVousPayload(
+      statut: nouveauStatut,
+      motifAnnulation: choixAnnulation?.motif,
+      commentaireAnnulation: choixAnnulation?.commentaire,
     );
+    // Annulation : on affiche le résultat RÉEL décidé par le serveur
+    // (remboursement, Mobile Money à traiter…) plutôt qu'un message fixe.
+    String texteSucces = messageSucces;
+    if (estAnnulation) {
+      final resultat =
+          await actions.annuler(rdv.rdvId, payload: payload, token: token);
+      texteSucces = resumerAnnulation(resultat, RoleAnnulation.patient);
+    } else {
+      await actions.changerStatut(rdv.rdvId, payload: payload, token: token);
+    }
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(messageSucces)),
+        SnackBar(
+          content: Text(texteSucces),
+          // Résumé financier plus long qu'un simple accusé : ~9 s.
+          duration: estAnnulation
+              ? const Duration(seconds: 9)
+              : const Duration(seconds: 4),
+        ),
       );
     }
   } catch (e) {

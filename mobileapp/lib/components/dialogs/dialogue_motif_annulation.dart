@@ -8,6 +8,11 @@
 // le traitement financier. Cette boîte est donc le seul chemin d'UI qui
 // doit précéder un [ChangerStatutRendezVousPayload] à l'état `annule`.
 //
+// Politique de fonds v2 : un widget [avertissement] optionnel (voir
+// avertissement_annulation.dart) est affiché AVANT le choix du motif, pour
+// indiquer la conséquence financière indicative. Il n'est jamais bloquant :
+// c'est le serveur qui applique la règle.
+//
 // Volontairement NON exportée par components.dart : elle dépend de
 // l'enum [MotifAnnulation] (couche modèles), comme bouton_payer_rdv.dart.
 
@@ -34,6 +39,7 @@ Future<ChoixAnnulation?> demanderMotifAnnulation(
   required String message,
   required String labelConfirmer,
   required List<MotifAnnulation> motifs,
+  Widget? avertissement,
 }) {
   return showDialog<ChoixAnnulation>(
     context: context,
@@ -42,6 +48,7 @@ Future<ChoixAnnulation?> demanderMotifAnnulation(
       message: message,
       labelConfirmer: labelConfirmer,
       motifs: motifs,
+      avertissement: avertissement,
     ),
   );
 }
@@ -52,12 +59,16 @@ class _DialogueMotifAnnulation extends StatefulWidget {
     required this.message,
     required this.labelConfirmer,
     required this.motifs,
+    this.avertissement,
   });
 
   final String titre;
   final String message;
   final String labelConfirmer;
   final List<MotifAnnulation> motifs;
+
+  /// Conséquence financière indicative, affichée sous le message.
+  final Widget? avertissement;
 
   @override
   State<_DialogueMotifAnnulation> createState() =>
@@ -96,6 +107,10 @@ class _DialogueMotifAnnulationState extends State<_DialogueMotifAnnulation> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(widget.message),
+            if (widget.avertissement != null) ...[
+              const SizedBox(height: 12),
+              widget.avertissement!,
+            ],
             const SizedBox(height: 16),
             const Text(
               'Motif de l\'annulation *',
