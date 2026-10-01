@@ -4,8 +4,15 @@
 // de paiement :
 //   - Carte bancaire : PaymentSheet Stripe native ([_payer]) ;
 //   - Mobile Money   : modale CamPay (dialogue_paiement_mobile_money.dart).
+// Avant le choix, le patient voit le devis de chaque moyen (total,
+// honoraires, frais d'envoi, remboursement estimé) ; un moyen dont le
+// barème n'est pas saisi (503) y est grisé.
 // Dans les deux cas, [onPaye] n'est appelé qu'une fois le paiement
 // confirmé par le SERVEUR (webhook), jamais sur la seule foi du client.
+// À la confirmation, la décomposition renvoyée par le serveur
+// (`paiement.decomposition`, absente des anciennes transactions) est
+// affichée dans une SnackBar : le bouton lui-même disparaît dès que
+// l'appelant passe le RDV à « payé ».
 // Réutilisable : écran de confirmation après réservation, et onglet
 // « À payer » du portail patient (rattrapage d'un paiement annulé).
 //
@@ -17,6 +24,7 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/paiement_controller.dart';
 import '../../repositories/paiement_repository.dart';
+import '../../utils/fonds.dart';
 import '../dialogs/dialogue_choix_moyen_paiement.dart';
 import '../dialogs/dialogue_paiement_mobile_money.dart';
 import '../style/colors.dart';
@@ -73,7 +81,12 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
 
   /// Clic sur « Payer » : le patient choisit d'abord son moyen de paiement.
   Future<void> _choisirMoyen() async {
-    final moyen = await demanderMoyenPaiement(context);
+    final moyen = await demanderMoyenPaiement(
+      context,
+      rdvId: widget.rdvId,
+      executer: widget.executer,
+      repository: _repo,
+    );
     if (!mounted || moyen == null) return;
     switch (moyen) {
       case MoyenPaiement.carte:
@@ -106,6 +119,10 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
           _paiementEffectueEnAttente = false;
           _message = null;
         });
+        // La modale n'expose pas le statut : on relit le détail (échec
+        // silencieux, il ne doit jamais retarder ni bloquer la confirmation).
+        final detail = await _lireStatutSansEchec();
+        _annoncerConfirmation(detail);
         widget.onPaye?.call();
       case ResultatMobileMoney.enAttente:
         // Demande envoyée mais pas encore confirmée : le patient peut
@@ -177,6 +194,7 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
           _paiementEffectueEnAttente = false;
           _message = null;
         });
+        _annoncerConfirmation(statut);
         widget.onPaye?.call();
         return;
       }
@@ -194,6 +212,36 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
         _messageEstErreur = true;
       });
     }
+  }
+
+  /// Relit GET …/paiement pour récupérer la décomposition ; `null` en cas
+  /// d'échec (le paiement est déjà confirmé, ce détail est facultatif).
+  Future<StatutPaiementRdv?> _lireStatutSansEchec() async {
+    try {
+      return await widget.executer(
+        (token) => _repo.obtenirStatut(rdvId: widget.rdvId, token: token),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Affiche, une fois le paiement confirmé par le serveur, le détail
+  /// « honoraires + frais d'envoi » — comme PaiementSucces.jsx. Rien n'est
+  /// affiché si le serveur n'a pas de décomposition (ancienne transaction).
+  void _annoncerConfirmation(StatutPaiementRdv? statut) {
+    final d = statut?.decomposition;
+    if (d == null || !mounted) return;
+    final devise = statut?.devise;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Text(
+          'Paiement confirmé : honoraires ${montantDevise(d.honoraires, devise)}'
+          ' + frais d’envoi ${montantDevise(d.fraisEnvoi, devise)}.',
+        ),
+      ),
+    );
   }
 
   /// Détecte un refus « rendez-vous annulé » : soit levé par le polling
