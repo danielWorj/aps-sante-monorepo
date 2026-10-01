@@ -75,7 +75,7 @@ class ApiException implements Exception {
 /// [PatientRepository.listerRendezVousPatient] — même liste que
 /// STATUTS_RDV dans patient.controller.js (voir StatutRendezVous dans
 /// patient_models.dart, qui porte la même énumération côté modèle).
-const List<StatutRendezVous> _statutsRdvValides = StatutRendezVous.values;
+const List<StatutRendezVous> _statutsRdvValides = StatutRendezVous.filtrables;
 
 class PatientRepository {
   static const Duration _timeout = Duration(seconds: 10);
@@ -188,7 +188,7 @@ class PatientRepository {
     final donnees = await _get(
       ApiRealEndpoints.rendezVousPatient(id),
       token: token,
-      query: statut != null ? {'statut': statut.toJson()} : null,
+      query: statut != null ? {'statut': statut.toApi()} : null,
     );
     final liste = (donnees is Map && donnees['rendez_vous'] is List)
         ? donnees['rendez_vous'] as List<dynamic>

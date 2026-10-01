@@ -31,6 +31,26 @@ T? _lire<T>(Map<String, dynamic> json, String cle) {
   return null;
 }
 
+/// Lit un nombre qui peut arriver sous forme de nombre OU de chaîne :
+/// Prisma sérialise les `Decimal` (ex. `montant` d'un mouvement de
+/// portefeuille, `taux_applique` d'une amende) en chaîne JSON.
+double? lireNombre(Object? valeur) {
+  if (valeur is num) return valeur.toDouble();
+  if (valeur is String) return double.tryParse(valeur.trim());
+  return null;
+}
+
+/// Lit une date ISO 8601 absente, nulle ou invalide sans lever d'erreur.
+DateTime? _lireDate(Map<String, dynamic> json, String cle) {
+  final valeur = json[cle];
+  return valeur is String ? DateTime.tryParse(valeur) : null;
+}
+
+/// Délai laissé aux deux parties pour convenir d'une nouvelle date une
+/// fois le rendez-vous passé en `a_reprogrammer` (politique de fonds v2).
+/// Affichage uniquement : le serveur reste seul juge de l'échéance.
+const Duration delaiReprogrammation = Duration(hours: 48);
+
 /// Miroir de l'enum Prisma `TypeRdv`.
 enum TypeRdv {
   physique,
@@ -49,21 +69,51 @@ enum TypeRdv {
 /// Miroir de l'enum Prisma `StatutRendezVous`.
 /// Ordre identique à STATUTS_RDV côté contrôleur (cycle de vie, du dépôt
 /// initial jusqu'à l'issue ou la contestation).
+///
+/// [aReprogrammer] : les deux parties étaient absentes, elles ont 48 h
+/// pour convenir d'une nouvelle date (politique de fonds v2).
+///
+/// [inconnu] : statut renvoyé par le serveur mais pas encore connu de
+/// l'application. Il ne doit JAMAIS être traité comme `cree` (un RDV
+/// non reconnu afficherait « en attente de paiement » avec le bouton
+/// Payer). La valeur brute reste lisible via `RendezVous.statutBrut`.
+/// Les écrans l'affichent avec un libellé neutre, sans action
+/// financière.
 enum StatutRendezVous {
   cree,
   confirme,
   enAttentePresence,
+  aReprogrammer,
   honore,
   nonHonore,
   annule,
-  conteste;
+  conteste,
+  inconnu;
+
+  /// Statuts acceptés par le serveur pour un filtre de liste (voir
+  /// STATUTS_RDV dans patient.controller.js : `a_reprogrammer` n'y figure
+  /// pas encore, un filtre dessus répondrait 400) — [inconnu] n'a de
+  /// sens que côté lecture.
+  static const List<StatutRendezVous> filtrables = [
+    cree,
+    confirme,
+    enAttentePresence,
+    honore,
+    nonHonore,
+    annule,
+    conteste,
+  ];
 
   static StatutRendezVous fromApi(String? valeur) {
     switch (valeur) {
+      case 'cree':
+        return StatutRendezVous.cree;
       case 'confirme':
         return StatutRendezVous.confirme;
       case 'en_attente_presence':
         return StatutRendezVous.enAttentePresence;
+      case 'a_reprogrammer':
+        return StatutRendezVous.aReprogrammer;
       case 'honore':
         return StatutRendezVous.honore;
       case 'non_honore':
@@ -72,12 +122,14 @@ enum StatutRendezVous {
         return StatutRendezVous.annule;
       case 'conteste':
         return StatutRendezVous.conteste;
-      case 'cree':
       default:
-        return StatutRendezVous.cree;
+        // Absent ou non reconnu : jamais `cree` par défaut.
+        return StatutRendezVous.inconnu;
     }
   }
 
+  /// Valeur envoyée à l'API. Lève une [StateError] pour [inconnu] : ce
+  /// statut n'existe que côté lecture et ne doit jamais être émis.
   String toApi() {
     switch (this) {
       case StatutRendezVous.cree:
@@ -86,6 +138,8 @@ enum StatutRendezVous {
         return 'confirme';
       case StatutRendezVous.enAttentePresence:
         return 'en_attente_presence';
+      case StatutRendezVous.aReprogrammer:
+        return 'a_reprogrammer';
       case StatutRendezVous.honore:
         return 'honore';
       case StatutRendezVous.nonHonore:
@@ -94,8 +148,28 @@ enum StatutRendezVous {
         return 'annule';
       case StatutRendezVous.conteste:
         return 'conteste';
+      case StatutRendezVous.inconnu:
+        throw StateError(
+          "Le statut « inconnu » ne peut pas être envoyé à l'API.",
+        );
     }
   }
+}
+
+/// Partie du rendez-vous à l'origine d'une proposition de
+/// reprogrammation — miroir de l'enum Prisma `PartieRendezVous`.
+enum PartieRendezVous {
+  patient,
+  medecin;
+
+  static PartieRendezVous? fromApi(String? valeur) {
+    for (final p in PartieRendezVous.values) {
+      if (p.name == valeur) return p;
+    }
+    return null;
+  }
+
+  String toApi() => name;
 }
 
 /// ─────────────────────────────────────────────────────────────────
@@ -186,7 +260,20 @@ class PatientRdvRef {
 /// l'accueil (scan/QR) : générés côté serveur à la création, jamais
 /// saisis par le client — [qrTokenSecret] est donc à traiter comme une
 /// donnée sensible côté app (ne jamais l'afficher en clair à l'écran,
-/// ne l'utiliser que pour générer/vérifier le QR).
+/// ne l'utiliser que pour générer/vérifier le QR). Il est NULLABLE : les
+/// réponses de reprogrammation (proposer/accepter) renvoient le
+/// rendez-vous sans ce champ (voir sansSecret côté serveur).
+///
+/// Politique de fonds v2 — reprogrammation « deux absents » :
+///   - [aReprogrammerLe]       : date de passage au statut `a_reprogrammer`
+///                               (départ du délai de 48 h, jamais prolongé) ;
+///   - [nouvelleDateProposee]  : proposition en cours (une nouvelle
+///                               proposition remplace la précédente) ;
+///   - [proposeePar]           : partie qui a proposé (l'autre doit accepter) ;
+///   - [dateProposition]       : date de la proposition.
+///
+/// [statutBrut] conserve la valeur reçue du serveur, utile quand
+/// [statut] vaut [StatutRendezVous.inconnu].
 class RendezVous {
   final String rdvId;
   final String patientId;
@@ -195,9 +282,15 @@ class RendezVous {
   final TypeRdv typeRdv;
   final DateTime dateCreneau;
   final StatutRendezVous statut;
+  final String? statutBrut;
   final String? motif;
   final String codeUnique;
-  final String qrTokenSecret;
+  final String? qrTokenSecret;
+
+  final DateTime? aReprogrammerLe;
+  final DateTime? nouvelleDateProposee;
+  final PartieRendezVous? proposeePar;
+  final DateTime? dateProposition;
 
   final MedecinRdvRef? medecin;
   final PatientRdvRef? patient;
@@ -210,12 +303,28 @@ class RendezVous {
     required this.typeRdv,
     required this.dateCreneau,
     required this.statut,
+    this.statutBrut,
     this.motif,
     required this.codeUnique,
-    required this.qrTokenSecret,
+    this.qrTokenSecret,
+    this.aReprogrammerLe,
+    this.nouvelleDateProposee,
+    this.proposeePar,
+    this.dateProposition,
     this.medecin,
     this.patient,
   });
+
+  bool get estAReprogrammer => statut == StatutRendezVous.aReprogrammer;
+  bool get estStatutConnu => statut != StatutRendezVous.inconnu;
+
+  /// Échéance de la reprogrammation : passage à `a_reprogrammer` + 48 h
+  /// (le délai ne se prolonge jamais). `null` hors de ce statut ou si le
+  /// serveur n'a pas renvoyé [aReprogrammerLe]. Affichage uniquement.
+  DateTime? get echeanceReprogrammation => aReprogrammerLe?.add(delaiReprogrammation);
+
+  /// Une proposition de nouvelle date est en cours.
+  bool get aUneProposition => nouvelleDateProposee != null && proposeePar != null;
 
   bool get estAnnule => statut == StatutRendezVous.annule;
   bool get estConteste => statut == StatutRendezVous.conteste;
@@ -229,10 +338,15 @@ class RendezVous {
       structureId: _lire<String>(json, 'structure_id'),
       typeRdv: TypeRdv.fromApi(json['type_rdv'] as String?),
       dateCreneau: DateTime.parse(json['date_creneau'] as String),
-      statut: StatutRendezVous.fromApi(json['statut'] as String?),
+      statut: StatutRendezVous.fromApi(_lire<String>(json, 'statut')),
+      statutBrut: _lire<String>(json, 'statut'),
       motif: _lire<String>(json, 'motif'),
       codeUnique: json['code_unique'] as String,
-      qrTokenSecret: json['qr_token_secret'] as String,
+      qrTokenSecret: _lire<String>(json, 'qr_token_secret'),
+      aReprogrammerLe: _lireDate(json, 'a_reprogrammer_le'),
+      nouvelleDateProposee: _lireDate(json, 'nouvelle_date_proposee'),
+      proposeePar: PartieRendezVous.fromApi(_lire<String>(json, 'proposee_par')),
+      dateProposition: _lireDate(json, 'date_proposition'),
       medecin: json['medecin'] is Map<String, dynamic>
           ? MedecinRdvRef.fromJson(json['medecin'] as Map<String, dynamic>)
           : null,
@@ -249,10 +363,17 @@ class RendezVous {
     'structure_id': structureId,
     'type_rdv': typeRdv.toApi(),
     'date_creneau': dateCreneau.toIso8601String(),
-    'statut': statut.toApi(),
+    'statut': statutBrut ?? statut.toApi(),
     'motif': motif,
     'code_unique': codeUnique,
-    'qr_token_secret': qrTokenSecret,
+    if (qrTokenSecret != null) 'qr_token_secret': qrTokenSecret,
+    if (aReprogrammerLe != null)
+      'a_reprogrammer_le': aReprogrammerLe!.toIso8601String(),
+    if (nouvelleDateProposee != null)
+      'nouvelle_date_proposee': nouvelleDateProposee!.toIso8601String(),
+    if (proposeePar != null) 'proposee_par': proposeePar!.toApi(),
+    if (dateProposition != null)
+      'date_proposition': dateProposition!.toIso8601String(),
     if (medecin != null) 'medecin': medecin!.toJson(),
     if (patient != null) 'patient': patient!.toJson(),
   };
@@ -265,9 +386,14 @@ class RendezVous {
     TypeRdv? typeRdv,
     DateTime? dateCreneau,
     StatutRendezVous? statut,
+    String? statutBrut,
     String? motif,
     String? codeUnique,
     String? qrTokenSecret,
+    DateTime? aReprogrammerLe,
+    DateTime? nouvelleDateProposee,
+    PartieRendezVous? proposeePar,
+    DateTime? dateProposition,
     MedecinRdvRef? medecin,
     PatientRdvRef? patient,
   }) {
@@ -279,16 +405,23 @@ class RendezVous {
       typeRdv: typeRdv ?? this.typeRdv,
       dateCreneau: dateCreneau ?? this.dateCreneau,
       statut: statut ?? this.statut,
+      // Un statut explicitement remplacé invalide la valeur brute reçue.
+      statutBrut: statutBrut ?? (statut != null ? null : this.statutBrut),
       motif: motif ?? this.motif,
       codeUnique: codeUnique ?? this.codeUnique,
       qrTokenSecret: qrTokenSecret ?? this.qrTokenSecret,
+      aReprogrammerLe: aReprogrammerLe ?? this.aReprogrammerLe,
+      nouvelleDateProposee: nouvelleDateProposee ?? this.nouvelleDateProposee,
+      proposeePar: proposeePar ?? this.proposeePar,
+      dateProposition: dateProposition ?? this.dateProposition,
       medecin: medecin ?? this.medecin,
       patient: patient ?? this.patient,
     );
   }
 
   @override
-  String toString() => 'RendezVous($rdvId, ${statut.toApi()}, $dateCreneau)';
+  String toString() =>
+      'RendezVous($rdvId, ${statutBrut ?? statut.name}, $dateCreneau)';
 
   @override
   bool operator ==(Object other) =>
@@ -663,4 +796,344 @@ class ModifierOrdonnancePayload {
     if (contenu != null) 'contenu': contenu,
     if (paysEmissionId != null) 'pays_emission_id': paysEmissionId,
   };
+}
+
+/// ─────────────────────────────────────────────────────────────────
+/// Politique de fonds v2 — résultats et données financières
+/// ─────────────────────────────────────────────────────────────────
+/// Principe : le front affiche, le serveur décide. Aucun de ces modèles
+/// ne calcule de montant ; ils relaient ce que renvoient
+/// rendezVous.controller.js, paiement.controller.js,
+/// notification.controller.js et portefeuille.controller.js.
+
+/// Remboursement renvoyé à l'annulation (`remboursement` de
+/// PATCH /rendez-vous/:id/statut, voir traitementFonds.service.js).
+///
+/// [statut] vaut `a_traiter` pour un paiement Mobile Money : le
+/// remboursement est traité manuellement, [montant] est alors le brut
+/// et [montantEstimeNet] l'estimation après frais de retrait.
+class RemboursementAnnulation {
+  final double montant;
+  final double? montantEstimeNet;
+  final String devise;
+  final String? motif;
+  final String statut;
+
+  const RemboursementAnnulation({
+    required this.montant,
+    this.montantEstimeNet,
+    required this.devise,
+    this.motif,
+    required this.statut,
+  });
+
+  /// Remboursement Mobile Money traité manuellement par l'équipe APS.
+  bool get estATraiter => statut == 'a_traiter';
+
+  factory RemboursementAnnulation.fromJson(Map<String, dynamic> json) {
+    return RemboursementAnnulation(
+      montant: lireNombre(json['montant']) ?? 0,
+      montantEstimeNet: lireNombre(json['montant_estime_net']),
+      devise: _lire<String>(json, 'devise') ?? 'xaf',
+      motif: _lire<String>(json, 'motif'),
+      statut: _lire<String>(json, 'statut') ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'montant': montant,
+    if (montantEstimeNet != null) 'montant_estime_net': montantEstimeNet,
+    'devise': devise,
+    if (motif != null) 'motif': motif,
+    'statut': statut,
+  };
+}
+
+/// Parse un rendez-vous imbriqué sans jamais faire échouer la réponse
+/// qui le porte : un RDV illisible ne doit pas faire perdre le résultat
+/// financier d'une annulation déjà effectuée côté serveur.
+RendezVous? _rendezVousTolerant(Object? brut) {
+  if (brut is! Map<String, dynamic>) return null;
+  try {
+    return RendezVous.fromJson(brut);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Réponse complète de PATCH /rendez-vous/:id/statut à l'annulation :
+/// `{ message, rendez_vous, tardif, remboursement, versement_medecin,
+/// commission_aps, amende }`.
+///   - [remboursement]    : `null` si rien à rembourser (jamais payé…) ;
+///   - [versementMedecin] : honoraires − commission APS libérés au médecin
+///                          (annulation patient < 24 h), avant amendes ;
+///   - [commissionAps]    : commission versée à APS ;
+///   - [amende]           : une amende a été enregistrée au médecin.
+class ResultatAnnulation {
+  final String? message;
+  final RendezVous? rendezVous;
+  final bool tardif;
+  final RemboursementAnnulation? remboursement;
+  final double? versementMedecin;
+  final double? commissionAps;
+  final bool amende;
+
+  const ResultatAnnulation({
+    this.message,
+    this.rendezVous,
+    this.tardif = false,
+    this.remboursement,
+    this.versementMedecin,
+    this.commissionAps,
+    this.amende = false,
+  });
+
+  factory ResultatAnnulation.fromJson(Map<String, dynamic> json) {
+    return ResultatAnnulation(
+      message: _lire<String>(json, 'message'),
+      rendezVous: _rendezVousTolerant(json['rendez_vous']),
+      tardif: json['tardif'] == true,
+      remboursement: json['remboursement'] is Map<String, dynamic>
+          ? RemboursementAnnulation.fromJson(
+              json['remboursement'] as Map<String, dynamic>,
+            )
+          : null,
+      versementMedecin: lireNombre(json['versement_medecin']),
+      commissionAps: lireNombre(json['commission_aps']),
+      amende: json['amende'] == true,
+    );
+  }
+}
+
+/// Devis avant paiement — GET /paiement/rendez-vous/:id/devis
+/// ?agregateur=stripe|campay. `total = honoraires + frais d'envoi`.
+/// [remboursementIndicatif] vaut `true` pour CamPay : le remboursement
+/// estimé n'est qu'une indication (Mobile Money, traitement manuel).
+/// Réponses d'erreur : 400 (agrégateur invalide), 409 (rendez-vous non
+/// payable ou déjà payé), 503 (barème absent — le message serveur est à
+/// afficher tel quel).
+class DevisPaiement {
+  final String agregateur;
+  final String devise;
+  final double honoraires;
+  final double fraisEnvoi;
+  final double total;
+  final double remboursementEstime;
+  final bool remboursementIndicatif;
+
+  const DevisPaiement({
+    required this.agregateur,
+    required this.devise,
+    required this.honoraires,
+    required this.fraisEnvoi,
+    required this.total,
+    required this.remboursementEstime,
+    required this.remboursementIndicatif,
+  });
+
+  factory DevisPaiement.fromJson(Map<String, dynamic> json) {
+    return DevisPaiement(
+      agregateur: _lire<String>(json, 'agregateur') ?? '',
+      devise: _lire<String>(json, 'devise') ?? 'xaf',
+      honoraires: lireNombre(json['honoraires']) ?? 0,
+      fraisEnvoi: lireNombre(json['frais_envoi']) ?? 0,
+      total: lireNombre(json['total']) ?? 0,
+      remboursementEstime: lireNombre(json['remboursement_estime']) ?? 0,
+      remboursementIndicatif: json['remboursement_indicatif'] == true,
+    );
+  }
+}
+
+/// Types de notification in-app — miroir de l'enum Prisma
+/// `TypeNotification`. [inconnu] : type ajouté côté serveur mais pas
+/// encore connu de l'application (affiché avec une icône neutre).
+enum TypeNotification {
+  rdvAReprogrammer('rdv_a_reprogrammer'),
+  rdvReprogrammationProposee('rdv_reprogrammation_proposee'),
+  rdvReprogrammationAcceptee('rdv_reprogrammation_acceptee'),
+  inconnu('');
+
+  const TypeNotification(this.valeurApi);
+
+  final String valeurApi;
+
+  static TypeNotification fromApi(String? valeur) {
+    for (final t in TypeNotification.values) {
+      if (t != TypeNotification.inconnu && t.valeurApi == valeur) return t;
+    }
+    return TypeNotification.inconnu;
+  }
+}
+
+/// Notification in-app — élément de `notifications` de
+/// GET /notifications (`?non_lues=true&limit=`, la valeur doit valoir
+/// exactement « true »). [lueLe] `null` = non lue.
+class NotificationApp {
+  final String notificationId;
+  final TypeNotification type;
+  final String? rdvId;
+  final String titre;
+  final String message;
+  final Map<String, dynamic>? donnees;
+  final DateTime? lueLe;
+  final DateTime? dateCreation;
+
+  const NotificationApp({
+    required this.notificationId,
+    required this.type,
+    this.rdvId,
+    required this.titre,
+    required this.message,
+    this.donnees,
+    this.lueLe,
+    this.dateCreation,
+  });
+
+  bool get estLue => lueLe != null;
+
+  factory NotificationApp.fromJson(Map<String, dynamic> json) {
+    return NotificationApp(
+      notificationId: json['notification_id'] as String,
+      type: TypeNotification.fromApi(_lire<String>(json, 'type')),
+      rdvId: _lire<String>(json, 'rdv_id'),
+      titre: _lire<String>(json, 'titre') ?? '',
+      message: _lire<String>(json, 'message') ?? '',
+      donnees: json['donnees'] is Map<String, dynamic>
+          ? json['donnees'] as Map<String, dynamic>
+          : null,
+      lueLe: _lireDate(json, 'lue_le'),
+      dateCreation: _lireDate(json, 'date_creation'),
+    );
+  }
+
+  NotificationApp copyWith({DateTime? lueLe}) {
+    return NotificationApp(
+      notificationId: notificationId,
+      type: type,
+      rdvId: rdvId,
+      titre: titre,
+      message: message,
+      donnees: donnees,
+      lueLe: lueLe ?? this.lueLe,
+      dateCreation: dateCreation,
+    );
+  }
+}
+
+/// Réponse de GET /notifications : la liste et le compteur GLOBAL de
+/// non lues (le compteur ignore le filtre `non_lues` et la limite).
+class ListeNotifications {
+  final List<NotificationApp> notifications;
+  final int nonLues;
+
+  const ListeNotifications({required this.notifications, required this.nonLues});
+
+  factory ListeNotifications.fromJson(Map<String, dynamic> json) {
+    final brut = json['notifications'];
+    return ListeNotifications(
+      notifications: brut is List
+          ? brut
+              .whereType<Map<String, dynamic>>()
+              .map(NotificationApp.fromJson)
+              .toList()
+          : const [],
+      nonLues: (lireNombre(json['non_lues']) ?? 0).toInt(),
+    );
+  }
+}
+
+/// Mouvement du grand-livre du portefeuille médecin — élément de
+/// `mouvements` de GET /medecins/:id/portefeuille (50 maximum).
+///
+/// Le signe vient du préfixe du [type] (`credit_*` augmente le solde,
+/// `debit_*` le diminue) ; [montant] est toujours positif. Les types de
+/// l'ancienne politique (`debit_retenue_annulation_tardive`,
+/// `debit_frais_no_show`, `credit_frais_annulation`) restent possibles
+/// dans l'historique : [type] est donc conservé en chaîne brute.
+class MouvementPortefeuille {
+  final String mouvementId;
+  final String type;
+  final double montant;
+  final DateTime? dateCreation;
+  final String? rdvId;
+
+  const MouvementPortefeuille({
+    required this.mouvementId,
+    required this.type,
+    required this.montant,
+    this.dateCreation,
+    this.rdvId,
+  });
+
+  bool get estCredit => type.startsWith('credit_');
+  bool get estDebit => type.startsWith('debit_');
+
+  /// Montant signé pour l'affichage (+ crédit, − débit).
+  double get montantSigne => estDebit ? -montant : montant;
+
+  factory MouvementPortefeuille.fromJson(Map<String, dynamic> json) {
+    return MouvementPortefeuille(
+      mouvementId: _lire<String>(json, 'mouvement_id') ?? '',
+      type: _lire<String>(json, 'type') ?? '',
+      // Decimal Prisma : chaîne dans le JSON.
+      montant: lireNombre(json['montant']) ?? 0,
+      dateCreation: _lireDate(json, 'date_creation'),
+      rdvId: _lire<String>(json, 'rdv_id'),
+    );
+  }
+}
+
+/// Amende en attente d'imputation — élément de `amendes_en_attente` de
+/// GET /medecins/:id/portefeuille. Elle n'a pas de montant : il se
+/// calcule à la prochaine libération de fonds, seul le taux retenu
+/// ([tauxApplique], fraction : 0.15 = 15 %) est exposé.
+class AmendeEnAttente {
+  final String amendeId;
+  final String? rdvId;
+  final double tauxApplique;
+  final String statut;
+  final DateTime? dateCreation;
+
+  const AmendeEnAttente({
+    required this.amendeId,
+    this.rdvId,
+    required this.tauxApplique,
+    required this.statut,
+    this.dateCreation,
+  });
+
+  factory AmendeEnAttente.fromJson(Map<String, dynamic> json) {
+    return AmendeEnAttente(
+      amendeId: _lire<String>(json, 'amende_id') ?? '',
+      rdvId: _lire<String>(json, 'rdv_id'),
+      tauxApplique: lireNombre(json['taux_applique']) ?? 0,
+      statut: _lire<String>(json, 'statut') ?? 'en_attente',
+      dateCreation: _lireDate(json, 'date_creation'),
+    );
+  }
+}
+
+/// Réponse de GET /medecins/:id/portefeuille : `{ solde, mouvements,
+/// amendes_en_attente }`. Le solde est recalculé par le serveur.
+class PortefeuilleMedecin {
+  final double solde;
+  final List<MouvementPortefeuille> mouvements;
+  final List<AmendeEnAttente> amendesEnAttente;
+
+  const PortefeuilleMedecin({
+    required this.solde,
+    required this.mouvements,
+    required this.amendesEnAttente,
+  });
+
+  factory PortefeuilleMedecin.fromJson(Map<String, dynamic> json) {
+    List<T> liste<T>(Object? brut, T Function(Map<String, dynamic>) f) =>
+        brut is List ? brut.whereType<Map<String, dynamic>>().map(f).toList() : <T>[];
+
+    return PortefeuilleMedecin(
+      solde: lireNombre(json['solde']) ?? 0,
+      mouvements: liste(json['mouvements'], MouvementPortefeuille.fromJson),
+      amendesEnAttente: liste(json['amendes_en_attente'], AmendeEnAttente.fromJson),
+    );
+  }
 }

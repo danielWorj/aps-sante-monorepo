@@ -190,6 +190,20 @@ class ApiRealEndpoints {
   static String statutRendezVous(String id) =>
       '${baseUrl}/rendez-vous/$id/statut';
 
+  // ─── Politique de fonds v2 : reprogrammation « deux absents » ─────
+  // Voir reprogrammation.controller.js : authentifié, réservé aux deux
+  // parties du rendez-vous (un admin n'est pas une partie), statut
+  // `a_reprogrammer` uniquement.
+  //   - proposer  POST { nouvelle_date }          → { message, rendez_vous,
+  //       echeance_reprogrammation }
+  //   - accepter  POST { nouvelle_date_proposee } → { message, rendez_vous } ;
+  //       409 si la proposition a changé depuis l'affichage.
+  // Le `rendez_vous` renvoyé n'a PAS `qr_token_secret`.
+  static String proposerReprogrammation(String rdvId) =>
+      '${baseUrl}/rendez-vous/$rdvId/reprogrammation/proposer';
+  static String accepterReprogrammation(String rdvId) =>
+      '${baseUrl}/rendez-vous/$rdvId/reprogrammation/accepter';
+
   // ─── Paiement Stripe (PaymentSheet natif) ────────────────────────
   // Voir paiement.routes.js / paiement.controller.js : authentifié,
   // patient propriétaire du rendez-vous uniquement.
@@ -201,6 +215,15 @@ class ApiRealEndpoints {
       '${baseUrl}/paiement/rendez-vous/$rdvId/paiement-natif';
   static String statutPaiementRdv(String rdvId) =>
       '${baseUrl}/paiement/rendez-vous/$rdvId/paiement';
+
+  // Devis avant paiement (politique de fonds v2) : GET, authentifié,
+  // `?agregateur=stripe|campay` (400 sinon) → { agregateur, devise,
+  // honoraires, frais_envoi, total, remboursement_estime,
+  // remboursement_indicatif }. 409 : rendez-vous non payable ou déjà
+  // payé ; 503 : barème absent (message serveur à afficher). Le même
+  // contrôle de barème s'applique à /paiement-natif et à CamPay.
+  static String devisPaiementRdv(String rdvId) =>
+      '${baseUrl}/paiement/rendez-vous/$rdvId/devis';
 
   // ─── Paiement Mobile Money (CamPay) ───────────────────────────────
   // Voir paiementCampay.controller.js : authentifié, patient propriétaire.
@@ -220,6 +243,34 @@ class ApiRealEndpoints {
   // Le numéro de destination vient TOUJOURS d'une fiche Mobile Money du médecin.
   static String retraitsMedecin(String medecinId) =>
       '${baseUrl}/medecins/$medecinId/retraits';
+
+  // ─── Portefeuille médecin (grand-livre, politique de fonds v2) ────
+  // Voir portefeuille.controller.js : authentifié, médecin propriétaire
+  // ou admin. GET → { medecin_id, solde, mouvements (50 max),
+  // amendes_en_attente }. /retraits ne renvoie NI mouvements NI amendes :
+  // second appel nécessaire, avec un échec isolé du premier.
+  static String portefeuilleMedecin(String medecinId) =>
+      '${baseUrl}/medecins/$medecinId/portefeuille';
+
+  // ─── Agenda médecin (créneaux libres, pour la reprogrammation) ────
+  // Voir agenda.controller.js : GET public → { creneaux }. Filtres :
+  // ?date_debut&date_fin&statut=disponible.
+  static String agendaMedecin(String medecinId) =>
+      '${baseUrl}/medecins/$medecinId/agenda';
+
+  // ─── Notifications in-app (politique de fonds v2) ─────────────────
+  // Voir notification.controller.js : authentifié, toujours scopé à
+  // l'utilisateur connecté.
+  //   - GET   ?non_lues=true&limit=  → { notifications, non_lues }. Le
+  //       filtre ne s'applique que si la valeur vaut exactement « true » ;
+  //       `non_lues` est le compteur GLOBAL, filtre ou non.
+  //   - PATCH /notifications/:id/lue → marque lue (idempotent, 404 sinon).
+  //   - POST  /notifications/lues    → { message, nombre }.
+  static const String notifications = '${baseUrl}/notifications';
+  static String notificationLue(String id) =>
+      '${baseUrl}/notifications/$id/lue';
+  static const String notificationsToutesLues =
+      '${baseUrl}/notifications/lues';
 
   // ─── Ordonnances (module transverse "Gestion des médecins") ──────
   // Voir rendezVous.controller.js / medecin.routes.js : toutes
