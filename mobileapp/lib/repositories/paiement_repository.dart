@@ -13,6 +13,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../models/rendez_vous_models.dart' show DevisPaiement, lireNombre;
 import '../utils/endpoint.dart';
 // Même ApiException que les autres repositories du module rendez-vous.
 import 'rendez_vous_repository.dart' show ApiException;
@@ -88,6 +89,41 @@ class CollecteCampay {
   }
 }
 
+/// Décomposition d'un paiement — `paiement.decomposition` de
+/// GET /paiement/rendez-vous/:id/paiement : total = honoraires + frais
+/// d'envoi. `null` côté [StatutPaiementRdv] pour les transactions
+/// antérieures à la politique v2.
+///
+/// La commission APS et le net médecin, que le serveur n'expose qu'au
+/// médecin concerné et aux admins, ne sont volontairement pas lus ici.
+class DecompositionPaiement {
+  const DecompositionPaiement({
+    required this.honoraires,
+    required this.fraisEnvoi,
+    required this.total,
+  });
+
+  final double honoraires;
+  final double fraisEnvoi;
+  final double total;
+
+  /// `null` si [json] n'est pas un objet ou si un des trois montants
+  /// manque : on n'affiche jamais une décomposition à moitié connue.
+  static DecompositionPaiement? tenterDepuis(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    // Décimaux Prisma sérialisés en String : lireNombre accepte les deux.
+    final honoraires = lireNombre(json['honoraires']);
+    final fraisEnvoi = lireNombre(json['frais_envoi']);
+    final total = lireNombre(json['total']);
+    if (honoraires == null || fraisEnvoi == null || total == null) return null;
+    return DecompositionPaiement(
+      honoraires: honoraires,
+      fraisEnvoi: fraisEnvoi,
+      total: total,
+    );
+  }
+}
+
 /// Réponse de GET /paiement/rendez-vous/:id/paiement.
 class StatutPaiementRdv {
   const StatutPaiementRdv({
@@ -95,6 +131,7 @@ class StatutPaiementRdv {
     this.statutPaiement,
     this.montant,
     this.devise,
+    this.decomposition,
     this.tentativeCampayStatut,
     this.tentativeCampayOperateur,
   });
@@ -105,6 +142,10 @@ class StatutPaiementRdv {
   final String? statutPaiement;
   final num? montant;
   final String? devise;
+
+  /// Détail honoraires / frais d'envoi renvoyé par le serveur ; `null`
+  /// pour une transaction antérieure à la politique v2 (ou sans paiement).
+  final DecompositionPaiement? decomposition;
 
   /// Statut de la DERNIÈRE tentative Mobile Money du RDV
   /// (`en_attente` | `reussie` | `echouee` | `remboursee`), ou `null` si
@@ -132,6 +173,7 @@ class StatutPaiementRdv {
       // Prisma Decimal est sérialisé en String ("5000") → parse tolérant.
       montant: paiement == null ? null : num.tryParse('${paiement['montant']}'),
       devise: paiement?['devise'] as String?,
+      decomposition: DecompositionPaiement.tenterDepuis(paiement?['decomposition']),
       tentativeCampayStatut: tentative?['statut'] as String?,
       tentativeCampayOperateur: tentative?['operateur'] as String?,
     );
@@ -195,6 +237,27 @@ class PaiementRepository {
         )
         .timeout(_timeout);
     return StatutPaiementRdv.fromJson(_decoder(r) as Map<String, dynamic>);
+  }
+
+  /// GET /paiement/rendez-vous/:id/devis?agregateur=stripe|campay
+  ///
+  /// Lecture seule : aucun montant n'est envoyé, le serveur recalcule
+  /// tout. Erreurs : 400 (agrégateur invalide), 409 (RDV non payable ou
+  /// déjà payé), 503 (barème non saisi, message serveur à afficher) →
+  /// toutes levées en [ApiException] avec le message du serveur.
+  Future<DevisPaiement> obtenirDevis({
+    required String rdvId,
+    required String agregateur,
+    required String token,
+  }) async {
+    final uri = Uri.parse(ApiRealEndpoints.devisPaiementRdv(rdvId))
+        .replace(queryParameters: {'agregateur': agregateur});
+    final r = await http.get(uri, headers: _entetes(token)).timeout(_timeout);
+    final corps = _decoder(r);
+    if (corps is! Map<String, dynamic>) {
+      throw const ApiException('Réponse de devis invalide.');
+    }
+    return DevisPaiement.fromJson(corps);
   }
 
   /// POST /paiement/rendez-vous/:id/paiement-campay
