@@ -15,8 +15,11 @@ import '../../../components/components.dart';
 import '../../../components/dialogs/dialogue_retrait.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/retrait_controller.dart';
+import '../../../models/rendez_vous_models.dart'
+    show AmendeEnAttente, MouvementPortefeuille, PortefeuilleMedecin;
 import '../../../repositories/rendez_vous_repository.dart' show ApiException;
 import '../../../repositories/retrait_repository.dart';
+import '../../../utils/fonds.dart' as fonds;
 
 String _fcfa(int n) {
   final s = n.abs().toString();
@@ -36,6 +39,27 @@ String _dateCourte(DateTime? d) {
   if (d == null) return '';
   String deux(int v) => v.toString().padLeft(2, '0');
   return '${deux(d.day)}/${deux(d.month)} ${deux(d.hour)}:${deux(d.minute)}';
+}
+
+/// Libellés des mouvements (mêmes textes que le web). Le signe vient du préfixe du type
+/// (`credit_` / `debit_`) ; les types de l'ancienne politique sont conservés pour lire
+/// l'historique. Un type inconnu s'affiche tel quel.
+const Map<String, String> _libellesMouvements = {
+  'credit_honoraires': 'Honoraires libérés (moins commission APS)',
+  'debit_retrait': 'Retrait',
+  'credit_annulation_retrait': 'Retrait rejeté ou échoué (recrédit)',
+  'debit_amende': 'Amende (reversée à APS)',
+  // Obsolètes (ancienne politique).
+  'debit_retenue_annulation_tardive': 'Retenue pour annulation tardive (ancienne politique)',
+  'debit_frais_no_show': 'Frais d\u2019absence (ancienne politique)',
+  'credit_frais_annulation': 'Frais d\u2019annulation (ancienne politique)',
+};
+
+/// Taux (fraction) en pourcentage français : 0.15 → « 15 % », 0.125 → « 12,5 % ».
+String _pourcent(double taux) {
+  final v = (taux * 100 * 100).round() / 100;
+  final texte = v == v.roundToDouble() ? v.round().toString() : v.toString().replaceAll('.', ',');
+  return '$texte\u00A0%';
 }
 
 class PortefeuilleRetraitsCard extends ConsumerStatefulWidget {
@@ -75,6 +99,11 @@ class _PortefeuilleRetraitsCardState
   Future<void> _charger() async {
     final token = ref.read(authTokenProvider);
     if (token == null) return;
+    // Mouvements et amendes : second appel (/portefeuille), lancé en parallèle et isolé —
+    // son échec n'invalide ni le solde ni les retraits (le contrôleur ne lève jamais).
+    unawaited(ref
+        .read(portefeuilleLedgerControllerProvider.notifier)
+        .charger(medecinId: widget.medecinId, token: token));
     await ref
         .read(retraitControllerProvider.notifier)
         .charger(medecinId: widget.medecinId, token: token);
@@ -124,6 +153,7 @@ class _PortefeuilleRetraitsCardState
   Widget build(BuildContext context) {
     final etat = ref.watch(retraitControllerProvider);
     final portefeuille = etat.value;
+    final etatLedger = ref.watch(portefeuilleLedgerControllerProvider);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -158,6 +188,8 @@ class _PortefeuilleRetraitsCardState
           else
             _Contenu(
               portefeuille: portefeuille,
+              ledger: etatLedger.value,
+              ledgerIndisponible: etatLedger.hasError && etatLedger.value == null,
               envoiEnCours: _envoiEnCours,
               onDemander: () => _demanderRetrait(portefeuille),
             ),
@@ -205,11 +237,15 @@ class _EtatInitial extends StatelessWidget {
 class _Contenu extends StatelessWidget {
   const _Contenu({
     required this.portefeuille,
+    required this.ledger,
+    required this.ledgerIndisponible,
     required this.envoiEnCours,
     required this.onDemander,
   });
 
   final PortefeuilleRetraits portefeuille;
+  final PortefeuilleMedecin? ledger;
+  final bool ledgerIndisponible;
   final bool envoiEnCours;
   final VoidCallback onDemander;
 
@@ -284,7 +320,146 @@ class _Contenu extends StatelessWidget {
               style: TextStyle(fontSize: 12.5, color: AppColors.inkFaint))
         else
           for (final r in p.retraits) _LigneRetrait(retrait: r),
+        if (ledger != null && ledger!.amendesEnAttente.isNotEmpty)
+          _BlocAmendes(amendes: ledger!.amendesEnAttente),
+        const SizedBox(height: 14),
+        const Text('Derniers mouvements',
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.inkSoft)),
+        const SizedBox(height: 6),
+        if (ledger == null)
+          Text(
+            ledgerIndisponible
+                ? 'Mouvements momentanément indisponibles.'
+                : 'Chargement des mouvements…',
+            style: const TextStyle(fontSize: 12.5, color: AppColors.inkFaint),
+          )
+        else if (ledger!.mouvements.isEmpty)
+          const Text('Aucun mouvement.',
+              style: TextStyle(fontSize: 12.5, color: AppColors.inkFaint))
+        else
+          _ListeMouvements(mouvements: ledger!.mouvements),
       ],
+    );
+  }
+}
+
+/// Amendes en attente d'imputation : sans montant (calculé à la prochaine libération),
+/// seul le taux retenu est exposé par le serveur.
+class _BlocAmendes extends StatelessWidget {
+  const _BlocAmendes({required this.amendes});
+
+  final List<AmendeEnAttente> amendes;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.warningLight,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('${amendes.length} amende(s) en attente.',
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          const Text(
+            'Elle(s) sera(ont) déduite(s) de votre prochaine libération de fonds '
+            '(montant calculé à ce moment-là).',
+            style: TextStyle(fontSize: 12, color: AppColors.inkSoft),
+          ),
+          const SizedBox(height: 6),
+          for (final a in amendes)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                'Taux ${_pourcent(a.tauxApplique)} · enregistrée le ${fonds.dateCourte(a.dateCreation)}',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.inkSoft),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Derniers mouvements : 10 affichés, le reste (50 au plus côté serveur) sur demande.
+class _ListeMouvements extends StatefulWidget {
+  const _ListeMouvements({required this.mouvements});
+
+  final List<MouvementPortefeuille> mouvements;
+
+  @override
+  State<_ListeMouvements> createState() => _ListeMouvementsState();
+}
+
+class _ListeMouvementsState extends State<_ListeMouvements> {
+  static const int _apercu = 10;
+  bool _toutAfficher = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tous = widget.mouvements;
+    final visibles = _toutAfficher ? tous : tous.take(_apercu).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final m in visibles) _LigneMouvement(mouvement: m),
+        if (tous.length > _apercu)
+          TextButton(
+            onPressed: () => setState(() => _toutAfficher = !_toutAfficher),
+            child: Text(_toutAfficher ? 'Réduire' : 'Afficher tout (${tous.length})'),
+          ),
+      ],
+    );
+  }
+}
+
+class _LigneMouvement extends StatelessWidget {
+  const _LigneMouvement({required this.mouvement});
+
+  final MouvementPortefeuille mouvement;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = mouvement;
+    final libelle = _libellesMouvements[m.type] ?? m.type;
+    final credit = m.estCredit;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(libelle, style: const TextStyle(fontSize: 13)),
+                const SizedBox(height: 2),
+                Text(fonds.dateCourte(m.dateCreation),
+                    style: const TextStyle(fontSize: 11.5, color: AppColors.inkFaint)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Signe selon le préfixe du type ; le montant serveur est toujours positif.
+          Text(
+            '${credit ? '+' : '\u2212'}${fonds.fcfa(m.montant)}',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: credit ? AppColors.success : AppColors.dangerDark,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
