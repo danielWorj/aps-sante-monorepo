@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { obtenirStatutPaiementRdv } from '../services/paiementService';
+import { montantDevise } from '../utils/fonds';
 
 function formaterMontant(montant, devise) {
   if (montant === undefined || montant === null) return null;
@@ -128,6 +129,13 @@ export default function PaiementSucces() {
         text="Votre rendez-vous est confirmé. Un récapitulatif vous a été envoyé par email."
         amount={formaterMontant(paiement?.montant, paiement?.devise)}
       >
+        {/* Détail renvoyé par le serveur (null pour les transactions antérieures à la v2) */}
+        {paiement?.decomposition && (
+          <p className="status-card-text small">
+            Honoraires {montantDevise(paiement.decomposition.honoraires, paiement.devise)}
+            {' '}+ frais d’envoi {montantDevise(paiement.decomposition.frais_envoi, paiement.devise)}
+          </p>
+        )}
         <div className="status-card-actions">
           <Link to="/portail/patient-rdv" className="btn btn-primary btn-lg-aps">
             <i className="fa-solid fa-calendar-check" /> Voir mes rendez-vous
