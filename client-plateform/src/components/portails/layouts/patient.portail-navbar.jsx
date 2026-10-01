@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
+import NotificationsBell from "../components/notifications-bell";
 
 const PatientPortailNavbar = ({ activePage = "" }) => {
   const navigate = useNavigate();
@@ -49,9 +50,7 @@ const PatientPortailNavbar = ({ activePage = "" }) => {
           </nav>
 
           <div className="aps-nav-actions">
-            <Link to="#" className="btn btn-ghost btn-sm-aps btn-icon" aria-label="Notifications">
-              <i className="fa-solid fa-bell"></i>
-            </Link>
+            <NotificationsBell cheminRdv="/portail/patient-rdv" />
             <button
               type="button"
               onClick={handleLogout}
