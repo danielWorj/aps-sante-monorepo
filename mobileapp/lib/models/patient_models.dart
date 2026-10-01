@@ -26,76 +26,15 @@
 //     type_rdv, date_creneau, statut, motif?, code_unique,
 //     qr_token_secret }
 
-/// Statuts possibles d'un rendez-vous — même liste que STATUTS_RDV
-/// dans patient.controller.js (et l'enum StatutRendezVous du schema).
-enum StatutRendezVous {
-  cree,
-  confirme,
-  enAttentePresence,
-  honore,
-  nonHonore,
-  annule,
-  conteste;
+import 'rendez_vous_models.dart' show StatutRendezVous, TypeRdv;
 
-  static StatutRendezVous fromJson(String valeur) {
-    switch (valeur) {
-      case 'cree':
-        return StatutRendezVous.cree;
-      case 'confirme':
-        return StatutRendezVous.confirme;
-      case 'en_attente_presence':
-        return StatutRendezVous.enAttentePresence;
-      case 'honore':
-        return StatutRendezVous.honore;
-      case 'non_honore':
-        return StatutRendezVous.nonHonore;
-      case 'annule':
-        return StatutRendezVous.annule;
-      case 'conteste':
-        return StatutRendezVous.conteste;
-      default:
-        throw ArgumentError('Statut de rendez-vous inconnu : $valeur');
-    }
-  }
-
-  String toJson() {
-    switch (this) {
-      case StatutRendezVous.cree:
-        return 'cree';
-      case StatutRendezVous.confirme:
-        return 'confirme';
-      case StatutRendezVous.enAttentePresence:
-        return 'en_attente_presence';
-      case StatutRendezVous.honore:
-        return 'honore';
-      case StatutRendezVous.nonHonore:
-        return 'non_honore';
-      case StatutRendezVous.annule:
-        return 'annule';
-      case StatutRendezVous.conteste:
-        return 'conteste';
-    }
-  }
-}
-
-/// Type de rendez-vous — enum TypeRdv du schema.prisma.
-enum TypeRdv {
-  physique,
-  teleconsultation;
-
-  static TypeRdv fromJson(String valeur) {
-    switch (valeur) {
-      case 'physique':
-        return TypeRdv.physique;
-      case 'teleconsultation':
-        return TypeRdv.teleconsultation;
-      default:
-        throw ArgumentError('Type de rendez-vous inconnu : $valeur');
-    }
-  }
-
-  String toJson() => this == TypeRdv.physique ? 'physique' : 'teleconsultation';
-}
+// Les enums `StatutRendezVous` et `TypeRdv` vivent désormais dans
+// rendez_vous_models.dart (source unique : il existait deux copies, dont
+// celle-ci levait une ArgumentError sur un statut inconnu, ce qui aurait
+// fait planter la liste des RDV du profil sur un `a_reprogrammer`).
+// Réexportées ici pour que les fichiers qui n'importent que
+// patient_models.dart continuent de les voir.
+export 'rendez_vous_models.dart' show StatutRendezVous, TypeRdv;
 
 /// Vue minimale d'un utilisateur (nom/prénom uniquement), utilisée
 /// pour l'utilisateur du médecin imbriqué dans un rendez-vous
@@ -280,6 +219,10 @@ class RendezVousPatient {
   final TypeRdv typeRdv;
   final DateTime dateCreneau;
   final StatutRendezVous statut;
+
+  /// Valeur brute du serveur, utile quand [statut] vaut
+  /// [StatutRendezVous.inconnu].
+  final String? statutBrut;
   final String? motif;
   final String codeUnique;
   final MedecinResume medecin;
@@ -293,6 +236,7 @@ class RendezVousPatient {
     required this.typeRdv,
     required this.dateCreneau,
     required this.statut,
+    this.statutBrut,
     this.motif,
     required this.codeUnique,
     required this.medecin,
@@ -305,9 +249,10 @@ class RendezVousPatient {
       patientId: json['patient_id'] as String,
       medecinId: json['medecin_id'] as String,
       structureId: json['structure_id'] as String?,
-      typeRdv: TypeRdv.fromJson(json['type_rdv'] as String),
+      typeRdv: TypeRdv.fromApi(json['type_rdv'] as String?),
       dateCreneau: DateTime.parse(json['date_creneau'] as String),
-      statut: StatutRendezVous.fromJson(json['statut'] as String),
+      statut: StatutRendezVous.fromApi(json['statut'] as String?),
+      statutBrut: json['statut'] as String?,
       motif: json['motif'] as String?,
       codeUnique: json['code_unique'] as String,
       medecin: MedecinResume.fromJson(json['medecin'] as Map<String, dynamic>),
@@ -322,9 +267,9 @@ class RendezVousPatient {
     'patient_id': patientId,
     'medecin_id': medecinId,
     if (structureId != null) 'structure_id': structureId,
-    'type_rdv': typeRdv.toJson(),
+    'type_rdv': typeRdv.toApi(),
     'date_creneau': dateCreneau.toIso8601String(),
-    'statut': statut.toJson(),
+    'statut': statutBrut ?? statut.toApi(),
     if (motif != null) 'motif': motif,
     'code_unique': codeUnique,
     'medecin': medecin.toJson(),
