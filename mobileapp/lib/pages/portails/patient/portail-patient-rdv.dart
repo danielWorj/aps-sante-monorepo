@@ -266,7 +266,11 @@ class _StatLine extends ConsumerWidget {
         final enAttente =
             rdvList.where((rdv) => rdv.statut == StatutRendezVous.cree).length;
         final enVisio =
-            rdvList.where((rdv) => rdv.typeRdv == TypeRdv.teleconsultation).length;
+            rdvList
+            .where((rdv) =>
+                rdv.typeRdv == TypeRdv.teleconsultation &&
+                !rdv.estAReprogrammer)
+            .length;
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(4, 2, 4, 14),
@@ -329,22 +333,24 @@ class _SegmentedTabs extends ConsumerWidget {
 
     final tabs = rdvAsync.when(
       loading: () => const [
-        _TabDef(label: 'Confirmé', count: null),
+        _TabDef(label: 'À venir', count: null),
         _TabDef(label: 'À payer', count: null),
         _TabDef(label: 'Terminés', count: null),
         _TabDef(label: 'Annulés', count: null),
       ],
       error: (_, __) => const [
-        _TabDef(label: 'Confirmé', count: 0),
+        _TabDef(label: 'À venir', count: 0),
         _TabDef(label: 'À payer', count: 0),
         _TabDef(label: 'Terminés', count: 0),
         _TabDef(label: 'Annulés', count: 0),
       ],
       data: (rdvList) => [
         _TabDef(
-          label: 'Confirmé',
+          label: 'À venir',
           count: rdvList
-              .where((r) => r.statut == StatutRendezVous.confirme)
+              .where((r) =>
+                  r.statut == StatutRendezVous.confirme ||
+                  r.statut == StatutRendezVous.aReprogrammer)
               .length,
         ),
         _TabDef(
@@ -519,7 +525,8 @@ class _SectionHead extends StatelessWidget {
 /// PANELS - ConsumerWidget pour accéder aux données Riverpod
 /// ════════════════════════════════════════════════════════════
 
-/// Panneau "Confirmé" (RDV confirmés par le médecin)
+/// Panneau "À venir" (RDV confirmés par le médecin + RDV à reprogrammer :
+/// le statut `a_reprogrammer` reste ici, comme sur le web)
 class _PanelConfirme extends ConsumerWidget {
   const _PanelConfirme();
 
@@ -532,21 +539,36 @@ class _PanelConfirme extends ConsumerWidget {
       error: (err, stack) => Center(child: Text('Erreur: $err')),
       data: (rdvList) {
         final rdvConfirmes = rdvList
-            .where((r) => r.statut == StatutRendezVous.confirme)
+            .where((r) =>
+                r.statut == StatutRendezVous.confirme ||
+                r.statut == StatutRendezVous.aReprogrammer)
             .toList();
 
         if (rdvConfirmes.isEmpty) {
           return const Center(
-            child: Text('Aucun rendez-vous confirmé'),
+            child: Text('Aucun rendez-vous à venir'),
           );
         }
 
+        final nbARepro = rdvConfirmes.where((r) => r.estAReprogrammer).length;
         final groupesParDate = _grouperParDate(rdvConfirmes);
 
         return SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Bandeau d'alerte visible sans ouvrir le détail.
+              if (nbARepro > 0) ...[
+                AppAlert(
+                  type: AppAlertType.warning,
+                  message: nbARepro == 1
+                      ? '1 rendez-vous à reprogrammer : ouvrez-le pour '
+                          'proposer ou accepter une date (délai de 48 h).'
+                      : '$nbARepro rendez-vous à reprogrammer : ouvrez-les '
+                          'pour proposer ou accepter une date (délai de 48 h).',
+                ),
+                const SizedBox(height: 4),
+              ],
               ...groupesParDate.entries.map((entry) {
                 final dateStr = entry.key;
                 final rdvsDate = entry.value;
@@ -575,13 +597,23 @@ class _PanelConfirme extends ConsumerWidget {
                             ? 'Téléconsultation'
                             : 'Cabinet',
                         bottom: _Frow(
-                          badge: BadgeChip(
-                            label: 'Confirmé',
-                            style: BadgeChipStyle.green,
-                          ),
+                          badge: rdv.estAReprogrammer
+                              ? const BadgeChip(
+                                  label: 'À reprogrammer',
+                                  style: BadgeChipStyle.coral,
+                                  icon: Icons.event_busy_outlined,
+                                )
+                              : const BadgeChip(
+                                  label: 'Confirmé',
+                                  style: BadgeChipStyle.green,
+                                ),
                           action: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              // Ni visio ni détail/itinéraire pour
+                              // `a_reprogrammer` : le créneau initial
+                              // est passé.
+                              if (!rdv.estAReprogrammer) ...[
                               if (rdv.typeRdv ==
                                   TypeRdv.teleconsultation)
                                 RdvButton(
@@ -609,6 +641,7 @@ class _PanelConfirme extends ConsumerWidget {
                                   },
                                 ),
                               const SizedBox(width: 8),
+                              ],
                               _DangerOutlineButton(
                                 label: 'Annuler',
                                 onPressed: () =>

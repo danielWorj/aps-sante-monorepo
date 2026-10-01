@@ -24,7 +24,8 @@
 //
 // ⚠️ Périmètre volontairement identique à celui du repository :
 // Rendez-vous + Ordonnance uniquement. Fiche médecin, Spécialités,
-// Agenda sont hors périmètre — voir medecin_controller.dart.
+// Agenda : voir agenda_controller.dart (lecture des créneaux libres) ;
+// la proposition/acceptation de reprogrammation vit ici (actions).
 
 import 'package:riverpod/legacy.dart';
 import 'package:riverpod/riverpod.dart';
@@ -274,6 +275,57 @@ class ActionsRendezVousController extends AsyncNotifier<void> {
         payload: payload,
         token: token,
       );
+      state = const AsyncData(null);
+      ref.invalidate(listeRendezVousControllerProvider);
+      return resultat;
+    } catch (e, pile) {
+      state = AsyncError<void>(e, pile);
+      rethrow;
+    }
+  }
+
+  /// Propose une nouvelle date pour un RDV `a_reprogrammer` (phase 5).
+  /// [nouvelleDateIso] vient de `CreneauAgenda.iso`. Lève [ApiException]
+  /// avec le message du serveur ; la liste des RDV est invalidée seulement
+  /// en cas de succès.
+  Future<ResultatReprogrammation> proposerReprogrammation(
+    String id, {
+    required String nouvelleDateIso,
+    required String token,
+  }) async {
+    state = const AsyncLoading<void>().copyWithPrevious(state);
+    try {
+      final resultat =
+          await ref.read(rendezVousRepositoryProvider).proposerReprogrammation(
+                id: id,
+                nouvelleDateIso: nouvelleDateIso,
+                token: token,
+              );
+      state = const AsyncData(null);
+      ref.invalidate(listeRendezVousControllerProvider);
+      return resultat;
+    } catch (e, pile) {
+      state = AsyncError<void>(e, pile);
+      rethrow;
+    }
+  }
+
+  /// Accepte la proposition en cours (par l'AUTRE partie). Lève
+  /// [ApiException] (409 si la proposition a changé, créneau pris ou délai
+  /// écoulé) ; la liste est invalidée en cas de succès.
+  Future<ResultatReprogrammation> accepterReprogrammation(
+    String id, {
+    required String nouvelleDateProposeeIso,
+    required String token,
+  }) async {
+    state = const AsyncLoading<void>().copyWithPrevious(state);
+    try {
+      final resultat =
+          await ref.read(rendezVousRepositoryProvider).accepterReprogrammation(
+                id: id,
+                nouvelleDateProposeeIso: nouvelleDateProposeeIso,
+                token: token,
+              );
       state = const AsyncData(null);
       ref.invalidate(listeRendezVousControllerProvider);
       return resultat;

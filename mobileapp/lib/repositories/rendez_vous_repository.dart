@@ -293,6 +293,52 @@ class RendezVousRepository {
     return ResultatAnnulation.fromJson(donnees);
   }
 
+  /// POST /rendez-vous/:id/reprogrammation/proposer
+  ///
+  /// Politique de fonds v2 — reprogrammation « deux absents » : le patient
+  /// OU le médecin propose une nouvelle date ; l'AUTRE partie l'accepte. Une
+  /// nouvelle proposition remplace la précédente sans prolonger le délai.
+  ///
+  /// [nouvelleDateIso] doit venir d'un créneau LIBRE de l'agenda du médecin
+  /// (voir `CreneauAgenda.iso`). Le serveur valide tout et lève :
+  /// 400 (date invalide ou identique à l'ancienne), 403 (pas une partie du
+  /// RDV), 409 (créneau pris ou hors agenda, RDV plus à reprogrammer, délai
+  /// de 48 h écoulé). Lève [ApiException] avec le message du serveur.
+  Future<ResultatReprogrammation> proposerReprogrammation({
+    required String id,
+    required String nouvelleDateIso,
+    required String token,
+  }) async {
+    final donnees = await _post(
+      ApiRealEndpoints.proposerReprogrammation(id),
+      body: {'nouvelle_date': nouvelleDateIso},
+      token: token,
+    );
+    if (donnees is! Map<String, dynamic>) return const ResultatReprogrammation();
+    return ResultatReprogrammation.fromJson(donnees);
+  }
+
+  /// POST /rendez-vous/:id/reprogrammation/accepter
+  ///
+  /// Réservé à l'AUTRE partie que l'auteur de la proposition. Le RDV repasse
+  /// `confirme` sur le nouveau créneau, sans nouveau paiement.
+  /// [nouvelleDateProposeeIso] est la date AFFICHÉE à l'utilisateur : le
+  /// serveur répond 409 si la proposition a été remplacée entre-temps, ce
+  /// qui évite d'accepter une date qu'on n'a pas vue.
+  Future<ResultatReprogrammation> accepterReprogrammation({
+    required String id,
+    required String nouvelleDateProposeeIso,
+    required String token,
+  }) async {
+    final donnees = await _post(
+      ApiRealEndpoints.accepterReprogrammation(id),
+      body: {'nouvelle_date_proposee': nouvelleDateProposeeIso},
+      token: token,
+    );
+    if (donnees is! Map<String, dynamic>) return const ResultatReprogrammation();
+    return ResultatReprogrammation.fromJson(donnees);
+  }
+
   /// DELETE /rendez-vous/:id
   /// Réservé à admin/superadmin côté backend — un rendez-vous s'annule
   /// via [changerStatutRendezVous]/[modifierRendezVous] (statut

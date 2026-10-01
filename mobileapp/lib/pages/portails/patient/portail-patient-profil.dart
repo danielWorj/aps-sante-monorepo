@@ -728,6 +728,8 @@ String _libelleStatutRdv(StatutRendezVous statut) {
       return 'Confirmé';
     case StatutRendezVous.enAttentePresence:
       return 'En attente de présence';
+    case StatutRendezVous.aReprogrammer:
+      return 'À reprogrammer';
     case StatutRendezVous.honore:
       return 'Honoré';
     case StatutRendezVous.nonHonore:
@@ -736,6 +738,10 @@ String _libelleStatutRdv(StatutRendezVous statut) {
       return 'Annulé';
     case StatutRendezVous.conteste:
       return 'Contesté';
+    case StatutRendezVous.inconnu:
+      // Statut renvoyé par le serveur mais pas encore connu de l'app :
+      // libellé neutre, jamais « Créé ».
+      return 'Statut inconnu';
   }
 }
 
@@ -750,6 +756,10 @@ BadgeChipStyle _styleStatutRdv(StatutRendezVous statut) {
     case StatutRendezVous.annule:
     case StatutRendezVous.conteste:
       return BadgeChipStyle.amber;
+    case StatutRendezVous.aReprogrammer:
+      return BadgeChipStyle.coral;
+    case StatutRendezVous.inconnu:
+      return BadgeChipStyle.outline;
   }
 }
 
