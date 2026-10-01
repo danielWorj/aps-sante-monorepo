@@ -44,34 +44,44 @@ class MedecinBottomNavigationBar extends StatelessWidget {
   /// Appelé avec le nouvel index lorsqu'un item est sélectionné.
   final ValueChanged<int> onTap;
 
+  /// Nombre de notifications non lues, affiché en pastille sur l'item
+  /// « Rendez-vous » (politique de fonds v2, phase 6). `0` = pas de pastille.
+  final int notificationsNonLues;
+
   /// Liste des items. Par défaut : Rendez-vous / Agenda / Profil / Aide,
-  /// identique à la maquette.
-  final List<MedecinNavItem> items;
+  /// identique à la maquette ; la pastille de « Rendez-vous » suit
+  /// [notificationsNonLues].
+  final List<MedecinNavItem>? items;
 
   const MedecinBottomNavigationBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
-    this.items = const [
-      MedecinNavItem(
-        icon: Icons.event_note_outlined,
-        label: 'Rendez-vous',
-        badgeCount: 3,
-      ),
-      MedecinNavItem(
-        icon: Icons.schedule_outlined,
-        label: 'Agenda',
-      ),
-      MedecinNavItem(
-        icon: Icons.person_outline,
-        label: 'Profil',
-      ),
-      MedecinNavItem(
-        icon: Icons.help_outline,
-        label: 'Aide',
-      ),
-    ],
+    this.notificationsNonLues = 0,
+    this.items,
   });
+
+  List<MedecinNavItem> get _items =>
+      items ??
+      [
+        MedecinNavItem(
+          icon: Icons.event_note_outlined,
+          label: 'Rendez-vous',
+          badgeCount: notificationsNonLues > 0 ? notificationsNonLues : null,
+        ),
+        const MedecinNavItem(
+          icon: Icons.schedule_outlined,
+          label: 'Agenda',
+        ),
+        const MedecinNavItem(
+          icon: Icons.person_outline,
+          label: 'Profil',
+        ),
+        const MedecinNavItem(
+          icon: Icons.help_outline,
+          label: 'Aide',
+        ),
+      ];
 
   @override
   Widget build(BuildContext context) {
@@ -98,8 +108,8 @@ class MedecinBottomNavigationBar extends StatelessWidget {
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(items.length, (index) {
-                final item = items[index];
+              children: List.generate(_items.length, (index) {
+                final item = _items[index];
                 final active = index == currentIndex;
                 return _NavItemWidget(
                   item: item,
@@ -155,7 +165,7 @@ class _NavItemWidget extends StatelessWidget {
                   ),
                   child: Icon(item.icon, size: 20, color: color),
                 ),
-                if (item.badgeCount != null)
+                if (item.badgeCount != null && item.badgeCount! > 0)
                   Positioned(
                     top: -2,
                     right: 4,
@@ -169,7 +179,9 @@ class _NavItemWidget extends StatelessWidget {
                         borderRadius: BorderRadius.circular(100),
                       ),
                       child: Text(
-                        '${item.badgeCount}',
+                        // « 9+ » au-delà de 9, comme la cloche (le serveur
+                        // peut en compter bien plus).
+                        item.badgeCount! > 9 ? '9+' : '${item.badgeCount}',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 8.5,
