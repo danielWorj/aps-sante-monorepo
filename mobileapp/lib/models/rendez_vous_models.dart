@@ -905,6 +905,29 @@ class ResultatAnnulation {
   }
 }
 
+/// Réponse de POST /rendez-vous/:id/reprogrammation/proposer et /accepter :
+/// `{ message, rendez_vous, echeance_reprogrammation? }`.
+///   - [rendezVous] : RDV mis à jour, SANS `qr_token_secret` (retiré par le
+///     serveur), parsé de façon tolérante : une proposition déjà enregistrée
+///     ne doit jamais apparaître comme un échec à cause d'un champ illisible ;
+///   - [echeance]   : échéance de la reprogrammation (proposer uniquement),
+///     le délai de 48 h n'étant jamais prolongé.
+class ResultatReprogrammation {
+  final String? message;
+  final RendezVous? rendezVous;
+  final DateTime? echeance;
+
+  const ResultatReprogrammation({this.message, this.rendezVous, this.echeance});
+
+  factory ResultatReprogrammation.fromJson(Map<String, dynamic> json) {
+    return ResultatReprogrammation(
+      message: _lire<String>(json, 'message'),
+      rendezVous: _rendezVousTolerant(json['rendez_vous']),
+      echeance: _lireDate(json, 'echeance_reprogrammation'),
+    );
+  }
+}
+
 /// Devis avant paiement — GET /paiement/rendez-vous/:id/devis
 /// ?agregateur=stripe|campay. `total = honoraires + frais d'envoi`.
 /// [remboursementIndicatif] vaut `true` pour CamPay : le remboursement

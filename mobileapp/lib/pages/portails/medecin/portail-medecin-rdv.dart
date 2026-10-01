@@ -271,7 +271,11 @@ class _StatLine extends ConsumerWidget {
                 final aujourd_hui = _compterAujourdhui(rdvList);
                 final cette_semaine = _compterCetteSemaine(rdvList);
                 final en_visio =
-                    rdvList.where((rdv) => rdv.typeRdv == TypeRdv.teleconsultation).length;
+                    rdvList
+                        .where((rdv) =>
+                            rdv.typeRdv == TypeRdv.teleconsultation &&
+                            !rdv.estAReprogrammer)
+                        .length;
 
                 return Padding(
                     padding: const EdgeInsets.fromLTRB(4, 2, 4, 14),
@@ -298,7 +302,8 @@ class _StatLine extends ConsumerWidget {
         final aujourd_hui = DateTime.now();
         return rdvList
             .where((rdv) =>
-        rdv.dateCreneau.year == aujourd_hui.year &&
+        !rdv.estAReprogrammer &&
+            rdv.dateCreneau.year == aujourd_hui.year &&
             rdv.dateCreneau.month == aujourd_hui.month &&
             rdv.dateCreneau.day == aujourd_hui.day)
             .length;
@@ -310,7 +315,8 @@ class _StatLine extends ConsumerWidget {
         final finSemaine = maintenant.add(const Duration(days: 7));
         return rdvList
             .where((rdv) =>
-        rdv.dateCreneau.isAfter(maintenant) &&
+        !rdv.estAReprogrammer &&
+            rdv.dateCreneau.isAfter(maintenant) &&
             rdv.dateCreneau.isBefore(finSemaine))
             .length;
     }
@@ -357,22 +363,24 @@ class _SegmentedTabs extends ConsumerWidget {
 
         final tabs = rdvAsync.when(
             loading: () => const [
-                _TabDef(label: 'Confirmé', count: null),
+                _TabDef(label: 'À venir', count: null),
                 _TabDef(label: 'En attente', count: null),
                 _TabDef(label: 'Terminés', count: null),
                 _TabDef(label: 'Annulés', count: null),
             ],
             error: (_, __) => const [
-                _TabDef(label: 'Confirmé', count: 0),
+                _TabDef(label: 'À venir', count: 0),
                 _TabDef(label: 'En attente', count: 0),
                 _TabDef(label: 'Terminés', count: 0),
                 _TabDef(label: 'Annulés', count: 0),
             ],
             data: (rdvList) => [
                 _TabDef(
-                    label: 'Confirmé',
+                    label: 'À venir',
                     count: rdvList
-                        .where((r) => r.statut == StatutRendezVous.confirme)
+                        .where((r) =>
+                            r.statut == StatutRendezVous.confirme ||
+                            r.statut == StatutRendezVous.aReprogrammer)
                         .length,
                 ),
                 _TabDef(
@@ -546,7 +554,7 @@ class _SectionHead extends StatelessWidget {
 /// PANELS - ConsumerWidget pour accéder aux données Riverpod
 /// ════════════════════════════════════════════════════════════
 
-/// Panneau "Confirmé"
+/// Panneau "À venir" : RDV confirmés + RDV `a_reprogrammer` (comme le web)
 class _PanelConfirme extends ConsumerWidget {
     const _PanelConfirme();
 
@@ -558,16 +566,21 @@ class _PanelConfirme extends ConsumerWidget {
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, stack) => Center(child: Text('Erreur: $err')),
             data: (rdvList) {
-                // Filtrer: RDV confirmés (peu importe la date), groupés par date
+                // Filtrer: RDV à venir (confirmés + à reprogrammer), groupés par date
                 final rdvConfirmes = rdvList
-                    .where((r) => r.statut == StatutRendezVous.confirme)
+                    .where((r) =>
+                        r.statut == StatutRendezVous.confirme ||
+                        r.statut == StatutRendezVous.aReprogrammer)
                     .toList();
 
                 if (rdvConfirmes.isEmpty) {
                     return const Center(
-                        child: Text('Aucun rendez-vous confirmé'),
+                        child: Text('Aucun rendez-vous à venir'),
                     );
                 }
+
+                final nbARepro =
+                    rdvConfirmes.where((r) => r.estAReprogrammer).length;
 
                 // Grouper par date
                 final groupesParDate = _grouperParDate(rdvConfirmes);
@@ -576,6 +589,18 @@ class _PanelConfirme extends ConsumerWidget {
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                            // Bandeau d'alerte visible sans ouvrir le détail.
+                            if (nbARepro > 0) ...[
+                                AppAlert(
+                                    type: AppAlertType.warning,
+                                    message: nbARepro == 1
+                                        ? '1 rendez-vous à reprogrammer : ouvrez-le pour '
+                                            'proposer ou accepter une date (délai de 48 h).'
+                                        : '$nbARepro rendez-vous à reprogrammer : ouvrez-les '
+                                            'pour proposer ou accepter une date (délai de 48 h).',
+                                ),
+                                const SizedBox(height: 4),
+                            ],
                             ...groupesParDate.entries.map((entry) {
                                 final dateStr = entry.key;
                                 final rdvsDate = entry.value;
@@ -602,11 +627,21 @@ class _PanelConfirme extends ConsumerWidget {
                                                     ? 'Téléconsultation'
                                                     : 'Cabinet',
                                                 bottom: _Frow(
-                                                    badge: const BadgeChip(
-                                                        label: 'Confirmé',
-                                                        style: BadgeChipStyle.green,
-                                                    ),
-                                                    action: RdvButton(
+                                                    badge: rdv.estAReprogrammer
+                                                        ? const BadgeChip(
+                                                            label: 'À reprogrammer',
+                                                            style: BadgeChipStyle.coral,
+                                                            icon: Icons.event_busy_outlined,
+                                                        )
+                                                        : const BadgeChip(
+                                                            label: 'Confirmé',
+                                                            style: BadgeChipStyle.green,
+                                                        ),
+                                                    // Ni visio ni dossier pour `a_reprogrammer`
+                                                    // (créneau initial passé).
+                                                    action: rdv.estAReprogrammer
+                                                        ? null
+                                                        : RdvButton(
                                                         label: rdv.typeRdv == TypeRdv.teleconsultation
                                                             ? 'Démarrer'
                                                             : 'Dossier',

@@ -19,6 +19,8 @@
 // Erreurs possibles (voir visio.controller.js) :
 //   - 400 si le RDV n'est pas une téléconsultation, ou n'est pas dans
 //     un statut permettant la visio (confirme / en_attente_presence) ;
+//     un RDV `a_reprogrammer` est intercepté avant l'appel (message
+//     dédié, sans bouton « Réessayer ») ;
 //   - 403 si l'utilisateur courant n'est ni le médecin ni le patient
 //     concerné ;
 //   - 404 si le RDV n'existe pas (a été supprimé entre-temps).
@@ -56,6 +58,10 @@ class _TeleconsultationScreenState
 
   _EtatEcran _etat = _EtatEcran.chargement;
   String? _messageErreur;
+
+  /// Vrai quand la visio est refusée à cause du statut du RDV
+  /// (`a_reprogrammer`) : réessayer n'a alors aucun sens.
+  bool _blocageStatut = false;
   bool _aQuitteVolontairement = false;
 
   @override
@@ -76,9 +82,25 @@ class _TeleconsultationScreenState
   }
 
   Future<void> _demarrer() async {
+    // Le serveur refuse la visio pour un RDV `a_reprogrammer` : on
+    // l'explique sans même appeler POST /visio/token. Même texte que
+    // Teleconsultation.jsx côté web.
+    if (widget.rdv.statut == StatutRendezVous.aReprogrammer) {
+      setState(() {
+        _etat = _EtatEcran.erreur;
+        _blocageStatut = true;
+        _messageErreur =
+            "Ce rendez-vous est à reprogrammer (les deux parties étaient "
+            "absentes). Convenez d'une nouvelle date depuis la page de "
+            "vos rendez-vous.";
+      });
+      return;
+    }
+
     setState(() {
       _etat = _EtatEcran.chargement;
       _messageErreur = null;
+      _blocageStatut = false;
     });
 
     // Repose sur le controller de rendez-vous (visio_controller.dart)
@@ -185,7 +207,7 @@ class _TeleconsultationScreenState
             _EtatEcran.erreur => _ErreurConsultation(
               message: _messageErreur ??
                   'Impossible de démarrer la consultation.',
-              onReessayer: _demarrer,
+              onReessayer: _blocageStatut ? null : _demarrer,
             ),
             _EtatEcran.enConference => const SizedBox.shrink(),
           },
@@ -227,7 +249,9 @@ class _ErreurConsultation extends StatelessWidget {
   });
 
   final String message;
-  final VoidCallback onReessayer;
+
+  /// `null` : pas de bouton « Réessayer » (erreur non récupérable).
+  final VoidCallback? onReessayer;
 
   @override
   Widget build(BuildContext context) {
@@ -253,12 +277,14 @@ class _ErreurConsultation extends StatelessWidget {
                   ),
                   child: const Text('Retour'),
                 ),
-                const SizedBox(width: 12),
-                RdvButton(
-                  label: 'Réessayer',
-                  icon: Icons.refresh,
-                  onPressed: onReessayer,
-                ),
+                if (onReessayer != null) ...[
+                  const SizedBox(width: 12),
+                  RdvButton(
+                    label: 'Réessayer',
+                    icon: Icons.refresh,
+                    onPressed: onReessayer!,
+                  ),
+                ],
               ],
             ),
           ],
