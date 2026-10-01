@@ -49,6 +49,8 @@ const STATUT_RDV_INFOS = {
   non_honore: { label: "Non honoré", classe: "chip-danger" },
   annule: { label: "Annulé", classe: "chip-danger" },
   conteste: { label: "Contesté", classe: "chip-danger" },
+  // Politique de fonds v2 : deux absents, nouvelle date à convenir sous 48 h.
+  a_reprogrammer: { label: "À reprogrammer", classe: "chip-semaine" },
 };
 
 function formaterDate(valeur, avecHeure = false) {

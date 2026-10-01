@@ -134,6 +134,8 @@ function nomPatient(rdv) {
 function libelleRendezVous(rdv) {
   if (!rdv) return "";
   if (rdv.statut === "en_attente_presence") return "En attente · présence";
+  // Politique de fonds v2 : deux absents, en attente d'une nouvelle date (48 h).
+  if (rdv.statut === "a_reprogrammer") return "À reprogrammer";
   if (rdv.statut === "conteste") return "Contesté";
   if (rdv.statut === "non_honore") return "Non honoré";
   if (rdv.type_rdv === "teleconsultation") return "Téléconsultation";
@@ -338,7 +340,12 @@ const MedecinAgenda = () => {
         const heureCreneau = formatHeure(creneau.horaire?.heure_debut ?? horaire.heure_debut);
         const rdv = rdvParCase.get(`${jourISO}__${heureCreneau}`);
         return {
-          statut: rdv?.statut === "en_attente_presence" ? "attente" : "reserve",
+          // « a_reprogrammer » partage le style « en attente » : le créneau reste
+          // occupé (jamais modifiable ici) mais n'est pas un rendez-vous ferme.
+          statut:
+            rdv?.statut === "en_attente_presence" || rdv?.statut === "a_reprogrammer"
+              ? "attente"
+              : "reserve",
           creneau,
           rdv,
           patient: rdv ? nomPatient(rdv) : "Patient",
@@ -688,7 +695,7 @@ const MedecinAgenda = () => {
             <div className="agenda-legend">
               <span className="legend-key"><span className="legend-swatch sw-free"></span> Libre</span>
               <span className="legend-key"><span className="legend-swatch sw-booked"></span> Réservé</span>
-              <span className="legend-key"><span className="legend-swatch sw-pending"></span> En attente de présence</span>
+              <span className="legend-key"><span className="legend-swatch sw-pending"></span> En attente de présence / à reprogrammer</span>
               <span className="legend-key"><span className="legend-swatch sw-blocked"></span> Bloqué / non proposé</span>
               <span className="legend-key"><span className="legend-swatch sw-today"></span> Aujourd'hui</span>
             </div>

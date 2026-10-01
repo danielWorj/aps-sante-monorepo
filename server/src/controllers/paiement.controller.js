@@ -211,6 +211,7 @@ export async function creerPaiementRdv(req, res, next) {
     return res.status(201).json({ url: session.url });
   } catch (err) {
     if (repondreSiPaiementExistant(err, res)) return;
+    if (repondreSiBaremeAbsent(err, res)) return;
     next(err);
   }
 }
@@ -306,6 +307,7 @@ export async function creerPaymentSheetRdv(req, res, next) {
     });
   } catch (err) {
     if (repondreSiPaiementExistant(err, res)) return;
+    if (repondreSiBaremeAbsent(err, res)) return;
     next(err);
   }
 }

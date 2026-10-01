@@ -1,6 +1,6 @@
 // src/controllers/paiementCampay.controller.js
 import prisma from "../lib/prisma.js";
-import { verifierRdvPayable, creerTransactionEnAttente, repondreSiPaiementExistant } from "./paiement.controller.js";
+import { verifierRdvPayable, creerTransactionEnAttente, repondreSiPaiementExistant, repondreSiBaremeAbsent } from "./paiement.controller.js";
 import {
   CampayError, DEVISE_CAMPAY, initierCollecte, normaliserNumeroCM, signatureCallbackValide,
 } from "../lib/campayService.js";
@@ -89,6 +89,7 @@ export async function creerPaiementCampayRdv(req, res, next) {
     });
   } catch (err) {
     if (repondreSiPaiementExistant(err, res)) return;
+    if (repondreSiBaremeAbsent(err, res)) return;
     if (err instanceof CampayError) {
       console.error("[campay] collecte refusée :", err.code, err.payload);
       return res.status(err.status >= 500 ? 502 : 400).json({ message: err.message, code: err.code });

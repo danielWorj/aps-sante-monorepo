@@ -65,6 +65,8 @@ const MESSAGE_STATUT_INDISPONIBLE = {
   non_honore: "Ce rendez-vous a été marqué comme non honoré.",
   annule: "Ce rendez-vous a été annulé.",
   conteste: "Ce rendez-vous fait l'objet d'une contestation — contactez le support.",
+  a_reprogrammer:
+    "Ce rendez-vous est à reprogrammer (les deux parties étaient absentes). Convenez d'une nouvelle date depuis la page de vos rendez-vous.",
 };
 
 function extraireInitiales(nom, prenom) {
