@@ -60,6 +60,11 @@ import bcrypt from "bcrypt"; // ajuster vers "bcryptjs" si c'est la lib utilisé
 import prisma from "../lib/prisma.js";
 import cloudinaryService, { construireUrl } from "../lib/cloudinaryService.js";
 import { verifierAppartenanceOrdreONMC } from "../lib/onmcVerificationService.js";
+import {
+  creerAccesseurGeospatial,
+  analyserParametresProximite,
+  validerCoordonnees,
+} from "../lib/geo.js";
 
 export {
   listerAvisMedecin,
@@ -214,6 +219,16 @@ const SELECTION_PAYS_PUBLIC = {
   select: { pays_id: true, nom: true },
 };
 
+// `include` de la fiche renvoyée par modifierMedecin (vue propriétaire/
+// admin : email + téléphone). Factorisé car utilisé par deux requêtes
+// exclusives (update / findUnique si `data` vide).
+const INCLUSION_MEDECIN_PROPRIETAIRE = {
+  utilisateur: SELECTION_UTILISATEUR_ADMIN,
+  specialite: SELECTION_SPECIALITE_PUBLIC,
+  ville_exercice: SELECTION_VILLE_PUBLIC,
+  pays_exercice: SELECTION_PAYS_PUBLIC,
+};
+
 function estAdmin(utilisateur) {
   return utilisateur?.role === "admin" || utilisateur?.role === "superadmin";
 }
@@ -251,6 +266,55 @@ function avecUrlsFichiersMedecin(medecin) {
   };
 }
 
+/* ===================================================================
+ * Géolocalisation (Medecin.geolocalisation, geography(Point, 4326))
+ *
+ * Non supportée nativement par Prisma Client (type "Unsupported(...)") :
+ * lecture/écriture/proximité passent par lib/geo.js (SQL brut), jamais
+ * par les `data` de prisma.medecin.create/update — latitude/longitude
+ * ne sont donc PAS des champs Prisma et ne doivent JAMAIS être ajoutés
+ * à CHAMPS_MODIFIABLES_MEDECIN. Contrat de réponse commun à toutes les
+ * entités géolocalisées : `geolocalisation: { latitude, longitude } | null`.
+ * =================================================================== */
+
+const geoMedecin = creerAccesseurGeospatial({
+  table: "medecin",
+  colonne: "geolocalisation",
+  clePrimaire: "medecin_id",
+});
+
+/**
+ * Ajoute `geolocalisation` à UNE fiche (lecture unitaire : 1 requête).
+ * Pour une liste, utiliser avecGeolocalisations (lecture groupée).
+ */
+async function avecGeolocalisation(medecin) {
+  if (!medecin) return medecin;
+  const geolocalisation = await geoMedecin.recuperer(medecin.medecin_id);
+  return { ...medecin, geolocalisation };
+}
+
+/**
+ * Ajoute `geolocalisation` à une LISTE de fiches en UNE seule requête
+ * SQL (anti N+1, contrairement à avecGeolocalisation de la pharmacie
+ * qui lit fiche par fiche).
+ */
+async function avecGeolocalisations(medecins) {
+  const points = await geoMedecin.recupererPlusieurs(medecins.map((m) => m.medecin_id));
+  return medecins.map((m) => ({ ...m, geolocalisation: points.get(m.medecin_id) ?? null }));
+}
+
+/**
+ * Lit latitude/longitude dans un corps de requête multipart/form-data.
+ * En multipart, le client ne peut pas envoyer `null` : l'EFFACEMENT de
+ * la position passe par une chaîne vide, convertie ici en `null` avant
+ * validerCoordonnees (qui comprend `null` + `null` comme "effacer").
+ * Champ absent -> `undefined` -> "inchange".
+ */
+function lireCoordonneesRequete(body) {
+  const normaliser = (valeur) => (typeof valeur === "string" && valeur.trim() === "" ? null : valeur);
+  return { latitude: normaliser(body?.latitude), longitude: normaliser(body?.longitude) };
+}
+
 /**
  * Génère un mot de passe temporaire lisible (12 caractères) — même
  * patron attendu que creerPharmacie côté service front
@@ -282,6 +346,11 @@ function genererMotDePasseTemporaire() {
  * Fichiers requis (multipart, voir gererTeleversementMedecin) : cni,
  * attestation. Fichier optionnel : photo (photo de profil, photo_url
  * nullable en base).
+ * Position du lieu d'exercice : FACULTATIVE — latitude/longitude
+ * (fournies ensemble, en chaînes numériques en multipart), validées
+ * AVANT tout upload Cloudinary (400 si invalides) puis écrites via
+ * lib/geo.js après la transaction. La réponse 201 contient
+ * `medecin.geolocalisation: { latitude, longitude } | null`.
  * ⚠️ SÉCURITÉ — statut_verification n'est PLUS lisible depuis
  * req.body ici : la route étant désormais ouverte à tout le monde
  * sans authentification, accepter cette valeur depuis la requête
@@ -344,6 +413,14 @@ export async function creerMedecin(req, res, next) {
     }
     // photo : optionnelle, même à la création (schema.prisma, photo_url
     // nullable) — contrairement à cni/attestation.
+
+    // Position facultative : validée AVANT les uploads Cloudinary pour
+    // ne rien téléverser (ni nettoyer) si les coordonnées sont invalides.
+    const { latitude, longitude } = lireCoordonneesRequete(req.body);
+    const coordonnees = validerCoordonnees(latitude, longitude);
+    if (coordonnees.statut === "erreur") {
+      return res.status(400).json({ message: coordonnees.message });
+    }
 
     // Route désormais publique (aucune authentification) : on ignore
     // délibérément un éventuel req.body.statut_verification et on
@@ -424,9 +501,31 @@ export async function creerMedecin(req, res, next) {
         return { utilisateur: utilisateurCree, medecin: medecinCree };
       });
 
+      // Position (facultative) écrite APRÈS la transaction (lib/geo.js
+      // passe par le client Prisma global, pas par `tx`). Les
+      // coordonnées sont déjà validées : une erreur ici ne peut être
+      // qu'un incident base de données. La fiche existe déjà : on ne
+      // doit surtout pas laisser remonter l'erreur jusqu'au `catch`
+      // ci-dessous, qui supprimerait les fichiers Cloudinary
+      // désormais référencés. On journalise et on signale à l'appelant.
+      let geolocalisation = null;
+      let avertissement;
+      if (coordonnees.statut === "valide") {
+        try {
+          const erreurGeo = await geoMedecin.appliquer(medecin.medecin_id, latitude, longitude);
+          if (erreurGeo) throw new Error(erreurGeo);
+          geolocalisation = { latitude: coordonnees.latitude, longitude: coordonnees.longitude };
+        } catch (errGeo) {
+          console.error("creerMedecin : échec de l'enregistrement de la position :", errGeo);
+          avertissement =
+            "Médecin créé, mais la position n'a pas pu être enregistrée : renseignez-la depuis votre profil.";
+        }
+      }
+
       return res.status(201).json({
         message: "Médecin créé.",
-        medecin: avecUrlsFichiersMedecin(medecin),
+        ...(avertissement ? { avertissement } : {}),
+        medecin: avecUrlsFichiersMedecin({ ...medecin, geolocalisation }),
         utilisateur: {
           utilisateur_id: utilisateur.utilisateur_id,
           nom: utilisateur.nom,
@@ -464,25 +563,64 @@ export async function creerMedecin(req, res, next) {
  * (SELECTION_UTILISATEUR_ADMIN) — nécessaire à l'écran back-office
  * "Tous les médecins". Ville/pays d'exercice sont désormais inclus
  * (libellé, pas seulement l'ID de la FK).
- * Filtres optionnels : ?specialite_id=...&specialite=...&ville_exercice_id=...&pays_exercice_id=...&recherche=...
+ * Filtres optionnels : ?specialite_id=...&specialite=...&ville_exercice_id=...&pays_exercice_id=...&recherche=...&statut_verification=...
  *   - specialite_id : filtre exact sur la FK (id de la table specialite).
  *   - specialite     : recherche par NOM de spécialité (relation), pour
  *                       les clients qui n'ont pas encore l'id sous la
  *                       main — ne fonctionne plus par égalité sur une
  *                       colonne texte, mais via le champ relationnel.
- * Affiche TOUTES les fiches médecin, quel que soit statut_verification
- * (pas de filtrage sur ce champ ici), triées de la plus récente à la
- * plus ancienne.
+ *   - statut_verification : filtre OPTIONNEL (non_publie / en_cours /
+ *                       publie, 400 sinon). Sans ce paramètre, le
+ *                       comportement historique est inchangé : TOUTES
+ *                       les fiches sont renvoyées, quel que soit leur
+ *                       statut.
+ * Recherche par proximité optionnelle : ?lat=...&lng=...&rayon_km=...
+ * (voir analyserParametresProximite / lib/geo.js) — combinable avec
+ * tous les filtres ci-dessus. lat/lng doivent être fournis ensemble ;
+ * rayon_km est optionnel (défaut : 10 km). Quand elle est active,
+ * chaque fiche gagne `distance_km` (1 décimale) et la liste est triée
+ * par distance croissante ; les médecins sans position en sont exclus.
+ * Dans tous les cas, chaque fiche porte `geolocalisation:
+ * { latitude, longitude } | null`.
+ * Sans proximité : triées de la plus récente à la plus ancienne.
  */
 export async function listerMedecins(req, res, next) {
   try {
-    const { specialite_id, specialite, ville_exercice_id, pays_exercice_id, recherche } = req.query;
+    const {
+      specialite_id,
+      specialite,
+      ville_exercice_id,
+      pays_exercice_id,
+      recherche,
+      statut_verification,
+    } = req.query;
 
-    const where = {};
-    if (specialite_id) where.specialite_id = specialite_id;
-    else if (specialite) where.specialite = { nom: { contains: specialite, mode: "insensitive" } };
-    if (ville_exercice_id) where.ville_exercice_id = ville_exercice_id;
-    if (pays_exercice_id) where.pays_exercice_id = pays_exercice_id;
+    if (statut_verification && !STATUTS_VERIFICATION_MEDECIN.includes(statut_verification)) {
+      return res.status(400).json({
+        message: `statut_verification invalide. Valeurs acceptées : ${STATUTS_VERIFICATION_MEDECIN.join(", ")}.`,
+      });
+    }
+
+    const proximite = analyserParametresProximite(req.query);
+    if (proximite.erreur) {
+      return res.status(400).json({ message: proximite.erreur });
+    }
+
+    // Filtres "à plat" (colonnes de la table medecin) : les SEULS que
+    // geo.rechercherParProximite sait traduire en SQL (égalité simple).
+    const whereGeo = {};
+    if (specialite_id) whereGeo.specialite_id = specialite_id;
+    if (ville_exercice_id) whereGeo.ville_exercice_id = ville_exercice_id;
+    if (pays_exercice_id) whereGeo.pays_exercice_id = pays_exercice_id;
+    if (statut_verification) whereGeo.statut_verification = statut_verification;
+
+    // Filtre complet = filtres "à plat" + filtres RELATIONNELS (nom de
+    // spécialité, nom/prénom de l'utilisateur) que geo.js refuse :
+    // ceux-ci sont réappliqués côté Prisma dans la branche proximité.
+    const where = { ...whereGeo };
+    if (!specialite_id && specialite) {
+      where.specialite = { nom: { contains: specialite, mode: "insensitive" } };
+    }
     if (recherche) {
       where.utilisateur = {
         OR: [
@@ -492,18 +630,65 @@ export async function listerMedecins(req, res, next) {
       };
     }
 
+    const include = {
+      utilisateur: selectionUtilisateurSelonRole(req.utilisateur),
+      specialite: SELECTION_SPECIALITE_PUBLIC,
+      ville_exercice: SELECTION_VILLE_PUBLIC,
+      pays_exercice: SELECTION_PAYS_PUBLIC,
+    };
+
+    if (proximite.actif) {
+      // Temps 1 : identifiants + distances via PostGIS, avec les seuls
+      // filtres "à plat". PAS de `limite` : le post-filtrage
+      // relationnel ci-dessous pourrait sinon réduire le résultat.
+      const proches = await geoMedecin.rechercherParProximite({
+        latitude: proximite.latitude,
+        longitude: proximite.longitude,
+        rayonKm: proximite.rayonKm,
+        where: whereGeo,
+      });
+
+      if (!proches.length) {
+        return res.status(200).json({ medecins: [] });
+      }
+
+      const ids = proches.map((p) => p.id);
+      const distanceParId = new Map(proches.map((p) => [p.id, p.distance_km]));
+
+      // Temps 2 : fiches complètes, avec réapplication des filtres
+      // relationnels (recherche par nom, nom de spécialité).
+      const medecins = await prisma.medecin.findMany({
+        where: { ...where, medecin_id: { in: ids } },
+        include,
+      });
+      const medecinsGeo = await avecGeolocalisations(medecins);
+      const medecinParId = new Map(medecinsGeo.map((m) => [m.medecin_id, m]));
+
+      // findMany({ in }) ne garantit pas l'ordre : on ré-ordonne selon
+      // la distance croissante renvoyée par PostGIS. Les ids écartés
+      // par le filtre relationnel (ou supprimés entre-temps) sont
+      // simplement absents de la Map.
+      const resultat = [];
+      for (const id of ids) {
+        const medecin = medecinParId.get(id);
+        if (!medecin) continue;
+        resultat.push({
+          ...avecUrlsFichiersMedecin(medecin),
+          distance_km: Math.round(distanceParId.get(id) * 10) / 10,
+        });
+      }
+
+      return res.status(200).json({ medecins: resultat });
+    }
+
     const medecins = await prisma.medecin.findMany({
       where,
-      include: {
-        utilisateur: selectionUtilisateurSelonRole(req.utilisateur),
-        specialite: SELECTION_SPECIALITE_PUBLIC,
-        ville_exercice: SELECTION_VILLE_PUBLIC,
-        pays_exercice: SELECTION_PAYS_PUBLIC,
-      },
+      include,
       orderBy: { date_creation: "desc" },
     });
+    const medecinsGeo = await avecGeolocalisations(medecins);
 
-    return res.status(200).json({ medecins: medecins.map(avecUrlsFichiersMedecin) });
+    return res.status(200).json({ medecins: medecinsGeo.map(avecUrlsFichiersMedecin) });
   } catch (err) {
     next(err);
   }
@@ -513,7 +698,8 @@ export async function listerMedecins(req, res, next) {
  * GET /api/medecins/:id
  * PUBLIQUE avec authentification optionnelle (mêmes règles que
  * listerMedecins ci-dessus : vue enrichie email/téléphone + ville/pays
- * d'exercice réservée à admin/superadmin). Consultation directe par ID
+ * d'exercice réservée à admin/superadmin). La fiche porte
+ * `geolocalisation: { latitude, longitude } | null`. Consultation directe par ID
  * possible même hors "verifie" (pas de fuite d'info supplémentaire par
  * rapport à la liste), mais la fiche n'apparaît dans /medecins que
  * vérifiée.
@@ -533,7 +719,7 @@ export async function obtenirMedecin(req, res, next) {
       return res.status(404).json({ message: "Médecin introuvable." });
     }
 
-    return res.status(200).json({ medecin: avecUrlsFichiersMedecin(medecin) });
+    return res.status(200).json({ medecin: avecUrlsFichiersMedecin(await avecGeolocalisation(medecin)) });
   } catch (err) {
     next(err);
   }
@@ -543,7 +729,8 @@ GET /api/medecins/mon-profil
 AUTHENTIFIÉ uniquement (voir medecin.routes.js).
 Récupère le profil complet du médecin connecté (déduit du token)
 avec toutes ses relations : utilisateur, spécialité, pays/ville
-d'exercice, moyens de paiement, avis, abonnements.
+d'exercice, moyens de paiement, avis, abonnements, ainsi que
+`geolocalisation: { latitude, longitude } | null`.
 
 Cette route est dédiée à l'écran "Mon profil" du médecin et garantit
 que seul le médecin propriétaire peut accéder à ses données sensibles
@@ -627,7 +814,7 @@ export async function obtenirMonProfil(req, res, next) {
     const { avis, ...medecinSansAvis } = medecin;
 
     return res.status(200).json({
-      medecin: avecUrlsFichiersMedecin(medecinSansAvis),
+      medecin: avecUrlsFichiersMedecin(await avecGeolocalisation(medecinSansAvis)),
       statistiques: {
         total_avis: totalAvis,
         note_moyenne: noteMoyenne ? Math.round(noteMoyenne * 10) / 10 : null,
@@ -669,6 +856,20 @@ export async function obtenirMonProfil(req, res, next) {
  *     Cloudinary, même patron que photo_url : remplacement optionnel
  *     via req.files.cv, ancien fichier nettoyé (best effort) une fois
  *     la mise à jour DB confirmée.
+ *
+ * Position du lieu d'exercice (latitude/longitude, facultatives,
+ * fournies ensemble) :
+ *   - validées AVANT toute écriture (et tout upload Cloudinary) : 400
+ *     si invalides ;
+ *   - requête multipart : l'EFFACEMENT passe par des chaînes vides
+ *     (`latitude=""&longitude=""`), converties en `null` ;
+ *   - une requête ne contenant QUE la position est valide (pas de 400
+ *     "Aucune donnée valide") ;
+ *   - modification de la position par un non-admin : la fiche repasse
+ *     à "en_cours", comme pour toute autre modification de fiche ;
+ *   - latitude/longitude ne sont pas des champs Prisma : elles sont
+ *     écrites via lib/geo.js APRÈS la transaction ;
+ *   - la réponse porte `medecin.geolocalisation: { latitude, longitude } | null`.
  */
 export async function modifierMedecin(req, res, next) {
   try {
@@ -683,6 +884,15 @@ export async function modifierMedecin(req, res, next) {
     if (!estAdministrateur && !estProprietaire) {
       return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
     }
+
+    // Position : validée AVANT toute écriture en base et tout upload
+    // Cloudinary ("" -> null pour l'effacement, voir lireCoordonneesRequete).
+    const { latitude, longitude } = lireCoordonneesRequete(req.body);
+    const coordonnees = validerCoordonnees(latitude, longitude);
+    if (coordonnees.statut === "erreur") {
+      return res.status(400).json({ message: coordonnees.message });
+    }
+    const geoModifiee = coordonnees.statut !== "inchange";
 
     const donnees = {};
 
@@ -766,13 +976,21 @@ export async function modifierMedecin(req, res, next) {
         }
         donnees.statut_verification = req.body.statut_verification;
       }
-    } else if (Object.keys(donnees).length > 0 || Object.keys(donneesUtilisateur).length > 0) {
-      // Le médecin modifie sa propre fiche (ou ses coordonnées) : repasse
-      // en vérification.
+    } else if (
+      Object.keys(donnees).length > 0 ||
+      Object.keys(donneesUtilisateur).length > 0 ||
+      geoModifiee
+    ) {
+      // Le médecin modifie sa propre fiche (ou ses coordonnées, ou sa
+      // position) : repasse en vérification.
       donnees.statut_verification = "en_cours";
     }
 
-    if (Object.keys(donnees).length === 0 && Object.keys(donneesUtilisateur).length === 0) {
+    if (
+      Object.keys(donnees).length === 0 &&
+      Object.keys(donneesUtilisateur).length === 0 &&
+      !geoModifiee
+    ) {
       return res.status(400).json({ message: "Aucune donnée valide à mettre à jour." });
     }
 
@@ -801,20 +1019,22 @@ export async function modifierMedecin(req, res, next) {
             }),
           ]
         : [prisma.utilisateur.findUnique({ where: { utilisateur_id: medecin.utilisateur_id } })]),
-      prisma.medecin.update({
-        where: { medecin_id: req.params.id },
-        data: donnees,
-        // Ici (contrairement à listerMedecins/obtenirMedecin) l'accès a
-        // déjà été restreint plus haut à estAdministrateur ||
-        // estProprietaire : quiconque atteint ce point a le droit de
-        // voir son propre email/téléphone, pas seulement un admin.
-        include: {
-          utilisateur: SELECTION_UTILISATEUR_ADMIN,
-          specialite: SELECTION_SPECIALITE_PUBLIC,
-          ville_exercice: SELECTION_VILLE_PUBLIC,
-          pays_exercice: SELECTION_PAYS_PUBLIC,
-        },
-      }),
+      // Ici (contrairement à listerMedecins/obtenirMedecin) l'accès a
+      // déjà été restreint plus haut à estAdministrateur ||
+      // estProprietaire : quiconque atteint ce point a le droit de
+      // voir son propre email/téléphone, pas seulement un admin.
+      // `data` vide (admin qui ne modifie QUE la position) : on évite
+      // un update sans donnée et on relit simplement la fiche.
+      Object.keys(donnees).length > 0
+        ? prisma.medecin.update({
+            where: { medecin_id: req.params.id },
+            data: donnees,
+            include: INCLUSION_MEDECIN_PROPRIETAIRE,
+          })
+        : prisma.medecin.findUnique({
+            where: { medecin_id: req.params.id },
+            include: INCLUSION_MEDECIN_PROPRIETAIRE,
+          }),
     ]);
 
     // Nettoyage best effort des anciens fichiers remplacés.
@@ -825,9 +1045,28 @@ export async function modifierMedecin(req, res, next) {
       ancienCvNom ? cloudinaryService.supprimerFichier(ancienCvNom) : Promise.resolve(),
     ]);
 
+    // Position : écrite APRÈS la transaction (lib/geo.js utilise le
+    // client Prisma global) et après le nettoyage Cloudinary, pour
+    // qu'un incident SQL sur la position n'empêche pas ce nettoyage.
+    // `appliquer` ne peut pas renvoyer d'erreur de validation ici
+    // (coordonnées déjà validées) ; on traite le cas par sécurité.
+    let geolocalisation;
+    if (geoModifiee) {
+      const erreurGeo = await geoMedecin.appliquer(req.params.id, latitude, longitude);
+      if (erreurGeo) {
+        return res.status(400).json({ message: erreurGeo });
+      }
+      geolocalisation =
+        coordonnees.statut === "valide"
+          ? { latitude: coordonnees.latitude, longitude: coordonnees.longitude }
+          : null;
+    } else {
+      geolocalisation = await geoMedecin.recuperer(req.params.id);
+    }
+
     return res.status(200).json({
       message: "Fiche médecin mise à jour.",
-      medecin: avecUrlsFichiersMedecin(medecinMisAJour),
+      medecin: avecUrlsFichiersMedecin({ ...medecinMisAJour, geolocalisation }),
     });
   } catch (err) {
     next(err);
@@ -856,7 +1095,7 @@ export async function publierMedecin(req, res, next) {
     if (medecin.statut_verification === "publie") {
       return res.status(200).json({
         message: "Ce médecin est déjà publié.",
-        medecin: avecUrlsFichiersMedecin(medecin),
+        medecin: avecUrlsFichiersMedecin(await avecGeolocalisation(medecin)),
       });
     }
 
@@ -873,7 +1112,7 @@ export async function publierMedecin(req, res, next) {
 
     return res.status(200).json({
       message: "Fiche médecin publiée.",
-      medecin: avecUrlsFichiersMedecin(medecinMisAJour),
+      medecin: avecUrlsFichiersMedecin(await avecGeolocalisation(medecinMisAJour)),
     });
   } catch (err) {
     next(err);
@@ -925,7 +1164,7 @@ export async function suspendreMedecin(req, res, next) {
 
     return res.status(200).json({
       message: "Médecin suspendu : accès au compte bloqué et fiche retirée de l'annuaire public.",
-      medecin: avecUrlsFichiersMedecin(medecinMisAJour),
+      medecin: avecUrlsFichiersMedecin(await avecGeolocalisation(medecinMisAJour)),
     });
   } catch (err) {
     next(err);
