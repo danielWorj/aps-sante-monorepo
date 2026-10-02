@@ -2,8 +2,8 @@
 //
 // Point d'accès UNIQUE aux colonnes PostGIS `geography(Point, 4326)`
 // déclarées `Unsupported(...)` dans schema.prisma (ServiceAssurance.geolocalisation,
-// Agence.gps, et — chantiers séparés à venir — Pharmacie.geolocalisation,
-// StructureSante/CentreSante.geolocalisation, Medecin.*).
+// Agence.gps, Pharmacie.geolocalisation, StructureSante/CentreSante.geolocalisation
+// et Medecin.geolocalisation).
 //
 // Contexte : Prisma Client ne sait ni lire ni écrire un type
 // `Unsupported(...)`, donc toute manipulation de ces colonnes passe par
@@ -23,8 +23,8 @@
 //
 // Portée : module strictement générique, sans dépendance à un modèle
 // métier particulier. Le module Assurance (ServiceAssurance, Agence)
-// est le premier appelant ; Pharmacie / Centre de santé / Médecin sont
-// prévus pour brancher dessus plus tard, sans dupliquer ce fichier.
+// est le premier appelant ; Pharmacie, Centre de santé et Médecin se
+// branchent dessus à leur tour, sans dupliquer ce fichier.
 //
 // Hypothèse portée par tout ce module : la clé primaire de la table
 // ciblée est de type `uuid` (`@db.Uuid`), comme c'est le cas pour
@@ -405,6 +405,105 @@ export async function rechercherParProximite({
 }
 
 /* ===================================================================
+ * Analyse des query params de proximité (?lat=...&lng=...&rayon_km=...)
+ *
+ * Même contrat que les copies locales de analyserParametresProximite
+ * dans pharmacie.controller.js, centreSante.controller.js et
+ * assurance.controller.js (laissées en l'état : leur remplacement par
+ * cet export fera l'objet d'un refactor séparé). Utilisée par
+ * listerMedecins.
+ * =================================================================== */
+
+const RAYON_KM_PAR_DEFAUT = 10;
+
+/**
+ * @param {{ lat?: *, lng?: *, rayon_km?: * }} params  typiquement req.query
+ * @returns
+ *   { actif: false }                                  -> ni lat ni lng fournis, liste "classique"
+ *   { actif: false, erreur: string }                  -> paramètres invalides, à renvoyer en HTTP 400
+ *   { actif: true, latitude, longitude, rayonKm }     -> recherche par proximité à effectuer
+ */
+export function analyserParametresProximite({ lat, lng, rayon_km }) {
+  const resultatCoord = validerCoordonnees(lat, lng);
+
+  if (resultatCoord.statut === "inchange") {
+    return { actif: false };
+  }
+  if (resultatCoord.statut === "erreur") {
+    return { actif: false, erreur: resultatCoord.message };
+  }
+  // statut "effacement" (lat/lng explicitement à null) ne peut pas
+  // survenir via des query params HTTP (toujours des chaînes ou
+  // absents) — gardé par cohérence défensive avec validerCoordonnees.
+  if (resultatCoord.statut === "effacement") {
+    return { actif: false, erreur: "latitude et longitude doivent être des nombres." };
+  }
+
+  let rayonKm = RAYON_KM_PAR_DEFAUT;
+  if (rayon_km !== undefined) {
+    const rayonNum = typeof rayon_km === "string" ? Number(rayon_km) : rayon_km;
+    if (typeof rayonNum !== "number" || Number.isNaN(rayonNum) || rayonNum <= 0) {
+      return { actif: false, erreur: "rayon_km invalide (doit être un nombre strictement positif)." };
+    }
+    rayonKm = rayonNum;
+  }
+
+  return {
+    actif: true,
+    latitude: resultatCoord.latitude,
+    longitude: resultatCoord.longitude,
+    rayonKm,
+  };
+}
+
+/* ===================================================================
+ * Lecture groupée de plusieurs points (anti N+1)
+ *
+ * recupererPoint ne lit qu'une ligne : l'appeler dans une boucle sur
+ * une liste coûte 1 requête SQL par fiche. Cette variante lit tous les
+ * points demandés en UNE seule requête (WHERE pk IN (...)).
+ * =================================================================== */
+
+/**
+ * @param {object} params
+ * @param {string} params.table
+ * @param {string} params.colonne
+ * @param {string} params.clePrimaire
+ * @param {string[]} params.ids  identifiants uuid (issus de la base, jamais saisis par l'utilisateur)
+ * @returns {Promise<Map<string, { latitude: number, longitude: number }>>}
+ *   Map id -> point. Les lignes sans point (NULL) ou inexistantes sont
+ *   simplement absentes de la Map : `map.get(id) ?? null` donne la
+ *   `geolocalisation` à exposer.
+ */
+export async function recupererPoints({ table, colonne, clePrimaire, ids }) {
+  // Validation AVANT le retour anticipé : une erreur d'appel doit
+  // remonter même quand la liste est vide.
+  const tableSql = identifiantSql(table, "table");
+  const colonneSql = identifiantSql(colonne, "colonne");
+  const clePrimaireSql = identifiantSql(clePrimaire, "clePrimaire");
+
+  const idsUniques = [...new Set(Array.isArray(ids) ? ids : [])];
+  if (idsUniques.length === 0) return new Map();
+
+  const lignes = await prisma.$queryRaw`
+    SELECT ${clePrimaireSql}::text AS id,
+           ST_Y(${colonneSql}::geometry) AS latitude,
+           ST_X(${colonneSql}::geometry) AS longitude
+    FROM ${tableSql}
+    WHERE ${clePrimaireSql} IN (${Prisma.join(idsUniques.map((id) => Prisma.sql`${id}::uuid`))})
+      AND ${colonneSql} IS NOT NULL
+  `;
+
+  const points = new Map();
+  for (const { id, latitude, longitude } of lignes) {
+    if (latitude !== null && longitude !== null) {
+      points.set(id, { latitude, longitude });
+    }
+  }
+  return points;
+}
+
+/* ===================================================================
  * Accesseur "lié" à une table/colonne/clé — pour éviter de répéter
  * { table, colonne, clePrimaire } à chaque appel dans un contrôleur.
  *
@@ -448,6 +547,9 @@ export function creerAccesseurGeospatial({ table, colonne, clePrimaire }) {
 
   return {
     recuperer: (id) => recupererPoint({ table, colonne, clePrimaire, id }),
+
+    // Lecture groupée (1 seule requête) -> Map<id, { latitude, longitude }>
+    recupererPlusieurs: (ids) => recupererPoints({ table, colonne, clePrimaire, ids }),
 
     definir: (id, latitude, longitude) =>
       definirPoint({ table, colonne, clePrimaire, id, latitude, longitude }),
