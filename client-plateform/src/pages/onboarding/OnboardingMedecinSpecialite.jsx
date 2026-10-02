@@ -15,8 +15,8 @@ import OnboardingProgress from './OnboardingProgess';
  *
  * pays_exercice_id et ville_exercice_id sont repris tels quels des
  * query params (renseignés par l'Écran 1.1.1) et transmis à l'Écran
- * 1.1.3 (liste des médecins obtenus, = /medecin déjà existant) au clic
- * sur "Voir les médecins".
+ * 1.1.3 (liste des médecins obtenus, = /medecin déjà existant) dès le
+ * clic sur une spécialité (pas de bouton de validation supplémentaire).
  *
  * Le lien "Retour" renvoie vers l'Écran 1.1.1 en conservant le pays et
  * la ville déjà choisis (le croquis note explicitement qu'on peut
@@ -34,7 +34,6 @@ export default function OnboardingMedecinSpecialite() {
   const [specialites, setSpecialites] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
-  const [specialiteId, setSpecialiteId] = useState('');
 
   useEffect(() => {
     let annule = false;
@@ -55,8 +54,8 @@ export default function OnboardingMedecinSpecialite() {
     };
   }, []);
 
-  function voirLesMedecins() {
-    if (!specialiteId) return;
+  // Un clic sur une spécialité ouvre directement la liste des médecins.
+  function choisirSpecialite(specialiteId) {
     const params = new URLSearchParams({
       specialite_id: specialiteId,
       pays_exercice_id: paysId,
@@ -112,19 +111,18 @@ export default function OnboardingMedecinSpecialite() {
         {!chargement && !erreur && specialites.length > 0 && (
           <div className="service-type-grid onboarding-specialite-grid">
             {specialites.map((s) => (
-              <label className="service-type-opt" key={s.specialite_id}>
-                <input
-                  type="radio"
-                  name="onboarding-specialite"
-                  value={s.specialite_id}
-                  checked={String(specialiteId) === String(s.specialite_id)}
-                  onChange={(e) => setSpecialiteId(e.target.value)}
-                />
+              <button
+                type="button"
+                className="service-type-opt"
+                key={s.specialite_id}
+                onClick={() => choisirSpecialite(s.specialite_id)}
+                style={{ background: 'none', border: 0, padding: 0 }}
+              >
                 <span className="opt-card">
                   <i className="fa-solid fa-stethoscope" />
                   {s.nom}
                 </span>
-              </label>
+              </button>
             ))}
           </div>
         )}
@@ -132,9 +130,6 @@ export default function OnboardingMedecinSpecialite() {
         <div className="form-nav-actions">
           <button type="button" className="btn btn-ghost" onClick={retourEtapeVille}>
             <i className="fa-solid fa-arrow-left" /> Retour
-          </button>
-          <button type="button" className="btn btn-primary" disabled={!specialiteId} onClick={voirLesMedecins}>
-            <i className="fa-solid fa-magnifying-glass" /> Voir les médecins
           </button>
         </div>
       </div>
