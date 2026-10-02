@@ -106,6 +106,18 @@ String dateHeure(DateTime? date) {
       '${_moisCourts[d.month - 1]}, ${_deuxChiffres(d.hour)}:${_deuxChiffres(d.minute)}';
 }
 
+/// « lun. 12 oct., 14:30 » lu en UTC, SANS conversion de fuseau.
+/// Pour les dates « épinglées UTC » (convention du dépôt, voir plus bas :
+/// créneaux d'agenda et `nouvelle_date_proposee`, reconstruite par
+/// [creneauVersIso]) : l'heure affichée est celle du créneau choisi,
+/// quel que soit le fuseau de l'appareil. Chaîne vide si [date] est `null`.
+String dateHeureUtc(DateTime? date) {
+  if (date == null) return '';
+  final d = date.toUtc();
+  return '${_joursCourts[d.weekday - 1]} ${_deuxChiffres(d.day)} '
+      '${_moisCourts[d.month - 1]}, ${_deuxChiffres(d.hour)}:${_deuxChiffres(d.minute)}';
+}
+
 /// « 12 oct., 14:30 » dans le fuseau local (sans jour de la semaine).
 String dateCourte(DateTime? date) {
   if (date == null) return '';
