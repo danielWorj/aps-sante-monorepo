@@ -4,6 +4,8 @@ import '../../assets/styles/creer-medecin.css';
 import { creerMedecin, listerSpecialites, verifierAppartenanceOrdre } from '../../services/medecinService';
 import { listerPays, listerVilles } from '../../services/geoService';
 import { connecter } from '../../services/authService';
+import { useGeolocation } from '../../hooks/useGeolocation';
+import GoogleMapPicker from '../maps/GoogleMapPicker';
 import { creerMobileMoney, creerCompteBancaire, listerTypesMobileMoney } from '../../services/moyenPaiementService';
 
 // ───────────────────────────────────────────────────────────────────
@@ -14,7 +16,8 @@ import { creerMobileMoney, creerCompteBancaire, listerTypesMobileMoney } from '.
 //     nom, prenom, email, pays_id, specialite_id, numero_ordre,
 //     pays_exercice_id, ville_exercice_id, teleconsultation_activee,
 //     tarif_indicatif, biographie (non vide)
-//   Champ optionnel : telephone
+//   Champs optionnels : telephone, latitude, longitude (à fournir
+//     ensemble ; position du lieu d'exercice, étape 6 « Localisation »)
 //   Fichiers obligatoires : cni, attestation — optionnel : photo
 //
 // Deux simplifications volontaires par rapport au schéma brut :
@@ -35,6 +38,12 @@ import { creerMobileMoney, creerCompteBancaire, listerTypesMobileMoney } from '.
 //   - structure / nomCentre / adresseCentre (aucune notion de
 //     structure de rattachement sur Medecin à la création)
 //   - codeSwift (CompteBancaire n'a que nom_banque, titulaire, iban)
+//
+// Étape 6 "Localisation" (facultative) : latitude/longitude sont envoyées
+// telles quelles dans le corps multipart (chaînes côté serveur, qui les
+// valide avant tout upload). Si l'étape est ignorée, les deux champs sont
+// omis (undefined) et la fiche n'apparaît pas dans la recherche « Autour
+// de moi » tant que la position n'est pas renseignée.
 //
 // Étape 5 "Trésorerie" : POST /medecins ne connaît pas Mobile Money /
 // Compte bancaire (ce sont des entités séparées, MobileMoney /
@@ -60,6 +69,15 @@ const CreationMedecin = () => {
   const [specialites, setSpecialites] = useState([]);
   const [typesMobileMoney, setTypesMobileMoney] = useState([]);
   const [chargementReferentiels, setChargementReferentiels] = useState(true);
+
+  // Étape 6 — bouton "Utiliser ma position actuelle" (voir
+  // src/hooks/useGeolocation.js). Ne fait que pré-remplir latitude/longitude.
+  const {
+    position: positionActuelle,
+    loading: geoEnCours,
+    error: geoErreur,
+    demanderPosition,
+  } = useGeolocation();
 
   // Vérification du numéro d'inscription à l'Ordre (informative,
   // non bloquante pour la soumission)
@@ -96,7 +114,11 @@ const CreationMedecin = () => {
     nom_banque: '',
     iban: '',
 
-    // Étape 6
+    // Étape 6 — localisation du lieu d'exercice (facultative)
+    latitude: '',
+    longitude: '',
+
+    // Étape 7
     acceptCGU: false,
   });
 
@@ -126,6 +148,19 @@ const CreationMedecin = () => {
       annule = true;
     };
   }, []);
+
+  // Biais régional pour le géocodage d'adresse (GoogleMapPicker)
+  const paysSelectionne = pays.find((p) => p.pays_id === formData.pays_id);
+
+  // Pré-remplit latitude/longitude dès que le navigateur renvoie une position
+  useEffect(() => {
+    if (!positionActuelle) return;
+    setFormData((prev) => ({
+      ...prev,
+      latitude: positionActuelle.latitude,
+      longitude: positionActuelle.longitude,
+    }));
+  }, [positionActuelle]);
 
   // Chargement des villes dès qu'un pays est choisi
   useEffect(() => {
@@ -234,7 +269,15 @@ const CreationMedecin = () => {
           if (!formData.iban.trim()) return "Le numéro de compte / IBAN est obligatoire.";
         }
         return null;
-      case 6:
+      case 6: {
+        const latRenseignee = formData.latitude !== '';
+        const lngRenseignee = formData.longitude !== '';
+        if (latRenseignee !== lngRenseignee) {
+          return "Latitude et longitude doivent être renseignées ensemble (ou laissées vides toutes les deux).";
+        }
+        return null;
+      }
+      case 7:
         if (!formData.acceptCGU) return "Vous devez accepter les CGU et la politique de confidentialité.";
         return null;
       default:
@@ -249,7 +292,7 @@ const CreationMedecin = () => {
       return;
     }
     setStepError(null);
-    if (currentStep < 6) setCurrentStep(currentStep + 1);
+    if (currentStep < 7) setCurrentStep(currentStep + 1);
   };
 
   const prevStep = () => {
@@ -260,7 +303,7 @@ const CreationMedecin = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const erreur = validateStep(6);
+    const erreur = validateStep(7);
     if (erreur) {
       setStepError(erreur);
       return;
@@ -285,6 +328,8 @@ const CreationMedecin = () => {
         teleconsultation_activee: formData.teleconsultation_activee,
         tarif_indicatif: Number(formData.tarif_indicatif),
         biographie: formData.biographie.trim(),
+        latitude: formData.latitude === '' ? undefined : Number(formData.latitude),
+        longitude: formData.longitude === '' ? undefined : Number(formData.longitude),
       };
 
       const fichiers = {
@@ -352,6 +397,7 @@ const CreationMedecin = () => {
       'Biographie',
       'Justificatifs',
       'Trésorerie',
+      'Localisation',
       'Confirmation',
     ];
 
@@ -495,7 +541,7 @@ if (isSubmitted) {
             <div className="form-shell">
               <div className="form-shell-grid">
                 <aside className="form-side">
-                  <h4>Votre inscription en 6 étapes</h4>
+                  <h4>Votre inscription en 7 étapes</h4>
                   <p>
                     Quelques minutes suffisent. Votre fiche est mise en ligne dès
                     validation de votre inscription à l'Ordre et de vos
@@ -546,6 +592,15 @@ if (isSubmitted) {
                       </div>
                     </li>
                     <li>
+                      <i className="fa-solid fa-location-dot"></i>
+                      <div>
+                        <strong>Localisation</strong>
+                        <span className="form-side-desc">
+                          Facultatif — position de votre lieu d'exercice
+                        </span>
+                      </div>
+                    </li>
+                    <li>
                       <i className="fa-solid fa-circle-check"></i>
                       <div>
                         <strong>Confirmation</strong>
@@ -562,7 +617,7 @@ if (isSubmitted) {
                     <span className="eyebrow">Espace professionnel</span>
                     <h1>Créer mon compte médecin</h1>
                     <p>
-                      Complétez les 6 étapes ci-dessous. Votre fiche est mise en
+                      Complétez les 7 étapes ci-dessous. Votre fiche est mise en
                       ligne dès validation de votre inscription à l'Ordre et de
                       vos justificatifs.
                     </p>
@@ -1095,8 +1150,58 @@ if (isSubmitted) {
                       </div>
                     )}
 
-                    {/* Étape 6 : Confirmation */}
+                    {/* Étape 6 : Localisation (facultative) */}
                     {currentStep === 6 && (
+                      <div className="form-page active">
+                        <p className="form-hint" style={{ marginBottom: '1rem' }}>
+                          Facultatif : positionnez votre lieu d'exercice sur la
+                          carte pour apparaître dans la recherche « Autour de
+                          moi ». Vous pouvez passer cette étape et la
+                          renseigner plus tard depuis votre espace médecin.
+                        </p>
+
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-sm-aps mb-3"
+                          onClick={demanderPosition}
+                          disabled={geoEnCours}
+                        >
+                          <i className="fa-solid fa-location-crosshairs" />{' '}
+                          {geoEnCours
+                            ? 'Localisation en cours…'
+                            : positionActuelle
+                            ? 'Position mise à jour'
+                            : 'Utiliser ma position actuelle'}
+                        </button>
+                        {geoErreur && (
+                          <p className="minimal-note mb-3">
+                            <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
+                          </p>
+                        )}
+
+                        <GoogleMapPicker
+                          latitude={formData.latitude === '' ? null : Number(formData.latitude)}
+                          longitude={formData.longitude === '' ? null : Number(formData.longitude)}
+                          onPositionChange={(lat, lng) =>
+                            setFormData((prev) => ({ ...prev, latitude: lat, longitude: lng }))
+                          }
+                          region={paysSelectionne?.code_iso2?.toLowerCase()}
+                        />
+
+                        {formData.latitude !== '' && (
+                          <button
+                            type="button"
+                            className="btn btn-link btn-sm p-0 mt-2"
+                            onClick={() => setFormData((prev) => ({ ...prev, latitude: '', longitude: '' }))}
+                          >
+                            Effacer la localisation
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Étape 7 : Confirmation */}
+                    {currentStep === 7 && (
                       <div className="form-page active">
                         <div className="form-check mb-4">
                           <input
@@ -1140,7 +1245,7 @@ if (isSubmitted) {
                         <div></div>
                       )}
 
-                      {currentStep < 6 ? (
+                      {currentStep < 7 ? (
                         <button
                           type="button"
                           className="btn btn-primary"

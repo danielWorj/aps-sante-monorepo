@@ -8,6 +8,7 @@ import med4 from '../assets/img/med4.jpg';
 import med5 from '../assets/img/med5.jpg';
 
 import { obtenirMedecin } from '../services/medecinService';
+import GoogleMapView from '../components/maps/GoogleMapView';
 // La prise de rendez-vous (créneau, motif, inscription patient,
 // POST /rendez-vous...) ne se fait plus dans une modale sur cette
 // page : elle vit désormais entièrement dans src/pages/RendezVous.jsx,
@@ -120,6 +121,12 @@ export default function ProfilMedecin() {
 
   const localisation = [medecin.ville_exercice?.nom, medecin.pays_exercice?.nom].filter(Boolean).join(' — ');
 
+  // Le backend renvoie la position sous `geolocalisation: { latitude, longitude } | null`
+  // (même contrat que les pharmacies et centres de santé).
+  const lat = medecin.geolocalisation?.latitude;
+  const lng = medecin.geolocalisation?.longitude;
+  const aUneLocalisation = lat != null && lng != null;
+
   return (
     <>
       {/* ============================ FIL D'ARIANE ============================ */}
@@ -227,14 +234,21 @@ export default function ProfilMedecin() {
                     <div className="info-card">
                       <h3><i className="fa-solid fa-location-dot" /> Localisation</h3>
                       <p style={{ fontSize: '.9rem' }}>{localisation || 'Localisation non renseignée'}</p>
-                      <div
-                        style={{
-                          height: 220, borderRadius: 10, background: 'var(--surface-alt)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-faint)',
-                        }}
-                      >
-                        <i className="fa-solid fa-map-location-dot" style={{ fontSize: '1.8rem' }} />
-                      </div>
+                      {aUneLocalisation ? (
+                        <GoogleMapView latitude={lat} longitude={lng} nom={nomComplet} />
+                      ) : (
+                        <div
+                          style={{
+                            height: 220, borderRadius: 10, background: 'var(--surface-alt)',
+                            display: 'flex', flexDirection: 'column', gap: '.5rem',
+                            alignItems: 'center', justifyContent: 'center', color: 'var(--ink-faint)',
+                            fontSize: '.88rem',
+                          }}
+                        >
+                          <i className="fa-solid fa-map-location-dot" style={{ fontSize: '1.8rem' }} />
+                          <span>Localisation non renseignée par ce médecin.</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
