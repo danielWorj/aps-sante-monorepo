@@ -104,8 +104,17 @@ function construireFormData(donnees, fichiers) {
  * Route publique (authentification optionnelle) — l'access token, s'il
  * existe, est ajouté automatiquement par apiFetch et permet au backend
  * d'enrichir la réponse (email/téléphone) si l'appelant est admin/superadmin.
- * @param {Object} filtres - { specialite_id, specialite, ville_exercice_id, pays_exercice_id, recherche }
- * @returns {Promise<Array>} liste des médecins
+ * @param {Object} filtres - { specialite_id, specialite, ville_exercice_id, pays_exercice_id, recherche,
+ *   statut_verification?, lat?, lng?, rayon_km? }
+ *   - statut_verification (optionnel) : "publie" | "en_cours" | "non_publie"… (voir
+ *     STATUTS_VERIFICATION_MEDECIN côté serveur). Sans ce paramètre, le comportement
+ *     historique de l'API est inchangé.
+ *   - lat + lng (ensemble, WGS84) : active la recherche par proximité « autour de moi »
+ *     (rayon_km optionnel, 10 km par défaut côté serveur). Seuls les médecins ayant
+ *     renseigné leur position sont renvoyés, triés par distance croissante.
+ * @returns {Promise<Array>} liste des médecins. Chaque fiche porte
+ *   `geolocalisation: { latitude, longitude } | null` et, en recherche de proximité,
+ *   `distance_km` (arrondi à 1 décimale).
  */
 export async function listerMedecins(filtres = {}) {
   const data = await apiFetch(`/medecins${construireQueryString(filtres)}`);
@@ -130,7 +139,11 @@ export async function obtenirMedecin(id) {
  *
  * @param {Object} donnees - { nom, prenom, email, telephone?, pays_id,
  *   specialite_id, numero_ordre, pays_exercice_id, ville_exercice_id,
- *   teleconsultation_activee, tarif_indicatif, statut_verification? }
+ *   teleconsultation_activee, tarif_indicatif, statut_verification?,
+ *   latitude?, longitude? }
+ *   latitude/longitude : position facultative du lieu d'exercice (nombres ou chaînes,
+ *   à fournir ensemble ; omettre les deux si non renseignée). Le serveur répond 400
+ *   si elles sont invalides (latitude hors [-90, 90], longitude hors [-180, 180]).
  * @param {Object} fichiers - { cni: File, attestation: File, photo?: File }
  * @returns {Promise<{medecin, utilisateur}>} utilisateur.mot_de_passe_temporaire
  *   n'est renvoyé qu'une seule fois par le backend — à afficher immédiatement
@@ -148,6 +161,14 @@ export async function creerMedecin(donnees, fichiers = {}) {
  * Ouvert au médecin propriétaire ou à admin/superadmin. cni/attestation/
  * photo sont optionnels ici (remplacement d'un fichier existant
  * uniquement).
+ *
+ * Position (latitude/longitude, à fournir ensemble) : une requête ne
+ * contenant que ces deux champs est acceptée. Pour EFFACER la position,
+ * envoyer des chaînes vides ('') pour les deux : le multipart ne sait pas
+ * transporter `null` (construireFormData ignore null/undefined mais
+ * transmet bien ''), et le serveur convertit '' en null. Une modification
+ * de position par un non-admin repasse la fiche à statut_verification=
+ * "en_cours".
  */
 export async function modifierMedecin(id, donnees = {}, fichiers = {}) {
   return apiFetch(`/medecins/${id}`, {
