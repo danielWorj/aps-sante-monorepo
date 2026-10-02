@@ -5,6 +5,7 @@ import '../../../components/buttons/bouton_payer_rdv.dart';
 import '../../../components/components.dart';
 import '../../../components/dialogs/avertissement_annulation.dart';
 import '../../../components/dialogs/dialogue_motif_annulation.dart';
+import '../../../components/panels/panneau_reprogrammation.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/authentification_models.dart';
@@ -596,6 +597,13 @@ class _PanelConfirme extends ConsumerWidget {
                         subtitle2: rdv.typeRdv == TypeRdv.teleconsultation
                             ? 'Téléconsultation'
                             : 'Cabinet',
+                        footer: rdv.estAReprogrammer
+                            ? PanneauReprogrammation(
+                                key: ValueKey('repro-${rdv.rdvId}'),
+                                rdv: rdv,
+                                role: PartieRendezVous.patient,
+                              )
+                            : null,
                         bottom: _Frow(
                           badge: rdv.estAReprogrammer
                               ? const BadgeChip(
@@ -967,6 +975,8 @@ class _AppointmentCard extends StatelessWidget {
   final String subtitle;
   final String subtitle2;
   final Widget? bottom;
+  /// Contenu additionnel sous la ligne du bas (panneau de reprogrammation).
+  final Widget? footer;
 
   const _AppointmentCard({
     required this.time,
@@ -976,6 +986,7 @@ class _AppointmentCard extends StatelessWidget {
     required this.subtitle,
     required this.subtitle2,
     this.bottom,
+    this.footer,
   });
 
   @override
@@ -1057,6 +1068,10 @@ class _AppointmentCard extends StatelessWidget {
             const SizedBox(height: 12),
             bottom!,
           ],
+            if (footer != null) ...[
+              const SizedBox(height: 12),
+              footer!,
+            ],
         ],
       ),
     );
