@@ -8,6 +8,16 @@ import { useAuth } from "./../../../context/AuthContext";
 import * as medecinService from "../../../services/medecinService";
 import MedecinPortefeuille from "./medecin-portefeuille";
 import { listerPays, listerVilles } from "../../../services/geoService";
+import { useGeolocation } from "../../../hooks/useGeolocation";
+import GoogleMapPicker from "../../maps/GoogleMapPicker";
+
+// Position du lieu d'exercice : le serveur renvoie
+// `geolocalisation: { latitude, longitude } | null`. Dans le state du
+// formulaire on la met à plat (latitude/longitude, '' si absente).
+const aplatirPosition = (geolocalisation) => ({
+  latitude: geolocalisation?.latitude ?? "",
+  longitude: geolocalisation?.longitude ?? "",
+});
 
 const MedecinProfil = () => {
   const { user, rafraichirUtilisateur, status: authStatus } = useAuth();
@@ -31,6 +41,19 @@ const MedecinProfil = () => {
   const [cniFile, setCniFile] = useState(null);
   const [attestationFile, setAttestationFile] = useState(null);
   const [cvFile, setCvFile] = useState(null);
+
+  // Position telle que chargée/enregistrée : sert à n'envoyer
+  // latitude/longitude que lorsqu'elles ont changé (une modification de
+  // position par un non-admin repasse la fiche en "en_cours").
+  const [positionInitiale, setPositionInitiale] = useState({ latitude: "", longitude: "" });
+
+  // Bouton "Utiliser ma position actuelle" (ne fait que pré-remplir)
+  const {
+    position: positionActuelle,
+    loading: geoEnCours,
+    error: geoErreur,
+    demanderPosition,
+  } = useGeolocation();
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -90,7 +113,10 @@ const MedecinProfil = () => {
           // Moyens de paiement
           mobile_moneys: medecin.mobile_moneys || [],
           comptes_bancaires: medecin.comptes_bancaires || [],
+          // Position du lieu d'exercice
+          ...aplatirPosition(medecin.geolocalisation),
         });
+        setPositionInitiale(aplatirPosition(medecin.geolocalisation));
 
         if (medecin.pays_exercice_id) {
           const v = await listerVilles(medecin.pays_exercice_id);
@@ -117,6 +143,16 @@ const MedecinProfil = () => {
   const updateProfile = (field, value) => {
     setProfile((prev) => ({ ...prev, [field]: value }));
   };
+
+  // Pré-remplit latitude/longitude dès que le navigateur renvoie une position
+  useEffect(() => {
+    if (!positionActuelle) return;
+    setProfile((prev) =>
+      prev
+        ? { ...prev, latitude: positionActuelle.latitude, longitude: positionActuelle.longitude }
+        : prev
+    );
+  }, [positionActuelle]);
 
   const handlePaysExerciceChange = async (e) => {
     const nouveauPaysId = e.target.value;
@@ -176,6 +212,24 @@ const MedecinProfil = () => {
         linkedInUrl: profile.linkedInUrl || null,
       };
 
+      // Position : validation des deux champs ensemble, puis envoi
+      // uniquement si elle a changé. '' = effacement (le multipart ne
+      // transporte pas null ; le serveur convertit '' en null).
+      const latRenseignee = profile.latitude !== "";
+      const lngRenseignee = profile.longitude !== "";
+      if (latRenseignee !== lngRenseignee) {
+        showToast("Latitude et longitude doivent être renseignées ensemble.", "error");
+        setSubmitting(false);
+        return;
+      }
+      const positionModifiee =
+        String(profile.latitude) !== String(positionInitiale.latitude) ||
+        String(profile.longitude) !== String(positionInitiale.longitude);
+      if (positionModifiee) {
+        donnees.latitude = latRenseignee ? Number(profile.latitude) : "";
+        donnees.longitude = lngRenseignee ? Number(profile.longitude) : "";
+      }
+
       const fichiers = {};
       if (photoFile) fichiers.photo = photoFile;
       if (cniFile) fichiers.cni = cniFile;
@@ -188,9 +242,15 @@ const MedecinProfil = () => {
         fichiers
       );
 
+      // La réponse contient `geolocalisation: { latitude, longitude } | null` :
+      // on resynchronise le state à plat, et la position de référence.
+      const positionMaj = aplatirPosition(medecinMaj.geolocalisation);
+      setPositionInitiale(positionMaj);
+
       setProfile((prev) => ({
         ...prev,
         ...medecinMaj,
+        ...positionMaj,
         nom: medecinMaj.utilisateur?.nom ?? prev.nom,
         prenom: medecinMaj.utilisateur?.prenom ?? prev.prenom,
         telephone: medecinMaj.utilisateur?.telephone ?? prev.telephone,
@@ -408,6 +468,50 @@ const MedecinProfil = () => {
                       ))}
                     </select>
                   </div>
+                </div>
+
+                {/* Position sur la carte (facultative) */}
+                <div className="mt-3">
+                  <label className="form-label-aps">Position sur la carte (facultatif)</label>
+                  <p className="text-muted small">
+                    Permet d'apparaître dans la recherche « Autour de moi ».
+                    {profile.statut_verification === "publie" &&
+                      " Modifier la position repasse votre fiche en vérification."}
+                  </p>
+
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-sm-aps mb-3"
+                    onClick={demanderPosition}
+                    disabled={geoEnCours}
+                  >
+                    <i className="fa-solid fa-location-crosshairs" />{" "}
+                    {geoEnCours ? "Localisation en cours…" : "Utiliser ma position"}
+                  </button>
+                  {geoErreur && (
+                    <p className="minimal-note mb-3">
+                      <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
+                    </p>
+                  )}
+
+                  <GoogleMapPicker
+                    latitude={profile.latitude === "" ? null : Number(profile.latitude)}
+                    longitude={profile.longitude === "" ? null : Number(profile.longitude)}
+                    onPositionChange={(lat, lng) =>
+                      setProfile((prev) => ({ ...prev, latitude: lat, longitude: lng }))
+                    }
+                    region={pays.find((p) => p.pays_id === profile.pays_exercice_id)?.code_iso2?.toLowerCase()}
+                  />
+
+                  {profile.latitude !== "" && (
+                    <button
+                      type="button"
+                      className="btn btn-link btn-sm p-0 mt-2"
+                      onClick={() => setProfile((prev) => ({ ...prev, latitude: "", longitude: "" }))}
+                    >
+                      Effacer la localisation
+                    </button>
+                  )}
                 </div>
               </div>
 
