@@ -464,15 +464,6 @@ model Medecin {
   teleconsultation_activee  Boolean
   tarif_indicatif           Decimal                   @db.Decimal(12, 2)
 
-  // Position du lieu d'exercice (facultative) — même patron que
-  // Pharmacie / StructureSante : GEOGRAPHY(POINT,4326) PostGIS non
-  // supporté nativement par Prisma Client (Unsupported(...)), donc
-  // lecture/écriture via $queryRaw / $executeRaw par lib/geo.js
-  // (voir medecin.controller.js). NULL tant que le médecin n'a pas
-  // renseigné sa position. Index GIST créé par migration SQL manuelle
-  // (20261002100000_medecin_geolocalisation).
-  geolocalisation Unsupported("geography(Point, 4326)")?
-
   biographie String @default("") @db.Text 
   linkedInUrl               String?                    @db.VarChar(255)
 
