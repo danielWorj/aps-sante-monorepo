@@ -143,6 +143,16 @@ router.post("/medecins", gererTeleversementMedecin, creerMedecin);
 // reçoit en plus email/téléphone (nécessaire à l'écran back-office
 // "Tous les médecins"). Voir selectionUtilisateurSelonRole dans le
 // contrôleur.
+// Query params optionnels (tous combinables) :
+//   - ?specialite_id=&specialite=&ville_exercice_id=&pays_exercice_id=&recherche=
+//   - ?statut_verification=non_publie|en_cours|publie (400 sinon) : sans
+//     ce paramètre, TOUTES les fiches sont renvoyées (comportement
+//     historique inchangé).
+//   - ?lat=&lng=&rayon_km= : recherche par proximité (lat/lng ensemble,
+//     rayon_km > 0 optionnel, 10 km par défaut). Ajoute `distance_km` à
+//     chaque fiche, trie par distance et exclut les médecins sans
+//     position. Chaque fiche porte `geolocalisation: { latitude,
+//     longitude } | null`.
 router.get("/medecins", authentifierOptionnel, listerMedecins);
 
 // AUTHENTIFIÉ — Récupère le profil complet du médecin connecté
