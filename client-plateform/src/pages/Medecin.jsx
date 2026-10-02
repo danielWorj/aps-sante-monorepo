@@ -10,6 +10,8 @@ import {
 // source unique (routes génériques /pays, /villes, partagées par tous
 // les modules annuaire) — voir src/services/geoService.js.
 import { listerPays, listerVilles } from '../services/geoService';
+import { useGeolocation } from '../hooks/useGeolocation';
+import GoogleMapListe from '../components/maps/GoogleMapListe';
 import './../assets/styles/medecin.css';
 
 const RESULTATS_PAR_PAGE = 3;
@@ -17,6 +19,30 @@ const RESULTATS_PAR_PAGE = 3;
 // Photo par défaut si le médecin n'a pas encore de photo_url (nullable
 // en base — voir schema.prisma).
 const PHOTO_PAR_DEFAUT = med1;
+
+// Rayons proposés pour le filtre « Autour de moi » (voir
+// server/src/lib/geo.js : rayon par défaut 10 km si non précisé).
+const RAYONS_KM = [5, 10, 25, 50];
+
+// Seules les fiches validées sont montrées en recherche de proximité
+// (décision D4). Hors mode « Autour de moi », le paramètre n'est pas
+// envoyé : le comportement historique de GET /medecins est inchangé.
+const STATUT_PUBLIC = 'publie';
+
+function nomCompletMedecin(m) {
+  return `Dr. ${m.utilisateur?.prenom || ''} ${m.utilisateur?.nom || ''}`.trim();
+}
+
+// Lien « Itinéraire » Google Maps. `origine` (facultative) vient du hook
+// useGeolocation déjà instancié par la page ; sans elle, Google Maps
+// demande lui-même le point de départ (même patron que Pharmacie.jsx).
+function lienItineraire(destLat, destLng, origine) {
+  if (destLat == null || destLng == null) return null;
+  const destination = `${destLat},${destLng}`;
+  return origine
+    ? `https://www.google.com/maps/dir/?api=1&origin=${origine.latitude},${origine.longitude}&destination=${destination}`
+    : `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+}
 
 export default function Medecin() {
   // Écran 1.1.3 du parcours d'onboarding (croquis) : arrivée ici
@@ -48,6 +74,43 @@ export default function Medecin() {
     recherche: '',
   });
 
+  // Filtre « Autour de moi » — API navigateur native (useGeolocation),
+  // aucune librairie carto. Refus de permission / navigateur non
+  // compatible : on retombe sur les filtres habituels (aucun lat/lng
+  // envoyé), avec un message discret sous le sélecteur de rayon.
+  const {
+    position: positionActuelle,
+    loading: geoEnCours,
+    error: geoErreur,
+    demanderPosition,
+  } = useGeolocation();
+  const [autourDeMoi, setAutourDeMoi] = useState(false);
+  const [rayonKm, setRayonKm] = useState(10);
+
+  function handleToggleAutourDeMoi(actif) {
+    setAutourDeMoi(actif);
+    if (actif && !positionActuelle) demanderPosition();
+  }
+
+  // Filtres réellement envoyés à GET /medecins. La proximité n'est
+  // ajoutée que si le mode est actif ET qu'une position a été obtenue ;
+  // dans ce cas seulement on demande aussi les fiches publiées (D4).
+  // Le tri par distance renvoyé par le serveur n'est jamais recalculé
+  // côté front. useMemo : l'effet de chargement ne se relance que si
+  // l'un de ces éléments change réellement.
+  const filtresEnvoyes = useMemo(() => {
+    if (autourDeMoi && positionActuelle) {
+      return {
+        ...filtres,
+        lat: positionActuelle.latitude,
+        lng: positionActuelle.longitude,
+        rayon_km: rayonKm,
+        statut_verification: STATUT_PUBLIC,
+      };
+    }
+    return filtres;
+  }, [filtres, autourDeMoi, positionActuelle, rayonKm]);
+
   /* ---------------------------------------------------------------
      Chargement des référentiels (spécialités, pays) au montage
   --------------------------------------------------------------- */
@@ -78,7 +141,7 @@ export default function Medecin() {
     let annule = false;
     setChargementMedecins(true);
     setErreurMedecins(null);
-    listerMedecins(filtres)
+    listerMedecins(filtresEnvoyes)
       .then((donnees) => {
         if (!annule) {
           setMedecins(donnees || []);
@@ -94,7 +157,7 @@ export default function Medecin() {
     return () => {
       annule = true;
     };
-  }, [filtres]);
+  }, [filtresEnvoyes]);
 
   function soumettreFiltres(e) {
     e.preventDefault();
@@ -109,6 +172,28 @@ export default function Medecin() {
     () => medecins.slice((page - 1) * RESULTATS_PAR_PAGE, page * RESULTATS_PAR_PAGE),
     [medecins, page]
   );
+
+  // Points de l'onglet « Carte » : tous les résultats (pas seulement la
+  // page courante) ayant une position ; les autres sont comptés pour le
+  // message « N médecin(s) sans localisation ».
+  const { pointsCarte, sansLocalisation } = useMemo(() => {
+    const points = [];
+    medecins.forEach((m) => {
+      const lat = m.geolocalisation?.latitude;
+      const lng = m.geolocalisation?.longitude;
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        points.push({
+          id: m.medecin_id,
+          latitude: lat,
+          longitude: lng,
+          titre: nomCompletMedecin(m),
+          sousTitre: [m.specialite?.nom, m.ville_exercice?.nom].filter(Boolean).join(' · '),
+          lien: `/profil/${m.medecin_id}`,
+        });
+      }
+    });
+    return { pointsCarte: points, sansLocalisation: medecins.length - points.length };
+  }, [medecins]);
 
   return (
     <>
@@ -189,6 +274,38 @@ export default function Medecin() {
                       onChange={(e) => setFiltres((f) => ({ ...f, recherche: e.target.value }))}
                     />
                   </div>
+                  <div className="d-flex flex-column gap-2 mb-3">
+                    <label className="chip chip-verifie" style={{ cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={autourDeMoi}
+                        onChange={(e) => handleToggleAutourDeMoi(e.target.checked)}
+                        style={{ marginRight: '.35rem' }}
+                      />
+                      <i className="fa-solid fa-location-crosshairs" /> Autour de moi
+                    </label>
+                  </div>
+                  {autourDeMoi && (
+                    <div className="mb-3">
+                      <label className="form-label-aps" htmlFor="f-rayon">Rayon de recherche</label>
+                      <select
+                        className="form-select"
+                        id="f-rayon"
+                        value={rayonKm}
+                        onChange={(e) => setRayonKm(Number(e.target.value))}
+                      >
+                        {RAYONS_KM.map((km) => (
+                          <option key={km} value={km}>{km} km</option>
+                        ))}
+                      </select>
+                      {geoEnCours && <p className="minimal-note mt-2">Localisation en cours…</p>}
+                      {geoErreur && (
+                        <p className="minimal-note mt-2">
+                          <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <button type="submit" className="btn btn-primary btn-block-aps">
                     <i className="fa-solid fa-magnifying-glass" /> Rechercher
                   </button>
@@ -236,7 +353,12 @@ export default function Medecin() {
               {!chargementMedecins && !erreurMedecins && medecins.length > 0 && view === 'list' && (
                 <div>
                   {medecinsPage.map((m) => {
-                    const nomComplet = `Dr. ${m.utilisateur?.prenom || ''} ${m.utilisateur?.nom || ''}`.trim();
+                    const nomComplet = nomCompletMedecin(m);
+                    const hrefItineraire = lienItineraire(
+                      m.geolocalisation?.latitude,
+                      m.geolocalisation?.longitude,
+                      positionActuelle
+                    );
                     const tags = [];
                     if (m.statut_verification === 'publie') {
                       tags.push({ cls: 'chip-verifie', label: "Vérifié à l'Ordre" });
@@ -264,6 +386,14 @@ export default function Medecin() {
                                 </span>
                               </>
                             )}
+                            {typeof m.distance_km === 'number' && (
+                              <>
+                                <span>&middot;</span>
+                                <span>
+                                  <i className="fa-solid fa-route" /> {m.distance_km.toFixed(1)} km
+                                </span>
+                              </>
+                            )}
                           </div>
                           {tags.length > 0 && (
                             <div className="practitioner-tags">
@@ -281,6 +411,22 @@ export default function Medecin() {
                           )}
                           <Link to={`/profil/${m.medecin_id}`} className="btn btn-outline-primary btn-sm-aps">Voir le profil</Link>
                           <Link to={`/rendez-vous/${m.medecin_id}`} className="btn btn-primary btn-sm-aps">Prendre RDV</Link>
+                          {hrefItineraire && (
+                            <a
+                              href={hrefItineraire}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="btn btn-outline-primary btn-sm-aps"
+                              onClick={() => {
+                                // Sans position utilisateur, ce clic s'ouvre sans
+                                // origine (Google Maps la demandera) ; on la
+                                // demande pour les clics suivants.
+                                if (!positionActuelle) demanderPosition();
+                              }}
+                            >
+                              <i className="fa-solid fa-diamond-turn-right" /> Itinéraire
+                            </a>
+                          )}
                         </div>
                       </div>
                     );
@@ -308,16 +454,16 @@ export default function Medecin() {
                   )}
                 </div>
               )}
-              {/* Vue carte (placeholder) */}
+              {/* Vue carte */}
               {!chargementMedecins && !erreurMedecins && medecins.length > 0 && view === 'map' && (
                 <div>
-                  <div
-                    className="info-card"
-                    style={{ height: 420, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '.6rem' }}
-                  >
-                    <i className="fa-solid fa-map-location-dot" style={{ fontSize: '2.2rem', color: 'var(--primary)' }} />
-                    <p className="mb-0" style={{ fontSize: '.9rem' }}>La carte interactive s&apos;affiche ici, centrée sur votre zone de recherche.</p>
-                  </div>
+                  <GoogleMapListe points={pointsCarte} hauteur="420px" />
+                  {sansLocalisation > 0 && (
+                    <p className="minimal-note mt-2">
+                      <i className="fa-solid fa-circle-info" /> {sansLocalisation}{' '}
+                      {sansLocalisation > 1 ? 'médecins sans localisation' : 'médecin sans localisation'}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
