@@ -41,6 +41,7 @@ import CreationAssurance from './components/assurances/creationAssurance.jsx';
 
 import PortailLayout from './Layouts/PortailLayout';
 import PortailParentLayout from './Layouts/PortailPatientLayout.jsx';
+import OnboardingLayout from './Layouts/OnboardingLayout.jsx';
 
 
 import MedecinAgenda from './components/portails/components/medecin-agenda';
@@ -59,19 +60,23 @@ import FicheAnnonce from './pages/FicheAnnonce.jsx';
 
 export const router = createBrowserRouter([
   {
-    element: <App />, // Layout commun : Navbar + <Outlet /> + Footer
+    // ONBOARDING : sans Navbar ni Footer
+    element: <OnboardingLayout />,
     children: [
       { path: '/', element: <OnboardingAccueil /> },
-      { path: '/home', element: <Home /> },
-      { path: '/inscription', element: <InscriptionPortail /> },
-
-      // ONBOARDING
       { path: '/onboarding', element: <OnboardingAccueil /> },
       { path: '/onboarding/services', element: <OnboardingServices /> },
       { path: '/onboarding/medecins/ville', element: <OnboardingMedecinVille /> },
       { path: '/onboarding/medecins/specialite', element: <OnboardingMedecinSpecialite /> },
       { path: '/onboarding/assurances/ville', element: <OnboardingAssuranceVille /> },
       { path: '/onboarding/assurances/type', element: <OnboardingAssuranceType /> },
+    ],
+  },
+  {
+    element: <App />, // Layout commun : Navbar + <Outlet /> + Footer
+    children: [
+      { path: '/home', element: <Home /> },
+      { path: '/inscription', element: <InscriptionPortail /> },
       { path: '/medecin', element: <Medecin /> },
       { path: '/devenir-medecin', element: <CreationMedecin /> },
       { path: '/creer-patient', element: <CreerPatient /> },
