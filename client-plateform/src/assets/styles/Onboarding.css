@@ -8,24 +8,26 @@
 .onboarding-shell{
   min-height:100vh;
   display:flex;
-  align-items:center;
+  align-items:center;      /* centrage vertical */
+  justify-content:center;  /* centrage horizontal du bloc */
   padding:3rem 0;
 }
-/* Écrans à contenu plus long (listes, formulaires) : on ancre en haut
-   plutôt que de centrer verticalement, pour éviter que le contenu ne
-   "saute" quand son nombre de lignes change (chargement, erreurs…). */
+/* Même centrage au milieu de l'écran pour les écrans plus longs. */
 .onboarding-shell-top{
-  align-items:flex-start;
-  padding-top:2.5rem;
+  align-items:center;
 }
 
-.onboarding-container{
+/* Spécificité renforcée (.container-aps.xxx) : d'autres feuilles de style
+   (creationAssurance.css, creer-medecin.css) redéfinissent .container-aps
+   avec max-width:1200px et, chargées après celle-ci, annulaient la largeur
+   réduite de l'onboarding. */
+.container-aps.onboarding-container{
   max-width:460px;
   margin:0 auto;
   width:100%;
 }
-.onboarding-container-lg{
-  max-width:720px;
+.container-aps.onboarding-container-lg{
+  max-width:620px;
   margin:0 auto;
   width:100%;
 }
@@ -88,6 +90,10 @@
 
 /* ---------------------------- Écran 1.1 — liste des services ---------------------------- */
 .onboarding-service-list{margin-bottom:1rem;}
+.onboarding-container-lg .cat-grid{grid-template-columns:repeat(2,1fr);}
+@media (max-width:575px){
+  .onboarding-container-lg .cat-grid{grid-template-columns:1fr;}
+}
 .cat-card.is-disabled{
   cursor:not-allowed;
   opacity:.55;
@@ -110,3 +116,7 @@
 .onboarding-progress span.is-done{background:var(--primary);}
 
 .onboarding-specialite-grid{margin-bottom:1.5rem;}
+.onboarding-container-lg .service-type-grid{grid-template-columns:repeat(3,1fr);}
+@media (max-width:420px){
+  .onboarding-container-lg .service-type-grid{grid-template-columns:repeat(2,1fr);}
+}

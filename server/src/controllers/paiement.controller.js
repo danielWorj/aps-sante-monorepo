@@ -8,13 +8,15 @@ import {
   versUniteStripe,
   verifierSignatureWebhook,
   expirerSessionCheckout,
+  annulerPaymentIntentSiPossible,
 } from "../lib/stripeService.js";
+import { CampayError } from "../lib/campayService.js";
 import { decomposerMontant, obtenirLignesTarifairesActives } from "../services/tarification.service.js";
 import { obtenirFraisActifs, calculerFrais } from "../services/fraisAgregateur.service.js";
-import { creerTransactionSansDoublon, invaliderCheckoutsOuverts, PaiementDejaExistantError } from "../services/antiDoublePaiement.service.js";
+import { creerTransactionSansDoublon, invaliderCheckoutsOuverts, annulerPaiementsEnCours, PaiementDejaExistantError } from "../services/antiDoublePaiement.service.js";
 import { decimalesPourMontant, arrondir } from "../utils/montants.js";
 import { finaliserPaiement } from "../services/finalisationPaiement.service.js";
-import { synchroniserCampayPourRdv, derniereTentativeCampay } from "../services/paiementCampay.service.js";
+import { synchroniserCampayPourRdv, derniereTentativeCampay, verifierEtFinaliserTransactionCampay } from "../services/paiementCampay.service.js";
 
 const DEVISE_PAR_DEFAUT = process.env.STRIPE_DEVISE_PAR_DEFAUT || "xaf";
 
@@ -140,7 +142,7 @@ export function creerTransactionEnAttente(ctx, extra = {}) {
 /** 409 clair pour un doublon de paiement ; renvoie true si l'erreur a été traitée. */
 export function repondreSiPaiementExistant(err, res) {
   if (!(err instanceof PaiementDejaExistantError)) return false;
-  res.status(409).json({ message: err.message });
+  res.status(409).json({ message: err.message, code: err.code });
   return true;
 }
 
@@ -212,6 +214,45 @@ export async function creerPaiementRdv(req, res, next) {
   } catch (err) {
     if (repondreSiPaiementExistant(err, res)) return;
     if (repondreSiBaremeAbsent(err, res)) return;
+    next(err);
+  }
+}
+
+// POST /api/paiement/rendez-vous/:id/paiement/annuler — le patient propriétaire
+// uniquement. Annule le(s) paiement(s) `en_attente` du RDV (Stripe Checkout,
+// PaymentSheet, Mobile Money) pour permettre d'en relancer un nouveau. Un
+// paiement déjà abouti n'est jamais annulé (409). Idempotent : 0 annulation
+// si rien n'est en cours.
+export async function annulerPaiementEnCoursRdv(req, res, next) {
+  try {
+    const rdv = await prisma.rendezVous.findUnique({ where: { rdv_id: req.params.id } });
+    if (!rdv) return res.status(404).json({ message: "Rendez-vous introuvable." });
+
+    const patient = await prisma.patient.findUnique({ where: { utilisateur_id: req.utilisateur.utilisateur_id } });
+    if (!patient || patient.patient_id !== rdv.patient_id) {
+      return res.status(403).json({ message: "Ce rendez-vous ne vous appartient pas." });
+    }
+    if (rdv.statut !== "cree") {
+      return res.status(409).json({ message: `Ce rendez-vous ne peut plus être payé (statut : ${rdv.statut}).` });
+    }
+    if (await prisma.compteEscrow.findUnique({ where: { rdv_id: rdv.rdv_id } })) {
+      return res.status(409).json({ message: "Un paiement existe déjà pour ce rendez-vous.", code: "PAIEMENT_EXISTANT" });
+    }
+
+    const annulees = await annulerPaiementsEnCours({
+      rdv,
+      fournisseurs: {
+        stripe: { expirerSession: expirerSessionCheckout, annulerPaymentIntent: annulerPaymentIntentSiPossible },
+        campay: { verifier: (t) => verifierEtFinaliserTransactionCampay(t, { force: true }) },
+      },
+    });
+    return res.status(200).json({ annulees });
+  } catch (err) {
+    if (repondreSiPaiementExistant(err, res)) return;
+    if (err instanceof CampayError) {
+      console.error("[paiement] Vérification CamPay impossible pendant l'annulation :", err.message);
+      return res.status(502).json({ message: "Impossible de vérifier le paiement auprès de l'opérateur. Réessayez dans un instant." });
+    }
     next(err);
   }
 }

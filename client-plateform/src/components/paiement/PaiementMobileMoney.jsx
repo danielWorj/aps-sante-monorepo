@@ -35,6 +35,7 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
   const [info, setInfo] = useState(null); // { reference, ussd_code, operateur }
   const [erreur, setErreur] = useState(null);
+  const [sansReessai, setSansReessai] = useState(false); // paiement reçu mais non validé : ne pas repayer
 
   const timer = useRef(null);
   const demonte = useRef(false);
@@ -80,7 +81,17 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
           return;
         }
         if (data.tentative_campay?.statut === 'echouee') {
-          setErreur(null);
+          if (data.tentative_campay.motif === 'montant_incoherent') {
+            // CamPay confirme le paiement mais son montant ne correspond pas à celui attendu :
+            // le serveur ne le valide pas. On signale l'échec SANS proposer de repayer.
+            setErreur(
+              "Votre paiement a été reçu par l'opérateur mais son montant ne correspond pas à celui attendu : " +
+              "il n'a pas pu être validé. Ne payez pas une seconde fois, contactez le support en indiquant ce rendez-vous."
+            );
+            setSansReessai(true);
+          } else {
+            setErreur(null);
+          }
           setEtape('echec');
           return;
         }
@@ -123,6 +134,7 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
 
   const reessayer = () => {
     setErreur(null);
+    setSansReessai(false);
     setInfo(null);
     setEtape('saisie');
   };
@@ -231,7 +243,7 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
               <i className="fa-solid fa-circle-exclamation" />{' '}
               {erreur || 'Le paiement a été refusé ou a expiré.'}
             </p>
-            {!erreur?.includes('annulé') && (
+            {!sansReessai && !erreur?.includes('annulé') && (
               <button type="button" className="btn btn-primary btn-block-aps w-100" onClick={reessayer}>
                 <i className="fa-solid fa-rotate-right" /> Réessayer
               </button>

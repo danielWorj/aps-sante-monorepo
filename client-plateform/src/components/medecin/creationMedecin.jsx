@@ -63,6 +63,14 @@ const CreationMedecin = () => {
   const [stepError, setStepError] = useState(null);
   const [compteCree, setCompteCree] = useState(null);
 
+  // Copie des identifiants (hooks toujours appelés au niveau racine du composant)
+  const [copiedField, setCopiedField] = useState(null);
+  const handleCopy = (field, value) => {
+    navigator.clipboard?.writeText(value);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 1500);
+  };
+
   // Référentiels chargés depuis le backend
   const [pays, setPays] = useState([]);
   const [villes, setVilles] = useState([]);
@@ -425,16 +433,6 @@ const CreationMedecin = () => {
   };
 
 if (isSubmitted) {
-  const copyToClipboard = (text) => {
-    navigator.clipboard?.writeText(text);
-  };
-  const [copiedField, setCopiedField] = useState(null);
-  const handleCopy = (field, value) => {
-    copyToClipboard(value);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField(null), 1500);
-  };
-
   return (
     <>
       <main>

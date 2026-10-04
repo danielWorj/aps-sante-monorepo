@@ -459,7 +459,7 @@ export async function connecter(req, res, next) {
 
     const email = normaliserEmail(emailBrut);
 
-    const utilisateur = await prisma.utilisateur.findUnique({
+    let utilisateur = await prisma.utilisateur.findUnique({
       where: { email },
       include: { role: true },
     });
