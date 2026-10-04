@@ -2,21 +2,32 @@
 //
 // Annulation par un admin (politique de fonds v2 §4) : au nom de qui
 // (`initiateur`, obligatoire), motif fermé, commentaire facultatif, et rappel
-// de la conséquence financière AVANT confirmation. L'avertissement est
-// indicatif ; le serveur applique la règle et renvoie le détail réel.
+// de la conséquence financière AVANT confirmation (matrice D3 : CP et CM
+// séparées). L'avertissement est indicatif ; le serveur applique la règle et
+// renvoie le détail réel. Un RDV non payé (« cree ») ne peut pas être annulé
+// « au nom du médecin » (409 RDV_NON_PAYE) : ce choix est masqué.
 import { useEffect, useState } from 'react';
 import FondsModal from './FondsModal';
-import { MOTIFS_ANNULATION, consequenceAnnulation, estTardif } from '../utils/fonds';
+import {
+  CONSEQUENCE_DEUX_ABSENTS_SANS_REPROGRAMMATION,
+  MOTIFS_ANNULATION,
+  consequenceAnnulation,
+  estTardif,
+} from '../utils/fonds';
 
 export default function AnnulationAdminModal({ rdv, occupe, erreur, onFermer, onConfirmer }) {
   const [initiateur, setInitiateur] = useState('');
   const [motif, setMotif] = useState('');
   const [commentaire, setCommentaire] = useState('');
 
-  useEffect(() => { if (rdv) { setInitiateur(''); setMotif(''); setCommentaire(''); } }, [rdv]);
+  useEffect(() => {
+    if (rdv) { setInitiateur(rdv.statut === 'cree' ? 'patient' : ''); setMotif(''); setCommentaire(''); }
+  }, [rdv]);
 
   const enReprogrammation = rdv?.statut === 'a_reprogrammer';
   const tardif = rdv ? estTardif(rdv.date_creneau) : false;
+  const nonPaye = rdv?.statut === 'cree';
+  const initiateursProposes = nonPaye ? [['patient', 'Le patient']] : [['patient', 'Le patient'], ['medecin', 'Le médecin']];
 
   return (
     <FondsModal
@@ -38,14 +49,13 @@ export default function AnnulationAdminModal({ rdv, occupe, erreur, onFermer, on
 
       {enReprogrammation ? (
         <div className="alert alert-info">
-          Rendez-vous en attente de reprogrammation (les deux parties étaient absentes) : le patient sera remboursé
-          (honoraires − frais de remboursement − commission APS), la commission est versée à APS, sans amende.
+          {CONSEQUENCE_DEUX_ABSENTS_SANS_REPROGRAMMATION}
         </div>
       ) : (
         <>
           <label className="form-label fw-semibold">Annulation au nom de <span aria-hidden="true">*</span></label>
           <div className="mb-3">
-            {[['patient', 'Le patient'], ['medecin', 'Le médecin']].map(([v, l]) => (
+            {initiateursProposes.map(([v, l]) => (
               <div className="form-check form-check-inline" key={v}>
                 <input className="form-check-input" type="radio" id={`init-${v}`} name="initiateur" value={v}
                   checked={initiateur === v} onChange={() => setInitiateur(v)} disabled={occupe} />
@@ -53,7 +63,7 @@ export default function AnnulationAdminModal({ rdv, occupe, erreur, onFermer, on
               </div>
             ))}
           </div>
-          {initiateur && <div className="alert alert-warning small">{consequenceAnnulation(initiateur, tardif)}</div>}
+          {initiateur && <div className="alert alert-warning small">{consequenceAnnulation(initiateur, tardif, { nonPaye })}</div>}
         </>
       )}
 

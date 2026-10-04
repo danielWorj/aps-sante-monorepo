@@ -29,7 +29,10 @@
 //     pour un admin, `initiateur` (au nom de qui il annule). Elle passe
 //     donc par AnnulationAdminModal + fondsService.annulerRendezVousAdmin,
 //     qui renvoie le résultat financier réel (remboursement, versement
-//     médecin, commission APS, amende) affiché dans une bannière.
+//     médecin, CM, CP conservée / rendue, amende) affiché dans une bannière.
+//   - RÉPARTITION DU PAIEMENT : la modale de détail (admin, RDV payé) affiche la
+//     décomposition complète via GET /paiement/rendez-vous/:id/facture :
+//     H, frais d'agrégateur, CP, total payé, puis CM et net médecin (D7 : l'admin voit tout).
 //   - `honore` n'est JAMAIS posé via le PUT/PATCH générique : seule la
 //     libération forcée (POST .../forcer-liberation, admin) le fait, en
 //     libérant aussi les fonds vers le médecin.
@@ -67,8 +70,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import AnnulationAdminModal from '../components/AnnulationAdminModal';
-import { annulerRendezVousAdmin, forcerLiberation } from '../services/fondsService';
-import { DELAI_REPROGRAMMATION_H, dateHeure, resumerAnnulation } from '../utils/fonds';
+import { annulerRendezVousAdmin, forcerLiberation, obtenirFactureRendezVous } from '../services/fondsService';
+import { DELAI_REPROGRAMMATION_H, dateHeure, lignesRepartitionPaiement, resumerAnnulation } from '../utils/fonds';
 import {
   listerRendezVous,
   creerRendezVous,
@@ -220,7 +223,7 @@ function libelleMedecin(m) {
 }
 
 // Un RDV terminé ou déjà annulé ne peut plus être annulé. `a_reprogrammer`
-// reste annulable (point G : remboursement moins frais et commission APS).
+// reste annulable (remboursement H − CM − F, APS conserve CM + CP).
 const STATUTS_NON_ANNULABLES = ['annule', 'honore', 'non_honore', 'conteste'];
 function peutAnnulerStatut(statut) {
   return !STATUTS_NON_ANNULABLES.includes(statut);
@@ -229,6 +232,71 @@ function peutAnnulerStatut(statut) {
 // P4 du guide : libération forcée proposée sur ces statuts ; le serveur
 // renvoie de toute façon un 409 clair (pas d'escrow / déjà traité).
 const STATUTS_LIBERATION_FORCEE = ['confirme', 'en_attente_presence'];
+
+// Répartition du paiement d'un RDV payé (vue admin, D7 : tout est visible) :
+// facture du patient (H, frais d'agrégateur, CP, total) + CM et net médecin.
+// Monté avec une `key` (rdv_id + statut) : l'état repart de zéro à chaque RDV.
+function RepartitionPaiement({ rdvId }) {
+  const [facture, setFacture] = useState(null);
+  const [chargement, setChargement] = useState(true);
+  const [erreur, setErreur] = useState(null);
+
+  useEffect(() => {
+    let annule = false;
+    obtenirFactureRendezVous(rdvId)
+      .then((f) => { if (!annule) setFacture(f); })
+      .catch((err) => { if (!annule) setErreur(err.message || 'Répartition du paiement indisponible.'); })
+      .finally(() => { if (!annule) setChargement(false); });
+    return () => { annule = true; };
+  }, [rdvId]);
+
+  const lignes = lignesRepartitionPaiement(facture);
+  return (
+    <div className="mt-3">
+      <label className="form-label">Paiement et répartition (CP / CM)</label>
+      {chargement && <div className="aps-text-muted" style={{ fontSize: 13 }}>Chargement…</div>}
+      {erreur && (
+        <div className="aps-notice is-danger">
+          <i className="fa-solid fa-circle-exclamation"></i>
+          <div>{erreur}</div>
+        </div>
+      )}
+      {!chargement && !erreur && !facture && (
+        <div className="aps-text-muted" style={{ fontSize: 13 }}>Aucun paiement enregistré pour ce rendez-vous.</div>
+      )}
+      {facture && (
+        <div className="aps-card" style={{ padding: 12, fontSize: 14 }}>
+          {facture.numero && (
+            <div className="aps-text-muted mb-2" style={{ fontSize: 12 }}>
+              Facture {facture.numero} — {dateHeure(facture.date)}
+            </div>
+          )}
+          <table className="table table-sm mb-0">
+            <tbody>
+              {lignes.map((l) => (
+                <tr key={l.cle} className={l.fort ? 'fw-bold' : undefined}>
+                  <td>
+                    {l.libelle}
+                    {l.detail && <small className="aps-text-muted ms-2">{l.detail}</small>}
+                  </td>
+                  <td className="text-end">{l.montant}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {facture.minimale && (
+            <small className="aps-text-muted d-block mt-2">
+              Transaction antérieure à la politique v2 : pas de décomposition (une seule ligne « Consultation »).
+            </small>
+          )}
+          {!facture.minimale && !facture.detail_admin && (
+            <small className="aps-text-muted d-block mt-2">CM et net médecin indisponibles pour cette transaction.</small>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Échéance (passage à « a_reprogrammer » + 48 h, jamais prolongée) et
 // proposition de nouvelle date en cours, s'il y en a une.
@@ -1185,6 +1253,10 @@ export default function RendezVous() {
                 </div>
               )}
             </div>
+
+            {estAdmin && !modeEdition && rdvActif.statut !== 'cree' && (
+              <RepartitionPaiement key={`${rdvActif.rdv_id}-${rdvActif.statut}`} rdvId={rdvActif.rdv_id} />
+            )}
           </>
         )}
       </Modal>

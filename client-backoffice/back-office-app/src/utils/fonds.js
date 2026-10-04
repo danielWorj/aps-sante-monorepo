@@ -3,6 +3,11 @@
 // Politique de fonds v2 — helpers d'AFFICHAGE partagés par les pages
 // finance du back-office. Aucun calcul métier ici : le serveur tranche.
 // Les seules constantes sont les délais de la spec, pour les avertissements.
+//
+// Vocabulaire : H = honoraires ; F = frais de remboursement de l'agrégateur ;
+// CM = commission MÉDECIN (retenue sur le médecin) ; CP = commission PATIENT
+// (ajoutée au total payé). Le back-office est réservé aux admins : il affiche
+// tout (CM et CP séparément), cf. D7. Les textes suivent la matrice D3 finale.
 
 export const DELAI_TARDIF_H = 24;
 export const DELAI_REPROGRAMMATION_H = 48;
@@ -59,21 +64,45 @@ export const MOTIFS_ANNULATION = [
   { valeur: 'autre', libelle: 'Autre' },
 ];
 
-/** Conséquence attendue d'une annulation (§3-§4), pour l'avertissement AVANT confirmation. */
-export function consequenceAnnulation(initiateur, tardif) {
+/**
+ * Conséquence attendue d'une annulation (matrice D3 finale), pour l'avertissement
+ * AVANT confirmation. `nonPaye` = RDV au statut « cree » : aucun fonds, ni CP ni CM.
+ */
+export function consequenceAnnulation(initiateur, tardif, { nonPaye = false } = {}) {
+  if (nonPaye) {
+    return 'Rendez-vous non payé : aucun fonds, aucune commission. Si un paiement aboutit après l’annulation, le patient sera remboursé de H − F (la commission patient CP reste à APS).';
+  }
   if (initiateur === 'patient') {
     return tardif
-      ? 'Annulation patient à moins de 24 h : aucun remboursement. Le médecin est payé (honoraires − commission APS), la commission est versée à APS.'
-      : 'Annulation patient à plus de 24 h : le patient est remboursé (honoraires − frais de remboursement).';
+      ? 'Annulation patient à moins de 24 h (patient fautif) : aucun remboursement. Le médecin reçoit H − CM (avant amendes) ; APS conserve CM + CP.'
+      : 'Annulation patient à plus de 24 h : le patient est remboursé de H − F (honoraires moins frais de remboursement). Les frais d’envoi et CP ne sont pas rendus : APS conserve CP. Le médecin ne reçoit rien.';
   }
   return tardif
-    ? 'Annulation médecin à moins de 24 h : le patient est remboursé (honoraires − frais de remboursement) ET une amende est enregistrée au médecin.'
-    : 'Annulation médecin à plus de 24 h : le patient est remboursé (honoraires − frais de remboursement).';
+    ? 'Annulation médecin à moins de 24 h (médecin fautif) : le patient est remboursé de H + CP − F, le médecin ne reçoit rien ET une amende lui est enregistrée. Les frais d’envoi ne sont pas rendus.'
+    : 'Annulation médecin à plus de 24 h (médecin fautif) : le patient est remboursé de H + CP − F, le médecin ne reçoit rien, APS ne conserve rien. Les frais d’envoi ne sont pas rendus.';
 }
 
-/** Résume la réponse de PATCH /rendez-vous/:id/statut (statut = annule). */
+/** Conséquence d'une annulation pendant la reprogrammation (« deux absents sans reprogrammation »). */
+export const CONSEQUENCE_DEUX_ABSENTS_SANS_REPROGRAMMATION =
+  'Rendez-vous en attente de reprogrammation (les deux parties étaient absentes) : le patient est remboursé de H − CM − F, APS conserve CM + CP, sans amende.';
+
+/** Libellés lisibles des événements de fonds (champ `evenement` de la réponse d'annulation). */
+export const LIBELLES_EVENEMENTS = {
+  annulation_patient: 'Annulation par le patient',
+  annulation_medecin: 'Annulation par le médecin',
+  patient_absent: 'Patient absent',
+  medecin_absent: 'Médecin absent',
+  deux_absents: 'Deux absents (en attente de reprogrammation)',
+  deux_absents_sans_reprogrammation: 'Deux absents sans reprogrammation',
+  paiement_tardif: 'Paiement arrivé après annulation',
+};
+
+/** Résume la réponse de PATCH /rendez-vous/:id/statut (statut = annule), vue admin : CP et CM séparées. */
 export function resumerAnnulation(data) {
   const lignes = ['Rendez-vous annulé.'];
+  if (data?.evenement && LIBELLES_EVENEMENTS[data.evenement]) {
+    lignes.push(`Événement : ${LIBELLES_EVENEMENTS[data.evenement]}.`);
+  }
   const r = data?.remboursement;
   if (r) {
     lignes.push(
@@ -86,9 +115,38 @@ export function resumerAnnulation(data) {
   } else {
     lignes.push('Aucun fonds à rembourser (rendez-vous non payé).');
   }
+  const cm = Number(data?.commission_medecin ?? data?.commission_aps) || 0;
   if (Number(data?.versement_medecin) > 0) {
-    lignes.push(`Médecin crédité de ${fcfa(data.versement_medecin)} (avant amendes) ; commission APS : ${fcfa(data.commission_aps)}.`);
+    lignes.push(`Médecin crédité de ${fcfa(data.versement_medecin)} (avant amendes).`);
+  }
+  if (cm > 0) lignes.push(`CM conservée par APS : ${fcfa(cm)}.`);
+  if (Number(data?.commission_patient) > 0) lignes.push(`CP conservée par APS : ${fcfa(data.commission_patient)}.`);
+  if (Number(data?.commission_patient_rendue) > 0) {
+    lignes.push(`CP rendue au patient (médecin fautif) : ${fcfa(data.commission_patient_rendue)}.`);
   }
   if (data?.amende) lignes.push('Une amende a été enregistrée au médecin (imputée à sa prochaine libération).');
   return lignes.join(' ');
+}
+
+/**
+ * Lignes d'affichage de la répartition d'un paiement (vue admin) à partir de
+ * GET /paiement/rendez-vous/:id/facture. Retourne null si la facture manque.
+ * [{ cle, libelle, montant, detail?, fort? }] — montants déjà arrondis par le serveur.
+ */
+export function lignesRepartitionPaiement(facture) {
+  if (!facture) return null;
+  const devise = facture.devise;
+  const lignes = (facture.lignes || []).map((l) => ({
+    cle: l.code,
+    libelle: l.code === 'commission_aps' ? 'Commission APS (CP)' : l.libelle,
+    montant: montantDevise(l.montant, devise),
+    detail: l.taux != null && l.base != null ? `${montantDevise(l.base, devise)} × ${pourcent(l.taux)}` : undefined,
+  }));
+  lignes.push({ cle: 'total', libelle: 'Total payé par le patient', montant: montantDevise(facture.total, devise), fort: true });
+  const d = facture.detail_admin;
+  if (d) {
+    lignes.push({ cle: 'cm', libelle: 'Commission médecin (CM) — retenue sur le médecin', montant: montantDevise(d.commission_medecin, devise) });
+    lignes.push({ cle: 'net', libelle: 'Net médecin (H − CM, avant amendes)', montant: montantDevise(d.net_medecin, devise) });
+  }
+  return lignes;
 }

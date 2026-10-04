@@ -116,7 +116,7 @@ const APS_MENU = [
     items: [
       { key: "remboursements-campay", label: "Remboursements CamPay", icon: "fa-solid fa-rotate-left", to: "/remboursements-campay" },
       { key: "frais-agregateur", label: "Frais d'agrégateur", icon: "fa-solid fa-percent", to: "/frais-agregateur" },
-      { key: "lignes-tarifaires", label: "Commission APS", icon: "fa-solid fa-scale-balanced", to: "/lignes-tarifaires" },
+      { key: "lignes-tarifaires", label: "Commissions APS (CM / CP)", icon: "fa-solid fa-scale-balanced", to: "/lignes-tarifaires" },
       { key: "parametre-amende", label: "Amendes médecins", icon: "fa-solid fa-gavel", to: "/parametre-amende" }
     ]
   },
