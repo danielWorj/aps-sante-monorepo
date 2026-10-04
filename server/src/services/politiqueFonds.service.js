@@ -9,9 +9,20 @@
 // Principe « aucune valeur dérivée stockée » : cette fonction ne
 // stocke rien ; elle recalcule à partir de faits (honoraires, lignes
 // figées sur la transaction, dates).
+//
+// Vocabulaire : H = honoraires ; F = frais de remboursement de
+// l'agrégateur (calculés sur H) ; CM = commission MÉDECIN (retenue sur
+// le médecin) ; CP = commission PATIENT (payée en plus par le patient).
+//
+// Règle de principe sur CP : elle n'est JAMAIS rendue au patient, sauf
+// (a) médecin fautif et (b) double paiement (hors de `decider`, géré par
+// l'anti double paiement : remboursement de la totalité). Hors faute du
+// médecin, le patient reçoit au plus H − F (les frais d'envoi ne sont
+// jamais rendus) et APS conserve CP.
 
 import { arrondir } from "../utils/montants.js";
 import { calculerFrais } from "./fraisAgregateur.service.js";
+import { calculerCommissionMedecin, calculerCommissionPatient } from "./tarification.service.js";
 
 export const EVENEMENTS = Object.freeze({
   ANNULATION_PATIENT: "annulation_patient",
@@ -55,9 +66,11 @@ export function delaiReprogrammationEcoule(aReprogrammerLe, maintenant) {
 }
 
 /**
- * Remboursement selon §2 : honoraires − frais de remboursement, plancher 0.
+ * Remboursement selon §2 : brut − frais de remboursement F, plancher 0.
  * `brut` = ce qui est dû avant frais (CamPay : montant porté par la ligne
- * a_traiter) ; `net` = brut − frais estimés, jamais négatif.
+ * a_traiter) ; `net` = brut − frais estimés, jamais négatif. Le brut vaut
+ * H (patient/paiement tardif), H + CP (médecin fautif) ou H − CM (deux
+ * absents sans reprogrammation) selon l'événement.
  */
 function remboursementSelonRegleGenerale(brut, frais, decimales) {
   const net = Math.max(0, arrondir(brut - frais, decimales));
@@ -78,12 +91,28 @@ export function netRembourseCampay(brut, fraisReels, decimales = 0) {
 }
 
 /**
- * Décision de fonds pour un événement.
+ * Décision de fonds pour un événement (matrice de remboursement finale).
+ *
+ * | événement                          | patient reçoit | médecin reçoit | APS garde |
+ * | annulation_patient > 24 h          | H − F          | rien           | CP        |
+ * | annulation_patient < 24 h          | rien           | H − CM         | CM + CP   |
+ * | patient_absent                     | rien           | H − CM         | CM + CP   |
+ * | annulation_medecin (> ou < 24 h)   | H + CP − F     | rien (+amende < 24 h) | rien |
+ * | medecin_absent                     | H + CP − F     | rien, + amende | rien      |
+ * | deux_absents                       | rien (séquestre, à reprogrammer) | rien | rien |
+ * | deux_absents_sans_reprogrammation  | H − CM − F     | rien           | CM + CP   |
+ * | paiement_tardif                    | H − F          | rien           | CP        |
+ *
+ * (Le double paiement n'est pas géré ici : totalité du montant payé.)
+ * Le net remboursé est toujours plafonné à 0 minimum.
  *
  * @param {object} p
  * @param {string} p.evenement            une valeur de EVENEMENTS
  * @param {number|string} p.honoraires    TransactionPaiement.montant_honoraires
- * @param {{ taux: number|string }} p.commission            ligne_commission figée
+ * @param {{ taux: number|string }} p.commission            ligne CM figée (ligne_commission)
+ * @param {{ taux: number|string }|null} [p.commissionPatient]  ligne CP figée
+ *        (ligne_commission_patient) ; absente/null = transaction antérieure
+ *        à CP => CP = 0 (rien à rendre, rien à conserver)
  * @param {{ taux?: number|string, montant_fixe?: number|string }} p.fraisRemboursement
  *        ligne de frais de remboursement (figée, ou active — voir
  *        resoudreFraisRemboursement)
@@ -94,8 +123,11 @@ export function netRembourseCampay(brut, fraisReels, decimales = 0) {
  *   evenement: string,
  *   tardif: boolean|null,
  *   remboursement: null | { brut:number, frais:number, net:number, creerLigne:boolean, motif:string },
- *   versementMedecin: number,   // honoraires − commission (AVANT amendes), 0 si non payé
- *   commissionAps: number,      // à enregistrer dans CommissionApsVersee si > 0
+ *   versementMedecin: number,   // H − CM (AVANT amendes), 0 si non versé
+ *   commissionMedecin: number,  // CM conservée par APS : CommissionApsVersee (origine « medecin ») si > 0
+ *   commissionPatient: number,  // CP conservée par APS : CommissionApsVersee (origine « patient ») si > 0 ;
+ *                               // 0 quand CP est rendue au patient (médecin fautif)
+ *   commissionAps: number,      // ALIAS DÉPRÉCIÉ de commissionMedecin (appelants historiques)
  *   amende: boolean,            // créer une AmendeMedecin (§7)
  *   sortEscrow: "rembourse"|"libere"|"sequestre"|"aucun",
  *   statutRdv: "annule"|"non_honore"|"a_reprogrammer"|null,
@@ -106,6 +138,7 @@ export function decider({
   evenement,
   honoraires,
   commission,
+  commissionPatient: ligneCommissionPatient,
   fraisRemboursement,
   dateCreneau,
   maintenant,
@@ -123,8 +156,10 @@ export function decider({
   }
 
   const honorairesArr = arrondir(h, decimales);
-  const commissionAps = Math.min(honorairesArr, arrondir(h * Number(commission.taux), decimales));
-  const netMedecinAvantAmende = arrondir(honorairesArr - commissionAps, decimales);
+  // CM (médecin) et CP (patient) : formules uniques de tarification.service.
+  const cm = calculerCommissionMedecin(h, commission, decimales);
+  const cp = calculerCommissionPatient(h, ligneCommissionPatient, decimales);
+  const netMedecinAvantAmende = arrondir(honorairesArr - cm, decimales);
 
   // Décision de base : rien ne bouge.
   const base = {
@@ -132,7 +167,9 @@ export function decider({
     tardif: null,
     remboursement: null,
     versementMedecin: 0,
-    commissionAps: 0,
+    commissionMedecin: 0,
+    commissionPatient: 0,
+    commissionAps: 0, // alias déprécié de commissionMedecin
     amende: false,
     sortEscrow: "sequestre",
     statutRdv: null,
@@ -151,24 +188,34 @@ export function decider({
     motif,
   });
 
-  // Patient fautif (annulation < 24h, absence) : médecin payé moins commission.
+  // Patient fautif (annulation < 24h, absence) : médecin payé H − CM ;
+  // APS conserve CM + CP.
   const patientFautif = () => ({
     ...base,
     remboursement: null,
     versementMedecin: netMedecinAvantAmende,
-    commissionAps,
+    commissionMedecin: cm,
+    commissionPatient: cp,
+    commissionAps: cm,
     sortEscrow: "libere",
   });
+
+  // Médecin fautif : le patient récupère H + CP − F (CP lui est rendue ;
+  // F reste déduit, les frais d'envoi ne sont jamais rendus). APS ne
+  // conserve rien.
+  const brutMedecinFautif = arrondir(honorairesArr + cp, decimales);
 
   switch (evenement) {
     case EVENEMENTS.ANNULATION_PATIENT: {
       exigerDates(dateCreneau, maintenant, evenement);
       const tardif = estAnnulationTardive(dateCreneau, maintenant);
       if (tardif) return { ...patientFautif(), tardif, statutRdv: "annule" };
+      // > 24 h : H − F au patient ; APS conserve CP (jamais rendue ici).
       return {
         ...base,
         tardif,
         remboursement: rembourse(honorairesArr, MOTIFS.ANNULATION_PRECOCE),
+        commissionPatient: cp,
         sortEscrow: "rembourse",
         statutRdv: "annule",
       };
@@ -181,7 +228,7 @@ export function decider({
         ...base,
         tardif,
         remboursement: rembourse(
-          honorairesArr,
+          brutMedecinFautif,
           tardif ? MOTIFS.DEFAILLANCE_PRO : MOTIFS.ANNULATION_PRECOCE
         ),
         amende: tardif,
@@ -193,7 +240,7 @@ export function decider({
     case EVENEMENTS.MEDECIN_ABSENT:
       return {
         ...base,
-        remboursement: rembourse(honorairesArr, MOTIFS.DEFAILLANCE_PRO),
+        remboursement: rembourse(brutMedecinFautif, MOTIFS.DEFAILLANCE_PRO),
         amende: true,
         sortEscrow: "rembourse",
         statutRdv: "non_honore",
@@ -203,22 +250,29 @@ export function decider({
       return { ...patientFautif(), statutRdv: "non_honore" };
 
     case EVENEMENTS.DEUX_ABSENTS_SANS_REPROGRAMMATION:
-      // §5 : patient remboursé de honoraires − frais − commission APS ;
-      // la commission est versée à APS ; le médecin ne touche rien.
+      // §5 : patient remboursé de H − CM − F ; APS conserve CM + CP ;
+      // le médecin ne touche rien.
       return {
         ...base,
         remboursement: rembourse(netMedecinAvantAmende, MOTIFS.DEUX_ABSENTS),
-        commissionAps,
+        commissionMedecin: cm,
+        commissionPatient: cp,
+        commissionAps: cm,
         sortEscrow: "rembourse",
         statutRdv: "non_honore",
       };
 
     case EVENEMENTS.PAIEMENT_TARDIF:
-      // §6 : payé après annulation -> honoraires − frais de remboursement.
-      // Pas d'escrow (le RDV est déjà annulé), ni commission, ni amende.
+      // §6 : payé après annulation -> H − F ; APS conserve CP. Le médecin
+      // ne pouvant ni confirmer ni annuler un RDV non payé, l'annulation
+      // vient du patient, d'un admin ou de l'expiration automatique : il
+      // n'y a jamais de « médecin fautif » ici, donc pas de paramètre
+      // « qui a annulé ». Pas d'escrow (le RDV est déjà annulé), ni CM,
+      // ni amende.
       return {
         ...base,
         remboursement: rembourse(honorairesArr, MOTIFS.PAIEMENT_APRES_ANNULATION),
+        commissionPatient: cp,
         sortEscrow: "aucun",
       };
 
@@ -234,21 +288,42 @@ function exigerDates(dateCreneau, maintenant, evenement) {
 }
 
 /**
- * Répartition d'une libération de fonds (§1) : honoraires = commission
- * APS + crédit net du médecin (AVANT amendes). Fonction pure, utilisée
- * par liberationEscrow.service.js pour tout versement au médecin
- * (RDV honoré, annulation patient < 24h, patient absent). Même formule
- * que `decider` (commission plafonnée aux honoraires).
- * @param {{ honoraires: number|string, commission: { taux: number|string }, decimales?: 0|2 }} p
- * @returns {{ honoraires:number, commissionAps:number, netMedecin:number }}
+ * Répartition d'une libération de fonds (§1) : honoraires = CM + crédit
+ * net du médecin (AVANT amendes) ; APS conserve en plus CP (déjà payée par
+ * le patient en sus des honoraires, elle ne réduit pas le crédit du
+ * médecin). Fonction pure, utilisée par liberationEscrow.service.js pour
+ * tout versement au médecin (RDV honoré, annulation patient < 24h,
+ * patient absent). Même formule que `decider` (CM plafonnée aux
+ * honoraires).
+ * @param {{
+ *   honoraires: number|string,
+ *   commission: { taux: number|string },
+ *   commissionPatient?: { taux: number|string }|null,
+ *   decimales?: 0|2
+ * }} p  `commission` = ligne CM figée ; `commissionPatient` = ligne CP
+ *       figée (absente/null = transaction antérieure à CP => CP = 0)
+ * @returns {{
+ *   honoraires:number,
+ *   commissionMedecin:number,   // CM : origine « medecin »
+ *   commissionPatient:number,   // CP : origine « patient » (0 si ligne absente)
+ *   commissionAps:number,       // ALIAS DÉPRÉCIÉ de commissionMedecin
+ *   netMedecin:number           // H − CM
+ * }}
  */
-export function repartirLiberation({ honoraires, commission, decimales = 2 }) {
+export function repartirLiberation({ honoraires, commission, commissionPatient: ligneCommissionPatient, decimales = 2 }) {
   if (!commission || commission.taux == null) {
     throw new Error("Ligne de commission manquante : répartition de la libération impossible.");
   }
   const h = arrondir(honoraires, decimales);
-  const commissionAps = Math.min(h, arrondir(Number(honoraires) * Number(commission.taux), decimales));
-  return { honoraires: h, commissionAps, netMedecin: arrondir(h - commissionAps, decimales) };
+  const commissionMedecin = calculerCommissionMedecin(honoraires, commission, decimales);
+  const commissionPatient = calculerCommissionPatient(honoraires, ligneCommissionPatient, decimales);
+  return {
+    honoraires: h,
+    commissionMedecin,
+    commissionPatient,
+    commissionAps: commissionMedecin,
+    netMedecin: arrondir(h - commissionMedecin, decimales),
+  };
 }
 
 // -----------------------------------------------------------------
@@ -258,15 +333,16 @@ export function repartirLiberation({ honoraires, commission, decimales = 2 }) {
 
 /**
  * Point ouvert C : base de calcul de l'amende = crédit NET de la
- * libération (honoraires − commission APS), avant imputation des
- * amendes. Fonction unique : pour changer la base (ex. honoraires
- * bruts), on ne modifie que celle-ci.
+ * libération (H − CM), avant imputation des amendes. CP n'entre pas dans
+ * la base (elle est payée par le patient en sus des honoraires). Fonction
+ * unique : pour changer la base (ex. honoraires bruts), on ne modifie que
+ * celle-ci.
  * @returns {number}
  */
 export function baseCalculAmende({ honoraires, commission, decimales = 2 }) {
   const h = arrondir(honoraires, decimales);
-  const c = Math.min(h, arrondir(Number(honoraires) * Number(commission.taux), decimales));
-  return arrondir(h - c, decimales);
+  const cm = calculerCommissionMedecin(honoraires, commission, decimales);
+  return arrondir(h - cm, decimales);
 }
 
 /**
