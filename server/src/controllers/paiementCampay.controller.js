@@ -1,6 +1,6 @@
 // src/controllers/paiementCampay.controller.js
 import prisma from "../lib/prisma.js";
-import { verifierRdvPayable, creerTransactionEnAttente, repondreSiPaiementExistant, repondreSiBaremeAbsent } from "./paiement.controller.js";
+import { verifierRdvPayable, creerTransactionEnAttente, repondreSiPaiementExistant, repondreSiBaremeAbsent, descriptionCampay } from "./paiement.controller.js";
 import {
   CampayError, DEVISE_CAMPAY, initierCollecte, normaliserNumeroCM, signatureCallbackValide,
 } from "../lib/campayService.js";
@@ -42,8 +42,9 @@ export async function creerPaiementCampayRdv(req, res, next) {
     }
 
     // §6 : contrôle anti double paiement + création sous verrou de créneau
-    // (409 si un paiement existe déjà). Total = honoraires + frais d'envoi
-    // CamPay, déjà arrondi à l'unité (XAF) par verifierRdvPayable.
+    // (409 si un paiement existe déjà). Total = H + frais d'envoi CamPay + CP,
+    // déjà arrondi à l'unité (XAF) par verifierRdvPayable ; la ligne CP est
+    // figée sur la transaction par creerTransactionEnAttente.
     const transaction = await creerTransactionEnAttente(ctx, {
       montant: montantXaf, // le montant arrondi EST le montant réellement débité
       devise: DEVISE_CAMPAY.toLowerCase(),
@@ -56,7 +57,9 @@ export async function creerPaiementCampayRdv(req, res, next) {
       collecte = await initierCollecte({
         montant: montantXaf,
         numero,
-        description: `Consultation APS Sante ${rdv.rdv_id.slice(0, 8)}`,
+        // Détail des composantes (H + frais + commission APS = total), court
+        // et sans accents ; retombe sur la description historique si trop long.
+        description: descriptionCampay(ctx),
         external_reference: transaction.transaction_id,
       });
     } catch (err) {

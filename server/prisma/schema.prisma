@@ -197,6 +197,10 @@ enum TypeNotification {
   rdv_reprogrammation_proposee
   // La partie qui avait proposé apprend que sa proposition est acceptée.
   rdv_reprogrammation_acceptee
+  // Le paiement d'un RDV est confirmé (cree -> confirme) : le MÉDECIN est
+  // notifié à ce moment-là seulement (D8) — jamais avant paiement, ni à la
+  // création, ni à l'annulation ou l'expiration d'un RDV non payé.
+  rdv_paye
 }
 
 // Motif d'annulation d'un rendez-vous — liste fermée exigée par la

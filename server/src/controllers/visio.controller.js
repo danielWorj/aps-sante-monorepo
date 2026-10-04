@@ -51,18 +51,29 @@ export async function obtenirTokenVisio(req, res, next) {
         .json({ message: "Ce rendez-vous n'est pas une téléconsultation." });
     }
 
-    if (!STATUTS_AUTORISES_VISIO.includes(rdv.statut)) {
-      return res
-        .status(400)
-        .json({ message: "Ce rendez-vous n'est pas dans un état permettant la visio." });
-    }
-
     const utilisateurCourantId = req.utilisateur.utilisateur_id;
     const estLeMedecin = rdv.medecin.utilisateur_id === utilisateurCourantId;
     const estLePatient = rdv.patient.utilisateur_id === utilisateurCourantId;
 
     if (!estLeMedecin && !estLePatient) {
       return res.status(403).json({ message: "Accès non autorisé à cette consultation." });
+    }
+
+    // D8 : le médecin n'a aucun accès à la visio d'un RDV non payé (409 dédié,
+    // distinct du 400 « statut incompatible »). Vérifié sur le statut en base.
+    if (estLeMedecin && rdv.statut === "cree") {
+      return res.status(409).json({
+        code: "RDV_NON_PAYE",
+        message:
+          "Ce rendez-vous n'est pas encore payé : la visio n'est pas accessible. " +
+          "Elle le sera une fois le paiement confirmé.",
+      });
+    }
+
+    if (!STATUTS_AUTORISES_VISIO.includes(rdv.statut)) {
+      return res
+        .status(400)
+        .json({ message: "Ce rendez-vous n'est pas dans un état permettant la visio." });
     }
 
     const participantInfo = estLeMedecin ? rdv.medecin.utilisateur : rdv.patient.utilisateur;
