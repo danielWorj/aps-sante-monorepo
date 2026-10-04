@@ -2,17 +2,23 @@
 // Politique de fonds v2 §1, §3, §5, §7 — Libération de l'escrow vers le
 // médecin.
 //
-// Crédit du médecin = honoraires − commission APS − amendes imputées :
-//   1. la commission APS (ligne_commission FIGÉE sur la transaction à la
-//      capture) est prélevée ICI, à la libération, et enregistrée comme
-//      fait de versement à APS (CommissionApsVersee) ;
-//   2. le net (honoraires − commission) est crédité au portefeuille
-//      (`credit_honoraires`) ;
-//   3. les amendes en attente du médecin sont ensuite imputées sur ce
+// Vocabulaire : H = honoraires ; CM = commission MÉDECIN ; CP = commission
+// PATIENT.
+//
+// Crédit du médecin = H − CM − amendes imputées :
+//   1. CM (ligne_commission FIGÉE sur la transaction à la capture) est
+//      prélevée ICI, à la libération, et enregistrée comme fait de
+//      versement à APS (CommissionApsVersee, origine « medecin ») ;
+//   2. CP (ligne_commission_patient FIGÉE, payée par le patient EN SUS des
+//      honoraires) est conservée par APS : elle n'entame jamais le crédit
+//      du médecin, et est enregistrée (origine « patient ») ;
+//   3. le net (H − CM) est crédité au portefeuille (`credit_honoraires`) ;
+//   4. les amendes en attente du médecin sont ensuite imputées sur ce
 //      crédit (`debit_amende`, reversé à APS), plafonnées au crédit.
 // Les frais d'envoi de l'agrégateur restent à la charge du patient : ils
-// n'entrent jamais dans ce calcul. Rien n'est stocké en dérivé : la
-// commission se recalcule depuis montant_honoraires × ligne_commission.taux.
+// n'entrent jamais dans ce calcul. Rien n'est stocké en dérivé : CM et CP
+// se recalculent depuis montant_honoraires × taux de la ligne figée.
+// Transaction antérieure à CP (ligne NULL) : CP = 0, aucune ligne « patient ».
 //
 // Appelée par :
 //   - libererEscrow(rdv_id) : RDV honoré (scan QR, clôture visio,
@@ -26,6 +32,7 @@ import { decimalesPourMontant } from "../utils/montants.js";
 import { repartirLiberation } from "./politiqueFonds.service.js";
 import { creerMouvement } from "./portefeuille.service.js";
 import { appliquerAmendesEnAttente } from "./amende.service.js";
+import { enregistrerCommissionsAps } from "./commissionAps.service.js";
 
 const STATUTS_RDV_LIBERATION = ["honore", "annule", "non_honore"];
 
@@ -41,7 +48,10 @@ const STATUTS_RDV_LIBERATION = ["honore", "annule", "non_honore"];
  * @param {string} rdv_id
  * @param {{ statutRdv?: "honore"|"annule"|"non_honore" }} [options]
  * @param {object} [tx] transaction Prisma de l'appelant (sinon une est ouverte)
- * @returns {Promise<{ deja_traite: boolean, honoraires?: number, commission_aps?: number,
+ * @returns {Promise<{ deja_traite: boolean, honoraires?: number,
+ *   commission_medecin?: number,   // CM (origine « medecin »)
+ *   commission_patient?: number,   // CP conservée par APS (origine « patient »)
+ *   commission_aps?: number,       // ALIAS DÉPRÉCIÉ de commission_medecin
  *   net_medecin?: number, amendes_imputees?: number, credit_final?: number }>}
  */
 export async function libererFonds(rdv_id, { statutRdv = "honore" } = {}, tx) {
@@ -52,7 +62,7 @@ export async function libererFonds(rdv_id, { statutRdv = "honore" } = {}, tx) {
   const executer = async (db) => {
     const escrow = await db.compteEscrow.findUnique({
       where: { rdv_id },
-      include: { transaction: { include: { ligne_commission: true } } },
+      include: { transaction: { include: { ligne_commission: true, ligne_commission_patient: true } } },
     });
     if (!escrow || escrow.statut !== "sequestre") return { deja_traite: true };
 
@@ -77,23 +87,21 @@ export async function libererFonds(rdv_id, { statutRdv = "honore" } = {}, tx) {
     });
 
     const decimales = decimalesPourMontant({ fournisseur: t.fournisseur, devise: t.devise });
-    const { honoraires, commissionAps, netMedecin } = repartirLiberation({
+    const { honoraires, commissionMedecin, commissionPatient, netMedecin } = repartirLiberation({
       honoraires: t.montant_honoraires,
       commission: t.ligne_commission,
+      commissionPatient: t.ligne_commission_patient,
       decimales,
     });
 
-    // Fait de versement à APS (une seule ligne par RDV : rdv_id unique).
-    if (commissionAps > 0) {
-      await db.commissionApsVersee.create({
-        data: {
-          rdv_id,
-          transaction_id: t.transaction_id,
-          ligne_commission_id: t.ligne_commission.ligne_tarifaire_id,
-          montant: commissionAps,
-        },
-      });
-    }
+    // Faits de versement à APS : une ligne par (RDV, origine) — CM
+    // « medecin », CP « patient » — écrites par upsert (idempotent).
+    await enregistrerCommissionsAps(db, {
+      rdv_id,
+      transaction: t,
+      commissionMedecin,
+      commissionPatient,
+    });
 
     await creerMouvement(
       {
@@ -114,7 +122,9 @@ export async function libererFonds(rdv_id, { statutRdv = "honore" } = {}, tx) {
     return {
       deja_traite: false,
       honoraires,
-      commission_aps: commissionAps,
+      commission_medecin: commissionMedecin,
+      commission_patient: commissionPatient,
+      commission_aps: commissionMedecin, // alias déprécié de commission_medecin
       net_medecin: netMedecin,
       amendes_imputees: amendes.totalImpute,
       credit_final: amendes.creditApres,

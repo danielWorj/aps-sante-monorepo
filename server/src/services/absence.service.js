@@ -8,18 +8,26 @@
 // politiqueFonds.service.js (`decider`), leur exécution dans
 // traitementFonds.service.js ; ce service choisit l'événement.
 //
-//   médecin absent  : remboursement (§2) + amende au médecin
+// Vocabulaire : H = honoraires ; F = frais de remboursement de l'agrégateur ;
+// CM = commission MÉDECIN ; CP = commission PATIENT.
+//
+//   médecin absent  : médecin fautif — patient remboursé de H + CP − F (CP
+//                     lui est rendue, F reste déduit) + amende au médecin ;
+//                     APS ne conserve rien
 //   patient absent  : comme une annulation patient < 24h (médecin payé
-//                     moins commission APS, commission versée à APS)
+//                     H − CM avant amendes ; APS conserve CM + CP)
 //   deux absents    : fonds gardés en séquestre, RDV « a_reprogrammer »
 //                     (début du délai de 48h) — la NOTIFICATION aux deux
 //                     parties est envoyée à l'étape 6 (canal à identifier,
 //                     point ouvert E)
-//   deux absents, 48h sans reprogrammation acceptée : remboursement du
-//                     patient (honoraires − frais − commission APS),
-//                     commission versée à APS
+//   deux absents, 48h sans reprogrammation acceptée : patient remboursé de
+//                     H − CM − F ; APS conserve CM + CP ; le médecin ne
+//                     touche rien
 //   deux présents mais RDV non clôturé : jamais décidé automatiquement,
 //                     signalé pour arbitrage admin (forcer-liberation)
+//
+// Ces événements ne concernent que des RDV PAYÉS (D8) : un RDV non payé
+// n'atteint jamais « confirme ».
 //
 // Déclencheurs : detecterCreneauxDepasses.job.js (cron). La détection des
 // présences et le cron d'expiration des 48h sont l'objet de l'étape 6.
@@ -65,8 +73,8 @@ export async function traiterAbsence(rdvRef, { maintenant = new Date() } = {}) {
 
 /**
  * §5 — Deux absents, aucune reprogrammation acceptée dans les 48h suivant
- * le passage à « a_reprogrammer » : remboursement du patient (honoraires −
- * frais de remboursement − commission APS), commission versée à APS.
+ * le passage à « a_reprogrammer » : patient remboursé de H − CM − F ; APS
+ * conserve CM + CP (CommissionApsVersee, une ligne par origine).
  * Sans effet tant que le délai court. Idempotent (RDV déjà « non_honore »
  * ou repassé « confirme » => deja_traite).
  *

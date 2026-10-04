@@ -10,20 +10,31 @@
 //   - neutralise les paiements Stripe encore ouverts d'un RDV jamais payé ;
 //   - traduit l'initiateur en événement de fonds.
 //
+// Vocabulaire : H = honoraires ; F = frais de remboursement de l'agrégateur ;
+// CM = commission MÉDECIN ; CP = commission PATIENT.
+//
 // Matrice (>24h : pile 24h inclus ; voir estAnnulationTardive) :
-//   patient  > 24h : remboursement (honoraires − frais de remboursement)
-//   patient  < 24h : aucun remboursement, médecin payé (honoraires −
-//                    commission APS), commission versée à APS
-//   médecin  > 24h : remboursement
-//   médecin  < 24h : remboursement + amende au médecin (§7)
+//   patient  > 24h : patient remboursé de H − F ; APS conserve CP
+//   patient  < 24h : aucun remboursement ; médecin payé H − CM (avant
+//                    amendes) ; APS conserve CM + CP
+//   médecin  > 24h : patient remboursé de H + CP − F (médecin fautif) ;
+//                    APS ne conserve rien
+//   médecin  < 24h : idem + amende au médecin (§7)
+// Les frais d'envoi ne sont jamais rendus ; F est toujours déduit.
 // Annulation pendant la reprogrammation (statut « a_reprogrammer », les deux
 // parties ont été absentes), par n'importe quelle partie ou un admin (point G) :
 //   traitée comme « deux absents sans reprogrammation » — patient remboursé de
-//   honoraires − frais de remboursement − commission APS, commission versée à
-//   APS, aucune amende, RDV « annule ». Le délai du créneau n'a plus de sens
-//   (le créneau initial est passé) : il n'est pas évalué.
+//   H − CM − F ; APS conserve CM + CP ; aucune amende ; RDV « annule ». Le
+//   délai du créneau n'a plus de sens (le créneau initial est passé) : il
+//   n'est pas évalué.
 // Un rendez-vous jamais payé : rien à rembourser ni à libérer ; l'amende
-// reste due (point ouvert D).
+// reste due (point ouvert D). Seuls son propriétaire (patient), un admin ou
+// l'expiration automatique peuvent l'annuler (D8) ; un paiement qui arrive
+// ensuite relève de `paiement_tardif` (finalisationPaiement.service.js).
+//
+// Le résultat contient TOUTE la décomposition (CP, CM, versement médecin) :
+// c'est l'appelant (rendezVous.controller.js) qui filtre la réponse par
+// rôle (D7) — le patient ne doit jamais recevoir CM ni le net du médecin.
 //
 // Retourne `{ erreur: { status, message } }` pour un refus métier
 // attendu (même convention que verifierTransitionAutorisee) ; lève une
@@ -75,9 +86,15 @@ async function neutraliserPaiementsEnCours(rdv_id) {
  *
  * @param {object} rdv ligne RendezVous
  * @param {{ motif: string, commentaire?: string|null, initiateur: "patient"|"medecin", maintenant?: Date }} params
- * @returns {Promise<{ erreur: {status:number, message:string} } | {
+ * @returns {Promise<{ erreur: {status:number, message:string, code?:string} } | {
+ *   evenement: string,                    // valeur de EVENEMENTS (qui est fautif, pour filtrer par rôle)
  *   remboursement: null|object, tardif: boolean|null,
- *   versement_medecin: number, commission_aps: number, amende: boolean }>}
+ *   versement_medecin: number,            // H − CM libérés au médecin (avant amendes)
+ *   commission_medecin: number,           // CM conservée par APS
+ *   commission_patient: number,           // CP conservée par APS
+ *   commission_patient_rendue: number,    // CP rendue au patient (médecin fautif), sinon 0
+ *   commission_aps: number,               // ALIAS DÉPRÉCIÉ de commission_medecin
+ *   amende: boolean }>}
  */
 export async function traiterAnnulation(
   rdv,
@@ -85,6 +102,22 @@ export async function traiterAnnulation(
 ) {
   if (STATUTS_NON_ANNULABLES[rdv.statut]) {
     return { erreur: { status: 409, message: STATUTS_NON_ANNULABLES[rdv.statut] } };
+  }
+
+  // D8 : un RDV non payé (« cree ») est hors de portée du médecin, et il n'y a
+  // aucun médecin fautif possible (ni fonds, ni CP, ni CM). Un admin ne peut
+  // donc pas l'annuler « au nom du médecin » : on refuse explicitement plutôt
+  // que de lui infliger une amende pour un RDV qu'il ne pouvait pas toucher.
+  if (rdv.statut === "cree" && initiateur === "medecin") {
+    return {
+      erreur: {
+        status: 409,
+        code: "RDV_NON_PAYE",
+        message:
+          "Ce rendez-vous n'est pas encore payé : le médecin ne peut pas l'annuler. " +
+          "Il ne peut être annulé que par le patient, un administrateur (au nom du patient) ou à l'expiration.",
+      },
+    };
   }
 
   const enReprogrammation = rdv.statut === "a_reprogrammer";
@@ -122,6 +155,10 @@ export async function traiterAnnulation(
       motif_annulation: motif,
       commentaire_annulation: commentaire ?? null,
       date_annulation: maintenant,
+      // Fait constaté : au nom de qui l'annulation a eu lieu (un admin annule
+      // au nom de l'une des parties). Simple trace d'audit : aucune règle de
+      // fonds n'en dépend (D3, D8).
+      annule_par: initiateur,
       ...(enReprogrammation
         ? { nouvelle_date_proposee: null, proposee_par: null, date_proposition: null }
         : {}),
@@ -140,10 +177,14 @@ export async function traiterAnnulation(
   }
 
   return {
+    evenement: resultat.evenement,
     remboursement: resultat.remboursement,
     tardif: resultat.tardif,
     versement_medecin: resultat.versement_medecin,
-    commission_aps: resultat.commission_aps,
+    commission_medecin: resultat.commission_medecin,
+    commission_patient: resultat.commission_patient,
+    commission_patient_rendue: resultat.commission_patient_rendue,
+    commission_aps: resultat.commission_medecin, // alias déprécié de commission_medecin
     amende: resultat.amende,
   };
 }

@@ -8,6 +8,7 @@ import { creerRemboursement, depuisUniteStripe } from "../lib/stripeService.js";
 import { decimalesPourMontant } from "../utils/montants.js";
 import { EVENEMENTS, decider } from "./politiqueFonds.service.js";
 import { resoudreFraisRemboursement } from "./fraisAgregateur.service.js";
+import { enregistrerCommissionsAps } from "./commissionAps.service.js";
 
 /**
  * Cœur métier commun à `checkout.session.completed` (web) et
@@ -18,8 +19,14 @@ import { resoudreFraisRemboursement } from "./fraisAgregateur.service.js";
  * Paiement tardif : si le rendez-vous a été annulé avant que ce paiement
  * n'aboutisse (PaymentSheet déjà validée au moment de l'annulation,
  * PaymentIntent non annulable), on n'encaisse rien : aucun escrow n'est
- * créé et le montant est remboursé selon §6 (honoraires − frais de
- * remboursement de l'agrégateur, jamais négatif).
+ * créé et le montant est remboursé selon §6 (H − F : honoraires moins frais
+ * de remboursement de l'agrégateur, jamais négatif). APS conserve CP
+ * (commission patient), enregistrée dans CommissionApsVersee (origine
+ * « patient »).
+ *
+ * Un RDV non payé n'est annulable que par son propriétaire (patient), un
+ * admin ou l'expiration automatique (D8) : il n'y a donc jamais de « médecin
+ * fautif » ici.
  */
 export async function finaliserPaiement({ transaction_id, rdv_id, payment_intent_id, campay_reference }) {
   // Référence à écrire sur la transaction selon le fournisseur.
@@ -104,10 +111,12 @@ export async function finaliserPaiement({ transaction_id, rdv_id, payment_intent
 
 /**
  * Politique de fonds v2 §6 — Rembourse un paiement arrivé APRÈS l'annulation
- * du rendez-vous : honoraires − frais de remboursement de l'agrégateur
- * (mêmes règles que §2 ; les frais d'envoi ne sont pas rendus). Pas
- * d'escrow, ni commission, ni amende. Le calcul est celui de `decider`
- * (événement PAIEMENT_TARDIF), sur les lignes FIGÉES de la transaction.
+ * du rendez-vous : H − F (honoraires moins frais de remboursement de
+ * l'agrégateur ; mêmes règles que §2). Les frais d'envoi et CP ne sont pas
+ * rendus : APS conserve CP et l'enregistre (CommissionApsVersee, origine
+ * « patient »). Pas d'escrow, ni CM, ni amende. Le calcul est celui de
+ * `decider` (événement PAIEMENT_TARDIF), sur les lignes FIGÉES de la
+ * transaction (CM, CP, frais de remboursement).
  *
  * Stripe d'abord, base ensuite ; la clé d'idempotence garantit qu'un rejeu
  * du webhook ne rembourse jamais deux fois. En cas d'échec Stripe on lève :
@@ -120,7 +129,7 @@ async function rembourserPaiementRdvAnnule({ transaction, rdv_id, payment_intent
   // Relecture avec les lignes figées (la transaction reçue n'en porte pas).
   const t = await prisma.transactionPaiement.findUnique({
     where: { transaction_id: transaction.transaction_id },
-    include: { ligne_commission: true, frais_remboursement: true },
+    include: { ligne_commission: true, ligne_commission_patient: true, frais_remboursement: true },
   });
   if (t.montant_honoraires == null || !t.ligne_commission) {
     throw new Error(
@@ -130,31 +139,41 @@ async function rembourserPaiementRdvAnnule({ transaction, rdv_id, payment_intent
   }
   const decimales = decimalesPourMontant({ fournisseur: t.fournisseur, devise: t.devise });
   const fraisRemboursement = await resoudreFraisRemboursement(t);
-  const { remboursement: rem } = decider({
+  const { remboursement: rem, commissionPatient } = decider({
     evenement: EVENEMENTS.PAIEMENT_TARDIF,
     honoraires: t.montant_honoraires,
     commission: t.ligne_commission,
+    commissionPatient: t.ligne_commission_patient,
     fraisRemboursement,
     decimales,
   });
 
+  // CP conservée par APS (idempotent : upsert sur (rdv_id, origine)). Nulle
+  // pour une transaction antérieure à CP : aucune ligne écrite.
+  const enregistrerCp = (db) =>
+    enregistrerCommissionsAps(db, { rdv_id, transaction: t, commissionPatient });
+
   if (campay_reference) {
     // Pas de remboursement natif chez CamPay : on enregistre l'intention, un admin
     // l'exécute. La contrainte unique (transaction_id, motif) rend l'appel idempotent.
-    if (rem.creerLigne) {
-      try {
-        await prisma.remboursementPaiement.create({
-          data: {
+    // Remboursement (si dû) et CP dans la MÊME transaction SQL ; upsert
+    // plutôt que create + capture de P2002 (une violation d'unicité
+    // avorterait la transaction interactive).
+    await prisma.$transaction(async (tx) => {
+      if (rem.creerLigne) {
+        await tx.remboursementPaiement.upsert({
+          where: { transaction_id_motif: { transaction_id: t.transaction_id, motif: rem.motif } },
+          create: {
             transaction_id: t.transaction_id,
             motif: rem.motif,
             montant: rem.brut,
             statut: "a_traiter",
           },
+          update: {},
         });
-      } catch (err) {
-        if (err.code !== "P2002") throw err; // déjà enregistré : rien à faire
       }
-    }
+      await enregistrerCp(tx);
+    });
     console.warn(`[paiement] CamPay reçu après annulation du rdv ${rdv_id} : remboursement à traiter.`);
     return;
   }
@@ -162,6 +181,8 @@ async function rembourserPaiementRdvAnnule({ transaction, rdv_id, payment_intent
   // ── Stripe ──
   if (!rem.creerLigne) {
     // Frais de remboursement ≥ honoraires : rien à rendre (plancher à 0, §2).
+    // APS conserve tout, CP comprise : le fait est enregistré.
+    await enregistrerCp(prisma);
     console.warn(
       `[paiement] Paiement reçu après annulation du rdv ${rdv_id} (transaction ${t.transaction_id}) : ` +
       `remboursement nul (frais ≥ honoraires), aucun remboursement effectué.`
@@ -188,8 +209,8 @@ async function rembourserPaiementRdvAnnule({ transaction, rdv_id, payment_intent
 
   // Le montant enregistré est celui que Stripe a RÉELLEMENT remboursé (un
   // fait) : il n'est plus égal au montant payé, il doit donc être consigné.
-  await prisma.$transaction([
-    prisma.remboursementPaiement.upsert({
+  await prisma.$transaction(async (tx) => {
+    await tx.remboursementPaiement.upsert({
       where: { transaction_id_motif: { transaction_id: t.transaction_id, motif: rem.motif } },
       create: {
         transaction_id: t.transaction_id,
@@ -198,14 +219,15 @@ async function rembourserPaiementRdvAnnule({ transaction, rdv_id, payment_intent
         stripe_refund_id: remboursement.id,
       },
       update: {},
-    }),
-    prisma.transactionPaiement.update({
+    });
+    await enregistrerCp(tx);
+    await tx.transactionPaiement.update({
       where: { transaction_id: t.transaction_id },
       data: { statut: "remboursee" },
-    }),
-  ]);
+    });
+  });
   console.warn(
-    `[paiement] Paiement reçu après annulation du rdv ${rdv_id} : remboursé (honoraires − frais de remboursement) ` +
+    `[paiement] Paiement reçu après annulation du rdv ${rdv_id} : remboursé (H − F, CP conservée par APS) ` +
     `(transaction ${t.transaction_id}, payment_intent ${payment_intent_id}).`
   );
 }

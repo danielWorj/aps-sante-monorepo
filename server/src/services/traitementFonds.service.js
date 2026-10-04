@@ -19,15 +19,25 @@
 //   2. réservation atomique de l'escrow (UPDATE conditionnel
 //      `WHERE statut = 'sequestre'`) : un seul appel concurrent écrit ;
 //   3. contraintes d'unicité : (transaction_id, motif) sur le
-//      remboursement, rdv_id sur l'amende et sur CommissionApsVersee.
+//      remboursement, rdv_id sur l'amende, (rdv_id, origine) sur
+//      CommissionApsVersee (écriture par upsert).
 //
 // Aucune valeur dérivée stockée : on écrit les faits (remboursement
-// réellement effectué, commission versée, amende due) ; nets et estimations
-// se recalculent.
+// réellement effectué, commissions conservées, amende due) ; nets et
+// estimations se recalculent.
+//
+// Vocabulaire : H = honoraires ; F = frais de remboursement de l'agrégateur ;
+// CM = commission MÉDECIN ; CP = commission PATIENT. CP n'est jamais rendue
+// au patient sauf médecin fautif (annulation médecin, médecin absent) ;
+// dans tous les autres cas APS la conserve et l'enregistre dans
+// CommissionApsVersee (origine « patient »), dès l'événement — libération
+// OU remboursement partiel. CM + CP sont conservées pour « deux absents
+// sans reprogrammation ».
 
 import prisma from "../lib/prisma.js";
 import { creerRemboursement, depuisUniteStripe } from "../lib/stripeService.js";
 import { decimalesPourMontant } from "../utils/montants.js";
+import { calculerCommissionPatient } from "./tarification.service.js";
 import {
   EVENEMENTS,
   STATUTS_RDV_ACTIFS,
@@ -37,6 +47,7 @@ import {
 import { resoudreFraisRemboursement } from "./fraisAgregateur.service.js";
 import { libererFonds } from "./liberationEscrow.service.js";
 import { creerAmende, exigerParametreAmende } from "./amende.service.js";
+import { enregistrerCommissionsAps } from "./commissionAps.service.js";
 
 /**
  * Applique la décision de fonds d'un événement à un rendez-vous.
@@ -53,12 +64,21 @@ import { creerAmende, exigerParametreAmende } from "./amende.service.js";
  * @returns {Promise<{ deja_traite: true } | {
  *   deja_traite: false, evenement: string, statut_rdv: string, tardif: boolean|null,
  *   remboursement: null | { montant:number, montant_estime_net?:number, devise:string, motif:string, statut:string },
- *   versement_medecin: number, commission_aps: number, amende: boolean }>}
+ *   versement_medecin: number,            // H − CM libérés au médecin (avant amendes)
+ *   commission_medecin: number,           // CM conservée par APS
+ *   commission_patient: number,           // CP conservée par APS
+ *   commission_patient_rendue: number,    // CP rendue au patient (médecin fautif), sinon 0
+ *   commission_aps: number,               // ALIAS DÉPRÉCIÉ de commission_medecin
+ *   amende: boolean }>}
  */
 export async function appliquerEvenementFonds(rdv, { evenement, maintenant = new Date(), donneesRdv = {}, statutRdv }) {
   const escrow = await prisma.compteEscrow.findUnique({
     where: { rdv_id: rdv.rdv_id },
-    include: { transaction: { include: { ligne_commission: true, frais_remboursement: true } } },
+    include: {
+      transaction: {
+        include: { ligne_commission: true, ligne_commission_patient: true, frais_remboursement: true },
+      },
+    },
   });
 
   if (!escrow) return appliquerSansEscrow(rdv, { evenement, maintenant, donneesRdv });
@@ -88,6 +108,7 @@ export async function appliquerEvenementFonds(rdv, { evenement, maintenant = new
     evenement,
     honoraires: t.montant_honoraires,
     commission: t.ligne_commission,
+    commissionPatient: t.ligne_commission_patient,
     fraisRemboursement,
     dateCreneau: rdv.date_creneau,
     maintenant,
@@ -98,6 +119,14 @@ export async function appliquerEvenementFonds(rdv, { evenement, maintenant = new
 
   const rem = decision.remboursement;
   const versementRemboursement = Boolean(rem?.creerLigne);
+
+  // CP rendue au patient : uniquement quand un remboursement est dû ET que
+  // APS ne conserve pas CP (= médecin fautif). Fait recalculé, jamais stocké ;
+  // exposé pour que les contrôleurs filtrent la réponse par rôle (D7).
+  const commissionPatientRendue =
+    versementRemboursement && decision.commissionPatient === 0
+      ? calculerCommissionPatient(t.montant_honoraires, t.ligne_commission_patient, decimales)
+      : 0;
 
   // ── 1. Stripe d'abord (CamPay : aucun appel, ligne « a_traiter » plus bas) ──
   let refund = null;
@@ -135,7 +164,10 @@ export async function appliquerEvenementFonds(rdv, { evenement, maintenant = new
         tardif: decision.tardif,
         remboursement: null,
         versement_medecin: lib.net_medecin,
-        commission_aps: lib.commission_aps,
+        commission_medecin: lib.commission_medecin,
+        commission_patient: lib.commission_patient,
+        commission_patient_rendue: 0,
+        commission_aps: lib.commission_medecin, // alias déprécié de commission_medecin
         amende: false,
         amendes_imputees: lib.amendes_imputees,
       };
@@ -163,6 +195,9 @@ export async function appliquerEvenementFonds(rdv, { evenement, maintenant = new
         tardif: null,
         remboursement: null,
         versement_medecin: 0,
+        commission_medecin: 0,
+        commission_patient: 0,
+        commission_patient_rendue: 0,
         commission_aps: 0,
         amende: false,
       };
@@ -209,18 +244,18 @@ export async function appliquerEvenementFonds(rdv, { evenement, maintenant = new
       };
     }
 
-    // Commission APS versée à APS (deux absents sans reprogrammation).
-    if (decision.commissionAps > 0) {
-      await tx.commissionApsVersee.createMany({
-        data: [{
-          rdv_id: rdv.rdv_id,
-          transaction_id: t.transaction_id,
-          ligne_commission_id: t.ligne_commission.ligne_tarifaire_id,
-          montant: decision.commissionAps,
-        }],
-        skipDuplicates: true,
-      });
-    }
+    // Commissions conservées par APS, enregistrées dès cet événement (et
+    // non plus seulement à la libération) :
+    //   - CP (origine « patient ») : annulation patient > 24 h, deux absents
+    //     sans reprogrammation ; jamais quand CP est rendue (médecin fautif) ;
+    //   - CM (origine « medecin ») : deux absents sans reprogrammation.
+    // Upsert sur (rdv_id, origine) : un rejeu n'écrit rien de plus.
+    await enregistrerCommissionsAps(tx, {
+      rdv_id: rdv.rdv_id,
+      transaction: t,
+      commissionMedecin: decision.commissionMedecin,
+      commissionPatient: decision.commissionPatient,
+    });
 
     // Amende du médecin (§7) : enregistrée « en_attente », imputée à sa
     // prochaine libération (amende.service.js). Idempotente sur rdv_id.
@@ -239,7 +274,10 @@ export async function appliquerEvenementFonds(rdv, { evenement, maintenant = new
       tardif: decision.tardif,
       remboursement,
       versement_medecin: 0,
-      commission_aps: decision.commissionAps,
+      commission_medecin: decision.commissionMedecin,
+      commission_patient: decision.commissionPatient,
+      commission_patient_rendue: commissionPatientRendue,
+      commission_aps: decision.commissionMedecin, // alias déprécié de commission_medecin
       amende: decision.amende,
     };
   });
@@ -268,6 +306,9 @@ async function appliquerSansEscrow(rdv, { evenement, maintenant, donneesRdv }) {
       tardif: d.tardif,
       remboursement: null,
       versement_medecin: 0,
+      commission_medecin: 0,
+      commission_patient: 0,
+      commission_patient_rendue: 0,
       commission_aps: 0,
       amende: d.amende,
     };
