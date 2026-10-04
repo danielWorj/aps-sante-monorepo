@@ -7,7 +7,12 @@ import { apiFetch } from '../lib/apiClient';
 
 /** Annulation avec le résultat financier complet (annulerRendezVous de medecinService
  *  ne renvoie que le RDV). Motif obligatoire ; `initiateur` est déduit du token côté serveur.
- *  -> { rendez_vous, tardif, remboursement, versement_medecin, commission_aps, amende } */
+ *  La réponse est FILTRÉE par rôle côté serveur (D7) :
+ *   - patient : { rendez_vous, evenement, tardif, remboursement, commission_patient,
+ *                 commission_patient_rendue, medecin_fautif } — jamais la part médecin (CM) ;
+ *   - médecin : { rendez_vous, evenement, tardif, remboursement (sans montant),
+ *                 versement_medecin, commission_medecin, amende } — jamais CP.
+ *  409 { code: 'RDV_NON_PAYE' } : le médecin ne peut pas annuler un RDV non payé (D8). */
 export function annulerRendezVousDetaille(id, { motif, commentaire } = {}) {
   const body = { statut: 'annule', motif_annulation: motif };
   const texte = typeof commentaire === 'string' ? commentaire.trim() : '';

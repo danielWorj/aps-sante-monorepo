@@ -5,6 +5,9 @@
 //   - l'AUTRE partie accepte (et inversement) ; une nouvelle proposition remplace
 //     la précédente ; le délai de 48 h ne se prolonge jamais ;
 //   - à l'acceptation : RDV « confirme » sur le nouveau créneau, aucun nouveau paiement.
+//   - sans accord dans les 48 h : remboursement automatique du patient (H − CM − F, CP
+//     conservée par APS, D3). Visibilité (D7) : le patient ne voit jamais le montant de
+//     la part médecin (CM) ; le médecin ne voit jamais CP ni le détail du remboursement.
 // Le serveur valide tout (créneau libre, futur, auteur) : ici, affichage et saisie.
 import React, { useEffect, useMemo, useState } from 'react';
 import { listerCreneauxAgenda } from '../../../services/medecinService';
@@ -109,9 +112,11 @@ export default function ReprogrammationPanel({ rdv, role, onChange }) {
     <div className="alert alert-warning" role="region" aria-label="Reprogrammation du rendez-vous">
       <h4 className="h6 mb-2"><i className="fa-solid fa-calendar-xmark me-2"></i>Rendez-vous à reprogrammer</h4>
       <p className="mb-2 small">
-        Aucune des deux parties n’était présente. Vos fonds restent en séquestre : convenez d’une nouvelle date
+        Aucune des deux parties n’était présente. {role === 'patient' ? 'Vos fonds restent' : 'Les fonds du patient restent'} en séquestre : convenez d’une nouvelle date
         {echeance && <> avant le <strong>{dateHeure(echeance)}</strong> ({expire ? restant.texte : <>il reste <strong>{restant.texte}</strong></>})</>}.
-        Sans accord dans ce délai, le patient est remboursé automatiquement (honoraires moins frais et commission APS).
+        {role === 'patient'
+          ? ' Sans accord dans ce délai, vous serez remboursé automatiquement d’une partie de vos honoraires (après déduction des frais de remboursement et des frais de service APS) ; la commission APS et les frais d’envoi ne sont pas remboursés.'
+          : ' Sans accord dans ce délai, le patient est remboursé automatiquement et vous ne percevez aucun honoraire pour ce rendez-vous.'}
       </p>
 
       {expire ? (

@@ -1,0 +1,15 @@
+/* ---------------------------- RDV NON PAYÉ — espace médecin (medecin-rdv.jsx) ----------------------------
+   D8 : un rendez-vous au statut « cree » (avant paiement) est en lecture seule pour le médecin.
+   Effet purement visuel : le serveur ne renvoie de toute façon aucune donnée patient pour ces RDV. */
+
+.rdv-item.is-non-paye{
+  opacity:.6;
+  filter:grayscale(.85);
+  background:var(--surface-alt);
+  cursor:default;
+}
+.rdv-item.is-non-paye:hover{ box-shadow:none; transform:none; }
+.rdv-item.is-non-paye .rdv-body h3{ color:var(--ink-soft); font-weight:600; }
+
+/* Les boutons d'action désactivés restent lisibles mais clairement inactifs. */
+.rdv-modal-actions .btn:disabled{ opacity:.5; cursor:not-allowed; }

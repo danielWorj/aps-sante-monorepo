@@ -7,8 +7,15 @@
 //   - B4 : statut « a_reprogrammer » (deux absents) — chip dédié, bandeau,
 //     panneau de reprogrammation (48 h), pas de visio ;
 //   - B7 : dans la modale de détail d'un RDV payé, « Vous recevrez X
-//     (honoraires − commission APS Y) », lu dans paiement.decomposition
-//     (renvoyé au seul médecin concerné). Net AVANT amendes éventuelles.
+//     (honoraires − commission APS (part médecin, CM)) », lu dans
+//     paiement.decomposition (renvoyé au seul médecin concerné). Net AVANT
+//     amendes éventuelles. Le médecin ne voit JAMAIS la commission patient (CP).
+//   - D8 : un RDV NON PAYÉ (statut « cree ») est en lecture seule pour le médecin :
+//     grisé, libellé « En attente de paiement », toutes les actions désactivées
+//     (confirmer, refuser, annuler, absence, reprogrammer, visio). Le serveur ne
+//     renvoie que { rdv_id, date_creneau, statut, non_paye: true } : aucune
+//     identité patient, aucun motif. Un 409 RDV_NON_PAYE est géré proprement. Le
+//     médecin n'« accepte » plus un RDV : la confirmation résulte du paiement.
 //   - le client n'invente aucun montant : il affiche ce que le serveur renvoie.
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
@@ -19,14 +26,17 @@ import AvertissementAnnulation from "./avertissement-annulation";
 import ReprogrammationPanel from "./reprogrammation-panel";
 import {
   listerRendezVousMedecinConnecte,
-  modifierRendezVous,
   MOTIFS_ANNULATION_MEDECIN,
 } from "./../../../services/medecinService";
 import { annulerRendezVousDetaille } from "./../../../services/fondsService";
 import { obtenirStatutPaiementRdv } from "./../../../services/paiementService";
 import { useAuth } from "./../../../context/AuthContext";
-import { categoriserRdv } from "./../../../utils/rdv";
+import { categoriserRdv, estRdvNonPaye, estErreurRdvNonPaye } from "./../../../utils/rdv";
 import { montantDevise, resumerAnnulation } from "./../../../utils/fonds";
+import "./medecin-rdv-non-paye.css";
+
+const MESSAGE_RDV_NON_PAYE =
+  "Ce rendez-vous n'est pas encore payé : vous pourrez agir dessus une fois le paiement confirmé.";
 
 // ─── Helpers de formatage ─────────────────────────────────────
 const TYPE_RDV_LABEL = {
@@ -147,12 +157,14 @@ const MedecinRdv = () => {
 
   // ─── Paiement du RDV affiché dans la modale de détail (B7) ──────
   // { rdvId, paiement } | null. `paiement.decomposition` contient, pour le
-  // médecin concerné, { honoraires, frais_envoi, total, commission_aps,
-  // net_medecin } ; null pour une transaction antérieure à la v2.
+  // médecin concerné, { honoraires, commission_medecin (CM), net_medecin } —
+  // jamais CP, ni les frais d'envoi, ni le total payé (D7) ; null pour une
+  // transaction antérieure à la v2. Rien n'est lu pour un RDV non payé (D8).
   // Échec silencieux : ce bloc est purement informatif.
   const [paiementDetail, setPaiementDetail] = useState(null);
   useEffect(() => {
     if (!detailRdv || detailRdv.categorie === "annules") return undefined;
+    if (estRdvNonPaye(detailRdv.rdv)) return undefined;
     const rdvId = detailRdv.rdv.rdv_id;
     let annule = false;
     (async () => {
@@ -253,7 +265,7 @@ const MedecinRdv = () => {
         tint: "primary",
       },
       {
-        label: "Demandes en attente",
+        label: "En attente de paiement",
         value: rdvParCategorie.attente.length,
         icon: "fa-hourglass-half",
         tint: "gold",
@@ -273,51 +285,27 @@ const MedecinRdv = () => {
     ];
   }, [rdvParCategorie]);
 
-  // ─── Actions accepter / refuser ─────────────────────────────
-  // Un rendez-vous ne peut être confirmé par le médecin que si le
-  // patient a préalablement payé (paiement Stripe validé par webhook
-  // -> CompteEscrow créé). Le serveur applique ce verrou de toute
-  // façon (rendezVous.controller.js renvoie 409 sinon) : la
-  // vérification ci-dessous n'est qu'une amélioration d'UX pour éviter
-  // un clic inutile et donner un message explicite plutôt qu'une
-  // erreur générique.
-  const accepter = async (id) => {
-    setActionEnCours(id);
-    try {
-      const { paiement } = await obtenirStatutPaiementRdv(id);
-      if (paiement?.statut !== "reussie") {
-        showToast(
-          "Impossible de confirmer : le patient n'a pas encore payé ce rendez-vous."
-        );
-        return;
-      }
-
-      await modifierRendezVous(id, { statut: "confirme" });
-      setRendezVous((prev) =>
-        prev.map((r) => (r.rdv_id === id ? { ...r, statut: "confirme" } : r))
-      );
-      showToast("Rendez-vous confirmé — le patient a été notifié.");
-    } catch (err) {
-      // 409 renvoyé par le serveur si, malgré la vérification
-      // ci-dessus, le paiement n'était finalement pas validé (cas
-      // limite : course avec un remboursement/expiration concurrent).
-      if (err?.status === 409) {
-        showToast("Impossible de confirmer : le paiement de ce rendez-vous n'est pas validé.");
-      } else {
-        showToast("Erreur : " + (err.message || "impossible de confirmer le RDV."));
-      }
-    } finally {
-      setActionEnCours(null);
-    }
-  };
-
+  // ─── Actions sur un RDV (D8) ────────────────────────────────
+  // Le médecin n'« accepte » plus un rendez-vous : un RDV « cree » (non payé) est
+  // en lecture seule pour lui, et la confirmation « cree -> confirme » résulte du
+  // seul paiement du patient (le médecin est alors notifié). Le serveur refuse de
+  // toute façon toute action médecin sur un RDV non payé (409 RDV_NON_PAYE) ;
+  // l'interface désactive les boutons pour éviter un clic inutile.
+  //
   // Refuser = annuler : le serveur exige un motif d'annulation (400
   // sinon) et déclenche le remboursement du patient. À moins de 24 h du
   // RDV, une amende est enregistrée au nom du médecin (déduite de sa
   // prochaine libération de fonds). Le même parcours sert à annuler un
   // RDV « a_reprogrammer » (aucune amende dans ce cas).
   const [rdvARefuser, setRdvARefuser] = useState(null); // rdv_id | null
-  const refuser = (id) => setRdvARefuser(id);
+  const refuser = (id) => {
+    const rdv = rendezVous.find((r) => r.rdv_id === id);
+    if (rdv && estRdvNonPaye(rdv)) {
+      showToast(MESSAGE_RDV_NON_PAYE);
+      return;
+    }
+    setRdvARefuser(id);
+  };
   const fermerRefus = () => {
     if (!actionEnCours) setRdvARefuser(null);
   };
@@ -337,7 +325,13 @@ const MedecinRdv = () => {
       showToast(resumerAnnulation(data, "medecin"), 9000);
     } catch (err) {
       setRdvARefuser(null);
-      showToast("Erreur : " + (err.message || "impossible de refuser le RDV."));
+      if (estErreurRdvNonPaye(err)) {
+        // Course ou liste périmée : le RDV n'est pas (ou plus) payé côté serveur.
+        showToast(MESSAGE_RDV_NON_PAYE);
+        chargerRendezVous();
+      } else {
+        showToast("Erreur : " + (err.message || "impossible de refuser le RDV."));
+      }
     } finally {
       setActionEnCours(null);
     }
@@ -352,7 +346,9 @@ const MedecinRdv = () => {
 
   // ─── Rendu d'un RDV (mutualisé) ────────────────────────────
   const renderRdvItem = (rdv, categorie) => {
-    const patient = nomPatient(rdv);
+    // D8 : RDV non payé = données minimales (aucune identité patient côté serveur).
+    const nonPaye = estRdvNonPaye(rdv);
+    const patient = nonPaye ? "Rendez-vous en attente de paiement" : nomPatient(rdv);
     const heure = formaterHeure(rdv.date_creneau);
     const date = formaterDateRelative(rdv.date_creneau);
     const typeLabel = TYPE_RDV_LABEL[rdv.type_rdv] || rdv.type_rdv;
@@ -364,7 +360,7 @@ const MedecinRdv = () => {
     return (
       <article
         key={rdv.rdv_id}
-        className={`rdv-item ${categorie === "attente" && rdv.statut === "cree" ? "is-pending" : ""}`}
+        className={`rdv-item ${nonPaye ? "is-pending is-non-paye" : ""}`}
         onClick={() => ouvrirDetail(rdv, categorie)}
         role="button"
         tabIndex={0}
@@ -383,10 +379,16 @@ const MedecinRdv = () => {
         <div className="rdv-body">
           <h3>{patient}</h3>
           <div className="rdv-meta">
-            <span>
-              <i className={`fa-solid ${typeIcon}`}></i>
-              {typeLabel}
-            </span>
+            {nonPaye ? (
+              <span className="chip chip-st-attente">
+                <i className="fa-solid fa-hourglass-half"></i> En attente de paiement
+              </span>
+            ) : (
+              <span>
+                <i className={`fa-solid ${typeIcon}`}></i>
+                {typeLabel}
+              </span>
+            )}
             {rdv.statut === "a_reprogrammer" && (
               <span className="chip chip-st-attente">
                 <i className="fa-solid fa-calendar-xmark"></i> À reprogrammer
@@ -404,7 +406,9 @@ const MedecinRdv = () => {
     if (!detailRdv) return null;
     const { rdv, categorie } = detailRdv;
 
-    const patient = nomPatient(rdv);
+    // D8 : RDV non payé = lecture seule, sans identité patient ni motif.
+    const nonPaye = estRdvNonPaye(rdv);
+    const patient = nonPaye ? "Rendez-vous en attente de paiement" : nomPatient(rdv);
     const initials = extraireInitiales(patient);
     const heure = formaterHeure(rdv.date_creneau);
     const dateComplete = rdv.date_creneau
@@ -445,19 +449,23 @@ const MedecinRdv = () => {
           </button>
 
           <div className="rdv-modal-head">
-            <div className="rdv-modal-avatar">{initials}</div>
+            <div className="rdv-modal-avatar">
+              {nonPaye ? <i className="fa-solid fa-hourglass-half"></i> : initials}
+            </div>
             <div className="rdv-modal-heading">
               <h3 id="rdv-modal-title">{patient}</h3>
-              <span className="rdv-modal-type">
-                <i className={`fa-solid ${typeIcon}`}></i> {typeLabel}
-              </span>
+              {!nonPaye && (
+                <span className="rdv-modal-type">
+                  <i className={`fa-solid ${typeIcon}`}></i> {typeLabel}
+                </span>
+              )}
             </div>
           </div>
 
           <div className="rdv-modal-status">
-            {categorie === "attente" && rdv.statut === "cree" && (
+            {nonPaye && (
               <span className="chip chip-st-attente">
-                <i className="fa-solid fa-hourglass-half"></i> En attente de votre validation
+                <i className="fa-solid fa-hourglass-half"></i> En attente de paiement
               </span>
             )}
             {categorie === "avenir" && rdv.statut !== "a_reprogrammer" && (
@@ -516,14 +524,16 @@ const MedecinRdv = () => {
                 <span className="value">{heure}</span>
               </div>
             </div>
-            <div className="rdv-modal-row">
-              <i className={`fa-solid ${lieuIcon}`}></i>
-              <div>
-                <span className="label">Lieu</span>
-                <span className="value">{lieu}</span>
+            {!nonPaye && (
+              <div className="rdv-modal-row">
+                <i className={`fa-solid ${lieuIcon}`}></i>
+                <div>
+                  <span className="label">Lieu</span>
+                  <span className="value">{lieu}</span>
+                </div>
               </div>
-            </div>
-            {rdv.motif && (
+            )}
+            {!nonPaye && rdv.motif && (
               <div className="rdv-modal-row">
                 <i className="fa-solid fa-comment-medical"></i>
                 <div>
@@ -533,6 +543,17 @@ const MedecinRdv = () => {
               </div>
             )}
           </div>
+
+          {nonPaye && (
+            <div className="note-box">
+              <i className="fa-solid fa-circle-info"></i>
+              <span>
+                Ce rendez-vous n’est pas encore payé : vous ne pouvez pas agir
+                dessus. Vous serez notifié et les détails vous seront communiqués
+                dès que le patient aura réglé.
+              </span>
+            </div>
+          )}
 
           {decomposition && (
             <div className="note-box">
@@ -544,38 +565,33 @@ const MedecinRdv = () => {
                 </strong>{" "}
                 (honoraires{" "}
                 {montantDevise(decomposition.honoraires, paiement.devise)} −
-                commission APS{" "}
-                {montantDevise(decomposition.commission_aps, paiement.devise)}
+                commission APS (part médecin){" "}
+                {montantDevise(
+                  decomposition.commission_medecin ?? decomposition.commission_aps,
+                  paiement.devise
+                )}
                 ). Montant avant amendes éventuelles.
               </span>
             </div>
           )}
 
           <div className="rdv-modal-actions">
-            {categorie === "attente" && rdv.statut === "cree" && (
+            {/* D8 : RDV non payé — actions visibles mais désactivées. */}
+            {nonPaye && (
               <>
                 <button
+                  type="button"
                   className="btn btn-primary btn-sm-aps"
-                  onClick={() => {
-                    accepter(rdv.rdv_id);
-                    fermerDetail();
-                  }}
-                  disabled={actionEnCours === rdv.rdv_id}
+                  disabled
+                  title="Disponible une fois le paiement confirmé"
                 >
-                  {actionEnCours === rdv.rdv_id ? (
-                    <span className="spinner-border spinner-border-sm me-1"></span>
-                  ) : (
-                    <i className="fa-solid fa-check"></i>
-                  )}
-                  Accepter
+                  <i className="fa-solid fa-check"></i> Accepter
                 </button>
                 <button
+                  type="button"
                   className="btn btn-outline-primary btn-sm-aps"
-                  onClick={() => {
-                    refuser(rdv.rdv_id);
-                    fermerDetail();
-                  }}
-                  disabled={actionEnCours === rdv.rdv_id}
+                  disabled
+                  title="Disponible une fois le paiement confirmé"
                 >
                   <i className="fa-solid fa-xmark"></i> Refuser
                 </button>
@@ -795,15 +811,16 @@ const MedecinRdv = () => {
                           className="text-faint mb-3"
                           style={{ fontSize: ".82rem" }}
                         >
-                          <i className="fa-solid fa-circle-info"></i> Acceptez
-                          ou refusez chaque demande : les fonds ne sont capturés
-                          qu'après votre acceptation.
+                          <i className="fa-solid fa-circle-info"></i> Ces
+                          rendez-vous attendent le paiement du patient : vous ne
+                          pouvez pas agir dessus. Vous serez notifié dès que le
+                          paiement sera confirmé.
                         </p>
                         <div className="rdv-list">
                           {rdvParCategorie.attente.length === 0 ? (
                             <div className="aps-empty-state">
                               <i className="fa-solid fa-inbox"></i>
-                              <div>Aucune demande en attente.</div>
+                              <div>Aucun rendez-vous en attente de paiement.</div>
                             </div>
                           ) : (
                             rdvParCategorie.attente.map((rdv) =>
