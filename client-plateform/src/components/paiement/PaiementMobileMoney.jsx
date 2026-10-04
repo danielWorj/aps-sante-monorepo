@@ -11,6 +11,9 @@
 //                 SERVEUR), redirection vers /paiement/succes ;
 //   4. echec / delai : refus, expiration, RDV annulé, ou pas de réponse.
 //
+// Avant l'envoi de la demande, le patient voit la facture détaillée (consultation +
+// frais d'agrégateur + commission APS) calculée par le serveur pour CamPay.
+//
 // Règle d'or : le client ne confirme jamais rien lui-même. Le montant n'est
 // pas envoyé non plus : le serveur le recalcule.
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -20,6 +23,7 @@ import {
   demanderPaiementCampay,
   obtenirStatutPaiementRdv,
 } from '../../services/paiementService';
+import { FactureRdv } from './FactureRecapitulative';
 import {
   estNumeroCMValide,
   formaterNumeroAffichage,
@@ -166,6 +170,9 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
 
         {etape === 'saisie' && (
           <>
+            <div className="mb-3">
+              <FactureRdv rdvId={rdvId} agregateur="campay" compact />
+            </div>
             <label htmlFor="momo-numero" className="form-label">
               Numéro MTN ou Orange
             </label>
