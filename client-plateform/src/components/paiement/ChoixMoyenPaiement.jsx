@@ -8,32 +8,40 @@
 //   - Mobile Money (CamPay)    : appelle onChoisirMobileMoney, le parent ferme
 //                                cette pop-up et ouvre <PaiementMobileMoney />.
 //
-// Politique de fonds v2 §1 — devis AVANT paiement : sous chaque moyen, le patient
-// voit « total = honoraires + frais d'envoi » (GET /paiement/rendez-vous/:id/devis).
-// Aucune taxe ni commission APS dans ce qu'il paie. Un moyen dont le barème n'est
+// Politique de fonds v2 — facture AVANT paiement : le patient voit la facture détaillée
+// (consultation + frais d'agrégateur + commission APS, GET /paiement/rendez-vous/:id/facture)
+// recalculée selon le moyen de paiement choisi (survol / focus / onglet), et le total
+// sous chaque moyen (GET /paiement/rendez-vous/:id/devis). Un moyen dont le barème n'est
 // pas encore saisi côté admin (503) est grisé avec le message du serveur.
 //
-// Le montant n'est jamais envoyé : le serveur le recalcule.
+// Le montant n'est jamais envoyé : le serveur le recalcule. Aucun montant n'est calculé ici.
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { demanderPaiementRdv, obtenirDevisPaiement, estPaiementEnCours } from '../../services/paiementService';
 import AnnulerPaiementEnCours from './AnnulerPaiementEnCours';
+import { FactureRdv } from './FactureRecapitulative';
 import { montantDevise } from '../../utils/fonds';
 
-// Détail du devis sous un moyen de paiement. `d` : undefined = chargement, { erreur } = indisponible.
+// Résumé du devis sous un moyen de paiement. `d` : undefined = chargement, { erreur } = indisponible.
+// Le détail ligne par ligne est dans la facture affichée plus haut.
 function DetailDevis({ d }) {
   if (d === undefined) return <small>Calcul du montant…</small>;
   if (d.erreur) return <small className="text-danger">{d.erreur}</small>;
   return (
     <small>
-      <strong>{montantDevise(d.total, d.devise)}</strong>
-      {' '}= honoraires {montantDevise(d.honoraires, d.devise)} + frais d’envoi {montantDevise(d.frais_envoi, d.devise)}
+      Total : <strong>{montantDevise(d.total, d.devise)}</strong>
       <br />
-      Annulation possible avec remboursement d’environ {montantDevise(d.remboursement_estime, d.devise)}
-      {d.remboursement_indicatif && ' (estimation)'}
+      Si vous annulez plus de 24 h à l’avance : remboursement d’environ {montantDevise(d.remboursement_estime, d.devise)}
+      {d.remboursement_indicatif && ' (estimation)'}, soit les honoraires moins les frais de remboursement
+      (commission APS et frais d’envoi non remboursés).
     </small>
   );
 }
+
+const MOYENS = [
+  { agregateur: 'stripe', libelle: 'Carte bancaire' },
+  { agregateur: 'campay', libelle: 'Mobile Money' },
+];
 
 export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMoney }) {
   const [redirection, setRedirection] = useState(false);
@@ -42,6 +50,8 @@ export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMon
   const [infoAnnulation, setInfoAnnulation] = useState(null);
   // Devis par agrégateur : undefined = en cours de calcul, { erreur } = indisponible.
   const [devis, setDevis] = useState({ stripe: undefined, campay: undefined });
+  // Moyen dont la facture est affichée (suit le survol / le focus des options ou l'onglet choisi).
+  const [apercu, setApercu] = useState('stripe');
 
   // Pendant la redirection vers Stripe, on ne ferme plus par accident.
   const fermer = useCallback(() => {
@@ -122,11 +132,36 @@ export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMon
         )}
         {infoAnnulation && <p className="status-card-text">{infoAnnulation}</p>}
 
+        {/* Facture détaillée, recalculée par le serveur selon le moyen de paiement */}
+        <div className="choix-paiement-facture">
+          <div className="choix-paiement-onglets" role="tablist" aria-label="Facture selon le moyen de paiement">
+            {MOYENS.map((m) => (
+              <button
+                key={m.agregateur}
+                type="button"
+                role="tab"
+                aria-selected={apercu === m.agregateur}
+                className={`choix-paiement-onglet${apercu === m.agregateur ? ' is-actif' : ''}`}
+                onClick={() => setApercu(m.agregateur)}
+              >
+                {m.libelle}
+              </button>
+            ))}
+          </div>
+          {devis[apercu]?.erreur ? (
+            <p className="status-card-error"><i className="fa-solid fa-circle-exclamation" /> {devis[apercu].erreur}</p>
+          ) : (
+            <FactureRdv rdvId={rdvId} agregateur={apercu} compact />
+          )}
+        </div>
+
         <div className="choix-paiement-options">
           {/* Carte bancaire (Stripe) */}
           <button
             type="button"
             className="choix-paiement-option"
+            onMouseEnter={() => setApercu('stripe')}
+            onFocus={() => setApercu('stripe')}
             onClick={payerParCarte}
             disabled={redirection || !!devis.stripe?.erreur}
           >
@@ -146,6 +181,8 @@ export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMon
           <button
             type="button"
             className="choix-paiement-option"
+            onMouseEnter={() => setApercu('campay')}
+            onFocus={() => setApercu('campay')}
             onClick={() => onChoisirMobileMoney?.()}
             disabled={redirection || !!devis.campay?.erreur}
           >

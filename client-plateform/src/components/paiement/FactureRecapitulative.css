@@ -1,0 +1,92 @@
+/* ---------------------------- FACTURE RÉCAPITULATIVE (FactureRecapitulative.jsx) ----------------------------
+   Card d'aperçu + feuille d'impression : seule la card est imprimée (« Enregistrer au format PDF »). */
+
+.facture-card{
+  width:100%; text-align:left;
+  background:var(--surface); border:1px solid var(--line);
+  border-radius:var(--radius-md); box-shadow:var(--shadow-sm, 0 1px 4px rgba(63,74,68,.08));
+  padding:1.4rem 1.4rem 1.2rem; color:var(--ink);
+}
+.facture-card.is-compact{padding:1rem 1rem .9rem; font-size:.88rem;}
+
+.facture-head{
+  display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;
+  padding-bottom:.9rem; margin-bottom:.9rem; border-bottom:2px solid var(--primary-tint-strong);
+}
+.facture-marque{font-family:var(--font-display); font-weight:800; font-size:1.2rem; color:var(--primary-dark); letter-spacing:-.01em;}
+.facture-sous-titre{font-size:.78rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.06em;}
+.facture-meta{display:flex; flex-direction:column; align-items:flex-end; gap:.15rem; font-size:.8rem; color:var(--ink-soft);}
+.facture-meta strong{font-family:var(--font-mono); font-size:.8rem; color:var(--ink);}
+.facture-badge{
+  background:var(--orange-tint); color:var(--orange-dark);
+  border-radius:var(--radius-pill); padding:.15rem .6rem; font-size:.72rem; font-weight:600;
+}
+
+.facture-consultation{margin-bottom:1rem;}
+.facture-consultation-titre{font-family:var(--font-display); font-weight:700; font-size:1rem; margin-bottom:.45rem;}
+.facture-infos{
+  display:grid; grid-template-columns:auto 1fr; column-gap:.9rem; row-gap:.2rem;
+  margin:0; font-size:.84rem;
+}
+.facture-infos dt{color:var(--ink-soft); font-weight:500;}
+.facture-infos dd{margin:0; color:var(--ink);}
+
+.facture-lignes{list-style:none; margin:0; padding:.35rem 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line);}
+.facture-ligne{display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; padding:.55rem 0;}
+.facture-ligne + .facture-ligne{border-top:1px dashed var(--line);}
+.facture-ligne-libelle{display:flex; flex-direction:column; font-size:.92rem;}
+.facture-ligne-libelle small{color:var(--ink-soft); font-size:.78rem; margin-top:.1rem;}
+.facture-ligne-montant{font-family:var(--font-display); font-weight:600; white-space:nowrap;}
+
+.facture-total{
+  display:flex; justify-content:space-between; align-items:center;
+  background:var(--primary-tint); border:1px solid var(--primary-tint-strong);
+  border-radius:var(--radius-sm); padding:.8rem 1rem; margin-top:.9rem;
+}
+.facture-total span{font-weight:600; color:var(--primary-dark);}
+.facture-total strong{font-family:var(--font-display); font-size:1.25rem; color:var(--ink);}
+
+.facture-note{font-size:.78rem; color:var(--ink-soft); margin:.8rem 0 0;}
+.facture-telecharger{width:100%; margin-top:1rem;}
+
+.facture-etat{
+  display:flex; align-items:center; justify-content:center; gap:.5rem;
+  padding:1rem; font-size:.85rem; color:var(--ink-soft);
+  background:var(--surface-alt); border-radius:var(--radius-sm);
+}
+.facture-etat.is-erreur{background:var(--urgence-tint); color:var(--urgence-dark);}
+
+/* Onglets « moyen de paiement » au-dessus de la facture (ChoixMoyenPaiement.jsx) */
+.choix-paiement-facture{margin-bottom:1rem; text-align:left;}
+.choix-paiement-onglets{display:flex; gap:.4rem; margin-bottom:.6rem;}
+.choix-paiement-onglet{
+  flex:1; border:1px solid var(--line); background:var(--surface-alt); color:var(--ink-soft);
+  border-radius:var(--radius-sm); padding:.4rem .6rem; font-size:.8rem; font-weight:600; cursor:pointer;
+  transition:background .15s ease, border-color .15s ease, color .15s ease;
+}
+.choix-paiement-onglet.is-actif{background:var(--primary-tint); border-color:var(--primary); color:var(--primary-dark);}
+
+/* ---------------------------- IMPRESSION ---------------------------- */
+@media print{
+  /* Tout est masqué, sauf la card (visibility, pas display : la card reste dans son parent). */
+  body *{visibility:hidden !important;}
+  .facture-card, .facture-card *{visibility:visible !important;}
+  .facture-card{
+    position:absolute; left:0; top:0; width:100%; max-width:none;
+    border:none; box-shadow:none; padding:0;
+  }
+  .facture-card.is-compact{font-size:inherit;}
+  .facture-telecharger{display:none !important;}
+
+  /* Les conteneurs de la page ou de la modale ne doivent ni rogner ni décaler la card
+     (une animation « fill-mode: both » laisse un transform qui crée un bloc contenant). */
+  html, body{height:auto !important; overflow:visible !important;}
+  .rdv-modal-overlay, .rdv-modal, .status-card{
+    position:static !important; max-height:none !important; overflow:visible !important;
+    transform:none !important; animation:none !important; box-shadow:none !important; background:transparent !important;
+  }
+
+  .facture-head{border-bottom-color:#999;}
+  .facture-total{background:none; border:1px solid #999;}
+  .facture-badge{background:none; border:1px solid #999; color:#000;}
+}
