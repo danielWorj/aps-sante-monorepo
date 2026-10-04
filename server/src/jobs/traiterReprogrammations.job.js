@@ -3,8 +3,9 @@
 // (les deux parties absentes). Deux rôles, un seul balayage :
 //
 //   1. délai de 48h ÉCOULÉ sans nouvelle date acceptée : le patient est
-//      remboursé (honoraires − frais d'agrégateur − commission APS), la
-//      commission est versée à APS — traiterDeuxAbsentsSansReprogrammation
+//      remboursé de H − CM − F (honoraires − commission médecin − frais de
+//      remboursement de l'agrégateur) ; APS conserve CM + CP (commissions
+//      médecin et patient) — traiterDeuxAbsentsSansReprogrammation
 //      (absence.service.js), qui délègue à l'exécuteur unique de fonds ;
 //   2. délai EN COURS : filet de rattrapage de la note « reprogrammer »
 //      (notification manquante si l'envoi immédiat par

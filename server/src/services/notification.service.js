@@ -40,10 +40,29 @@ const SELECTION_PARTIES = {
   medecin: { select: { utilisateur_id: true } },
 };
 
+// Textes de la note « reprogrammer » — DEUX versions, car la règle de fonds
+// (le patient reçoit H − CM − F) ne doit pas révéler le montant de CM au
+// patient (D7), et le médecin n'a pas à voir de montant du patient (CP).
+// Aucun montant n'est cité : seul le remboursement effectif est affiché
+// ailleurs. Les frais d'envoi et CP ne sont pas rendus.
+const MESSAGE_REPROGRAMMATION_PATIENT =
+  "Ni vous ni le médecin ne vous êtes présentés à ce rendez-vous. " +
+  `Vous avez ${DELAI_REPROGRAMMATION_H}h pour convenir d'une nouvelle date : l'un de vous propose, l'autre accepte. ` +
+  "Sans nouvelle date acceptée dans ce délai, le rendez-vous est annulé et vous êtes remboursé d'une partie " +
+  "des honoraires, déduction faite des frais de remboursement de l'agrégateur et d'une retenue de service APS. " +
+  "Les frais d'envoi et la commission patient ne sont pas remboursés.";
+
+const MESSAGE_REPROGRAMMATION_MEDECIN =
+  "Ni vous ni le patient ne vous êtes présentés à ce rendez-vous. " +
+  `Vous avez ${DELAI_REPROGRAMMATION_H}h pour convenir d'une nouvelle date : l'un de vous propose, l'autre accepte. ` +
+  "Sans nouvelle date acceptée dans ce délai, le rendez-vous est annulé, le patient est remboursé " +
+  "et aucun versement n'est effectué pour ce rendez-vous.";
+
 /**
  * §5 — Note « reprogrammer » envoyée AUX DEUX parties quand un RDV passe à
- * « a_reprogrammer » (les deux absents). Sans effet si le RDV n'est plus
- * dans ce statut (annulé, reprogrammé, remboursé entre-temps).
+ * « a_reprogrammer » (les deux absents), avec un texte adapté à chaque rôle.
+ * Sans effet si le RDV n'est plus dans ce statut (annulé, reprogrammé,
+ * remboursé entre-temps).
  * @param {string} rdv_id
  * @returns {Promise<{ creees: number }>}
  */
@@ -52,18 +71,19 @@ export async function notifierReprogrammation(rdv_id) {
   if (!rdv || rdv.statut !== "a_reprogrammer" || !rdv.a_reprogrammer_le) return { creees: 0 };
 
   const cycle = rdv.a_reprogrammer_le.toISOString();
-  const destinataires = [rdv.patient.utilisateur_id, rdv.medecin.utilisateur_id];
+  const destinataires = [
+    { utilisateur_id: rdv.patient.utilisateur_id, message: MESSAGE_REPROGRAMMATION_PATIENT },
+    { utilisateur_id: rdv.medecin.utilisateur_id, message: MESSAGE_REPROGRAMMATION_MEDECIN },
+  ];
+  // La clé (événement + destinataire) est inchangée : une note déjà émise
+  // n'est jamais dupliquée par le balayage de rattrapage.
   const { count } = await creerNotifications(
-    destinataires.map((utilisateur_id) => ({
+    destinataires.map(({ utilisateur_id, message }) => ({
       utilisateur_id,
       type: "rdv_a_reprogrammer",
       rdv_id,
       titre: "Rendez-vous à reprogrammer",
-      message:
-        "Ni vous ni l'autre partie ne vous êtes présentés à ce rendez-vous. " +
-        `Vous avez ${DELAI_REPROGRAMMATION_H}h pour convenir d'une nouvelle date : l'un de vous propose, l'autre accepte. ` +
-        "Sans nouvelle date acceptée dans ce délai, le patient est remboursé, déduction faite des frais " +
-        "de l'agrégateur et de la commission APS.",
+      message,
       cle: `a_reprogrammer:${rdv_id}:${cycle}:${utilisateur_id}`,
     }))
   );
