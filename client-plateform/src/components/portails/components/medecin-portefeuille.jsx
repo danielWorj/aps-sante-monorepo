@@ -3,6 +3,10 @@
 // Section « Portefeuille & retraits » du profil médecin (ancre #portefeuille, ciblée par la
 // sidebar). Le solde et le statut des retraits viennent TOUJOURS du serveur : le client n'en
 // calcule ni n'en confirme rien.
+//
+// Libellés : la retenue sur les honoraires est la commission APS « part médecin » (CM).
+// La commission patient (CP) est à la charge du patient : elle n'apparaît jamais ici
+// comme une déduction sur les honoraires du médecin.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { listerMesRetraits, demanderRetrait } from '../../../services/retraitService';
@@ -20,7 +24,7 @@ const ACTIFS = ['en_attente_validation', 'en_cours'];
 // Libellés des mouvements du portefeuille. Le signe vient du préfixe du type (credit_* / debit_*),
 // comme dans portefeuille.service.js côté serveur.
 const MOUVEMENTS = {
-  credit_honoraires: 'Honoraires libérés (moins commission APS)',
+  credit_honoraires: 'Honoraires libérés (moins commission APS, part médecin)',
   debit_retrait: 'Retrait',
   credit_annulation_retrait: 'Retrait rejeté ou échoué (recrédit)',
   debit_amende: 'Amende (reversée à APS)',

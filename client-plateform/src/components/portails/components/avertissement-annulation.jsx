@@ -3,6 +3,13 @@
 // Politique de fonds v2 §3-§4 — conséquence financière d'une annulation, AVANT
 // confirmation. Indicatif : le serveur applique la règle et le toast final
 // affiche le résultat réel. Un RDV non payé ne met aucun fonds en jeu.
+//
+// Règle de remboursement (D3) : la commission APS patient (CP) n'est JAMAIS rendue au
+// patient, sauf si le médecin est fautif ; les frais d'envoi ne sont jamais rendus.
+// Hors faute du médecin, le patient reçoit uniquement les honoraires (H) moins les frais
+// de remboursement de l'agrégateur (F).
+// Visibilité (D7) : le patient ne voit jamais la part médecin (CM) ; le médecin ne voit
+// jamais CP ni le détail du remboursement du patient. Aucun montant de CM ici.
 import React, { useEffect, useState } from 'react';
 import { obtenirStatutPaiementRdv } from '../../../services/paiementService';
 import { estTardif, montantDevise } from '../../../utils/fonds';
@@ -12,16 +19,18 @@ function message({ role, rdv, paiement }) {
   const devise = paiement?.devise;
 
   if (rdv.statut === 'a_reprogrammer') {
+    // Deux absents sans reprogrammation : le patient reçoit H − CM − F (CP conservée par APS).
+    // Seul le principe est affiché au patient, jamais le montant de la part médecin (D7).
     return role === 'patient'
-      ? 'Les deux parties étaient absentes. Si vous annulez, vous serez remboursé de vos honoraires moins les frais du moyen de paiement et la commission APS.'
-      : 'Les deux parties étaient absentes. Si vous annulez, le patient est remboursé (honoraires moins frais et commission APS). Aucune amende.';
+      ? 'Les deux parties étaient absentes. Si vous annulez, vous serez remboursé d’une partie de vos honoraires, après déduction des frais de remboursement du moyen de paiement et des frais de service APS retenus sur cette consultation. La commission APS et les frais d’envoi ne sont pas remboursés. Le montant exact vous sera indiqué à l’annulation.'
+      : 'Les deux parties étaient absentes. Si vous annulez, le patient est remboursé et vous ne percevez aucun honoraire. Aucune amende.';
   }
 
   const tardif = estTardif(rdv.date_creneau);
   if (role === 'patient') {
     return tardif
       ? 'Le rendez-vous a lieu dans moins de 24 h : aucun remboursement. Le médecin sera rémunéré pour ce créneau.'
-      : `Le rendez-vous a lieu dans plus de 24 h : vous serez remboursé de vos honoraires${honoraires != null ? ` (${montantDevise(honoraires, devise)})` : ''} moins les frais de remboursement du moyen de paiement.`;
+      : `Le rendez-vous a lieu dans plus de 24 h : vous serez remboursé de vos honoraires${honoraires != null ? ` (${montantDevise(honoraires, devise)})` : ''} moins les frais de remboursement du moyen de paiement. La commission APS et les frais d’envoi ne sont pas remboursés.`;
   }
   return tardif
     ? 'Le rendez-vous a lieu dans moins de 24 h : le patient sera remboursé, vous ne percevrez aucun honoraire, et une amende sera enregistrée à votre nom (un pourcentage de votre prochaine libération de fonds, reversé à APS).'

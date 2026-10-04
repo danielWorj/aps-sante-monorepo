@@ -8,10 +8,13 @@
 // que patient_id est TOUJOURS déduit du token côté serveur.
 //
 // Changements majeurs par rapport à la maquette statique d'origine :
-//   - Plus de catalogue de "motifs" à prix fixes (MOTIFS/honoraires),
-//     ni de commission/paiement/escrow : rien de tout cela n'existe
-//     côté backend fourni. `motif` est un simple champ texte libre et
-//     optionnel (1000 caractères max, cf. MOTIF_RENDEZ_VOUS_LONGUEUR_MAX).
+//   - Plus de catalogue de "motifs" à prix fixes (MOTIFS/honoraires) :
+//     `motif` est un simple champ texte libre et optionnel (1000
+//     caractères max, cf. MOTIF_RENDEZ_VOUS_LONGUEUR_MAX).
+//   - Paiement (politique de fonds v2) : le RDV est créé « cree » (NON PAYÉ) ;
+//     le bouton « Payer » ouvre ChoixMoyenPaiement, qui affiche la facture
+//     détaillée (consultation + frais d'agrégateur + commission APS) avant tout
+//     débit. Aucun montant n'est calculé ni envoyé ici : le serveur recalcule tout.
 //   - Plus de grille de créneaux prédéfinis (DAYS/TIME_SLOTS) : aucune
 //     route de disponibilité n'est exposée par medecinService.js. Le
 //     patient choisit donc directement une date + une heure
@@ -774,8 +777,8 @@ export default function RendezVous() {
                           <div className="ticket-top">
                             <div className="ticket-check"><i className="fa-solid fa-check" /></div>
                             <h3 style={{ fontSize: '1.15rem', marginBottom: '.3rem' }}>
-+                              {rendezVousCree.statut === 'cree' ? 'Rendez-vous enregistré' : 'Rendez-vous confirmé'}
-+                            </h3>
+                              {rendezVousCree.statut === 'cree' ? 'Rendez-vous enregistré' : 'Rendez-vous confirmé'}
+                            </h3>
                             <p  style={{ fontSize: '.87rem', marginBottom: 0 }}>
                               {rendezVousCree.statut === 'cree'
                                  ? 'En attente de paiement : il ne sera confirmé qu\'une fois réglé.'

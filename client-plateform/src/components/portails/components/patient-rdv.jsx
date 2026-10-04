@@ -26,6 +26,13 @@
 //     de 9 s) ;
 //   - B4 : statut « a_reprogrammer » (deux absents) — chip dédié, bandeau
 //     d'alerte, panneau de reprogrammation (48 h), pas de visio ni d'itinéraire ;
+//   - facture : bouton « Facture » dans le détail d'un RDV payé (À venir / Passés) ->
+//     card FactureRdv (GET /paiement/rendez-vous/:id/facture) avec « Télécharger » ;
+//   - remboursement (D3) : la commission APS patient n'est jamais rendue, sauf médecin
+//     fautif ; les frais d'envoi non plus. La réponse d'annulation est filtrée par rôle
+//     (D7) : le patient ne voit jamais la part médecin ;
+//   - un RDV « cree » est NON PAYÉ : il attend le PAIEMENT du patient (le médecin ne peut
+//     ni le confirmer ni l'annuler, D8) et non plus une « confirmation du médecin » ;
 //   - le client n'invente aucun montant : il affiche ce que le serveur renvoie.
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
@@ -44,6 +51,7 @@ import { useAuth } from "./../../../context/AuthContext";
 import { categoriserRdv } from "./../../../utils/rdv";
 import PaiementMobileMoney from "./../../paiement/PaiementMobileMoney";
 import ChoixMoyenPaiement from "./../../paiement/ChoixMoyenPaiement";
+import { FactureRdv } from "./../../paiement/FactureRecapitulative";
 
 // ─── Helpers de formatage ─────────────────────────────────────
 const TYPE_RDV_LABEL = {
@@ -150,6 +158,23 @@ const PatientRdv = () => {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [detailRdv]);
+
+  // ─── Facture d'un RDV payé ───────────────────────────────────
+  const [factureRdv, setFactureRdv] = useState(null); // rdv | null
+  const ouvrirFacture = (rdv) => {
+    fermerDetail();
+    setFactureRdv(rdv);
+  };
+  const fermerFacture = () => setFactureRdv(null);
+
+  useEffect(() => {
+    if (!factureRdv) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setFactureRdv(null);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [factureRdv]);
 
   // Durée optionnelle : un résumé financier (annulation) doit rester lisible
   // plus longtemps qu'un simple message de confirmation.
@@ -270,7 +295,7 @@ const PatientRdv = () => {
         tint: "primary",
       },
       {
-        label: "En attente de confirmation",
+        label: "En attente de paiement",
         value: rdvParCategorie.attente.length,
         icon: "fa-hourglass-half",
         tint: "gold",
@@ -557,6 +582,17 @@ const PatientRdv = () => {
                 <i className="fa-solid fa-file-medical"></i> Compte rendu
               </button>
             )}
+            {/* Facture : uniquement pour un RDV payé (À venir / Passés). */}
+            {(categorie === "avenir" || categorie === "passes") &&
+              rdv.statut !== "cree" && (
+                <button
+                  type="button"
+                  className="btn btn-outline-primary btn-sm-aps"
+                  onClick={() => ouvrirFacture(rdv)}
+                >
+                  <i className="fa-solid fa-file-invoice"></i> Facture
+                </button>
+              )}
             {categorie === "annules" && (
               <button className="btn btn-ghost btn-sm-aps">
                 <i className="fa-solid fa-rotate"></i> Reprogrammer
@@ -752,15 +788,15 @@ const PatientRdv = () => {
                           style={{ fontSize: ".82rem" }}
                         >
                           <i className="fa-solid fa-circle-info"></i> Ces
-                          demandes attendent la confirmation du médecin. Vous
-                          pouvez les annuler à tout moment tant qu'elles ne
-                          sont pas confirmées.
+                          rendez-vous attendent votre paiement : ils ne sont
+                          confirmés qu'une fois réglés. Vous pouvez les annuler
+                          à tout moment tant qu'ils ne sont pas payés.
                         </p>
                         <div className="rdv-list">
                           {rdvParCategorie.attente.length === 0 ? (
                             <div className="aps-empty-state">
                               <i className="fa-solid fa-inbox"></i>
-                              <div>Aucune demande en attente.</div>
+                              <div>Aucun rendez-vous en attente de paiement.</div>
                             </div>
                           ) : (
                             rdvParCategorie.attente.map((rdv) =>
@@ -821,6 +857,25 @@ const PatientRdv = () => {
       </div>
 
       {renderDetailModal()}
+
+      {factureRdv && (
+        <div className="rdv-modal-overlay" onClick={fermerFacture}>
+          <div
+            className="rdv-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Facture de la consultation"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button className="rdv-modal-close" onClick={fermerFacture} aria-label="Fermer">
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+            <div className="mt-4">
+              <FactureRdv rdvId={factureRdv.rdv_id} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <MotifAnnulationModal
         open={rdvAAnnuler !== null}

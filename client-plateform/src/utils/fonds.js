@@ -61,7 +61,15 @@ export const libelleJour = (c) =>
   new Date(`${jour(c.date)}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 export const libelleHeure = (c) => hhmm(c.horaire.heure_debut);
 
-/** Résume la réponse de PATCH /rendez-vous/:id/statut pour un toast, selon qui annule. */
+/**
+ * Résume la réponse de PATCH /rendez-vous/:id/statut pour un toast, selon qui annule.
+ * La réponse est FILTRÉE par rôle côté serveur (D7) : on n'affiche que ce qu'elle contient.
+ *   patient : remboursement, commission_patient (CP conservée), commission_patient_rendue
+ *             (CP rendue), medecin_fautif — jamais CM ni le versement du médecin ;
+ *   médecin : remboursement SANS montant, versement_medecin, amende — jamais CP.
+ * Règle D3 : CP n'est rendue au patient que si le médecin est fautif ; les frais d'envoi
+ * ne sont jamais rendus.
+ */
 export function resumerAnnulation(data, role) {
   const r = data?.remboursement;
   const parts = ['Rendez-vous annulé.'];
@@ -74,6 +82,13 @@ export function resumerAnnulation(data, role) {
       parts.push(`Remboursement de ${montantDevise(r.montant, r.devise)} en cours.`);
     } else if (data?.tardif) {
       parts.push('Aucun remboursement : annulation à moins de 24 h du rendez-vous.');
+    }
+    if (r) {
+      parts.push(
+        data?.medecin_fautif && Number(data?.commission_patient_rendue) > 0
+          ? 'La commission APS vous est restituée, l’annulation étant à l’initiative du médecin.'
+          : 'La commission APS et les frais d’envoi ne sont pas remboursés.'
+      );
     }
   } else {
     if (r) parts.push('Le patient est remboursé.');
