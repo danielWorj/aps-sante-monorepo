@@ -248,6 +248,43 @@ export function construireFacture({
 }
 
 /**
+ * Vue MÉDECIN d'une facture (D7). Fonction PURE.
+ *
+ * Le médecin concerné ne doit jamais pouvoir déduire CP : ni la ligne
+ * « Commission APS », ni les frais d'agrégateur, ni le total payé (H + frais
+ * + CP) ne lui sont montrés. Il ne voit que la consultation : une seule ligne
+ * égale aux honoraires H, et un total égal à H. Pour une facture minimale
+ * (transaction antérieure à la v2), le total débité contient d'anciennes
+ * taxes : on repart des honoraires enregistrés ; s'ils sont absents, la vue
+ * n'existe pas (null) plutôt que de révéler le total débité.
+ *
+ * @param {object} facture   résultat de construireFacture
+ * @param {object} p
+ * @param {number|string|null} p.honoraires  transaction.montant_honoraires
+ * @param {0|2} [p.decimales=2]
+ * @returns {object|null}
+ */
+export function projeterFacturePourMedecin(facture, { honoraires, decimales = 2 } = {}) {
+  if (!facture || honoraires == null) return null;
+  const h = arrondir(honoraires, decimales);
+  return {
+    type: facture.type,
+    numero: facture.numero,
+    date: facture.date,
+    devise: facture.devise,
+    agregateur: null,
+    statut_paiement: facture.statut_paiement,
+    entete: facture.entete,
+    lignes: [
+      ligneFacture({ code: CODES_LIGNES_FACTURE.CONSULTATION, libelle: LIBELLE_CONSULTATION, montant: h }),
+    ],
+    total: h,
+    minimale: false,
+    raison_minimale: null,
+  };
+}
+
+/**
  * Aperçu de la facture AVANT paiement, pour l'agrégateur choisi : mêmes
  * lignes et même total que la facture qui sera émise (lignes en vigueur,
  * pas de numéro ni de transaction). Fonction PURE.
