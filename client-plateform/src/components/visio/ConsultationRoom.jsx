@@ -11,10 +11,15 @@
 //
 // Utilise `apiFetch` (jamais axios / jamais de token en localStorage,
 // voir lib/apiClient.js) — cohérent avec le reste du front.
+//
+// D8 : le serveur refuse (409 RDV_NON_PAYE) la visio d'un RDV non payé au
+// médecin ; on affiche alors son message (« la visio sera accessible une fois
+// le paiement confirmé ») plutôt qu'une erreur générique.
 
 import { useEffect, useState } from "react";
 import { JitsiMeeting } from "@jitsi/react-sdk";
 import { apiFetch } from "../../lib/apiClient";
+import { estErreurRdvNonPaye } from "../../utils/rdv";
 
 function ConsultationRoom({ rdvId, onCallEnded, onReady }) {
   const [visioData, setVisioData] = useState(null);
@@ -30,8 +35,14 @@ function ConsultationRoom({ rdvId, onCallEnded, onReady }) {
       .then((data) => {
         if (!annule) setVisioData(data);
       })
-      .catch(() => {
-        if (!annule) setError("Impossible de démarrer la consultation.");
+      .catch((err) => {
+        if (annule) return;
+        setError(
+          estErreurRdvNonPaye(err)
+            ? err.data?.message ||
+                "Ce rendez-vous n'est pas encore payé : la visio sera accessible une fois le paiement confirmé."
+            : "Impossible de démarrer la consultation."
+        );
       });
 
     return () => {

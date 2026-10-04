@@ -810,12 +810,23 @@ export default function RendezVous() {
 
                             {rendezVousCree.type_rdv === 'teleconsultation' && (
                               <p className="text-faint mb-3" style={{ fontSize: '.8rem' }}>
-                                <i className="fa-solid fa-video" /> La téléconsultation ne sera accessible
-                                qu&apos;une fois le rendez-vous confirmé par le médecin. Ce lien restera
-                                valable jusque-là :{' '}
-                                <Link to={`/portail/consultation/${rendezVousCree.rdv_id}`}>
-                                  rejoindre la visio
-                                </Link>
+                                <i className="fa-solid fa-video" />{' '}
+                                {rendezVousCree.statut === 'cree' ? (
+                                  // Politique de fonds v2 (D8) : le RDV n'est plus « confirmé par le médecin »,
+                                  // il est confirmé par le paiement ; pas de lien de visio avant.
+                                  <>
+                                    La téléconsultation sera accessible dès que le paiement sera
+                                    confirmé : le bouton « Rejoindre la visio » apparaîtra alors dans
+                                    la rubrique « Rendez-vous » de votre espace patient.
+                                  </>
+                                ) : (
+                                  <>
+                                    Votre téléconsultation est confirmée :{' '}
+                                    <Link to={`/portail/consultation/${rendezVousCree.rdv_id}`}>
+                                      rejoindre la visio
+                                    </Link>
+                                  </>
+                                )}
                               </p>
                             )}
 

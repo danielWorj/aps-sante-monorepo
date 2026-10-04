@@ -62,11 +62,21 @@
 //     (supprimerCreneauAgenda), un créneau "réservé" (rdv_id renseigné)
 //     n'est jamais supprimable depuis ce mode : il faut d'abord annuler
 //     le rendez-vous via le module Rendez-vous — 409 sinon.
+//
+// D8 (politique de fonds v2) : un rendez-vous NON PAYÉ (statut « cree ») est en
+// lecture seule pour le médecin. Pour ces RDV, GET /rendez-vous ne renvoie que
+// { rdv_id, date_creneau, statut, non_paye: true } : ni identité du patient, ni
+// motif, ni type. Son créneau est déjà « reserve » (il n'est donc jamais
+// modifiable ici), mais la case s'affiche grisée, libellée « En attente de
+// paiement », sans nom de patient ni icône de visio. Le médecin n'est de toute
+// façon notifié qu'à la confirmation du paiement.
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import PortailNavbar from "./../layouts/portail-navbar";
 import PortailFooter from "./../layouts/portail-footer";
 import PortailSidebar from "./../layouts/portail-sidebar";
+import { estRdvNonPaye } from "./../../../utils/rdv";
+import "./medecin-agenda-non-paye.css";
 import {
   obtenirMonProfil,
   listerHoraires,
@@ -133,6 +143,8 @@ function nomPatient(rdv) {
 
 function libelleRendezVous(rdv) {
   if (!rdv) return "";
+  // D8 : aucun motif ni type n'est exposé au médecin avant paiement.
+  if (estRdvNonPaye(rdv)) return "En attente de paiement";
   if (rdv.statut === "en_attente_presence") return "En attente · présence";
   // Politique de fonds v2 : deux absents, en attente d'une nouvelle date (48 h).
   if (rdv.statut === "a_reprogrammer") return "À reprogrammer";
@@ -339,18 +351,22 @@ const MedecinAgenda = () => {
       if (creneau.statut === "reserve") {
         const heureCreneau = formatHeure(creneau.horaire?.heure_debut ?? horaire.heure_debut);
         const rdv = rdvParCase.get(`${jourISO}__${heureCreneau}`);
+        // D8 : RDV non payé -> lecture seule, aucune donnée patient affichée.
+        const nonPaye = rdv ? estRdvNonPaye(rdv) : false;
         return {
           // « a_reprogrammer » partage le style « en attente » : le créneau reste
           // occupé (jamais modifiable ici) mais n'est pas un rendez-vous ferme.
+          // Un RDV non payé est lui aussi en attente (de paiement).
           statut:
-            rdv?.statut === "en_attente_presence" || rdv?.statut === "a_reprogrammer"
+            nonPaye || rdv?.statut === "en_attente_presence" || rdv?.statut === "a_reprogrammer"
               ? "attente"
               : "reserve",
           creneau,
           rdv,
-          patient: rdv ? nomPatient(rdv) : "Patient",
-          type: libelleRendezVous(rdv),
-          tele: rdv?.type_rdv === "teleconsultation",
+          nonPaye,
+          patient: nonPaye ? "En attente de paiement" : rdv ? nomPatient(rdv) : "Patient",
+          type: nonPaye ? "" : libelleRendezVous(rdv),
+          tele: nonPaye ? false : rdv?.type_rdv === "teleconsultation",
         };
       }
       return { statut: "ferme", creneau };
@@ -667,7 +683,7 @@ const MedecinAgenda = () => {
                           cellule.statut === "reserve"
                             ? "slot-booked"
                             : cellule.statut === "attente"
-                            ? "slot-pending"
+                            ? `slot-pending${cellule.nonPaye ? " slot-unpaid" : ""}`
                             : "slot-blocked";
                         const bloqueModifiable = cellule.statut === "bloque" && (modeBlocage || modeSuppression);
                         return (
@@ -678,7 +694,15 @@ const MedecinAgenda = () => {
                             }`}
                             onClick={() => bloqueModifiable && toggleCreneau(ligne, jour)}
                           >
-                            <span className={`slot ${slotClass}`}>
+                            <span
+                              className={`slot ${slotClass}`}
+                              title={
+                                cellule.nonPaye
+                                  ? "Rendez-vous en attente de paiement : aucune action possible tant qu'il n'est pas payé."
+                                  : undefined
+                              }
+                            >
+                              {cellule.nonPaye && <i className="fa-solid fa-hourglass-half" aria-hidden="true"></i>}
                               {cellule.tele && <i className="fa-solid fa-video"></i>}
                               {cellule.patient || "Bloqué"}
                               {cellule.patient && cellule.type && <small>{cellule.type}</small>}
@@ -696,6 +720,7 @@ const MedecinAgenda = () => {
               <span className="legend-key"><span className="legend-swatch sw-free"></span> Libre</span>
               <span className="legend-key"><span className="legend-swatch sw-booked"></span> Réservé</span>
               <span className="legend-key"><span className="legend-swatch sw-pending"></span> En attente de présence / à reprogrammer</span>
+              <span className="legend-key"><span className="legend-swatch sw-unpaid"></span> En attente de paiement (lecture seule)</span>
               <span className="legend-key"><span className="legend-swatch sw-blocked"></span> Bloqué / non proposé</span>
               <span className="legend-key"><span className="legend-swatch sw-today"></span> Aujourd'hui</span>
             </div>

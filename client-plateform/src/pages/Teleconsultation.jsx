@@ -39,6 +39,14 @@
 // qui gère déjà l'appel à POST /visio/token et le rendu de
 // @jitsi/react-sdk.
 //
+// D8 (politique de fonds v2) : un RDV au statut « cree » est NON PAYÉ. Le médecin
+// n'a alors aucun accès : GET /rendez-vous/:id ne lui renvoie que
+// { rdv_id, date_creneau, statut, non_paye: true } (donc ni type_rdv, ni patient) et
+// POST /visio/token répond 409 RDV_NON_PAYE. Le RDV n'est plus « confirmé par le
+// médecin » : il devient confirmé par le paiement. Cette page affiche donc « en
+// attente de paiement » (et non « pas encore confirmé par le médecin ») et teste
+// l'état non payé AVANT le type de RDV, absent de la projection minimale.
+//
 // ⚠️ Hypothèse (à confirmer côté back-office) : useAuth().user.role vaut
 // 'medecin' pour un compte médecin (cf. RendezVous.jsx, ligne
 // `user?.role !== 'patient'`) — utilisé ici uniquement pour savoir quel
@@ -48,6 +56,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { obtenirRendezVous } from "../services/medecinService";
+import { estRdvNonPaye, estErreurRdvNonPaye } from "../utils/rdv";
 import { useAuth } from "../context/AuthContext";
 import ConsultationRoom from "../components/visio/ConsultationRoom";
 import "../assets/styles/teleconsultation.css";
@@ -59,8 +68,13 @@ import "../assets/styles/teleconsultation.css";
 // désync, c'est son 400 qui prévaut, remonté par ConsultationRoom).
 const STATUTS_AUTORISES_VISIO = ["confirme", "en_attente_presence"];
 
+const MESSAGE_RDV_NON_PAYE_PATIENT =
+  "Ce rendez-vous est en attente de paiement : la téléconsultation sera accessible dès que votre paiement sera confirmé.";
+const MESSAGE_RDV_NON_PAYE_MEDECIN =
+  "Ce rendez-vous est en attente de paiement du patient : la visio sera accessible une fois le paiement confirmé.";
+
 const MESSAGE_STATUT_INDISPONIBLE = {
-  cree: "Ce rendez-vous n'est pas encore confirmé par le médecin.",
+  cree: MESSAGE_RDV_NON_PAYE_PATIENT,
   honore: "Cette téléconsultation a déjà eu lieu.",
   non_honore: "Ce rendez-vous a été marqué comme non honoré.",
   annule: "Ce rendez-vous a été annulé.",
@@ -109,6 +123,14 @@ export default function Teleconsultation() {
         if (annule) return;
         setRdv(donnees);
 
+        // D8 : RDV non payé -> pas d'accès à la visio (et, pour le médecin, aucune
+        // autre donnée que la projection minimale : on ne teste pas type_rdv).
+        if (estRdvNonPaye(donnees)) {
+          setMessageErreur(user?.role === "medecin" ? MESSAGE_RDV_NON_PAYE_MEDECIN : MESSAGE_RDV_NON_PAYE_PATIENT);
+          setPhase("indisponible");
+          return;
+        }
+
         if (donnees.type_rdv !== "teleconsultation") {
           setMessageErreur("Ce rendez-vous est une consultation physique, pas une téléconsultation.");
           setPhase("indisponible");
@@ -126,6 +148,12 @@ export default function Teleconsultation() {
       })
       .catch((err) => {
         if (annule) return;
+        // Filet de sécurité D8 : un 409 RDV_NON_PAYE n'est pas une panne.
+        if (estErreurRdvNonPaye(err)) {
+          setMessageErreur(err.data?.message || MESSAGE_RDV_NON_PAYE_MEDECIN);
+          setPhase("indisponible");
+          return;
+        }
         setMessageErreur(
           err?.status === 404 || err?.status === 403
             ? "Rendez-vous introuvable, ou vous n'êtes pas autorisé à y accéder."
@@ -137,7 +165,7 @@ export default function Teleconsultation() {
     return () => {
       annule = true;
     };
-  }, [id]);
+  }, [id, user?.role]);
 
   // Confirmation avant de fermer/rafraîchir l'onglet pendant un appel en
   // cours, pour éviter une coupure accidentelle (ex. Ctrl+W involontaire).

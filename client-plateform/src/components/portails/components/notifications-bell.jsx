@@ -14,6 +14,8 @@ const ICONES = {
   rdv_a_reprogrammer: 'fa-calendar-xmark',
   rdv_reprogrammation_proposee: 'fa-calendar-plus',
   rdv_reprogrammation_acceptee: 'fa-calendar-check',
+  // D8 : le médecin n'est notifié qu'à la confirmation du paiement (cree -> confirme).
+  rdv_paye: 'fa-circle-check',
 };
 const heure = (iso) => new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 

@@ -1,0 +1,20 @@
+/* ---------------------------- RDV NON PAYÉ — agenda médecin (medecin-agenda.jsx) ----------------------------
+   D8 : un rendez-vous au statut « cree » (avant paiement) est en lecture seule pour le médecin.
+   Effet purement visuel : le serveur ne renvoie de toute façon ni identité patient, ni motif pour ces RDV. */
+
+.slot.slot-unpaid{
+  background:var(--surface-alt);
+  color:var(--ink-soft);
+  border-left-color:var(--line-strong);
+  opacity:.75;
+  filter:grayscale(.85);
+  cursor:default;
+}
+.slot.slot-unpaid .fa-hourglass-half{ margin-right:.25rem; }
+
+/* Pastille de la légende */
+.sw-unpaid{
+  background:var(--surface-alt);
+  border-color:var(--line-strong);
+  border-style:dashed;
+}
