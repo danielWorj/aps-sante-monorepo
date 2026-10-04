@@ -16,7 +16,8 @@
 // Le montant n'est jamais envoyé : le serveur le recalcule.
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { demanderPaiementRdv, obtenirDevisPaiement } from '../../services/paiementService';
+import { demanderPaiementRdv, obtenirDevisPaiement, estPaiementEnCours } from '../../services/paiementService';
+import AnnulerPaiementEnCours from './AnnulerPaiementEnCours';
 import { montantDevise } from '../../utils/fonds';
 
 // Détail du devis sous un moyen de paiement. `d` : undefined = chargement, { erreur } = indisponible.
@@ -37,6 +38,8 @@ function DetailDevis({ d }) {
 export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMoney }) {
   const [redirection, setRedirection] = useState(false);
   const [erreur, setErreur] = useState(null);
+  const [paiementEnCours, setPaiementEnCours] = useState(false); // 409 annulable
+  const [infoAnnulation, setInfoAnnulation] = useState(null);
   // Devis par agrégateur : undefined = en cours de calcul, { erreur } = indisponible.
   const [devis, setDevis] = useState({ stripe: undefined, campay: undefined });
 
@@ -70,11 +73,14 @@ export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMon
   const payerParCarte = async () => {
     if (redirection || !rdvId) return;
     setErreur(null);
+    setInfoAnnulation(null);
+    setPaiementEnCours(false);
     setRedirection(true);
     try {
       window.location.href = await demanderPaiementRdv(rdvId); // Stripe Checkout
     } catch (err) {
       setErreur(err?.message || 'Impossible de lancer le paiement. Veuillez réessayer.');
+      setPaiementEnCours(estPaiementEnCours(err));
       setRedirection(false);
     }
   };
@@ -104,6 +110,17 @@ export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMon
             <i className="fa-solid fa-circle-exclamation" /> {erreur}
           </p>
         )}
+        {paiementEnCours && (
+          <AnnulerPaiementEnCours
+            rdvId={rdvId}
+            onAnnule={() => {
+              setErreur(null);
+              setPaiementEnCours(false);
+              setInfoAnnulation('Le paiement précédent a été annulé. Vous pouvez choisir un moyen de paiement.');
+            }}
+          />
+        )}
+        {infoAnnulation && <p className="status-card-text">{infoAnnulation}</p>}
 
         <div className="choix-paiement-options">
           {/* Carte bancaire (Stripe) */}

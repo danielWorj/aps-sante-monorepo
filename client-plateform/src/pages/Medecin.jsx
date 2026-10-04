@@ -98,6 +98,8 @@ export default function Medecin() {
   // Le tri par distance renvoyé par le serveur n'est jamais recalculé
   // côté front. useMemo : l'effet de chargement ne se relance que si
   // l'un de ces éléments change réellement.
+  const attentePosition = autourDeMoi && !positionActuelle && geoEnCours;
+
   const filtresEnvoyes = useMemo(() => {
     if (autourDeMoi && positionActuelle) {
       return {
@@ -141,6 +143,12 @@ export default function Medecin() {
     let annule = false;
     setChargementMedecins(true);
     setErreurMedecins(null);
+    // « Autour de moi » coché mais position pas encore reçue : on
+    // n'interroge pas l'API (sinon elle renverrait TOUS les médecins,
+    // non triés, avant de se recharger avec lat/lng). Le chargement est
+    // relancé dès que la position arrive (filtresEnvoyes change) ou en
+    // cas d'échec (attentePosition repasse à false -> liste classique).
+    if (attentePosition) return undefined;
     listerMedecins(filtresEnvoyes)
       .then((donnees) => {
         if (!annule) {
@@ -157,7 +165,7 @@ export default function Medecin() {
     return () => {
       annule = true;
     };
-  }, [filtresEnvoyes]);
+  }, [filtresEnvoyes, attentePosition]);
 
   function soumettreFiltres(e) {
     e.preventDefault();

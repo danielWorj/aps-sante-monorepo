@@ -115,7 +115,10 @@ export async function tenterRefresh() {
  * Lève une Error (avec `.status` et `.data`) si la réponse finale n'est
  * pas OK, pour un traitement simple par les appelants (try/catch).
  */
-export async function apiFetch(path, { body, headers, skipAuthRetry = false, ...options } = {}) {
+export async function apiFetch(
+  path,
+  { body, headers, skipAuthRetry = false, authOverride, ...options } = {}
+) {
   // Un FormData (upload multipart, ex. création/modification de centre
   // de santé avec fichiers) ne doit JAMAIS être passé à JSON.stringify
   // (il n'a pas de propriétés énumérables : on obtiendrait "{}", donc
@@ -131,7 +134,14 @@ export async function apiFetch(path, { body, headers, skipAuthRetry = false, ...
       credentials: 'include',
       headers: {
         ...(estFormData ? {} : { 'Content-Type': 'application/json' }),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        // `authOverride` (ex. token restreint de changement de mot de passe
+        // temporaire) prime sur l'access token en mémoire, qui est null
+        // tant qu'aucune session n'est ouverte.
+        ...(authOverride
+          ? { Authorization: authOverride }
+          : token
+            ? { Authorization: `Bearer ${token}` }
+            : {}),
         ...headers,
       },
       body: body === undefined ? undefined : estFormData ? body : JSON.stringify(body),

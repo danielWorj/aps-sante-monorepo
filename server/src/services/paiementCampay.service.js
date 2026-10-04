@@ -10,16 +10,36 @@ const INTERVALLE_MIN_MS = 4000;
 
 const REFERENCE_CAMPAY_MAX = 100; // VarChar(100) en base
 
+// Surplus toléré : CamPay peut renvoyer dans `amount` le montant demandé + ses propres frais
+// (ex. demandé 10, reçu 11). On accepte donc un montant reçu SUPÉRIEUR, dans une limite
+// (max(plancher XAF, pourcentage du montant)). Un montant INFÉRIEUR reste toujours refusé :
+// le patient n'aurait pas payé l'intégralité. Réglable par variables d'environnement.
+function lireNombreEnv(nom, defaut) {
+  const n = Number(process.env[nom]);
+  return Number.isFinite(n) && n >= 0 ? n : defaut;
+}
+const SURPLUS_MAX_POURCENT = lireNombreEnv("CAMPAY_SURPLUS_MAX_POURCENT", 5);
+const SURPLUS_MIN_XAF = lireNombreEnv("CAMPAY_SURPLUS_MIN_XAF", 2);
+
+// Collectes SUCCESSFUL chez CamPay dont le montant ne correspond pas : transaction_id -> détail.
+// Mémoire du processus (pas de migration) : sert à signaler « paiement échoué » au client et à
+// ne pas journaliser / réinterroger CamPay en boucle. Reconstituée au prochain contrôle après
+// un redémarrage (GET du client ou cron).
+const montantsIncoherents = new Map();
+
 /**
  * Le statut renvoyé par CamPay correspond-il à ce qu'on a demandé ? Montant (arrondi, en XAF)
  * ET devise. Une valeur absente ou illisible est traitée comme une incohérence : on ne
  * finalise et on ne rattache jamais sur la foi d'une réponse incomplète.
+ * Règle du montant : attendu <= reçu <= attendu + surplus toléré (frais CamPay).
  */
 function montantEtDeviseCoherents(st, transaction) {
   const attendu = Math.round(Number(transaction.montant));
   const recu = Number(st?.amount);
   const deviseOk = !st?.currency || st.currency === DEVISE_CAMPAY;
-  return { ok: Number.isFinite(recu) && recu === attendu && deviseOk, attendu, recu };
+  const surplusMax = Math.max(SURPLUS_MIN_XAF, Math.ceil((attendu * SURPLUS_MAX_POURCENT) / 100));
+  const montantOk = Number.isFinite(recu) && recu >= attendu && recu - attendu <= surplusMax;
+  return { ok: montantOk && deviseOk, attendu, recu, surplusMax };
 }
 
 /**
@@ -41,10 +61,25 @@ export async function verifierEtFinaliserTransactionCampay(transaction, { force 
     // Garde-fou : le montant et la devise confirmés par CamPay doivent correspondre à ce qu'on a demandé.
     const controle = montantEtDeviseCoherents(st, transaction);
     if (!controle.ok) {
-      console.error(
-        `[campay] MONTANT INCOHÉRENT transaction=${cle} attendu=${controle.attendu} reçu=${st.amount} ${st.currency} — non finalisé.`
-      );
+      // Une seule alerte détaillée par transaction et par démarrage (pas une par minute).
+      if (!montantsIncoherents.has(cle)) {
+        montantsIncoherents.set(cle, { attendu: controle.attendu, recu: controle.recu, devise: st.currency ?? null });
+        console.error(
+          `[campay] MONTANT INCOHÉRENT transaction=${cle} rdv=${transaction.rdv_id_cible} ` +
+          `attendu=${controle.attendu} reçu=${st.amount} ${st.currency ?? ""} ` +
+          `(tolérance : +${controle.surplusMax} XAF max, jamais en dessous) — non finalisé, ` +
+          `signalé « échoué » au client. Réponse CamPay : ${JSON.stringify(st)}`
+        );
+      }
       return "MONTANT_INCOHERENT";
+    }
+    montantsIncoherents.delete(cle);
+    if (controle.recu > controle.attendu) {
+      console.info(
+        `[campay] transaction=${cle} : CamPay renvoie ${controle.recu} pour ${controle.attendu} demandés ` +
+        `(écart de ${controle.recu - controle.attendu} XAF toléré, probablement les frais CamPay). ` +
+        `Le séquestre reste au montant demandé.`
+      );
     }
     await finaliserPaiement({
       transaction_id: transaction.transaction_id,
@@ -55,6 +90,7 @@ export async function verifierEtFinaliserTransactionCampay(transaction, { force 
   }
 
   if (st.status === "FAILED") {
+    montantsIncoherents.delete(cle);
     await prisma.transactionPaiement.updateMany({
       where: { transaction_id: cle, statut: "en_attente" },
       data: { statut: "echouee" },
@@ -145,9 +181,18 @@ export async function derniereTentativeCampay(rdv_id) {
   const t = await prisma.transactionPaiement.findFirst({
     where: { fournisseur: "campay", rdv_id_cible: rdv_id },
     orderBy: { date_creation: "desc" },
-    select: { statut: true, campay_operator: true },
+    select: { transaction_id: true, statut: true, campay_operator: true },
   });
-  return t ? { fournisseur: "campay", statut: t.statut, operateur: t.campay_operator } : null;
+  if (!t) return null;
+  // Collecte SUCCESSFUL mais montant incohérent : jamais finalisée -> on la présente au client
+  // comme « echouee », avec un motif pour qu'il n'invite pas à repayer (l'argent est débité).
+  const incoherent = t.statut === "en_attente" && montantsIncoherents.has(t.transaction_id);
+  return {
+    fournisseur: "campay",
+    statut: incoherent ? "echouee" : t.statut,
+    operateur: t.campay_operator,
+    ...(incoherent ? { motif: "montant_incoherent" } : {}),
+  };
 }
 
 // Collectes à issue incertaine jamais rattachées (callback perdu, CamPay injoignable au
@@ -215,6 +260,7 @@ export async function reconcilierCampayEnAttente() {
   });
   let traitees = 0;
   for (const t of transactions) {
+    if (montantsIncoherents.has(t.transaction_id)) continue; // déjà signalée, rien ne changera côté CamPay
     try {
       await verifierEtFinaliserTransactionCampay(t, { force: true });
       traitees += 1;

@@ -163,6 +163,23 @@ export async function annulerPaymentIntent(payment_intent_id) {
   return stripe.paymentIntents.cancel(payment_intent_id);
 }
 
+/**
+ * Annulation à la demande du patient (« annuler le paiement en cours »).
+ * @returns {Promise<"annule"|"paye">} "paye" : déjà payé / en cours de capture
+ *   (le webhook finalisera) — ne PAS en ouvrir un autre.
+ */
+export async function annulerPaymentIntentSiPossible(payment_intent_id) {
+  try {
+    await stripe.paymentIntents.cancel(payment_intent_id);
+    return "annule";
+  } catch (err) {
+    const pi = await stripe.paymentIntents.retrieve(payment_intent_id);
+    if (pi.status === "canceled") return "annule";
+    if (pi.status === "succeeded" || pi.status === "processing") return "paye";
+    throw err;
+  }
+}
+
 export function verifierSignatureWebhook(corpsBrut, signature) {
   return stripe.webhooks.constructEvent(
     corpsBrut, signature, process.env.STRIPE_WEBHOOK_SECRET

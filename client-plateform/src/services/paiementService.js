@@ -24,3 +24,14 @@ export async function demanderPaiementCampay(rdvId, numero) {
 export async function obtenirDevisPaiement(rdvId, agregateur) {
   return apiFetch(`/paiement/rendez-vous/${rdvId}/devis?agregateur=${encodeURIComponent(agregateur)}`);
 }
+
+// Un paiement `en_attente` récent bloque un nouveau paiement (409, code PAIEMENT_EN_COURS) :
+// le patient peut alors l'ANNULER puis repayer. Un paiement abouti n'est jamais annulé.
+export function estPaiementEnCours(err) {
+  return err?.status === 409 && err?.data?.code === 'PAIEMENT_EN_COURS';
+}
+
+// Annule le(s) paiement(s) en cours du RDV (Carte / Mobile Money) -> { annulees }.
+export async function annulerPaiementEnCours(rdvId) {
+  return apiFetch(`/paiement/rendez-vous/${rdvId}/paiement/annuler`, { method: 'POST' });
+}

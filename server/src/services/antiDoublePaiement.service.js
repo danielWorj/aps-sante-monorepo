@@ -25,11 +25,21 @@
 // patient/médecin/créneau : la seconde requête attend la première, puis
 // voit sa transaction `en_attente` et est refusée.
 
+// Codes lisibles par le front (champ `code` de la réponse 409) :
+//   PAIEMENT_EXISTANT       : paiement abouti / escrow : rien à annuler ;
+//   PAIEMENT_EN_COURS       : tentative `en_attente` récente : le patient peut l'ANNULER
+//                             (POST /paiement/rendez-vous/:id/paiement/annuler) puis repayer ;
+//   PAIEMENT_NON_ANNULABLE  : tentative en cours qu'on ne peut pas annuler sans risque.
+export const CODE_PAIEMENT_EXISTANT = "PAIEMENT_EXISTANT";
+export const CODE_PAIEMENT_EN_COURS = "PAIEMENT_EN_COURS";
+export const CODE_PAIEMENT_NON_ANNULABLE = "PAIEMENT_NON_ANNULABLE";
+
 export class PaiementDejaExistantError extends Error {
-  constructor(message) {
+  constructor(message, code = CODE_PAIEMENT_EXISTANT) {
     super(message);
     this.name = "PaiementDejaExistantError";
     this.status = 409;
+    this.code = code;
   }
 }
 
@@ -52,15 +62,8 @@ async function clientParDefaut() {
   return (await import("../lib/prisma.js")).default;
 }
 
-/**
- * Lève PaiementDejaExistantError (409) si un paiement existe déjà.
- * @param {{ rdv_id: string, patient_id: string, medecin_id: string, date_creneau: Date|string }} rdv
- * @param {object} [client] client Prisma ou tx
- * @param {Date} [maintenant]
- */
-export async function verifierAucunPaiementExistant(rdv, client, maintenant = new Date()) {
-  const db = client ?? (await clientParDefaut());
-
+/** RDV actifs du même patient / médecin / créneau (+ le RDV visé, qui compte toujours). */
+async function idsRdvMemeCreneau(db, rdv) {
   const memeCreneau = await db.rendezVous.findMany({
     where: {
       patient_id: rdv.patient_id,
@@ -71,7 +74,19 @@ export async function verifierAucunPaiementExistant(rdv, client, maintenant = ne
     select: { rdv_id: true },
   });
   const ids = memeCreneau.map((r) => r.rdv_id);
-  if (!ids.includes(rdv.rdv_id)) ids.push(rdv.rdv_id); // le RDV visé compte toujours
+  if (!ids.includes(rdv.rdv_id)) ids.push(rdv.rdv_id);
+  return ids;
+}
+
+/**
+ * Lève PaiementDejaExistantError (409) si un paiement existe déjà.
+ * @param {{ rdv_id: string, patient_id: string, medecin_id: string, date_creneau: Date|string }} rdv
+ * @param {object} [client] client Prisma ou tx
+ * @param {Date} [maintenant]
+ */
+export async function verifierAucunPaiementExistant(rdv, client, maintenant = new Date()) {
+  const db = client ?? (await clientParDefaut());
+  const ids = await idsRdvMemeCreneau(db, rdv);
 
   const message =
     "Un paiement existe déjà pour ce rendez-vous (ou pour un rendez-vous identique : même médecin, même créneau).";
@@ -97,7 +112,8 @@ export async function verifierAucunPaiementExistant(rdv, client, maintenant = ne
     })
   ) {
     throw new PaiementDejaExistantError(
-      "Un paiement est déjà en cours pour ce rendez-vous. Terminez-le, ou patientez quelques minutes avant de réessayer."
+      "Un paiement est déjà en cours pour ce rendez-vous. Terminez-le, ou patientez quelques minutes avant de réessayer.",
+      CODE_PAIEMENT_EN_COURS
     );
   }
 }
@@ -133,6 +149,76 @@ export async function invaliderCheckoutsOuverts({ rdv, client, expirer }) {
       data: { statut: "echouee" },
     });
   }
+}
+
+/**
+ * Annule TOUS les paiements `en_attente` d'un RDV (et des RDV identiques :
+ * même patient / médecin / créneau) pour permettre au patient d'en lancer un
+ * nouveau. Ne touche JAMAIS un paiement abouti : si, chez le fournisseur,
+ * le paiement s'avère payé (ou en cours de capture), on refuse (409) et le
+ * webhook / la vérification finalise.
+ *
+ * `fournisseurs` (injecté, comme `invaliderCheckoutsOuverts`) :
+ *   stripe.expirerSession(sessionId)       -> "expiree" | "payee"
+ *   stripe.annulerPaymentIntent(piId)      -> "annule"  | "paye"
+ *   campay.verifier(transaction)           -> "SUCCESSFUL" | "FAILED" | "PENDING" | "MONTANT_INCOHERENT" …
+ *     (re-interroge CamPay et finalise si payé : jamais d'annulation à l'aveugle)
+ *
+ * CamPay n'offre pas d'API d'annulation d'une collecte : si la demande est
+ * encore PENDING, on clôt la transaction côté APS (`echouee`). Une validation
+ * tardive sur le téléphone est rattrapée par le webhook (voir
+ * verifierEtFinaliserTransactionCampay) : remboursement « double_paiement »
+ * si le patient a entre-temps payé autrement.
+ * Une collecte à issue incertaine (sans référence) n'est PAS annulable : on ne
+ * peut pas savoir si le patient a été débité.
+ * @returns {Promise<number>} nombre de transactions annulées
+ */
+export async function annulerPaiementsEnCours({ rdv, client, fournisseurs }) {
+  const db = client ?? (await clientParDefaut());
+  const ids = await idsRdvMemeCreneau(db, rdv);
+  const enAttente = await db.transactionPaiement.findMany({
+    where: { rdv_id_cible: { in: ids }, statut: "en_attente" },
+    orderBy: { date_creation: "asc" },
+  });
+
+  const dejaAboutiErr = () =>
+    new PaiementDejaExistantError(
+      "Un paiement vient d'aboutir pour ce rendez-vous : sa confirmation est en cours de traitement."
+    );
+
+  let annulees = 0;
+  for (const t of enAttente) {
+    if (t.fournisseur === "campay") {
+      if (!t.campay_reference) {
+        throw new PaiementDejaExistantError(
+          "Votre demande Mobile Money est en cours de vérification auprès de l'opérateur : elle ne peut pas être annulée pour le moment. Patientez quelques minutes.",
+          CODE_PAIEMENT_NON_ANNULABLE
+        );
+      }
+      const issue = await fournisseurs.campay.verifier(t);
+      if (issue === "SUCCESSFUL") throw dejaAboutiErr();
+      if (issue === "MONTANT_INCOHERENT") {
+        throw new PaiementDejaExistantError(
+          "Ce paiement nécessite une vérification manuelle : il ne peut pas être annulé. Contactez l'assistance.",
+          CODE_PAIEMENT_NON_ANNULABLE
+        );
+      }
+    } else {
+      if (t.stripe_checkout_session_id) {
+        if ((await fournisseurs.stripe.expirerSession(t.stripe_checkout_session_id)) === "payee") throw dejaAboutiErr();
+      }
+      if (t.stripe_payment_intent_id) {
+        if ((await fournisseurs.stripe.annulerPaymentIntent(t.stripe_payment_intent_id)) === "paye") throw dejaAboutiErr();
+      }
+    }
+
+    const { count } = await db.transactionPaiement.updateMany({
+      where: { transaction_id: t.transaction_id, statut: "en_attente" },
+      data: { statut: "echouee" },
+    });
+    annulees += count;
+  }
+  return annulees;
 }
 
 /**

@@ -1189,18 +1189,11 @@ model GardePharmacie {
 // moment du paiement (TransactionPaiement.ligne_commission_id) et
 // restent donc correctes même si le taux change ensuite.
 //
-// Commission APS à DEUX parts (évolution « commission patient ») :
-//   - `commission`         = commission MÉDECIN (CM, ex-« Z ») : prélevée
-//     sur le médecin à la libération des fonds. Valeur INCHANGÉE (pas de
-//     renommage : zéro risque pour les lignes et transactions existantes).
-//   - `commission_patient` = commission PATIENT (CP, ex-« Y ») : ajoutée au
-//     total payé par le patient (honoraires × taux). Jamais remboursée au
-//     patient, sauf défaillance du médecin ou double paiement.
-// Le même index unique partiel (pays_id, type_frais) WHERE actif couvre les
-// deux types : une seule ligne active par pays ET par type.
+// L'enum est conservé à une seule valeur (plutôt que supprimé) pour que
+// l'API admin et l'index (pays_id, type_frais) restent inchangés si un
+// autre type de ligne par pays devait revenir.
 enum TypeFraisTarifaire {
   commission
-  commission_patient
 }
 
 model LigneTarifaire {
@@ -1214,9 +1207,8 @@ model LigneTarifaire {
 
   pays Pays @relation(fields: [pays_id], references: [pays_id])
 
-  transactions_commission         TransactionPaiement[] @relation("TransactionLigneCommission")
-  transactions_commission_patient TransactionPaiement[] @relation("TransactionLigneCommissionPatient")
-  commissions_versees             CommissionApsVersee[]
+  transactions_commission TransactionPaiement[] @relation("TransactionLigneCommission")
+  commissions_versees     CommissionApsVersee[]
 
   @@index([pays_id, type_frais])
   @@map("ligne_tarifaire")
@@ -1338,22 +1330,12 @@ model TransactionPaiement {
   //   - frais_remboursement_id  : frais de remboursement du même agrégateur
   //     (figés dès la capture pour que le remboursement de cette
   //     transaction ne dépende pas d'un changement de barème ultérieur)
-  //
-  // Commission APS à deux parts :
-  //   - ligne_commission_id         : commission MÉDECIN (CM), prélevée à la
-  //     libération (valeur d'enum `commission`) ;
-  //   - ligne_commission_patient_id : commission PATIENT (CP), incluse dans
-  //     le total payé par le patient (valeur d'enum `commission_patient`).
-  //     NULL = transaction antérieure à CP : commission patient = 0, le
-  //     total déjà encaissé ne change jamais (aucun backfill).
-  montant_honoraires          Decimal? @db.Decimal(12, 2)
-  ligne_commission_id         String?  @db.Uuid
-  ligne_commission_patient_id String?  @db.Uuid
-  frais_envoi_id              String?  @db.Uuid
-  frais_remboursement_id      String?  @db.Uuid
+  montant_honoraires     Decimal? @db.Decimal(12, 2)
+  ligne_commission_id    String?  @db.Uuid
+  frais_envoi_id         String?  @db.Uuid
+  frais_remboursement_id String?  @db.Uuid
 
   ligne_commission      LigneTarifaire?       @relation("TransactionLigneCommission", fields: [ligne_commission_id], references: [ligne_tarifaire_id])
-  ligne_commission_patient LigneTarifaire?    @relation("TransactionLigneCommissionPatient", fields: [ligne_commission_patient_id], references: [ligne_tarifaire_id])
   frais_envoi           FraisAgregateur?      @relation("TransactionFraisEnvoi", fields: [frais_envoi_id], references: [frais_agregateur_id])
   frais_remboursement   FraisAgregateur?      @relation("TransactionFraisRemboursement", fields: [frais_remboursement_id], references: [frais_agregateur_id])
   abonnements_pharmacie AbonnementPharmacie[]
@@ -1361,13 +1343,11 @@ model TransactionPaiement {
   compte_escrow         CompteEscrow?
   remboursements        RemboursementPaiement[]
 
-  // Politique de fonds v2 §5 : commissions APS effectivement conservées
-  // par APS pour cette transaction (au plus une par origine : médecin,
-  // patient — voir CommissionApsVersee.origine).
-  commissions_aps_versees CommissionApsVersee[]
+  // Politique de fonds v2 §5 : commission APS effectivement versée à
+  // APS pour cette transaction (au plus une par RDV).
+  commission_aps_versee CommissionApsVersee?
 
   @@index([ligne_commission_id])
-  @@index([ligne_commission_patient_id])
   @@index([frais_envoi_id])
   @@index([frais_remboursement_id])
   @@index([fournisseur, statut])
@@ -1546,40 +1526,24 @@ model AmendeMedecin {
 }
 
 // -----------------------------------------------------------------
-// Politique de fonds v2 §1/§3/§5 — Commission APS effectivement conservée
-// par APS : fait de versement. Deux origines, une ligne chacune :
-//   - `medecin` (CM) : libération d'un RDV honoré, annulation patient
-//     < 24h, patient absent, deux absents sans reprogrammation ;
-//   - `patient` (CP) : conservée par APS dès que le patient n'est pas
-//     remboursé de CP (RDV honoré, annulation/absence du patient, deux
-//     absents, annulation patient > 24h, paiement tardif d'un RDV annulé
-//     par le patient). Jamais écrite quand CP est rendue au patient
-//     (défaillance du médecin, double paiement).
-// Au plus UNE ligne par (rdv, origine) et par (transaction, origine) :
-// idempotence. `ligne_commission_id` référence la ligne de taux de
-// l'origine (CM : ligne_commission ; CP : ligne_commission_patient).
-// Les lignes existantes prennent origine = medecin (migration).
+// Politique de fonds v2 §1/§3/§5 — Commission APS effectivement versée
+// à APS : fait de versement (libération d'un RDV honoré, annulation
+// patient < 24h, patient absent, deux absents sans reprogrammation).
+// Un seul versement par RDV (rdv_id unique : idempotence). La
+// commission n'est pas versée sur les remboursements simples.
 // -----------------------------------------------------------------
-enum OrigineCommissionAps {
-  medecin
-  patient
-}
-
 model CommissionApsVersee {
-  commission_versee_id String               @id @default(uuid()) @db.Uuid
-  rdv_id               String               @db.Uuid
-  transaction_id       String               @db.Uuid
-  origine              OrigineCommissionAps @default(medecin)
-  ligne_commission_id  String               @db.Uuid
-  montant              Decimal              @db.Decimal(12, 2)
-  date_versement       DateTime             @default(now())
+  commission_versee_id String   @id @default(uuid()) @db.Uuid
+  rdv_id               String   @unique @db.Uuid
+  transaction_id       String   @unique @db.Uuid
+  ligne_commission_id  String   @db.Uuid
+  montant              Decimal  @db.Decimal(12, 2)
+  date_versement       DateTime @default(now())
 
   rendez_vous  RendezVous          @relation(fields: [rdv_id], references: [rdv_id])
   transaction  TransactionPaiement @relation(fields: [transaction_id], references: [transaction_id])
   ligne_commission LigneTarifaire  @relation(fields: [ligne_commission_id], references: [ligne_tarifaire_id])
 
-  @@unique([rdv_id, origine])
-  @@unique([transaction_id, origine])
   @@index([ligne_commission_id])
   @@map("commission_aps_versee")
 }
@@ -1821,11 +1785,6 @@ model RendezVous {
   motif_annulation       MotifAnnulation?
   commentaire_annulation String?          @db.Text
   date_annulation        DateTime?
-  // Qui a annulé (fait constaté, y compris quand un admin annule au nom
-  // d'une partie). Nécessaire à la règle « paiement tardif » : si le
-  // médecin a annulé, il est fautif et CP est rendue au patient. NULL =
-  // RDV annulé avant cette colonne ou jamais annulé (traité « patient »).
-  annule_par             PartieRendezVous?
 
   // Politique de fonds v2 §5 — présences : FAITS enregistrés (jamais un
   // « absent » stocké) ; l'absence se déduit de l'absence d'horodatage.
@@ -1858,11 +1817,10 @@ model RendezVous {
   // checkout.session.completed — voir paiement.controller.js).
   compte_escrow CompteEscrow?
 
-  // Politique de fonds v2 : amende due par le médecin pour ce RDV (au plus
-  // une) et commissions APS conservées (au plus une par origine : médecin,
-  // patient — voir CommissionApsVersee).
-  amende_medecin         AmendeMedecin?
-  commissions_aps_versees CommissionApsVersee[]
+  // Politique de fonds v2 : amende due par le médecin pour ce RDV et
+  // commission APS versée (au plus une de chaque, voir modèles plus haut).
+  amende_medecin        AmendeMedecin?
+  commission_aps_versee CommissionApsVersee?
 
   // Étape 6 : notifications in-app liées à ce RDV (reprogrammation).
   notifications Notification[]
