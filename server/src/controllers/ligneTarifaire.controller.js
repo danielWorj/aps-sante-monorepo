@@ -4,14 +4,23 @@
 //
 // Politique de fonds v2 : la taxe est supprimée et les frais
 // d'agrégateur vivent dans leur propre table (voir
-// fraisAgregateur.controller.js). Il ne reste ici que la COMMISSION
-// APS, prélevée à la libération vers le médecin. Le modèle reste
-// générique (par type_frais) : un futur type = une valeur d'enum.
+// fraisAgregateur.controller.js). Il reste ici les DEUX commissions APS,
+// versionnées par pays :
+//   - `commission`         = CM, commission MÉDECIN : retenue sur le médecin
+//                            à la libération des fonds (valeur historique,
+//                            jamais renommée) ;
+//   - `commission_patient` = CP, commission PATIENT : ajoutée au total payé
+//                            par le patient. Sans ligne CP active pour le
+//                            pays du médecin, AUCUN paiement n'est possible
+//                            (503) : à créer avant le déploiement. Un taux
+//                            de 0 est un barème valide.
+// Le modèle reste générique (par type_frais) : un futur type = une valeur
+// d'enum.
 //
 // Champs réels du modèle (voir schema.prisma) :
 //   LigneTarifaire { ligne_tarifaire_id, pays_id, type_frais, libelle,
 //     taux, actif, date_debut_validite }
-//   type_frais ∈ { commission }
+//   type_frais ∈ { commission (CM), commission_patient (CP) }
 //
 // Réservé à admin/superadmin (voir routes/ligneTarifaire.routes.js) :
 // ces taux engagent directement ce qui est facturé au patient et
@@ -19,7 +28,8 @@
 
 import prisma from "../lib/prisma.js";
 
-const TYPES_FRAIS_VALIDES = ["commission"];
+// CM (commission médecin, valeur historique) et CP (commission patient).
+const TYPES_FRAIS_VALIDES = ["commission", "commission_patient"];
 
 function tauxValide(valeur) {
   const n = Number(valeur);

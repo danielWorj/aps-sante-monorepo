@@ -17,6 +17,11 @@ import prisma from "../lib/prisma.js";
 import { libererEscrow } from "../services/liberationEscrow.service.js";
 import { traiterAnnulation } from "../services/annulation.service.js";
 import { enregistrerPresence } from "../services/presence.service.js";
+import {
+  ROLES_VISIBILITE,
+  filtrerResultatAnnulation,
+  projeterRdvNonPayePourMedecin,
+} from "../services/visibiliteRole.service.js";
 import { estViolationCreneauActif, MESSAGE_CRENEAU_PRIS } from "../utils/erreursPrisma.js";
 
 const TYPES_RDV = ["physique", "teleconsultation"];
@@ -74,6 +79,47 @@ async function profilMedecinCourant(utilisateurCourant) {
   return prisma.medecin.findUnique({
     where: { utilisateur_id: utilisateurCourant.utilisateur_id },
   });
+}
+
+/* -------------------------------------------------------------------
+ * D8 — RDV non payé : lecture seule pour le médecin, verrouillé côté serveur.
+ * Un RDV « cree » (avant finaliserPaiement) n'a ni fonds, ni CP, ni CM : le
+ * médecin ne peut ni le confirmer, ni l'annuler, ni déclarer d'absence, ni
+ * le reprogrammer, ni le scanner, ni émettre d'ordonnance. Le statut est
+ * toujours relu en base (jamais d'après le client). Seuls le patient
+ * propriétaire, un admin ou l'expiration automatique peuvent l'annuler.
+ * ------------------------------------------------------------------- */
+const STATUT_RDV_NON_PAYE = "cree";
+const MESSAGE_RDV_NON_PAYE =
+  "Ce rendez-vous n'est pas encore payé : vous ne pouvez pas agir dessus. " +
+  "Il vous sera communiqué une fois le paiement confirmé.";
+
+function repondreRdvNonPaye(res) {
+  return res.status(409).json({ code: "RDV_NON_PAYE", message: MESSAGE_RDV_NON_PAYE });
+}
+
+/**
+ * Vrai si l'utilisateur courant agit EN TANT QUE médecin du RDV (ni admin, ni
+ * le patient propriétaire du RDV).
+ */
+async function agitEnTantQueMedecinDuRdv(rdv, utilisateurCourant) {
+  if (estAdmin(utilisateurCourant)) return false;
+  const patient = await profilPatientCourant(utilisateurCourant);
+  if (patient && patient.patient_id === rdv.patient_id) return false;
+  const medecin = await profilMedecinCourant(utilisateurCourant);
+  return Boolean(medecin && medecin.medecin_id === rdv.medecin_id);
+}
+
+/**
+ * Verrou D8 : répond 409 `RDV_NON_PAYE` et renvoie true si le médecin du RDV
+ * tente d'agir sur un RDV non payé. À appeler APRÈS l'autorisation d'accès et
+ * AVANT toute action.
+ */
+async function refuserActionMedecinSiNonPaye(req, res, rdv) {
+  if (rdv.statut !== STATUT_RDV_NON_PAYE) return false;
+  if (!(await agitEnTantQueMedecinDuRdv(rdv, req.utilisateur))) return false;
+  repondreRdvNonPaye(res);
+  return true;
 }
 
 /**
@@ -154,6 +200,13 @@ async function estAutoriseSurRdv(rdv, utilisateurCourant) {
  *     un patient ou un médecin il est déduit du compte, et une valeur
  *     envoyée par le client est ignorée : sinon un patient pourrait se
  *     déclarer "medecin" pour obtenir un remboursement intégral.
+ *     Un RDV NON PAYÉ ne peut pas être annulé « au nom du médecin »
+ *     (409 RDV_NON_PAYE, voir traiterAnnulation) : le back-office doit
+ *     masquer ce choix pour les RDV « cree ».
+ *
+ * La réponse est FILTRÉE selon le rôle de celui qui la reçoit (D7), voir
+ * visibiliteRole.service.js : le patient ne reçoit jamais CM ni le versement
+ * du médecin, le médecin ne reçoit jamais CP, l'admin voit tout.
  */
 async function annulerRendezVous(req, res, rdv) {
   const { motif_annulation, commentaire_annulation, initiateur: initiateurDemande } = req.body;
@@ -184,7 +237,11 @@ async function annulerRendezVous(req, res, rdv) {
   }
 
   let initiateur;
+  // Rôle de CELUI QUI REÇOIT la réponse (filtrage D7), indépendant de
+  // l'initiateur : un admin qui annule « au nom du patient » voit tout.
+  let roleReponse;
   if (estAdmin(req.utilisateur)) {
+    roleReponse = ROLES_VISIBILITE.ADMIN;
     if (!INITIATEURS_ANNULATION.includes(initiateurDemande)) {
       return res.status(400).json({
         message: `Un administrateur doit préciser au nom de qui il annule : initiateur = ${INITIATEURS_ANNULATION.join(" ou ")}.`,
@@ -194,6 +251,7 @@ async function annulerRendezVous(req, res, rdv) {
   } else {
     const patient = await profilPatientCourant(req.utilisateur);
     initiateur = patient && patient.patient_id === rdv.patient_id ? "patient" : "medecin";
+    roleReponse = initiateur === "patient" ? ROLES_VISIBILITE.PATIENT : ROLES_VISIBILITE.MEDECIN;
   }
 
   const resultat = await traiterAnnulation(rdv, {
@@ -202,7 +260,10 @@ async function annulerRendezVous(req, res, rdv) {
     initiateur,
   });
   if (resultat.erreur) {
-    return res.status(resultat.erreur.status).json({ message: resultat.erreur.message });
+    return res.status(resultat.erreur.status).json({
+      message: resultat.erreur.message,
+      ...(resultat.erreur.code ? { code: resultat.erreur.code } : {}),
+    });
   }
 
   const rdvMisAJour = await prisma.rendezVous.findUnique({
@@ -210,24 +271,24 @@ async function annulerRendezVous(req, res, rdv) {
     include: INCLUSION_NOMS_RDV,
   });
 
+  // Politique de fonds v2 — renvoyés pour l'affichage, jamais stockés, et
+  // FILTRÉS par rôle (D7) :
+  //   evenement / tardif : l'événement de fonds appliqué et le délai (< 24 h) ;
+  //   remboursement      : null si rien à rembourser (jamais payé, ou annulation
+  //                        patient < 24 h) ; CamPay : statut "a_traiter", montant =
+  //                        brut et montant_estime_net (le net définitif dépend des
+  //                        frais réels du retrait). Médecin : sans montants ;
+  //   commission_patient / commission_patient_rendue (patient, admin) : CP
+  //                        conservée par APS / rendue au patient (médecin fautif) ;
+  //   versement_medecin, commission_medecin (médecin, admin) : H − CM libérés
+  //                        au médecin (annulation patient < 24 h, avant amendes) et
+  //                        CM conservée par APS ; commission_aps = alias déprécié ;
+  //   amende (médecin, admin) : true si une amende a été enregistrée.
+  // (`frais_annulation` de l'ancienne politique n'existe plus.)
   return res.status(200).json({
     message: "Rendez-vous annulé.",
     rendez_vous: rdvMisAJour,
-    // Politique de fonds v2 — renvoyés pour l'affichage, jamais stockés :
-    //   remboursement     : null si rien à rembourser (jamais payé, ou
-    //                       annulation patient < 24h) ; CamPay : statut
-    //                       "a_traiter", montant = brut et montant_estime_net
-    //                       (le net définitif dépend des frais réels du retrait) ;
-    //   versement_medecin : honoraires − commission APS libérés au médecin
-    //                       (annulation patient < 24h), avant amendes ;
-    //   commission_aps    : commission versée à APS ;
-    //   amende            : true si une amende a été enregistrée au médecin.
-    // (`frais_annulation` de l'ancienne politique n'existe plus.)
-    tardif: resultat.tardif,
-    remboursement: resultat.remboursement,
-    versement_medecin: resultat.versement_medecin,
-    commission_aps: resultat.commission_aps,
-    amende: resultat.amende,
+    ...filtrerResultatAnnulation(resultat, roleReponse),
   });
 }
 
@@ -253,6 +314,7 @@ export async function listerRendezVous(req, res, next) {
     }
 
     const where = {};
+    let vueMedecin = false;
 
     if (estAdmin(req.utilisateur)) {
       if (statut) where.statut = statut;
@@ -270,7 +332,10 @@ export async function listerRendezVous(req, res, next) {
       // scope sur celui qui existe (patient prioritaire si les deux
       // existaient, cas non prévu par le schéma).
       if (patient) where.patient_id = patient.patient_id;
-      else if (medecin) where.medecin_id = medecin.medecin_id;
+      else if (medecin) {
+        where.medecin_id = medecin.medecin_id;
+        vueMedecin = true;
+      }
 
       if (statut) where.statut = statut;
     }
@@ -281,7 +346,14 @@ export async function listerRendezVous(req, res, next) {
       orderBy: { date_creneau: "desc" },
     });
 
-    return res.status(200).json({ rendez_vous: rendezVous });
+    // D8 : pour le médecin, un RDV non payé se réduit au strict nécessaire
+    // (identifiant, créneau, statut, `non_paye: true`) — ni patient, ni motif,
+    // ni code, ni QR : ces données ne doivent pas figurer dans le JSON.
+    const visibles = vueMedecin
+      ? rendezVous.map((r) => (r.statut === STATUT_RDV_NON_PAYE ? projeterRdvNonPayePourMedecin(r) : r))
+      : rendezVous;
+
+    return res.status(200).json({ rendez_vous: visibles });
   } catch (err) {
     next(err);
   }
@@ -298,6 +370,11 @@ export async function obtenirRendezVous(req, res, next) {
     });
     if (!rdv || !(await estAutoriseSurRdv(rdv, req.utilisateur))) {
       return res.status(404).json({ message: "Rendez-vous introuvable." });
+    }
+
+    // D8 : données minimales pour le médecin tant que le RDV n'est pas payé.
+    if (rdv.statut === STATUT_RDV_NON_PAYE && (await agitEnTantQueMedecinDuRdv(rdv, req.utilisateur))) {
+      return res.status(200).json({ rendez_vous: projeterRdvNonPayePourMedecin(rdv) });
     }
 
     return res.status(200).json({ rendez_vous: rdv });
@@ -424,6 +501,10 @@ export async function modifierRendezVous(req, res, next) {
     if (!(await estAutoriseSurRdv(rdv, req.utilisateur))) {
       return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
     }
+
+    // D8 : aucune action du médecin (confirmer, annuler, reprogrammer, motif…)
+    // sur un RDV non payé, quelle que soit la route d'entrée.
+    if (await refuserActionMedecinSiNonPaye(req, res, rdv)) return;
 
     const { statut, date_creneau, structure_id, motif } = req.body;
     const donnees = {};
@@ -585,7 +666,10 @@ const TRANSITIONS_AUTORISEES = {
     a_reprogrammer: ["annule"], // point G : annulable, remboursement moins frais et commission APS
   },
   medecin: {
-    cree: ["confirme", "annule"],
+    // D8 : un RDV non payé est hors de portée du médecin (verrou 409
+    // RDV_NON_PAYE en amont). La confirmation « cree -> confirme » n'est plus
+    // un acte du médecin : elle résulte du paiement (finaliserPaiement).
+    cree: [],
     confirme: ["en_attente_presence", "annule"],
     en_attente_presence: ["non_honore"],
     honore: [],
@@ -602,15 +686,11 @@ const TRANSITIONS_AUTORISEES = {
  *
  *   1. Cohérence avec TRANSITIONS_AUTORISEES pour son rôle (patient ou
  *      médecin) et le statut courant du rdv.
- *   2. Verrou paiement : un médecin ne peut faire passer un
- *      rendez-vous de "cree" à "confirme" QUE si le paiement Stripe a
- *      déjà été validé pour ce rdv — c'est-à-dire qu'un CompteEscrow
- *      existe (il n'est créé que par le webhook Stripe, sur
- *      "checkout.session.completed", voir paiement.controller.js).
- *      Sans paiement réussi, il n'y a pas de CompteEscrow : la
- *      confirmation manuelle est donc bloquée. C'est cette fonction
- *      qui garantit qu'un rendez-vous ne peut jamais être confirmé
- *      par le médecin tant que le patient n'a pas payé au préalable.
+ *   2. Verrou paiement (D8) : un médecin n'a AUCUNE transition possible
+ *      depuis "cree" (TRANSITIONS_AUTORISEES.medecin.cree = []) : le RDV
+ *      passe à "confirme" par le seul paiement (finaliserPaiement), jamais
+ *      par le médecin. Le verrou 409 RDV_NON_PAYE est posé en amont dans
+ *      les contrôleurs ; la matrice en est la seconde ligne de défense.
  *
  * admin/superadmin ne sont PAS soumis à la matrice TRANSITIONS_AUTORISEES
  * ni au verrou paiement ci-dessus : ils gardent la possibilité de forcer
@@ -669,17 +749,6 @@ async function verifierTransitionAutorisee(rdv, utilisateurCourant, nouveauStatu
     };
   }
 
-  if (role === "medecin" && rdv.statut === "cree" && nouveauStatut === "confirme") {
-    const escrow = await prisma.compteEscrow.findUnique({ where: { rdv_id: rdv.rdv_id } });
-    if (!escrow) {
-      return {
-        status: 409,
-        message:
-          "Ce rendez-vous ne peut pas être confirmé : le paiement du patient n'a pas encore été validé.",
-      };
-    }
-  }
-
   return null;
 }
 
@@ -715,6 +784,9 @@ export async function changerStatutRendezVous(req, res, next) {
     if (!(await estAutoriseSurRdv(rdv, req.utilisateur))) {
       return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
     }
+
+    // D8 : aucune action du médecin sur un RDV non payé.
+    if (await refuserActionMedecinSiNonPaye(req, res, rdv)) return;
 
     const { statut } = req.body;
     if (!statut) {
@@ -798,6 +870,9 @@ export async function scannerQrRendezVous(req, res, next) {
     if (!medecin || medecin.medecin_id !== rdv.medecin_id) {
       return res.status(403).json({ message: "Accès refusé : vous n'êtes pas le médecin de ce rendez-vous." });
     }
+
+    // D8 : un RDV non payé n'a ni fonds ni QR exploitable côté médecin.
+    if (rdv.statut === STATUT_RDV_NON_PAYE) return repondreRdvNonPaye(res);
 
     if (rdv.type_rdv !== "physique") {
       return res.status(400).json({ message: "Ce rendez-vous n'est pas un rendez-vous physique." });
@@ -1028,6 +1103,8 @@ export async function creerOrdonnance(req, res, next) {
         message: "Vous n'êtes pas le médecin de ce rendez-vous.",
       });
     }
+    // D8 : pas d'ordonnance sur un RDV non payé.
+    if (rdv.statut === STATUT_RDV_NON_PAYE) return repondreRdvNonPaye(res);
 
     const pays = await prisma.pays.findUnique({ where: { pays_id: pays_emission_id } });
     if (!pays) {

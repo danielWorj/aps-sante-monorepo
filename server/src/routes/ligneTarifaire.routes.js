@@ -1,7 +1,8 @@
 // src/routes/ligneTarifaire.routes.js
-// Lignes tarifaires (commission APS uniquement depuis la politique de
-// fonds v2), versionnées par pays. Réservé à admin/superadmin : ces
-// taux déterminent directement ce qui est crédité au médecin.
+// Lignes tarifaires (commission médecin CM et commission patient CP depuis
+// la politique de fonds v2), versionnées par pays. Réservé à
+// admin/superadmin : ces taux déterminent directement ce que paie le
+// patient (CP) et ce qui est crédité au médecin (CM).
 
 import { Router } from "express";
 import {

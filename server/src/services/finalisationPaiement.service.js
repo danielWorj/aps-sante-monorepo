@@ -9,6 +9,7 @@ import { decimalesPourMontant } from "../utils/montants.js";
 import { EVENEMENTS, decider } from "./politiqueFonds.service.js";
 import { resoudreFraisRemboursement } from "./fraisAgregateur.service.js";
 import { enregistrerCommissionsAps } from "./commissionAps.service.js";
+import { notifierRdvPaye } from "./notification.service.js";
 
 /**
  * Cœur métier commun à `checkout.session.completed` (web) et
@@ -27,21 +28,31 @@ import { enregistrerCommissionsAps } from "./commissionAps.service.js";
  * Un RDV non payé n'est annulable que par son propriétaire (patient), un
  * admin ou l'expiration automatique (D8) : il n'y a donc jamais de « médecin
  * fautif » ici.
+ *
+ * Notification médecin (D8) : le médecin n'est prévenu qu'ICI, au passage
+ * `cree` -> `confirme` effectivement réalisé par cet appel (UPDATE
+ * conditionnel : un rejeu du webhook, un double paiement ou un paiement tardif
+ * ne notifient jamais). L'émission a lieu APRÈS la transaction SQL et ne défait
+ * jamais un paiement validé : un échec est journalisé (la clé d'idempotence
+ * rend un éventuel rattrapage sans doublon).
  */
+// Résultat de la transaction quand rien n'est à faire (rejeu, transaction inconnue).
+const AUCUN_EFFET = Object.freeze({ paiementTardif: null, rdvConfirme: false });
+
 export async function finaliserPaiement({ transaction_id, rdv_id, payment_intent_id, campay_reference }) {
   // Référence à écrire sur la transaction selon le fournisseur.
   const referencePaiement = campay_reference
     ? { campay_reference }
     : { stripe_payment_intent_id: payment_intent_id };
 
-  const paiementTardif = await prisma.$transaction(async (tx) => {
+  const { paiementTardif, rdvConfirme } = await prisma.$transaction(async (tx) => {
     const transaction = await tx.transactionPaiement.findUnique({ where: { transaction_id } });
     if (!transaction) {
       console.warn(`[paiement] transaction ${transaction_id} introuvable — ignorée.`);
-      return null;
+      return AUCUN_EFFET;
     }
     // Rejeu d'un événement déjà traité jusqu'au remboursement.
-    if (transaction.statut === "remboursee") return null;
+    if (transaction.statut === "remboursee") return AUCUN_EFFET;
 
     const rdv = await tx.rendezVous.findUnique({ where: { rdv_id }, select: { statut: true } });
     const escrowExistant = await tx.compteEscrow.findUnique({ where: { rdv_id } });
@@ -50,7 +61,7 @@ export async function finaliserPaiement({ transaction_id, rdv_id, payment_intent
     // transaction, éventuellement remboursé depuis par une annulation) :
     // rien à refaire, et surtout ne pas repasser la transaction à
     // "reussie" ni la rembourser une 2e fois.
-    if (escrowExistant?.transaction_id === transaction_id) return null;
+    if (escrowExistant?.transaction_id === transaction_id) return AUCUN_EFFET;
 
     if (rdv?.statut === "annule") {
       // On garde une trace du paiement réellement encaissé par Stripe ;
@@ -59,7 +70,7 @@ export async function finaliserPaiement({ transaction_id, rdv_id, payment_intent
         where: { transaction_id },
         data: { statut: "reussie", ...referencePaiement },
       });
-      return transaction;
+      return { paiementTardif: transaction, rdvConfirme: false };
     }
 
     await tx.transactionPaiement.update({
@@ -100,9 +111,18 @@ export async function finaliserPaiement({ transaction_id, rdv_id, payment_intent
 
     // Ne confirme que depuis "cree" : un RDV annulé entre-temps ne doit
     // pas être ressuscité par un webhook tardif.
-    await tx.rendezVous.updateMany({ where: { rdv_id, statut: "cree" }, data: { statut: "confirme" } });
-    return null;
+    const { count } = await tx.rendezVous.updateMany({ where: { rdv_id, statut: "cree" }, data: { statut: "confirme" } });
+    return { paiementTardif: null, rdvConfirme: count === 1 };
   });
+
+  // D8 : le médecin est notifié à la confirmation du paiement, jamais avant.
+  if (rdvConfirme) {
+    try {
+      await notifierRdvPaye(rdv_id);
+    } catch (err) {
+      console.error(`[paiement] Notification médecin (rdv_paye) impossible pour le rdv ${rdv_id} :`, err.message);
+    }
+  }
 
   if (paiementTardif) {
     await rembourserPaiementRdvAnnule({ transaction: paiementTardif, rdv_id, payment_intent_id, campay_reference });

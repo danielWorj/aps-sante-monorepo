@@ -32,23 +32,68 @@ export function depuisUniteStripe(montantStripe, devise) {
     : Math.round(valeur) / 100;
 }
 
+/**
+ * Lignes de la session Checkout : une ligne par composante de la facture
+ * (consultation / frais d'agrégateur / commission APS). Les lignes à 0 sont
+ * omises (Stripe refuse un montant nul). GARDE-FOU : la somme des lignes,
+ * dans l'unité Stripe, doit être STRICTEMENT égale au montant de la
+ * transaction — le webhook compare `amount === versUniteStripe(montant)`.
+ * Sans `lignes`, une ligne unique (comportement historique).
+ */
+function lignesCheckout({ montant, devise, libelle, lignes }) {
+  const source = lignes?.length ? lignes : [{ libelle, description: null, montant }];
+  const retenues = source.filter((l) => versUniteStripe(l.montant, devise) > 0);
+  const somme = retenues.reduce((total, l) => total + versUniteStripe(l.montant, devise), 0);
+  if (retenues.length === 0 || somme !== versUniteStripe(montant, devise)) {
+    throw new Error(
+      `Incohérence de facturation : la somme des lignes (${somme}) diffère du montant à débiter ` +
+      `(${versUniteStripe(montant, devise)}) — session Checkout non créée.`
+    );
+  }
+  return retenues.map((l) => ({
+    quantity: 1,
+    price_data: {
+      currency: devise.toLowerCase(),
+      unit_amount: versUniteStripe(l.montant, devise),
+      product_data: {
+        name: l.libelle,
+        ...(l.description ? { description: l.description } : {}),
+      },
+    },
+  }));
+}
+
+/**
+ * Session Checkout (parcours web, option A).
+ * `lignes` : [{ libelle, description?, montant }] — détail de la facture,
+ * dont la somme doit égaler `montant` (voir lignesCheckout).
+ * `description_facture` : texte de la facture Stripe (invoice_creation).
+ *
+ * NB : les metadata `transaction_id` / `rdv_id` ne sont posées que sur la
+ * SESSION (et sur la facture), jamais sur le PaymentIntent du Checkout : un
+ * PaymentIntent qui les porterait serait retraité par le webhook
+ * `payment_intent.succeeded` et retrouvé par annulerPaymentIntentsRdv.
+ */
 export async function creerSessionCheckout({
-  montant, devise, transaction_id, rdv_id, libelle,
+  montant, devise, transaction_id, rdv_id, libelle, lignes, description_facture,
   email_client, url_succes, url_annulation,
 }) {
+  const descriptionFacture = description_facture ?? libelle;
   return stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
     customer_email: email_client,
     client_reference_id: transaction_id,
-    line_items: [{
-      quantity: 1,
-      price_data: {
-        currency: devise.toLowerCase(),
-        unit_amount: versUniteStripe(montant, devise),
-        product_data: { name: libelle },
+    line_items: lignesCheckout({ montant, devise, libelle, lignes }),
+    // Facture Stripe émise après paiement (détail identique au récapitulatif).
+    invoice_creation: {
+      enabled: true,
+      invoice_data: {
+        description: descriptionFacture,
+        metadata: { transaction_id, rdv_id },
       },
-    }],
+    },
+    payment_intent_data: { description: descriptionFacture },
     metadata: { transaction_id, rdv_id },
     success_url: url_succes,
     cancel_url: url_annulation,
@@ -83,7 +128,7 @@ export async function expirerSessionCheckout(session_id) {
  * via `checkout.session.completed`).
  */
 export async function creerPaymentIntent({
-  montant, devise, transaction_id, rdv_id, email_client,
+  montant, devise, transaction_id, rdv_id, email_client, description, detail,
 }) {
   return stripe.paymentIntents.create(
     {
@@ -91,7 +136,15 @@ export async function creerPaymentIntent({
       currency: devise.toLowerCase(),
       payment_method_types: ["card"], // parité avec le Checkout actuel
       receipt_email: email_client,
-      metadata: { transaction_id, rdv_id },
+      ...(description ? { description } : {}),
+      // `detail` : composantes du total (honoraires, frais, commission APS),
+      // en texte (les metadata Stripe sont des chaînes). transaction_id et
+      // rdv_id restent les seules clés lues par le code (webhook, recherche).
+      metadata: {
+        transaction_id,
+        rdv_id,
+        ...Object.fromEntries(Object.entries(detail ?? {}).map(([k, v]) => [k, String(v)])),
+      },
     },
     { idempotencyKey: `pi_${transaction_id}` }
   );

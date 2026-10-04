@@ -132,3 +132,45 @@ export async function notifierAcceptation(rdv, { auteurProposition, nouvelleDate
     },
   ]);
 }
+
+/**
+ * D8 — Le MÉDECIN est notifié quand le paiement d'un RDV est confirmé
+ * (cree -> confirme). Jamais avant : un RDV non payé n'existe pas pour lui
+ * (ni à la création, ni à l'annulation ou l'expiration d'un RDV non payé).
+ * Aucun montant n'est cité (D7 : le médecin ne voit pas CP). La date du
+ * créneau est dans `donnees` (ISO) pour que chaque client l'affiche dans le
+ * fuseau de l'utilisateur.
+ * Sans effet si le RDV n'est plus « confirme » (annulé entre-temps).
+ * Idempotent : une seule notification par RDV et par médecin.
+ * @param {string} rdv_id
+ * @returns {Promise<{ creees: number }>}
+ */
+export async function notifierRdvPaye(rdv_id) {
+  const rdv = await prisma.rendezVous.findUnique({
+    where: { rdv_id },
+    select: {
+      rdv_id: true,
+      statut: true,
+      date_creneau: true,
+      type_rdv: true,
+      medecin: { select: { utilisateur_id: true } },
+    },
+  });
+  if (!rdv || rdv.statut !== "confirme") return { creees: 0 };
+
+  const destinataire = rdv.medecin.utilisateur_id;
+  const { count } = await creerNotifications([
+    {
+      utilisateur_id: destinataire,
+      type: "rdv_paye",
+      rdv_id,
+      titre: "Nouveau rendez-vous confirmé",
+      message:
+        "Un patient a payé et confirmé un rendez-vous avec vous. " +
+        "Consultez votre agenda pour en voir les détails.",
+      donnees: { date_creneau: rdv.date_creneau.toISOString(), type_rdv: rdv.type_rdv },
+      cle: `rdv_paye:${rdv_id}:${destinataire}`,
+    },
+  ]);
+  return { creees: count };
+}
