@@ -1,16 +1,24 @@
 // src/components/TauxParPays.jsx
 //
-// Écran d'administration d'un taux versionné PAR PAYS (commission APS,
-// amende médecin). Jamais d'update : « Définir » crée une nouvelle version
+// Écran d'administration d'un taux versionné PAR PAYS (commission médecin CM,
+// commission patient CP, amende médecin). Jamais d'update : « Définir » crée une nouvelle version
 // active et désactive l'ancienne (transaction côté serveur). Aucune valeur
 // par défaut : un pays sans ligne active est signalé.
+//
+// Props facultatives (ajoutées pour l'écran à deux onglets CM / CP) :
+//   - onglets        : nœud affiché sous l'en-tête (barre d'onglets) ;
+//   - note           : nœud affiché sous l'introduction (ex. rappel « 0 % est valide ») ;
+//   - graviteAbsent  : 'warning' (défaut) | 'danger' — niveau de l'alerte « pays sans taux ».
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import './../assets/style/Referentiel.css';
 import { listerPays } from '../services/referentielService';
 import FondsModal from './FondsModal';
 import { dateHeure, pourcent, pourcentDepuisTaux, tauxDepuisPourcent } from '../utils/fonds';
 
-export default function TauxParPays({ titre, fil, intro, alerteAbsent, libelleModele, lister, creer }) {
+export default function TauxParPays({
+  titre, fil, intro, alerteAbsent, libelleModele, lister, creer,
+  onglets = null, note = null, graviteAbsent = 'warning',
+}) {
   const [pays, setPays] = useState([]);
   const [lignes, setLignes] = useState([]);
   const [chargement, setChargement] = useState(true);
@@ -83,12 +91,15 @@ export default function TauxParPays({ titre, fil, intro, alerteAbsent, libelleMo
         </button>
       </div>
 
+      {onglets}
+
       <p className="aps-text-muted">{intro}</p>
+      {note}
 
       {message && <div className={`alert alert-${message.type} mb-3`} role="status">{message.texte}</div>}
       {erreur && <div className="alert alert-danger">{erreur}</div>}
       {!chargement && sansLigne.length > 0 && (
-        <div className="alert alert-warning">
+        <div className={`alert alert-${graviteAbsent}`} role="alert">
           <strong>{sansLigne.length} pays sans taux actif :</strong> {sansLigne.map((p) => p.nom).join(', ')}. {alerteAbsent}
         </div>
       )}

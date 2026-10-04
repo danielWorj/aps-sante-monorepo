@@ -3,7 +3,11 @@
 // Miroir front-end des routes « politique de fonds v2 » côté admin :
 //   /frais-agregateur, /parametres-amende, /lignes-tarifaires,
 //   /remboursements-campay, PATCH /rendez-vous/:id/statut (annulation),
-//   POST /rendez-vous/:id/forcer-liberation.
+//   POST /rendez-vous/:id/forcer-liberation, GET /paiement/rendez-vous/:id/facture.
+//
+// Vocabulaire : CM = commission MÉDECIN (type_frais « commission », retenue sur
+// le médecin à la libération) ; CP = commission PATIENT (type_frais
+// « commission_patient », ajoutée au total payé par le patient).
 // Chemins relatifs : API_BASE_URL inclut déjà « /api ».
 
 import { apiFetch } from '../lib/apiClient';
@@ -35,13 +39,28 @@ export const listerParametresAmende = (filtres) =>
 /** POST /parametres-amende { pays_id, libelle, taux } */
 export const creerParametreAmende = (body) => apiFetch('/parametres-amende', { method: 'POST', body });
 
-/* ── Commission APS (lignes tarifaires, type « commission ») ───── */
-/** GET /lignes-tarifaires?type_frais=commission -> [{ pays_id, type_frais, libelle, taux, actif, date_debut_validite, pays }] */
+/* ── Commissions APS (lignes tarifaires : CM et CP) ─────────────── */
+/** Valeurs de `type_frais` gérées par cet écran. `commission` reste la part
+ *  médecin (CM) : l'identifiant n'a pas été renommé (zéro risque pour les données). */
+export const TYPE_COMMISSION_MEDECIN = 'commission'; // CM
+export const TYPE_COMMISSION_PATIENT = 'commission_patient'; // CP
+
+/** GET /lignes-tarifaires?type_frais=commission|commission_patient
+ *  -> [{ pays_id, type_frais, libelle, taux, actif, date_debut_validite, pays }] */
 export const listerLignesTarifaires = (filtres) =>
   apiFetch(`/lignes-tarifaires${qs(filtres)}`).then((d) => d.lignes_tarifaires);
 
-/** POST /lignes-tarifaires { pays_id, type_frais:'commission', libelle, taux } */
+/** POST /lignes-tarifaires { pays_id, type_frais, libelle, taux } (nouvelle version active) */
 export const creerLigneTarifaire = (body) => apiFetch('/lignes-tarifaires', { method: 'POST', body });
+
+/** Commission médecin (CM) : lister / créer. */
+export const listerCommissionsMedecin = () => listerLignesTarifaires({ type_frais: TYPE_COMMISSION_MEDECIN });
+export const creerCommissionMedecin = (body) => creerLigneTarifaire({ ...body, type_frais: TYPE_COMMISSION_MEDECIN });
+
+/** Commission patient (CP) : lister / créer. Un taux de 0 est valide ;
+ *  seule l'ABSENCE de ligne active bloque les paiements du pays. */
+export const listerCommissionsPatient = () => listerLignesTarifaires({ type_frais: TYPE_COMMISSION_PATIENT });
+export const creerCommissionPatient = (body) => creerLigneTarifaire({ ...body, type_frais: TYPE_COMMISSION_PATIENT });
 
 /* ── Remboursements CamPay ──────────────────────────────────────── */
 /** GET /remboursements-campay?statut=a_traiter|traite
@@ -56,8 +75,12 @@ export const cloturerRemboursementCampay = (id, frais_reels) =>
   apiFetch(`/remboursements-campay/${id}/cloturer`, { method: 'POST', body: { frais_reels } });
 
 /* ── Rendez-vous (annulation admin, libération forcée) ─────────── */
-/** Annulation par un admin : `initiateur` ('patient'|'medecin') OBLIGATOIRE.
- *  Retourne la réponse complète { rendez_vous, tardif, remboursement, versement_medecin, commission_aps, amende }. */
+/** Annulation par un admin : `initiateur` ('patient'|'medecin') OBLIGATOIRE
+ *  (« medecin » refusé par le serveur sur un RDV non payé : 409 RDV_NON_PAYE).
+ *  Retourne la réponse complète, non filtrée pour un admin :
+ *  { rendez_vous, evenement, tardif, remboursement, versement_medecin,
+ *    commission_medecin (CM), commission_patient (CP conservée par APS),
+ *    commission_patient_rendue (CP rendue au patient), commission_aps (alias déprécié de CM), amende }. */
 export const annulerRendezVousAdmin = (id, { motif, commentaire, initiateur }) =>
   apiFetch(`/rendez-vous/${id}/statut`, {
     method: 'PATCH',
@@ -71,3 +94,18 @@ export const annulerRendezVousAdmin = (id, { motif, commentaire, initiateur }) =
 
 /** Arbitrage admin : RDV « les deux présents mais jamais clôturé ». POST /rendez-vous/:id/forcer-liberation */
 export const forcerLiberation = (id) => apiFetch(`/rendez-vous/${id}/forcer-liberation`, { method: 'POST' });
+
+/* ── Facture / décomposition d'un RDV payé (vue admin) ─────────── */
+/** GET /paiement/rendez-vous/:id/facture -> facture du patient
+ *  { numero, date, devise, agregateur, entete, lignes:[{code,libelle,base,taux,montant_fixe,montant}], total, minimale,
+ *    detail_admin: { commission_patient, commission_medecin, net_medecin } | null }.
+ *  Pour l'admin, `detail_admin` ajoute CM et le net médecin (null pour une transaction pré-v2).
+ *  Retourne null si le RDV n'a pas de paiement (404 « non payé »). */
+export const obtenirFactureRendezVous = async (rdvId) => {
+  try {
+    return await apiFetch(`/paiement/rendez-vous/${rdvId}/facture`);
+  } catch (err) {
+    if (err.status === 404) return null;
+    throw err;
+  }
+};
