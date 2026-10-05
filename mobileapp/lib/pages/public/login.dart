@@ -23,9 +23,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../components/components.dart';
-import '../../../controllers/authentification_controller.dart';
-import '../../../models/authentification_models.dart';
+import '../../components/components.dart';
+import '../../controllers/authentification_controller.dart';
+import '../../models/authentification_models.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({
