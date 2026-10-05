@@ -4,15 +4,19 @@
 // de paiement :
 //   - Carte bancaire : PaymentSheet Stripe native ([_payer]) ;
 //   - Mobile Money   : modale CamPay (dialogue_paiement_mobile_money.dart).
-// Avant le choix, le patient voit le devis de chaque moyen (total,
-// honoraires, frais d'envoi, remboursement estimé) ; un moyen dont le
-// barème n'est pas saisi (503) y est grisé.
+// Avant le choix, le patient voit la facture détaillée de chaque moyen
+// (consultation, frais agrégateur, commission APS, total) et le remboursement
+// estimé ; un moyen dont le barème n'est pas saisi (503) y est grisé.
 // Dans les deux cas, [onPaye] n'est appelé qu'une fois le paiement
 // confirmé par le SERVEUR (webhook), jamais sur la seule foi du client.
-// À la confirmation, la décomposition renvoyée par le serveur
-// (`paiement.decomposition`, absente des anciennes transactions) est
-// affichée dans une SnackBar : le bouton lui-même disparaît dès que
-// l'appelant passe le RDV à « payé ».
+// Le total envoyé à Stripe (PaymentSheet) comme à CamPay est celui que le
+// serveur recalcule : l'app n'envoie jamais de montant, la facture affichée
+// est donc exactement le montant débité.
+// À la confirmation, la FACTURE FINALE (GET …/facture, card + bouton
+// « Télécharger la facture ») s'ouvre dans une boîte de dialogue, AVANT
+// [onPaye] : le bouton disparaît dès que l'appelant passe le RDV à « payé »,
+// ce qui détruirait le contexte nécessaire pour afficher la facture. Un échec
+// de chargement de la facture ne bloque jamais la confirmation.
 // Réutilisable : écran de confirmation après réservation, et onglet
 // « À payer » du portail patient (rattrapage d'un paiement annulé).
 //
@@ -24,9 +28,9 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/paiement_controller.dart';
 import '../../repositories/paiement_repository.dart';
-import '../../utils/fonds.dart';
 import '../dialogs/dialogue_choix_moyen_paiement.dart';
 import '../dialogs/dialogue_paiement_mobile_money.dart';
+import '../factures/facture_recapitulative.dart';
 import '../style/colors.dart';
 import '../style/text_styles.dart';
 import 'app_buttons.dart';
@@ -119,10 +123,7 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
           _paiementEffectueEnAttente = false;
           _message = null;
         });
-        // La modale n'expose pas le statut : on relit le détail (échec
-        // silencieux, il ne doit jamais retarder ni bloquer la confirmation).
-        final detail = await _lireStatutSansEchec();
-        _annoncerConfirmation(detail);
+        await _afficherFactureFinale();
         widget.onPaye?.call();
       case ResultatMobileMoney.enAttente:
         // Demande envoyée mais pas encore confirmée : le patient peut
@@ -194,7 +195,7 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
           _paiementEffectueEnAttente = false;
           _message = null;
         });
-        _annoncerConfirmation(statut);
+        await _afficherFactureFinale();
         widget.onPaye?.call();
         return;
       }
@@ -214,33 +215,19 @@ class _BoutonPayerRdvState extends State<BoutonPayerRdv> {
     }
   }
 
-  /// Relit GET …/paiement pour récupérer la décomposition ; `null` en cas
-  /// d'échec (le paiement est déjà confirmé, ce détail est facultatif).
-  Future<StatutPaiementRdv?> _lireStatutSansEchec() async {
-    try {
-      return await widget.executer(
-        (token) => _repo.obtenirStatut(rdvId: widget.rdvId, token: token),
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Affiche, une fois le paiement confirmé par le serveur, le détail
-  /// « honoraires + frais d'envoi » — comme PaiementSucces.jsx. Rien n'est
-  /// affiché si le serveur n'a pas de décomposition (ancienne transaction).
-  void _annoncerConfirmation(StatutPaiementRdv? statut) {
-    final d = statut?.decomposition;
-    if (d == null || !mounted) return;
-    final devise = statut?.devise;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 6),
-        content: Text(
-          'Paiement confirmé : honoraires ${montantDevise(d.honoraires, devise)}'
-          ' + frais d’envoi ${montantDevise(d.fraisEnvoi, devise)}.',
-        ),
-      ),
+  /// Affiche, une fois le paiement confirmé par le serveur, la facture
+  /// finale (card + « Télécharger la facture »), comme PaiementSucces.jsx.
+  /// Sans effet si le widget a été retiré entre-temps ; si la facture ne se
+  /// charge pas, la boîte affiche le message d'erreur avec « Réessayer » :
+  /// le paiement, lui, est déjà confirmé.
+  Future<void> _afficherFactureFinale() async {
+    if (!mounted) return;
+    await afficherFactureRdv(
+      context,
+      rdvId: widget.rdvId,
+      executer: widget.executer,
+      repository: _repo,
+      titre: 'Paiement confirmé',
     );
   }
 
