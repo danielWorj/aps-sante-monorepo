@@ -67,26 +67,24 @@
 .choix-paiement-onglet.is-actif{background:var(--primary-tint); border-color:var(--primary); color:var(--primary-dark);}
 
 /* ---------------------------- IMPRESSION ---------------------------- */
+/* La copie imprimable (portail sous <body>) n'existe que pendant l'impression. */
+.facture-print-root{display:none;}
+
+@page{size:A4; margin:15mm;}
+
 @media print{
-  /* Tout est masqué, sauf la card (visibility, pas display : la card reste dans son parent). */
-  body *{visibility:hidden !important;}
-  .facture-card, .facture-card *{visibility:visible !important;}
-  .facture-card{
-    position:absolute; left:0; top:0; width:100%; max-width:none;
-    border:none; box-shadow:none; padding:0;
-  }
-  .facture-card.is-compact{font-size:inherit;}
-  .facture-telecharger{display:none !important;}
+  /* display:none (et NON visibility:hidden) : visibility conserve la hauteur de la page
+     masquée, ce qui générait plusieurs pages blanches avant la facture. */
+  body > *:not(.facture-print-root){display:none !important;}
+  .facture-print-root{display:block !important;}
+  html, body{height:auto !important; overflow:visible !important; background:#fff !important;}
 
-  /* Les conteneurs de la page ou de la modale ne doivent ni rogner ni décaler la card
-     (une animation « fill-mode: both » laisse un transform qui crée un bloc contenant). */
-  html, body{height:auto !important; overflow:visible !important;}
-  .rdv-modal-overlay, .rdv-modal, .status-card{
-    position:static !important; max-height:none !important; overflow:visible !important;
-    transform:none !important; animation:none !important; box-shadow:none !important; background:transparent !important;
+  .facture-print-root .facture-card{
+    position:static; width:100%; max-width:none; margin:0;
+    border:none; box-shadow:none; padding:0; font-size:inherit;
+    break-inside:avoid; page-break-inside:avoid;
   }
-
-  .facture-head{border-bottom-color:#999;}
-  .facture-total{background:none; border:1px solid #999;}
-  .facture-badge{background:none; border:1px solid #999; color:#000;}
+  .facture-print-root .facture-head{border-bottom-color:#999;}
+  .facture-print-root .facture-total{background:none; border:1px solid #999;}
+  .facture-print-root .facture-badge{background:none; border:1px solid #999; color:#000;}
 }

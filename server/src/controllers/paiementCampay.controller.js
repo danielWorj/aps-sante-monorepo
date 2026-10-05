@@ -19,7 +19,14 @@ export async function creerPaiementCampayRdv(req, res, next) {
     const { rdv, patient, montant } = ctx;
 
     const numero = normaliserNumeroCM(req.body?.numero ?? patient.utilisateur.telephone);
+    // Total AFFICHÉ au patient et enregistré sur la transaction : H + frais d'envoi + CP.
     const montantXaf = Math.round(Number(montant)); // CamPay refuse les décimales (ER201)
+    // Montant ENVOYÉ à CamPay : H + CP seulement. CamPay ajoute lui-même ses frais
+    // d'agrégateur au débit du patient ; les lui envoyer aussi les ferait payer deux fois.
+    // Débit final attendu ≈ montantXaf (H + CP + frais CamPay).
+    const montantEnvoyeXaf = Math.round(
+      Number(ctx.decomposition.honoraires) + Number(ctx.decomposition.commissionPatient)
+    );
 
     // Anti double demande : même RDV, même numéro, moins de 2 min -> on renvoie la tentative en cours.
     // Inclut les tentatives à issue incertaine (sans campay_reference) : les rejouer risquerait
@@ -46,7 +53,7 @@ export async function creerPaiementCampayRdv(req, res, next) {
     // déjà arrondi à l'unité (XAF) par verifierRdvPayable ; la ligne CP est
     // figée sur la transaction par creerTransactionEnAttente.
     const transaction = await creerTransactionEnAttente(ctx, {
-      montant: montantXaf, // le montant arrondi EST le montant réellement débité
+      montant: montantXaf, // total affiché au patient (= débit attendu, frais CamPay inclus)
       devise: DEVISE_CAMPAY.toLowerCase(),
       fournisseur: "campay",
       numero_payeur: numero,
@@ -55,10 +62,10 @@ export async function creerPaiementCampayRdv(req, res, next) {
     let collecte;
     try {
       collecte = await initierCollecte({
-        montant: montantXaf,
+        montant: montantEnvoyeXaf, // H + CP : CamPay y ajoute ses frais
         numero,
-        // Détail des composantes (H + frais + commission APS = total), court
-        // et sans accents ; retombe sur la description historique si trop long.
+        // Détail des composantes, court et sans accents ; retombe sur la
+        // description historique si trop long.
         description: descriptionCampay(ctx),
         external_reference: transaction.transaction_id,
       });

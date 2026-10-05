@@ -16,9 +16,10 @@
 // « Consultation » et le total débité, sans frais ni commission.
 //
 // « Télécharger » : impression native du navigateur (window.print()) ; la feuille
-// @media print de FactureRecapitulative.css n'imprime QUE la card. Dans la boîte
+// @media print de FactureRecapitulative.css n'imprime QUE la copie montée sous <body>. Dans la boîte
 // d'impression, choisir « Enregistrer au format PDF ». Aucune dépendance ajoutée.
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { obtenirFacture } from '../../services/paiementService';
 import { dateHeure, montantDevise } from '../../utils/fonds';
 import './FactureRecapitulative.css';
@@ -43,34 +44,20 @@ function formule(ligne, devise) {
   return parts.join(' ');
 }
 
-export function FactureRecapitulative({ facture, telechargeable = true, compact = false }) {
-  const imprimer = useCallback(() => {
-    if (!facture) return;
-    // Le titre du document devient le nom de fichier proposé à l'enregistrement en PDF.
-    const titreInitial = document.title;
-    const restaurer = () => {
-      document.title = titreInitial;
-      window.removeEventListener('afterprint', restaurer);
-    };
-    window.addEventListener('afterprint', restaurer);
-    document.title = facture.numero ? `Facture ${facture.numero}` : 'Facture APS Santé';
-    window.print();
-  }, [facture]);
-
-  if (!facture) return null;
-
+/** Contenu de la facture (sans bouton) : partagé entre la card affichée et la copie imprimée. */
+function FactureCorps({ facture, compact = false, className = '' }) {
   const { entete = {}, lignes = [], devise, total } = facture;
   const estDevis = facture.type === 'devis';
   const date = formatDate(facture.date);
 
   return (
     <article
-      className={`facture-card${compact ? ' is-compact' : ''}`}
+      className={`facture-card${compact ? ' is-compact' : ''}${className ? ` ${className}` : ''}`}
       aria-label={estDevis ? 'Aperçu de la facture' : 'Facture'}
     >
       <header className="facture-head">
         <div>
-          <div className="facture-marque">APS Santé</div>
+          <div className="facture-marque">APSA</div>
           <div className="facture-sous-titre">{estDevis ? 'Aperçu de la facture' : 'Facture'}</div>
         </div>
         <div className="facture-meta">
@@ -119,13 +106,50 @@ export function FactureRecapitulative({ facture, telechargeable = true, compact 
           débité est affiché.
         </p>
       )}
+    </article>
+  );
+}
 
+export function FactureRecapitulative({ facture, telechargeable = true, compact = false }) {
+  // `impression` : monte, le temps de l'impression, une copie de la facture directement
+  // sous <body> (portail). Le CSS d'impression masque alors tout le reste en display:none,
+  // si bien que la page imprimée ne contient QUE la facture (1 seule page).
+  const [impression, setImpression] = useState(false);
+
+  useEffect(() => {
+    if (!impression) return undefined;
+    // Le titre du document devient le nom de fichier proposé à l'enregistrement en PDF.
+    const titreInitial = document.title;
+    document.title = facture?.numero ? `Facture ${facture.numero}` : 'Facture APSA';
+    const terminer = () => {
+      document.title = titreInitial;
+      setImpression(false);
+    };
+    window.addEventListener('afterprint', terminer);
+    // Laisse le portail se monter avant d'ouvrir la boîte d'impression.
+    const id = requestAnimationFrame(() => window.print());
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener('afterprint', terminer);
+      document.title = titreInitial;
+    };
+  }, [impression, facture]);
+
+  if (!facture) return null;
+
+  return (
+    <>
+      <FactureCorps facture={facture} compact={compact} className="facture-ecran" />
       {telechargeable && (
-        <button type="button" className="btn btn-outline-primary facture-telecharger" onClick={imprimer}>
+        <button type="button" className="btn btn-outline-primary facture-telecharger" onClick={() => setImpression(true)}>
           <i className="fa-solid fa-download" /> Télécharger la facture
         </button>
       )}
-    </article>
+      {impression && createPortal(
+        <div className="facture-print-root"><FactureCorps facture={facture} /></div>,
+        document.body,
+      )}
+    </>
   );
 }
 

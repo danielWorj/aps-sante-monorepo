@@ -1,5 +1,5 @@
 // login.dart
-// Écran de connexion — APS Santé
+// Écran de connexion — APSA
 //
 // Reprend fidèlement le design system de l'application (voir lib/components) :
 // - Couleurs : AppColors (vert de marque, corail, surfaces)
@@ -309,7 +309,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
         const SizedBox(height: 12),
         Text(
-          'APS Santé',
+          'APSA',
           style: AppTextStyles.h3.copyWith(fontSize: 18, color: AppColors.primaryDark),
         ),
       ],

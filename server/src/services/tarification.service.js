@@ -26,7 +26,7 @@
 // CP = 0, le total déjà encaissé ne change jamais (aucun backfill).
 
 import { arrondir } from "../utils/montants.js";
-import { calculerFrais } from "./fraisAgregateur.service.js";
+import { calculerFraisEnvoi } from "./fraisAgregateur.service.js";
 
 /**
  * CM — commission médecin : H × taux, plafonnée à H, arrondie selon la
@@ -97,7 +97,7 @@ export function decomposerMontant(honoraires, lignes, decimales = 2) {
     throw new Error("Ligne de commission manquante : décomposition impossible.");
   }
   const h = arrondir(honoraires, decimales);
-  const fraisEnvoi = calculerFrais(honoraires, lignes.frais_envoi, decimales);
+  const fraisEnvoi = calculerFraisEnvoi(honoraires, lignes.frais_envoi, decimales);
   const commissionPatient = calculerCommissionPatient(honoraires, lignes.commission_patient, decimales);
   const commissionMedecin = calculerCommissionMedecin(honoraires, lignes.commission, decimales);
 

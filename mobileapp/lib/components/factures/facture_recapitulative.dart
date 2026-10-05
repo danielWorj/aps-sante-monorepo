@@ -118,7 +118,7 @@ class _FactureRecapitulativeState extends State<FactureRecapitulative> {
               ? null
               : [
                   BoxShadow(
-                    color: AppColors.ink.withOpacity(0.06),
+                    color: AppColors.ink.withValues(alpha: 0.06),
                     blurRadius: 14,
                     offset: const Offset(0, 4),
                   ),
@@ -149,7 +149,7 @@ class _FactureRecapitulativeState extends State<FactureRecapitulative> {
                         Text(
                           titreFacture(f),
                           style: AppTextStyles.cardMeta.copyWith(
-                            color: Colors.white.withOpacity(0.85),
+                            color: Colors.white.withValues(alpha: 0.85),
                           ),
                         ),
                       ],
@@ -164,7 +164,7 @@ class _FactureRecapitulativeState extends State<FactureRecapitulative> {
                             horizontal: 8,
                             vertical: 3,
                           ),
-                          color: Colors.white.withOpacity(0.18),
+                          color: Colors.white.withValues(alpha: 0.18),
                           child: Text(
                             'Avant paiement',
                             style: AppTextStyles.badge.copyWith(
@@ -184,7 +184,7 @@ class _FactureRecapitulativeState extends State<FactureRecapitulative> {
                         Text(
                           date,
                           style: AppTextStyles.cardMeta.copyWith(
-                            color: Colors.white.withOpacity(0.85),
+                            color: Colors.white.withValues(alpha: 0.85),
                           ),
                         ),
                     ],

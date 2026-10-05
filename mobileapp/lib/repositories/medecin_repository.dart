@@ -29,6 +29,7 @@
 
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 
 import '../models/medecin_models.dart';
@@ -105,10 +106,19 @@ class MedecinRepository {
     if (query != null && query.isNotEmpty) {
       uri = uri.replace(queryParameters: {...uri.queryParameters, ...query});
     }
-    final reponse = await http
-        .get(uri, headers: _entetes(token: token, avecJson: false))
-        .timeout(_timeout);
-    return _decoder(reponse);
+    // DEBUG TEMPORAIRE : affiche la vraie cause de l'échec dans la console
+    // (HandshakeException, SocketException, TimeoutException, ApiException...).
+    // À retirer une fois le problème identifié.
+    try {
+      final reponse = await http
+          .get(uri, headers: _entetes(token: token, avecJson: false))
+          .timeout(_timeout);
+      debugPrint('GET $uri -> HTTP ${reponse.statusCode}');
+      return _decoder(reponse);
+    } catch (e) {
+      debugPrint('GET $uri -> ${e.runtimeType}: $e');
+      rethrow;
+    }
   }
 
   Future<dynamic> _post(

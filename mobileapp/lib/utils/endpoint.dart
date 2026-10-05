@@ -8,7 +8,9 @@ class ApiRealEndpoints {
   /// argument, on garde la production.
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://api.azasante.com/api',
+    //defaultValue: 'https://api.azasante.com/api',
+    defaultValue: 'http://10.0.2.2:3000/api', // en local
+
   );
   static const String meetbaseUrl = 'https://meet.azasante.com';
 
