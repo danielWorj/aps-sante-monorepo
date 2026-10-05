@@ -32,10 +32,18 @@ class ApiException implements Exception {
   final String message;
   final int? statusCode;
 
-  const ApiException(this.message, {this.statusCode});
+  /// Code applicatif éventuel renvoyé par le serveur dans le corps JSON
+  /// (ex. `RDV_NON_PAYE`).
+  final String? code;
+
+  const ApiException(this.message, {this.statusCode, this.code});
 
   /// Vrai si l'échec vient d'une absence/expiration d'authentification.
   bool get estNonAutorise => statusCode == 401 || statusCode == 403;
+
+  /// D8 : le serveur refuse (409 `RDV_NON_PAYE`) une action du médecin sur
+  /// un rendez-vous non payé.
+  bool get estRdvNonPaye => statusCode == 409 && code == 'RDV_NON_PAYE';
 
   @override
   String toString() => message;
@@ -60,15 +68,19 @@ class VisioRepository {
   dynamic _decoder(http.Response reponse) {
     if (reponse.statusCode < 200 || reponse.statusCode >= 300) {
       String message = 'Erreur ${reponse.statusCode}: ${reponse.body}';
+      String? code;
       try {
         final corps = jsonDecode(reponse.body);
         if (corps is Map && corps['message'] is String) {
           message = corps['message'] as String;
         }
+        if (corps is Map && corps['code'] is String) {
+          code = corps['code'] as String;
+        }
       } catch (_) {
         // Corps non-JSON : on garde le message par défaut.
       }
-      throw ApiException(message, statusCode: reponse.statusCode);
+      throw ApiException(message, statusCode: reponse.statusCode, code: code);
     }
     if (reponse.body.isEmpty) return null;
     return jsonDecode(reponse.body);

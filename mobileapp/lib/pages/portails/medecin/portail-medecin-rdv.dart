@@ -2,16 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../components/components.dart';
-import '../../../components/dialogs/avertissement_annulation.dart';
-import '../../../components/dialogs/dialogue_motif_annulation.dart';
 import '../../../components/panels/panneau_reprogrammation.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/authentification_models.dart';
 import '../../../models/rendez_vous_models.dart';
-import '../../../repositories/paiement_repository.dart';
-import '../../../repositories/rendez_vous_repository.dart' show ApiException;
-import '../../../utils/fonds.dart';
 import '../teleconsultation_screen.dart';
 
 /// ============================================================
@@ -24,6 +19,15 @@ import '../teleconsultation_screen.dart';
 /// - SessionController fournit le token du médecin
 /// - ListeRendezVousController récupère les RDV via l'API
 /// - Filtrage par statut dans les panels
+///
+/// Politique de fonds v2 — D8 : un RDV NON PAYÉ (statut `cree`) est en
+/// LECTURE SEULE pour le médecin. Le serveur ne renvoie pour lui que
+/// { rdv_id, date_creneau, statut, non_paye: true } (aucune identité patient,
+/// aucun motif, aucun lien de visio) ; l'écran l'affiche grisé, « En attente
+/// de paiement », avec toutes les actions désactivées. Le médecin n'« accepte »
+/// ni ne « refuse » plus un RDV : la confirmation `cree → confirme` résulte du
+/// seul paiement du patient (il est alors notifié). Un 409 `RDV_NON_PAYE`
+/// éventuel (visio) est géré dans teleconsultation_screen.dart.
 ///
 /// ⚠️ Ce widget ne gère plus sa propre barre de navigation basse :
 /// il est destiné à être affiché comme un onglet parmi d'autres à
@@ -98,11 +102,8 @@ class _PortailMedecinRdvState extends ConsumerState<PortailMedecinRdv>
                                 physics: const NeverScrollableScrollPhysics(),
                                 children: [
                                     const _PanelConfirme(),
-                                    // Après confirmation d'une demande, on bascule
-                                    // automatiquement sur l'onglet "Confirmé" (index 0).
-                                    _PanelAttente(
-                                        onConfirme: () => _tabController.animateTo(0),
-                                    ),
+                                    // D8 : RDV non payés, lecture seule (aucune action).
+                                    const _PanelAttente(),
                                     const _PanelTermines(),
                                     const _PanelAnnules(),
                                 ],
@@ -274,6 +275,7 @@ class _StatLine extends ConsumerWidget {
                 final en_visio =
                     rdvList
                         .where((rdv) =>
+                            !rdv.estNonPaye &&
                             rdv.typeRdv == TypeRdv.teleconsultation &&
                             !rdv.estAReprogrammer)
                         .length;
@@ -303,6 +305,7 @@ class _StatLine extends ConsumerWidget {
         final aujourd_hui = DateTime.now();
         return rdvList
             .where((rdv) =>
+        !rdv.estNonPaye &&
         !rdv.estAReprogrammer &&
             rdv.dateCreneau.year == aujourd_hui.year &&
             rdv.dateCreneau.month == aujourd_hui.month &&
@@ -316,6 +319,7 @@ class _StatLine extends ConsumerWidget {
         final finSemaine = maintenant.add(const Duration(days: 7));
         return rdvList
             .where((rdv) =>
+        !rdv.estNonPaye &&
         !rdv.estAReprogrammer &&
             rdv.dateCreneau.isAfter(maintenant) &&
             rdv.dateCreneau.isBefore(finSemaine))
@@ -683,7 +687,7 @@ class _PanelConfirme extends ConsumerWidget {
                                 padding: EdgeInsets.only(top: 16, bottom: 4),
                                 child: Center(
                                     child: Text(
-                                        'Confirmez ou refusez les demandes pour accéder aux fonds',
+                                        'Les rendez-vous non payés apparaissent dans l\'onglet « En attente »',
                                         style: TextStyle(fontSize: 11, color: AppColors.inkFaint),
                                     ),
                                 ),
@@ -696,13 +700,15 @@ class _PanelConfirme extends ConsumerWidget {
     }
 }
 
-/// Panneau "En attente"
+/// Panneau "En attente" (de paiement) — D8 : LECTURE SEULE.
+///
+/// Les RDV `cree` n'ont ni fonds, ni commission : le médecin ne peut ni les
+/// confirmer, ni les refuser, ni déclarer d'absence, ni reprogrammer, ni
+/// lancer la visio (le serveur refuse de toute façon : 409 `RDV_NON_PAYE`).
+/// Pour lui, le serveur ne renvoie que l'identifiant, le créneau, le statut
+/// et `non_paye: true` : on n'affiche donc ni patient ni motif.
 class _PanelAttente extends ConsumerWidget {
-    /// Appelé après confirmation réussie d'une demande, pour permettre
-    /// au parent de basculer sur l'onglet "Confirmé".
-    final VoidCallback? onConfirme;
-
-    const _PanelAttente({this.onConfirme});
+    const _PanelAttente();
 
     @override
     Widget build(BuildContext context, WidgetRef ref) {
@@ -712,13 +718,12 @@ class _PanelAttente extends ConsumerWidget {
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, stack) => Center(child: Text('Erreur: $err')),
             data: (rdvList) {
-                // Filtrer: RDV en attente (statut "cree")
                 final rdvAttente =
-                rdvList.where((r) => r.statut == StatutRendezVous.cree).toList();
+                    rdvList.where((r) => r.estNonPaye).toList();
 
                 if (rdvAttente.isEmpty) {
                     return const Center(
-                        child: Text('Aucune demande en attente'),
+                        child: Text('Aucun rendez-vous en attente de paiement'),
                     );
                 }
 
@@ -729,32 +734,18 @@ class _PanelAttente extends ConsumerWidget {
                             const AppAlert(
                                 type: AppAlertType.primary,
                                 message:
-                                'Acceptez ou refusez chaque demande : les fonds sont '
-                                    'capturés après votre acceptation uniquement.',
+                                'Ces rendez-vous ne sont pas encore payés : vous ne '
+                                    'pouvez pas agir dessus. Vous serez notifié et les '
+                                    'détails vous seront communiqués dès que le patient '
+                                    'aura réglé.',
                             ),
                             const SizedBox(height: 14),
-                            const _SectionHead(title: 'Demandes en attente'),
+                            const _SectionHead(title: 'En attente de paiement'),
                             ...rdvAttente.map((rdv) {
-                                return _AppointmentCard(
+                                return _RdvNonPayeCard(
+                                    key: ValueKey('non-paye-${rdv.rdvId}'),
                                     time: _formatTime(rdv.dateCreneau),
                                     dateLabel: _formatDateLabel(rdv.dateCreneau),
-                                    initials: _genererInitiales(
-                                        rdv.patient?.utilisateur?.prenom,
-                                        rdv.patient?.utilisateur?.nom,
-                                    ),
-                                    name:
-                                    '${rdv.patient?.utilisateur?.prenom ?? ''} ${rdv.patient?.utilisateur?.nom ?? ''}'
-                                        .trim(),
-                                    subtitle: 'Consultation générale',
-                                    subtitle2: rdv.typeRdv == TypeRdv.teleconsultation
-                                        ? 'Téléconsultation'
-                                        : 'Cabinet',
-                                    bottom: _Frow(
-                                        action: _PendingRdvActions(
-                                            rdv: rdv,
-                                            onConfirme: onConfirme,
-                                        ),
-                                    ),
                                 );
                             }).toList(),
                         ],
@@ -765,143 +756,149 @@ class _PanelAttente extends ConsumerWidget {
     }
 }
 
-/// ════════════════════════════════════════════════════════════
-/// Actions "Confirmer" / "Refuser" d'une demande en attente
-/// ════════════════════════════════════════════════════════════
-///
-/// PATCH /rendez-vous/:id/statut via [ActionsRendezVousController].
-/// Un état local (`_enCours`) affiche un loader pendant l'appel et
-/// évite les double-taps ; en cas de succès de la confirmation, le
-/// parent est notifié via [onConfirme] pour basculer l'utilisateur
-/// sur l'onglet "Confirmé".
-class _PendingRdvActions extends ConsumerStatefulWidget {
-    final RendezVous rdv;
-    final VoidCallback? onConfirme;
+/// Carte d'un RDV non payé (D8) : grisée, sans aucune donnée patient, avec les
+/// actions visibles mais désactivées. Les interactions sont bloquées
+/// ([IgnorePointer]) et le serveur refuse de toute façon toute action.
+class _RdvNonPayeCard extends StatelessWidget {
+    final String time;
+    final String dateLabel;
 
-    const _PendingRdvActions({required this.rdv, this.onConfirme});
-
-    @override
-    ConsumerState<_PendingRdvActions> createState() =>
-        _PendingRdvActionsState();
-}
-
-class _PendingRdvActionsState extends ConsumerState<_PendingRdvActions> {
-    bool _enCours = false;
-
-    Future<void> _changerStatut(StatutRendezVous nouveauStatut) async {
-        if (_enCours) return;
-
-        final token = ref.read(authTokenProvider);
-        if (token == null) return;
-
-        // Refuser = annuler : le backend exige un motif_annulation (400
-        // sinon), donc on le demande avant tout appel réseau.
-        ChoixAnnulation? choixAnnulation;
-        final estAnnulation = nouveauStatut == StatutRendezVous.annule;
-        if (estAnnulation) {
-            // appelAuthentifie rafraîchit le token s'il a expiré.
-            final executer =
-                ref.read(sessionControllerProvider.notifier).appelAuthentifie;
-            choixAnnulation = await demanderMotifAnnulation(
-                context,
-                titre: 'Refuser ce rendez-vous ?',
-                message: 'Le rendez-vous sera annulé et le patient en sera '
-                    'informé. Cette action est irréversible.',
-                labelConfirmer: 'Refuser',
-                motifs: MotifAnnulation.pourMedecin,
-                // Conséquence financière indicative ; son échec ne bloque pas
-                // le refus (le serveur tranche).
-                avertissement: AvertissementAnnulation(
-                    rdv: widget.rdv,
-                    role: RoleAnnulation.medecin,
-                    chargerPaiement: () => executer(
-                        (jeton) => PaiementRepository().obtenirStatut(
-                            rdvId: widget.rdv.rdvId,
-                            token: jeton,
-                        ),
-                    ),
-                ),
-            );
-            if (choixAnnulation == null || !mounted) return;
-        }
-
-        setState(() => _enCours = true);
-        try {
-            final actions = ref.read(actionsRendezVousControllerProvider.notifier);
-            final payload = ChangerStatutRendezVousPayload(
-                statut: nouveauStatut,
-                motifAnnulation: choixAnnulation?.motif,
-                commentaireAnnulation: choixAnnulation?.commentaire,
-            );
-            // Refus = annulation : on affiche le résultat RÉEL du serveur
-            // (remboursement du patient, amende éventuelle).
-            String texte = 'Rendez-vous confirmé.';
-            if (estAnnulation) {
-                final resultat = await actions.annuler(
-                    widget.rdv.rdvId,
-                    payload: payload,
-                    token: token,
-                );
-                texte = resumerAnnulation(resultat, RoleAnnulation.medecin);
-            } else {
-                await actions.changerStatut(
-                    widget.rdv.rdvId,
-                    payload: payload,
-                    token: token,
-                );
-            }
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                    content: Text(texte),
-                    duration: estAnnulation
-                        ? const Duration(seconds: 9)
-                        : const Duration(seconds: 4),
-                ),
-            );
-            // Seule la confirmation fait basculer vers "Confirmé" — un
-            // refus reste visible dans l'onglet "Annulés".
-            if (nouveauStatut == StatutRendezVous.confirme) {
-                widget.onConfirme?.call();
-            }
-        } on ApiException catch (e) {
-            if (!mounted) return;
-            ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text(e.message)));
-        } catch (e) {
-            if (!mounted) return;
-            ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text('Erreur : $e')));
-        } finally {
-            if (mounted) setState(() => _enCours = false);
-        }
-    }
+    const _RdvNonPayeCard({super.key, required this.time, required this.dateLabel});
 
     @override
     Widget build(BuildContext context) {
-        if (_enCours) {
-            return const SizedBox(
-                height: 32,
-                width: 32,
-                child: Center(
-                    child: CircularProgressIndicator(strokeWidth: 2),
+        return Semantics(
+            label: 'Rendez-vous en attente de paiement, $dateLabel à $time. '
+                'Aucune action possible.',
+            child: IgnorePointer(
+                child: Opacity(
+                    opacity: 0.6,
+                    child: CardSurface(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                                Row(
+                                    children: [
+                                        Text(
+                                            time,
+                                            style: const TextStyle(
+                                                fontFamily: AppTextStyles.fontMono,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.ink,
+                                            ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                            dateLabel,
+                                            style: const TextStyle(
+                                                fontSize: 11,
+                                                color: AppColors.inkSoft,
+                                            ),
+                                        ),
+                                        const Spacer(),
+                                        Container(
+                                            width: 32,
+                                            height: 32,
+                                            alignment: Alignment.center,
+                                            decoration: const BoxDecoration(
+                                                color: AppColors.inkFaint,
+                                                shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                                Icons.hourglass_empty_rounded,
+                                                size: 16,
+                                                color: Colors.white,
+                                            ),
+                                        ),
+                                    ],
+                                ),
+                                const SizedBox(height: 10),
+                                const Text(
+                                    'Rendez-vous en attente de paiement',
+                                    style: TextStyle(
+                                        fontFamily: AppTextStyles.fontDisplay,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.ink,
+                                    ),
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                    'Les détails seront visibles après le paiement.',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.inkSoft,
+                                    ),
+                                ),
+                                const SizedBox(height: 12),
+                                const _Frow(
+                                    badge: BadgeChip(
+                                        label: 'En attente de paiement',
+                                        style: BadgeChipStyle.amber,
+                                        icon: Icons.hourglass_empty_rounded,
+                                    ),
+                                    action: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                            _ActionDesactivee(
+                                                label: 'Confirmer',
+                                                icon: Icons.check,
+                                            ),
+                                            SizedBox(width: 8),
+                                            _ActionDesactivee(
+                                                label: 'Refuser',
+                                                icon: Icons.close,
+                                            ),
+                                        ],
+                                    ),
+                                ),
+                            ],
+                        ),
+                    ),
                 ),
-            );
-        }
+            ),
+        );
+    }
+}
 
-        return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-                RdvButton(
-                    label: 'Confirmer',
-                    onPressed: () => _changerStatut(StatutRendezVous.confirme),
+/// Bouton d'action désactivé (D8) : visible mais inerte, disponible une fois
+/// le paiement confirmé.
+class _ActionDesactivee extends StatelessWidget {
+    final String label;
+    final IconData icon;
+
+    const _ActionDesactivee({required this.label, required this.icon});
+
+    @override
+    Widget build(BuildContext context) {
+        return Tooltip(
+            message: 'Disponible une fois le paiement confirmé',
+            child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.line),
+                    borderRadius: BorderRadius.circular(6),
                 ),
-                const SizedBox(width: 8),
-                _DangerOutlineButton(
-                    label: 'Refuser',
-                    onPressed: () => _changerStatut(StatutRendezVous.annule),
+                child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                        Icon(icon, size: 13, color: AppColors.inkFaint),
+                        const SizedBox(width: 5),
+                        Text(
+                            label,
+                            style: const TextStyle(
+                                fontFamily: AppTextStyles.fontDisplay,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.inkFaint,
+                            ),
+                        ),
+                    ],
                 ),
-            ],
+            ),
         );
     }
 }
@@ -1167,39 +1164,6 @@ class _Frow extends StatelessWidget {
                 const Spacer(),
                 if (action != null) action!,
             ],
-        );
-    }
-}
-
-class _DangerOutlineButton extends StatelessWidget {
-    final String label;
-    final VoidCallback? onPressed;
-
-    const _DangerOutlineButton({
-        required this.label,
-        this.onPressed,
-    });
-
-    @override
-    Widget build(BuildContext context) {
-        return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-                border: Border.all(color: AppColors.coral600),
-                borderRadius: BorderRadius.circular(6),
-            ),
-            child: GestureDetector(
-                onTap: onPressed,
-                child: Text(
-                    label,
-                    style: const TextStyle(
-                        fontFamily: AppTextStyles.fontDisplay,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.coral600,
-                    ),
-                ),
-            ),
         );
     }
 }
