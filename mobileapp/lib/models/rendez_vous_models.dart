@@ -929,7 +929,9 @@ class ResultatReprogrammation {
 }
 
 /// Devis avant paiement — GET /paiement/rendez-vous/:id/devis
-/// ?agregateur=stripe|campay. `total = honoraires + frais d'envoi`.
+/// ?agregateur=stripe|campay.
+/// `total = honoraires + frais d'envoi + commission APS patient (CP)`.
+/// La commission médecin (CM) n'est jamais exposée au patient (D7).
 /// [remboursementIndicatif] vaut `true` pour CamPay : le remboursement
 /// estimé n'est qu'une indication (Mobile Money, traitement manuel).
 /// Réponses d'erreur : 400 (agrégateur invalide), 409 (rendez-vous non
@@ -940,6 +942,10 @@ class DevisPaiement {
   final String devise;
   final double honoraires;
   final double fraisEnvoi;
+
+  /// Commission APS patient (CP). 0 si le serveur ne la renvoie pas
+  /// (lecture défensive) ou si le taux du pays est nul.
+  final double commissionPatient;
   final double total;
   final double remboursementEstime;
   final bool remboursementIndicatif;
@@ -949,6 +955,7 @@ class DevisPaiement {
     required this.devise,
     required this.honoraires,
     required this.fraisEnvoi,
+    this.commissionPatient = 0,
     required this.total,
     required this.remboursementEstime,
     required this.remboursementIndicatif,
@@ -960,6 +967,7 @@ class DevisPaiement {
       devise: _lire<String>(json, 'devise') ?? 'xaf',
       honoraires: lireNombre(json['honoraires']) ?? 0,
       fraisEnvoi: lireNombre(json['frais_envoi']) ?? 0,
+      commissionPatient: lireNombre(json['commission_patient']) ?? 0,
       total: lireNombre(json['total']) ?? 0,
       remboursementEstime: lireNombre(json['remboursement_estime']) ?? 0,
       remboursementIndicatif: json['remboursement_indicatif'] == true,
