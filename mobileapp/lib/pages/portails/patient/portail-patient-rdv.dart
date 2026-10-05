@@ -5,6 +5,7 @@ import '../../../components/buttons/bouton_payer_rdv.dart';
 import '../../../components/components.dart';
 import '../../../components/dialogs/avertissement_annulation.dart';
 import '../../../components/dialogs/dialogue_motif_annulation.dart';
+import '../../../components/factures/facture_recapitulative.dart';
 import '../../../components/panels/panneau_reprogrammation.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
@@ -597,13 +598,21 @@ class _PanelConfirme extends ConsumerWidget {
                         subtitle2: rdv.typeRdv == TypeRdv.teleconsultation
                             ? 'Téléconsultation'
                             : 'Cabinet',
-                        footer: rdv.estAReprogrammer
-                            ? PanneauReprogrammation(
+                        // Facture : RDV payé (confirmé / à reprogrammer).
+                        footer: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (rdv.estAReprogrammer) ...[
+                              PanneauReprogrammation(
                                 key: ValueKey('repro-${rdv.rdvId}'),
                                 rdv: rdv,
                                 role: PartieRendezVous.patient,
-                              )
-                            : null,
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                            _LienFacture(rdvId: rdv.rdvId),
+                          ],
+                        ),
                         bottom: _Frow(
                           badge: rdv.estAReprogrammer
                               ? const BadgeChip(
@@ -842,6 +851,7 @@ class _PanelTermines extends ConsumerWidget {
                   subtitle2: rdv.typeRdv == TypeRdv.teleconsultation
                       ? 'Téléconsultation'
                       : 'Cabinet',
+                  footer: _LienFacture(rdvId: rdv.rdvId),
                   bottom: _Frow(
                     badge: BadgeChip(
                       label: rdv.statut == StatutRendezVous.honore
@@ -1073,6 +1083,38 @@ class _AppointmentCard extends StatelessWidget {
               footer!,
             ],
         ],
+      ),
+    );
+  }
+}
+
+/// Accès à la facture d'un RDV PAYÉ (miroir du bouton « Facture » de
+/// patient-rdv.jsx) : ouvre la card de facture (GET …/facture, bouton
+/// « Télécharger la facture ») dans une boîte de dialogue. À n'utiliser que
+/// pour un RDV payé (jamais pour `cree`, où il n'y a pas encore de facture).
+class _LienFacture extends ConsumerWidget {
+  final String rdvId;
+
+  const _LienFacture({required this.rdvId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: AppOutlineButton(
+        label: 'Facture',
+        icon: Icons.receipt_long_outlined,
+        onPressed: () {
+          // appelAuthentifie rafraîchit l'access token s'il a expiré.
+          final executer =
+              ref.read(sessionControllerProvider.notifier).appelAuthentifie;
+          afficherFactureRdv(
+            context,
+            rdvId: rdvId,
+            executer: executer,
+            titre: 'Facture de la consultation',
+          );
+        },
       ),
     );
   }

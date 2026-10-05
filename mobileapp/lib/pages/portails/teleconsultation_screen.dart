@@ -21,6 +21,9 @@
 //     un statut permettant la visio (confirme / en_attente_presence) ;
 //     un RDV `a_reprogrammer` est intercepté avant l'appel (message
 //     dédié, sans bouton « Réessayer ») ;
+//   - 409 `RDV_NON_PAYE` (D8) si le médecin tente de démarrer la visio
+//     d'un RDV non payé : message du serveur, sans bouton « Réessayer »
+//     (la visio ne sera accessible qu'une fois le paiement confirmé) ;
 //   - 403 si l'utilisateur courant n'est ni le médecin ni le patient
 //     concerné ;
 //   - 404 si le RDV n'existe pas (a été supprimé entre-temps).
@@ -60,7 +63,8 @@ class _TeleconsultationScreenState
   String? _messageErreur;
 
   /// Vrai quand la visio est refusée à cause du statut du RDV
-  /// (`a_reprogrammer`) : réessayer n'a alors aucun sens.
+  /// (`a_reprogrammer`, ou RDV non payé : 409 `RDV_NON_PAYE`) :
+  /// réessayer n'a alors aucun sens.
   bool _blocageStatut = false;
   bool _aQuitteVolontairement = false;
 
@@ -123,6 +127,9 @@ class _TeleconsultationScreenState
       setState(() {
         _etat = _EtatEcran.erreur;
         _messageErreur = e.message;
+        // D8 : RDV non payé -> inutile de réessayer tant que le paiement
+        // n'est pas confirmé.
+        _blocageStatut = e.estRdvNonPaye;
       });
     } catch (e) {
       if (!mounted) return;

@@ -295,6 +295,13 @@ class RendezVous {
   final MedecinRdvRef? medecin;
   final PatientRdvRef? patient;
 
+  /// D8 : indicateur `non_paye` renvoyé au MÉDECIN pour un RDV non payé
+  /// (statut `cree`). Dans ce cas le serveur ne fournit que
+  /// { rdv_id, date_creneau, statut, non_paye: true } : [patientId],
+  /// [medecinId] et [codeUnique] sont alors vides, et [patient], [motif],
+  /// [qrTokenSecret] absents.
+  final bool nonPaye;
+
   const RendezVous({
     required this.rdvId,
     required this.patientId,
@@ -313,7 +320,13 @@ class RendezVous {
     this.dateProposition,
     this.medecin,
     this.patient,
+    this.nonPaye = false,
   });
+
+  /// RDV non payé (D8) : `non_paye: true` renvoyé par le serveur, ou statut
+  /// `cree` (miroir de `estRdvNonPaye` côté web). Pour le médecin, un tel
+  /// RDV est en lecture seule : aucune action, aucune donnée patient.
+  bool get estNonPaye => nonPaye || statut == StatutRendezVous.cree;
 
   bool get estAReprogrammer => statut == StatutRendezVous.aReprogrammer;
   bool get estStatutConnu => statut != StatutRendezVous.inconnu;
@@ -333,15 +346,18 @@ class RendezVous {
   factory RendezVous.fromJson(Map<String, dynamic> json) {
     return RendezVous(
       rdvId: json['rdv_id'] as String,
-      patientId: json['patient_id'] as String,
-      medecinId: json['medecin_id'] as String,
+      // D8 : la projection minimale d'un RDV non payé (vue médecin) ne
+      // contient ni patient_id, ni medecin_id, ni code_unique. Parsing
+      // défensif : un `as String` sur null ferait échouer TOUTE la liste.
+      patientId: _lire<String>(json, 'patient_id') ?? '',
+      medecinId: _lire<String>(json, 'medecin_id') ?? '',
       structureId: _lire<String>(json, 'structure_id'),
-      typeRdv: TypeRdv.fromApi(json['type_rdv'] as String?),
+      typeRdv: TypeRdv.fromApi(_lire<String>(json, 'type_rdv')),
       dateCreneau: DateTime.parse(json['date_creneau'] as String),
       statut: StatutRendezVous.fromApi(_lire<String>(json, 'statut')),
       statutBrut: _lire<String>(json, 'statut'),
       motif: _lire<String>(json, 'motif'),
-      codeUnique: json['code_unique'] as String,
+      codeUnique: _lire<String>(json, 'code_unique') ?? '',
       qrTokenSecret: _lire<String>(json, 'qr_token_secret'),
       aReprogrammerLe: _lireDate(json, 'a_reprogrammer_le'),
       nouvelleDateProposee: _lireDate(json, 'nouvelle_date_proposee'),
@@ -353,6 +369,7 @@ class RendezVous {
       patient: json['patient'] is Map<String, dynamic>
           ? PatientRdvRef.fromJson(json['patient'] as Map<String, dynamic>)
           : null,
+      nonPaye: json['non_paye'] == true,
     );
   }
 
@@ -376,6 +393,7 @@ class RendezVous {
       'date_proposition': dateProposition!.toIso8601String(),
     if (medecin != null) 'medecin': medecin!.toJson(),
     if (patient != null) 'patient': patient!.toJson(),
+    if (nonPaye) 'non_paye': true,
   };
 
   RendezVous copyWith({
@@ -396,6 +414,7 @@ class RendezVous {
     DateTime? dateProposition,
     MedecinRdvRef? medecin,
     PatientRdvRef? patient,
+    bool? nonPaye,
   }) {
     return RendezVous(
       rdvId: rdvId ?? this.rdvId,
@@ -416,6 +435,7 @@ class RendezVous {
       dateProposition: dateProposition ?? this.dateProposition,
       medecin: medecin ?? this.medecin,
       patient: patient ?? this.patient,
+      nonPaye: nonPaye ?? this.nonPaye,
     );
   }
 
