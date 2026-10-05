@@ -223,6 +223,18 @@ String resumerAnnulation(ResultatAnnulation? resultat, RoleAnnulation role) {
     } else if (resultat?.tardif == true) {
       parties.add('Aucun remboursement : annulation à moins de 24 h du rendez-vous.');
     }
+    // D3 : CP n'est rendue que si le médecin est fautif ; frais d'envoi
+    // jamais rendus. Aucun montant de CM n'est affiché au patient (D7).
+    if (r != null) {
+      parties.add(
+        resultat?.medecinFautif == true &&
+                (resultat?.commissionPatientRendue ?? 0) > 0
+            ? 'La commission APS vous est restituée, l\u2019annulation étant '
+                'à l\u2019initiative du médecin.'
+            : 'La commission APS et les frais d\u2019envoi ne sont pas '
+                'remboursés.',
+      );
+    }
   } else {
     if (r != null) parties.add('Le patient est remboursé.');
     if (resultat?.amende == true) {

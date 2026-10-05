@@ -10,7 +10,10 @@
 //   - à l'acceptation : RDV `confirme` sur le nouveau créneau, aucun
 //     nouveau paiement ;
 //   - sans accord dans le délai, le serveur rembourse automatiquement le
-//     patient.
+//     patient (H − CM − F, CP conservée par APS : D3). Le texte affiché au
+//     patient ne donne que le principe, jamais le montant de la part
+//     médecin (CM) ; le médecin ne voit jamais CP ni le détail du
+//     remboursement du patient (D7).
 //
 // Le front affiche, le serveur décide : créneau libre, futur, auteur de la
 // proposition et délai sont tous revalidés côté serveur. Ici : affichage,
@@ -291,10 +294,17 @@ class _PanneauReprogrammationState
                   ],
                   const TextSpan(text: ')'),
                 ],
-                const TextSpan(
-                  text: '. Sans accord dans ce délai, le patient est '
-                      'remboursé automatiquement (honoraires moins frais et '
-                      'commission APS).',
+                TextSpan(
+                  text: widget.role == PartieRendezVous.patient
+                      ? '. Sans accord dans ce délai, vous serez remboursé '
+                          'automatiquement d\u2019une partie de vos '
+                          'honoraires (après déduction des frais de '
+                          'remboursement et des frais de service APS) ; la '
+                          'commission APS et les frais d\u2019envoi ne sont '
+                          'pas remboursés.'
+                      : '. Sans accord dans ce délai, le patient est '
+                          'remboursé automatiquement et vous ne percevez '
+                          'aucun honoraire pour ce rendez-vous.',
                 ),
               ],
             ),

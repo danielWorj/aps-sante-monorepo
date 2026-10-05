@@ -861,13 +861,20 @@ RendezVous? _rendezVousTolerant(Object? brut) {
   }
 }
 
-/// Réponse complète de PATCH /rendez-vous/:id/statut à l'annulation :
-/// `{ message, rendez_vous, tardif, remboursement, versement_medecin,
-/// commission_aps, amende }`.
+/// Réponse complète de PATCH /rendez-vous/:id/statut à l'annulation,
+/// FILTRÉE PAR RÔLE par le serveur (D7) : tout champ absent vaut `null` /
+/// `false` et ne doit jamais être déduit.
 ///   - [remboursement]    : `null` si rien à rembourser (jamais payé…) ;
-///   - [versementMedecin] : honoraires − commission APS libérés au médecin
-///                          (annulation patient < 24 h), avant amendes ;
-///   - [commissionAps]    : commission versée à APS ;
+///   - [versementMedecin] : H − CM libérés au médecin (annulation patient
+///                          < 24 h), avant amendes (médecin, admin) ;
+///   - [commissionMedecin]: commission médecin (CM) conservée par APS
+///                          (médecin, admin ; jamais le patient) ;
+///   - [commissionAps]    : alias déprécié de [commissionMedecin] ;
+///   - [commissionPatient]: commission patient (CP) conservée ou rendue
+///                          (patient, admin ; jamais le médecin) ;
+///   - [commissionPatientRendue] : CP rendue au patient (médecin fautif) ;
+///   - [medecinFautif]    : l'annulation vient d'une faute du médecin
+///                          (réponse patient) ;
 ///   - [amende]           : une amende a été enregistrée au médecin.
 class ResultatAnnulation {
   final String? message;
@@ -875,7 +882,11 @@ class ResultatAnnulation {
   final bool tardif;
   final RemboursementAnnulation? remboursement;
   final double? versementMedecin;
+  final double? commissionMedecin;
   final double? commissionAps;
+  final double? commissionPatient;
+  final double? commissionPatientRendue;
+  final bool medecinFautif;
   final bool amende;
 
   const ResultatAnnulation({
@@ -884,7 +895,11 @@ class ResultatAnnulation {
     this.tardif = false,
     this.remboursement,
     this.versementMedecin,
+    this.commissionMedecin,
     this.commissionAps,
+    this.commissionPatient,
+    this.commissionPatientRendue,
+    this.medecinFautif = false,
     this.amende = false,
   });
 
@@ -899,7 +914,13 @@ class ResultatAnnulation {
             )
           : null,
       versementMedecin: lireNombre(json['versement_medecin']),
+      commissionMedecin: lireNombre(
+        json['commission_medecin'] ?? json['commission_aps'],
+      ),
       commissionAps: lireNombre(json['commission_aps']),
+      commissionPatient: lireNombre(json['commission_patient']),
+      commissionPatientRendue: lireNombre(json['commission_patient_rendue']),
+      medecinFautif: json['medecin_fautif'] == true,
       amende: json['amende'] == true,
     );
   }

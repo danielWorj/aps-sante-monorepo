@@ -4,6 +4,14 @@
 // annulation, affichée AVANT la confirmation (équivalent de
 // avertissement-annulation.jsx côté client-plateform).
 //
+// Règle de remboursement (D3) : la commission APS patient (CP) n'est JAMAIS
+// rendue au patient, sauf si le médecin est fautif ; les frais d'envoi ne
+// sont jamais rendus. Hors faute du médecin, le patient reçoit uniquement
+// les honoraires (H) moins les frais de remboursement de l'agrégateur (F).
+// Visibilité (D7) : le patient ne voit jamais la part médecin (CM) ; le
+// médecin ne voit jamais CP ni le détail du remboursement du patient.
+// Aucun montant de CM n'apparaît ici.
+//
 // Le front affiche, le serveur décide : ce texte n'engage rien, le résumé
 // réel est donné après l'annulation (voir `resumerAnnulation`,
 // utils/fonds.dart). Règles d'affichage :
@@ -85,13 +93,20 @@ class _AvertissementAnnulationState extends State<AvertissementAnnulation> {
     final patient = widget.role == RoleAnnulation.patient;
 
     if (widget.rdv.statut == StatutRendezVous.aReprogrammer) {
+      // Deux absents sans reprogrammation : le patient reçoit H − CM − F
+      // (CP conservée par APS). Seul le principe est affiché au patient,
+      // jamais le montant de la part médecin (D7).
       return patient
           ? 'Les deux parties étaient absentes. Si vous annulez, vous serez '
-              'remboursé de vos honoraires moins les frais du moyen de '
-              'paiement et la commission APS.'
+              'remboursé d\u2019une partie de vos honoraires, après '
+              'déduction des frais de remboursement du moyen de paiement et '
+              'des frais de service APS retenus sur cette consultation. La '
+              'commission APS et les frais d\u2019envoi ne sont pas '
+              'remboursés. Le montant exact vous sera indiqué à '
+              'l\u2019annulation.'
           : 'Les deux parties étaient absentes. Si vous annulez, le patient '
-              'est remboursé (honoraires moins frais et commission APS). '
-              'Aucune amende.';
+              'est remboursé et vous ne percevez aucun honoraire. Aucune '
+              'amende.';
     }
 
     final tardif = estTardif(widget.rdv.dateCreneau);
@@ -104,7 +119,8 @@ class _AvertissementAnnulationState extends State<AvertissementAnnulation> {
           honoraires != null ? ' (${montantDevise(honoraires, devise)})' : '';
       return 'Le rendez-vous a lieu dans plus de 24 h : vous serez remboursé '
           'de vos honoraires$detail moins les frais de remboursement du '
-          'moyen de paiement.';
+          'moyen de paiement. La commission APS et les frais d\u2019envoi ne '
+          'sont pas remboursés.';
     }
     return tardif
         ? 'Le rendez-vous a lieu dans moins de 24 h : le patient sera '

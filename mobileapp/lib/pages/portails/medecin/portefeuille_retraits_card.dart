@@ -45,7 +45,7 @@ String _dateCourte(DateTime? d) {
 /// (`credit_` / `debit_`) ; les types de l'ancienne politique sont conservés pour lire
 /// l'historique. Un type inconnu s'affiche tel quel.
 const Map<String, String> _libellesMouvements = {
-  'credit_honoraires': 'Honoraires libérés (moins commission APS)',
+  'credit_honoraires': 'Honoraires libérés (moins commission APS, part médecin)',
   'debit_retrait': 'Retrait',
   'credit_annulation_retrait': 'Retrait rejeté ou échoué (recrédit)',
   'debit_amende': 'Amende (reversée à APS)',
