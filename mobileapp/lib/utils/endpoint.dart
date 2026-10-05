@@ -218,12 +218,29 @@ class ApiRealEndpoints {
 
   // Devis avant paiement (politique de fonds v2) : GET, authentifié,
   // `?agregateur=stripe|campay` (400 sinon) → { agregateur, devise,
-  // honoraires, frais_envoi, total, remboursement_estime,
-  // remboursement_indicatif }. 409 : rendez-vous non payable ou déjà
-  // payé ; 503 : barème absent (message serveur à afficher). Le même
-  // contrôle de barème s'applique à /paiement-natif et à CamPay.
+  // honoraires, frais_envoi, commission_patient, total,
+  // remboursement_estime, remboursement_indicatif }. total = honoraires
+  // + frais d'envoi + commission APS patient (CP). 409 : rendez-vous non
+  // payable ou déjà payé ; 503 : barème absent (message serveur à
+  // afficher). Le même contrôle de barème s'applique à /paiement-natif
+  // et à CamPay.
   static String devisPaiementRdv(String rdvId) =>
       '${baseUrl}/paiement/rendez-vous/$rdvId/devis';
+
+  // Facture récapitulative (JSON uniquement : aucun PDF côté serveur, le
+  // PDF est généré dans l'app). Voir facture.controller.js : authentifié.
+  //   - RDV payé     : facture du paiement abouti (`agregateur` ignoré).
+  //   - RDV non payé : aperçu AVANT paiement, `?agregateur=stripe|campay`
+  //       obligatoire (400 sinon), réservé au patient propriétaire.
+  //   - 409 `RDV_NON_PAYE` pour un médecin sur un RDV non payé ; 503 :
+  //       barème absent (message serveur à afficher).
+  // Le serveur ne renvoie jamais CM au patient (D7) ; le médecin ne reçoit
+  // que la consultation (H).
+  static String facturePaiementRdv(String rdvId, {String? agregateur}) {
+    final base = '${baseUrl}/paiement/rendez-vous/$rdvId/facture';
+    if (agregateur == null || agregateur.isEmpty) return base;
+    return '$base?agregateur=${Uri.encodeQueryComponent(agregateur)}';
+  }
 
   // ─── Paiement Mobile Money (CamPay) ───────────────────────────────
   // Voir paiementCampay.controller.js : authentifié, patient propriétaire.

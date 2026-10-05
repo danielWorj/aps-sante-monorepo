@@ -90,25 +90,32 @@ class CollecteCampay {
 }
 
 /// Décomposition d'un paiement — `paiement.decomposition` de
-/// GET /paiement/rendez-vous/:id/paiement : total = honoraires + frais
-/// d'envoi. `null` côté [StatutPaiementRdv] pour les transactions
-/// antérieures à la politique v2.
+/// GET /paiement/rendez-vous/:id/paiement : total = honoraires (H) + frais
+/// d'envoi + commission APS patient (CP). `null` côté [StatutPaiementRdv]
+/// pour les transactions antérieures à la politique v2.
 ///
-/// La commission APS et le net médecin, que le serveur n'expose qu'au
-/// médecin concerné et aux admins, ne sont volontairement pas lus ici.
+/// La commission médecin (CM) et le net médecin, que le serveur n'expose
+/// qu'au médecin concerné et aux admins, ne sont volontairement pas lus
+/// ici (D7).
 class DecompositionPaiement {
   const DecompositionPaiement({
     required this.honoraires,
     required this.fraisEnvoi,
+    this.commissionPatient = 0,
     required this.total,
   });
 
   final double honoraires;
   final double fraisEnvoi;
+
+  /// Commission APS patient (CP). 0 pour une transaction sans ligne CP
+  /// figée (D2) ou si le champ est absent.
+  final double commissionPatient;
   final double total;
 
-  /// `null` si [json] n'est pas un objet ou si un des trois montants
-  /// manque : on n'affiche jamais une décomposition à moitié connue.
+  /// `null` si [json] n'est pas un objet ou si H, les frais d'envoi ou le
+  /// total manquent : on n'affiche jamais une décomposition à moitié
+  /// connue. CP absente = 0 (transaction ancienne, D2).
   static DecompositionPaiement? tenterDepuis(Object? json) {
     if (json is! Map<String, dynamic>) return null;
     // Décimaux Prisma sérialisés en String : lireNombre accepte les deux.
@@ -119,7 +126,160 @@ class DecompositionPaiement {
     return DecompositionPaiement(
       honoraires: honoraires,
       fraisEnvoi: fraisEnvoi,
+      commissionPatient: lireNombre(json['commission_patient']) ?? 0,
       total: total,
+    );
+  }
+}
+
+/// Ligne d'une facture : `taux` est une FRACTION (0,02 = 2 %), `base`
+/// vaut H quand un taux s'applique. `montant` est déjà arrondi par le
+/// serveur : la somme des lignes égale [Facture.total]. Aucun calcul
+/// n'est fait côté app.
+class LigneFacture {
+  const LigneFacture({
+    required this.code,
+    required this.libelle,
+    required this.montant,
+    this.base,
+    this.taux,
+    this.montantFixe,
+  });
+
+  /// `consultation` | `frais_agregateur` | `commission_aps`.
+  final String code;
+  final String libelle;
+  final double montant;
+  final double? base;
+  final double? taux;
+  final double? montantFixe;
+
+  /// Taux en pourcentage pour l'affichage (0,02 → 2), `null` sans taux.
+  double? get tauxEnPourcent => taux == null ? null : taux! * 100;
+
+  /// `null` si le libellé ou le montant manque : la ligne est ignorée
+  /// plutôt que d'afficher une facture incohérente.
+  static LigneFacture? tenterDepuis(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    final libelle = json['libelle'];
+    final montant = lireNombre(json['montant']);
+    if (libelle is! String || montant == null) return null;
+    return LigneFacture(
+      code: json['code'] is String ? json['code'] as String : '',
+      libelle: libelle,
+      montant: montant,
+      base: lireNombre(json['base']),
+      taux: lireNombre(json['taux']),
+      montantFixe: lireNombre(json['montant_fixe']),
+    );
+  }
+}
+
+/// Bloc « consultation » de l'en-tête d'une facture.
+class EnteteFacture {
+  const EnteteFacture({
+    required this.medecin,
+    this.specialite,
+    this.pays,
+    this.ville,
+    this.rdvId,
+    this.dateCreneau,
+  });
+
+  final String medecin;
+  final String? specialite;
+  final String? pays;
+  final String? ville;
+  final String? rdvId;
+  final DateTime? dateCreneau;
+
+  factory EnteteFacture.fromJson(Object? json) {
+    final j = json is Map<String, dynamic> ? json : const <String, dynamic>{};
+    String? texte(String cle) {
+      final v = j[cle];
+      return v is String && v.isNotEmpty ? v : null;
+    }
+
+    final creneau = texte('date_creneau');
+    return EnteteFacture(
+      medecin: texte('medecin') ?? 'Médecin',
+      specialite: texte('specialite'),
+      pays: texte('pays'),
+      ville: texte('ville'),
+      rdvId: texte('rdv_id'),
+      dateCreneau: creneau == null ? null : DateTime.tryParse(creneau),
+    );
+  }
+}
+
+/// Réponse de GET /paiement/rendez-vous/:id/facture.
+///
+/// - [estDevis] : aperçu AVANT paiement (`type = devis`, pas de numéro) ;
+/// - [minimale] : facture d'une transaction antérieure à la v2 (une seule
+///   ligne « Consultation », total = montant débité, D4) ;
+/// - vue médecin (D7) : une seule ligne (la consultation H), sans CP ni
+///   frais ni total payé : la même card l'affiche sans cas particulier.
+/// `detail_admin` (CM, net médecin) n'est jamais lu dans l'app patient.
+class Facture {
+  const Facture({
+    required this.type,
+    required this.devise,
+    required this.entete,
+    required this.lignes,
+    required this.total,
+    this.numero,
+    this.date,
+    this.agregateur,
+    this.statutPaiement,
+    this.minimale = false,
+    this.raisonMinimale,
+  });
+
+  final String type;
+  final String? numero;
+  final DateTime? date;
+  final String devise;
+  final String? agregateur;
+  final String? statutPaiement;
+  final EnteteFacture entete;
+  final List<LigneFacture> lignes;
+  final double total;
+  final bool minimale;
+  final String? raisonMinimale;
+
+  bool get estDevis => type == 'devis';
+
+  factory Facture.fromJson(Map<String, dynamic> json) {
+    final total = lireNombre(json['total']);
+    final brutes = json['lignes'];
+    final lignes = <LigneFacture>[
+      if (brutes is List)
+        for (final l in brutes)
+          if (LigneFacture.tenterDepuis(l) case final ligne?) ligne,
+    ];
+    // Pas de total ou pas de ligne : on refuse d'afficher une facture
+    // vide ou fausse (le patient verrait un montant qui n'est pas le sien).
+    if (total == null || lignes.isEmpty) {
+      throw const ApiException('Facture invalide.');
+    }
+    String? texte(String cle) {
+      final v = json[cle];
+      return v is String && v.isNotEmpty ? v : null;
+    }
+
+    final date = texte('date');
+    return Facture(
+      type: texte('type') ?? 'facture',
+      numero: texte('numero'),
+      date: date == null ? null : DateTime.tryParse(date),
+      devise: texte('devise') ?? 'xaf',
+      agregateur: texte('agregateur'),
+      statutPaiement: texte('statut_paiement'),
+      entete: EnteteFacture.fromJson(json['entete']),
+      lignes: lignes,
+      total: total,
+      minimale: json['minimale'] == true,
+      raisonMinimale: texte('raison_minimale'),
     );
   }
 }
@@ -258,6 +418,33 @@ class PaiementRepository {
       throw const ApiException('Réponse de devis invalide.');
     }
     return DevisPaiement.fromJson(corps);
+  }
+
+  /// GET /paiement/rendez-vous/:id/facture[?agregateur=stripe|campay]
+  ///
+  /// Lecture seule : aucun montant n'est envoyé, le serveur recalcule
+  /// tout. RDV payé : facture du paiement abouti ([agregateur] ignoré).
+  /// RDV non payé : aperçu avant paiement, [agregateur] obligatoire (400
+  /// sinon). Erreurs (409 `RDV_NON_PAYE` pour un médecin, 503 barème
+  /// absent, 404…) levées en [ApiException] avec le message du serveur.
+  Future<Facture> obtenirFacture({
+    required String rdvId,
+    required String token,
+    String? agregateur,
+  }) async {
+    final r = await http
+        .get(
+          Uri.parse(
+            ApiRealEndpoints.facturePaiementRdv(rdvId, agregateur: agregateur),
+          ),
+          headers: _entetes(token),
+        )
+        .timeout(_timeout);
+    final corps = _decoder(r);
+    if (corps is! Map<String, dynamic>) {
+      throw const ApiException('Réponse de facture invalide.');
+    }
+    return Facture.fromJson(corps);
   }
 
   /// POST /paiement/rendez-vous/:id/paiement-campay
