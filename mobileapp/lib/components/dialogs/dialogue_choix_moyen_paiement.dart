@@ -8,11 +8,15 @@
 //   - Carte bancaire (Stripe)  → [MoyenPaiement.carte]
 //   - Mobile Money (CamPay)    → [MoyenPaiement.mobileMoney]
 //
-// Politique de fonds v2 — devis AVANT paiement : sous chaque moyen, le
-// patient voit « total = honoraires + frais d'envoi » et le remboursement
-// estimé en cas d'annulation (GET /paiement/rendez-vous/:id/devis). Les deux
-// devis sont chargés en parallèle, avec des états INDÉPENDANTS : l'échec ou
-// la lenteur de l'un n'affecte pas l'autre.
+// Politique de fonds v2 — facture et devis AVANT paiement :
+//   - en haut, la FACTURE détaillée du moyen sélectionné (onglets « Carte
+//     bancaire » / « Mobile Money » ; consultation + frais agrégateur +
+//     commission APS patient, GET /paiement/rendez-vous/:id/facture) ;
+//   - sous chaque moyen, le total et le remboursement estimé en cas
+//     d'annulation (GET /paiement/rendez-vous/:id/devis).
+// Les deux devis sont chargés en parallèle, avec des états INDÉPENDANTS :
+// l'échec ou la lenteur de l'un n'affecte pas l'autre. Aucun montant n'est
+// calculé dans l'app.
 //   - chargement  : « Calcul du montant… » ;
 //   - disponible  : détail du devis ;
 //   - indisponible: 503 (barème non saisi) ou 409 (RDV non payable) → le
@@ -35,6 +39,7 @@ import '../../models/rendez_vous_models.dart' show DevisPaiement;
 import '../../repositories/paiement_repository.dart';
 import '../../repositories/rendez_vous_repository.dart' show ApiException;
 import '../../utils/fonds.dart';
+import '../factures/facture_recapitulative.dart';
 import '../style/colors.dart';
 import '../style/text_styles.dart';
 
@@ -116,6 +121,9 @@ class _DialogueChoixMoyenPaiementState
   _EtatDevis _devisStripe = const _DevisEnCours();
   _EtatDevis _devisCampay = const _DevisEnCours();
 
+  /// Moyen dont la facture est affichée (onglet sélectionné).
+  String _apercu = _stripe;
+
   @override
   void initState() {
     super.initState();
@@ -181,13 +189,28 @@ class _DialogueChoixMoyenPaiementState
               'Choisissez votre moyen de paiement. Votre rendez-vous sera '
               'confirmé dès la réception du règlement.',
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            _ApercuFacture(
+              apercu: _apercu,
+              onChanger: (v) => setState(() => _apercu = v),
+              devisIndisponible: switch (_apercu == _stripe
+                  ? _devisStripe
+                  : _devisCampay) {
+                _DevisIndisponible(:final message) => message,
+                _ => null,
+              },
+              rdvId: widget.rdvId,
+              executer: widget.executer,
+              repository: _repo,
+            ),
+            const SizedBox(height: 12),
             _OptionPaiement(
               icone: Icons.credit_card_rounded,
               titre: 'Carte bancaire',
               sousTitre: 'Visa, Mastercard — paiement via Stripe',
               etat: _devisStripe,
               onReessayer: () => _charger(_stripe),
+              onSelection: () => setState(() => _apercu = _stripe),
               onTap: () => Navigator.of(context).pop(MoyenPaiement.carte),
             ),
             const SizedBox(height: 10),
@@ -197,6 +220,7 @@ class _DialogueChoixMoyenPaiementState
               sousTitre: 'MTN / Orange — paiement via CamPay',
               etat: _devisCampay,
               onReessayer: () => _charger(_campay),
+              onSelection: () => setState(() => _apercu = _campay),
               onTap: () =>
                   Navigator.of(context).pop(MoyenPaiement.mobileMoney),
             ),
@@ -223,6 +247,7 @@ class _OptionPaiement extends StatelessWidget {
     required this.etat,
     required this.onTap,
     required this.onReessayer,
+    required this.onSelection,
   });
 
   final IconData icone;
@@ -231,6 +256,9 @@ class _OptionPaiement extends StatelessWidget {
   final _EtatDevis etat;
   final VoidCallback onTap;
   final VoidCallback onReessayer;
+
+  /// Appelé au focus de l'option : la facture affichée suit le moyen.
+  final VoidCallback onSelection;
 
   bool get _desactive => etat is _DevisIndisponible;
 
@@ -244,6 +272,9 @@ class _OptionPaiement extends StatelessWidget {
       ),
       child: InkWell(
         onTap: _desactive ? null : onTap,
+        onFocusChange: (focus) {
+          if (focus) onSelection();
+        },
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -327,9 +358,11 @@ class _DetailDevis extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Le détail ligne par ligne est dans la facture affichée plus haut.
             Text.rich(
               TextSpan(
                 children: [
+                  const TextSpan(text: 'Total : '),
                   TextSpan(
                     text: montantDevise(devis.total, d),
                     style: meta.copyWith(
@@ -337,23 +370,125 @@ class _DetailDevis extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  TextSpan(
-                    text: ' = honoraires ${montantDevise(devis.honoraires, d)}'
-                        ' + frais d’envoi ${montantDevise(devis.fraisEnvoi, d)}',
-                  ),
                 ],
               ),
               style: meta,
             ),
             const SizedBox(height: 2),
             Text(
-              'Annulation possible avec remboursement d’environ '
+              'Annulation plus de 24 h à l’avance : remboursement d’environ '
               '${montantDevise(devis.remboursementEstime, d)}'
-              '${devis.remboursementIndicatif ? ' (estimation)' : ''}',
+              '${devis.remboursementIndicatif ? ' (estimation)' : ''}, soit '
+              'les honoraires moins les frais de remboursement (commission '
+              'APS et frais d’envoi non remboursés).',
               style: meta,
             ),
           ],
         );
     }
+  }
+}
+
+/// Facture détaillée du moyen de paiement sélectionné : deux onglets, puis la
+/// card [FactureRdv] (recalculée par le serveur selon l'agrégateur). Si le
+/// devis de ce moyen est indisponible (503 barème absent, 409), le message du
+/// serveur remplace la facture.
+class _ApercuFacture extends StatelessWidget {
+  const _ApercuFacture({
+    required this.apercu,
+    required this.onChanger,
+    required this.devisIndisponible,
+    required this.rdvId,
+    required this.executer,
+    required this.repository,
+  });
+
+  final String apercu;
+  final ValueChanged<String> onChanger;
+  final String? devisIndisponible;
+  final String rdvId;
+  final ExecuteurAuthentifie executer;
+  final PaiementRepository repository;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            _Onglet(
+              libelle: 'Carte bancaire',
+              actif: apercu == 'stripe',
+              onTap: () => onChanger('stripe'),
+            ),
+            const SizedBox(width: 6),
+            _Onglet(
+              libelle: 'Mobile Money',
+              actif: apercu == 'campay',
+              onTap: () => onChanger('campay'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (devisIndisponible != null)
+          Text(
+            devisIndisponible!,
+            style: AppTextStyles.cardMeta.copyWith(color: AppColors.coral600),
+          )
+        else
+          FactureRdv(
+            rdvId: rdvId,
+            agregateur: apercu,
+            executer: executer,
+            repository: repository,
+            compact: true,
+            // Aperçu avant paiement : le téléchargement est proposé sur la
+            // facture définitive, une fois le paiement confirmé.
+            telechargeable: false,
+          ),
+      ],
+    );
+  }
+}
+
+/// Onglet carré « Carte bancaire » / « Mobile Money ».
+class _Onglet extends StatelessWidget {
+  const _Onglet({
+    required this.libelle,
+    required this.actif,
+    required this.onTap,
+  });
+
+  final String libelle;
+  final bool actif;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: actif ? AppColors.primary : AppColors.card,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.zero,
+          side: BorderSide(color: AppColors.primary),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Center(
+              child: Text(
+                libelle,
+                style: AppTextStyles.cardMeta.copyWith(
+                  color: actif ? Colors.white : AppColors.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -45,6 +45,12 @@ dependencies:
   cookie_jar: ^4.0.9
   flutter_stripe: ^14.1.0
 
+  # Facture : génération du PDF dans l'app (aucun PDF côté serveur) puis
+  # partage / enregistrement via la feuille native. `printing` embarque
+  # sa propre configuration Android/iOS : aucun changement de manifeste.
+  pdf: ^3.11.3
+  printing: ^5.14.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
