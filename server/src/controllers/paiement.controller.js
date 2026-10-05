@@ -195,11 +195,12 @@ export function lignesDetailPaiement(ctx) {
 export function descriptionCampay(ctx) {
   const { rdv, decomposition, devise } = ctx;
   const court = `Consultation APS Sante ${rdv.rdv_id.slice(0, 8)}`;
+  // Montant collecté par CamPay = H + CP ; ses propres frais s'y ajoutent au débit.
+  const collecte = Number(decomposition.honoraires) + Number(decomposition.commissionPatient);
   const detail =
     `${court} - Honoraires ${formaterNombre(decomposition.honoraires)}` +
-    ` + Frais ${formaterNombre(decomposition.fraisEnvoi)}` +
     ` + Commission APS ${formaterNombre(decomposition.commissionPatient)}` +
-    ` = ${formaterNombre(decomposition.total)} ${devise.toUpperCase()}`;
+    ` = ${formaterNombre(collecte)} ${devise.toUpperCase()} (+ frais CamPay)`;
   return detail.length <= 100 ? detail : court;
 }
 

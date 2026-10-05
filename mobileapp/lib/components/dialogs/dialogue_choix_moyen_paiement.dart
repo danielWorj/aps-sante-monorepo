@@ -2,7 +2,7 @@
 //
 // Pop-up « Comment souhaitez-vous payer ? », affichée au clic sur « Payer ».
 // Miroir de client-plateform/.../ChoixMoyenPaiement.jsx, sur le modèle de
-// dialogue_motif_annulation.dart, avec des coins carrés.
+// dialogue_motif_annulation.dart, avec des coins arrondis.
 //
 // Deux options :
 //   - Carte bancaire (Stripe)  → [MoyenPaiement.carte]
@@ -177,8 +177,11 @@ class _DialogueChoixMoyenPaiementState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      // Coins carrés (demandés) : Radius nul plutôt que le 28 par défaut.
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      // Boîte plus large : marges latérales réduites (40 → 16 px par défaut
+      // d'AlertDialog), comme la boîte de facture.
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      // Coins arrondis.
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: const Text('Comment souhaitez-vous payer ?'),
       content: SingleChildScrollView(
         child: Column(
@@ -237,7 +240,7 @@ class _DialogueChoixMoyenPaiementState
   }
 }
 
-/// Carte cliquable à angles droits (icône, titre, sous-titre, devis,
+/// Carte cliquable à coins arrondis (icône, titre, sous-titre, devis,
 /// chevron). Grisée et non cliquable quand le devis est indisponible.
 class _OptionPaiement extends StatelessWidget {
   const _OptionPaiement({
@@ -266,10 +269,11 @@ class _OptionPaiement extends StatelessWidget {
   Widget build(BuildContext context) {
     final carte = Material(
       color: _desactive ? AppColors.paper : AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
-        side: BorderSide(color: AppColors.lineStrong),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: AppColors.lineStrong),
       ),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: _desactive ? null : onTap,
         onFocusChange: (focus) {
@@ -283,7 +287,10 @@ class _OptionPaiement extends StatelessWidget {
               Container(
                 width: 40,
                 height: 40,
-                color: AppColors.primarySurface,
+                decoration: BoxDecoration(
+                  color: AppColors.primarySurface,
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Icon(icone, color: AppColors.primary, size: 22),
               ),
               const SizedBox(width: 12),
@@ -452,7 +459,7 @@ class _ApercuFacture extends StatelessWidget {
   }
 }
 
-/// Onglet carré « Carte bancaire » / « Mobile Money ».
+/// Onglet arrondi « Carte bancaire » / « Mobile Money ».
 class _Onglet extends StatelessWidget {
   const _Onglet({
     required this.libelle,
@@ -469,10 +476,11 @@ class _Onglet extends StatelessWidget {
     return Expanded(
       child: Material(
         color: actif ? AppColors.primary : AppColors.card,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
-          side: BorderSide(color: AppColors.primary),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.primary),
         ),
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
           child: Padding(

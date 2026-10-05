@@ -11,7 +11,7 @@
 // Prisma est importé paresseusement : les fonctions pures restent
 // utilisables (et testables) sans client généré ni base.
 
-import { arrondir } from "../utils/montants.js";
+import { arrondir, arrondirSuperieur } from "../utils/montants.js";
 
 const AGREGATEURS = ["stripe", "campay"];
 const TYPES = ["envoi", "remboursement"];
@@ -36,12 +36,27 @@ export function calculerFrais(honoraires, ligne, decimales = 2) {
   return arrondir(h * taux + fixe, decimales);
 }
 
-export const calculerFraisEnvoi = calculerFrais;
+/**
+ * Frais d'ENVOI payés par le patient. Identique à calculerFrais, sauf en devise
+ * sans décimale (CamPay / XAF) : toute fraction est arrondie à l'entier SUPÉRIEUR,
+ * comme le fait CamPay (10 FCFA × 2 % = 0,2 -> 1 FCFA débité).
+ */
+export function calculerFraisEnvoi(honoraires, ligne, decimales = 2) {
+  if (decimales !== 0) return calculerFrais(honoraires, ligne, decimales);
+  if (!ligne) {
+    throw new Error("Ligne de frais d'agrégateur manquante : calcul impossible.");
+  }
+  const h = Number(honoraires);
+  if (!Number.isFinite(h) || h < 0) {
+    throw new Error(`Honoraires invalides (${honoraires}) pour le calcul des frais d'agrégateur.`);
+  }
+  return arrondirSuperieur(h * Number(ligne.taux ?? 0) + Number(ligne.montant_fixe ?? 0), 0);
+}
 export const calculerFraisRemboursement = calculerFrais;
 
 /** Total facturé au patient : honoraires + frais d'envoi (§1). */
 export function calculerTotalPatient(honoraires, ligneEnvoi, decimales = 2) {
-  const frais = calculerFrais(honoraires, ligneEnvoi, decimales);
+  const frais = calculerFraisEnvoi(honoraires, ligneEnvoi, decimales);
   return { honoraires: arrondir(honoraires, decimales), fraisEnvoi: frais, total: arrondir(Number(honoraires) + frais, decimales) };
 }
 

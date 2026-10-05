@@ -32,3 +32,13 @@ deploiement/
 access/
 
 KEYS.txt
+
+
+# --- mobileapp (Flutter) ---
+/mobileapp/build
+/mobileapp/.dart_tool
+/mobileapp/android/.gradle
+/mobileapp/android/build
+/mobileapp/android/app/build
+/mobileapp/android/app/.cxx
+/mobileapp/android/local.properties

@@ -40,7 +40,7 @@
 // jamais une facture qui diverge de ce que le patient a payé.
 
 import { arrondir, decimalesPourMontant } from "../utils/montants.js";
-import { calculerFrais } from "./fraisAgregateur.service.js";
+import { calculerFraisEnvoi } from "./fraisAgregateur.service.js";
 import { calculerCommissionPatient } from "./tarification.service.js";
 
 /** Codes des lignes (alignés sur lignesDetailPaiement de paiement.controller.js). */
@@ -135,7 +135,7 @@ function ligneFacture({ code, libelle, base = null, taux = null, montant_fixe = 
  */
 function calculerLignesFacture({ honoraires, lignes, decimales }) {
   const h = arrondir(honoraires, decimales);
-  const fraisEnvoi = calculerFrais(honoraires, lignes.frais_envoi, decimales);
+  const fraisEnvoi = calculerFraisEnvoi(honoraires, lignes.frais_envoi, decimales);
   const commissionPatient = calculerCommissionPatient(honoraires, lignes.commission_patient, decimales);
 
   const detail = [
