@@ -50,6 +50,26 @@ export function tauxDepuisPourcent(saisie) {
   return Math.round(centiemes) / 10000;
 }
 
+/** Bornes de T côté serveur (heures) : 0 à 30 jours. */
+export const DELAI_LIBERATION_MIN_H = 0;
+export const DELAI_LIBERATION_MAX_H = 720;
+
+/** 48 -> « 48 h (2 j) » ; 36 -> « 36 h » ; 0 -> « 0 h (au prochain passage du cron) » */
+export function heuresLisibles(heures) {
+  const h = Number(heures);
+  if (!Number.isFinite(h)) return '—';
+  if (h === 0) return '0 h (au prochain passage du cron)';
+  return h >= 24 && h % 24 === 0 ? `${h} h (${h / 24} j)` : `${h} h`;
+}
+
+/** Saisie « 48 » -> 48. Retourne null si ce n'est pas un entier compris entre 0 et 720. */
+export function heuresDepuisSaisie(saisie) {
+  const texte = String(saisie ?? '').trim();
+  if (!/^\d+$/.test(texte)) return null;
+  const h = Number(texte);
+  return h >= DELAI_LIBERATION_MIN_H && h <= DELAI_LIBERATION_MAX_H ? h : null;
+}
+
 /** Annulation tardive = strictement moins de 24 h avant le RDV (pile 24 h : non tardive). */
 export function estTardif(dateCreneau, maintenant = new Date()) {
   return new Date(dateCreneau).getTime() - maintenant.getTime() < DELAI_TARDIF_H * 3600 * 1000;

@@ -163,3 +163,49 @@ export function resumerFondsEnAttente(rdvs) {
     prochaineLiberation: enAttente[0]?.liberation_prevue_le ?? null,
   };
 }
+
+/**
+ * Libération des fonds en retard de quelques minutes ? Vrai quand la fin est
+ * constatée, que `liberation_prevue_le` est échue, mais que le cron (toutes les
+ * ~5 min) n'a pas encore passé le RDV à « honore ». Évite d'afficher une date
+ * passée comme si la libération était à venir.
+ * @param {object} rdv
+ * @returns {boolean}
+ */
+export function liberationFondsEnCours(rdv) {
+  return fondsEnAttenteDeLiberation(rdv) && new Date(rdv.liberation_prevue_le) <= new Date();
+}
+
+/**
+ * Mention courte de libération des fonds pour une liste / un tableau :
+ *   - « Libération des fonds le 12/10 à 14:30 » tant que l'échéance est future ;
+ *   - « Libération des fonds en cours » si l'échéance est échue mais pas encore traitée ;
+ *   - chaîne vide si aucun fonds n'est en attente (RDV non terminé, déjà libéré, contesté…).
+ * @param {object} rdv
+ * @returns {string}
+ */
+export function libelleLiberationFonds(rdv) {
+  if (!fondsEnAttenteDeLiberation(rdv)) return "";
+  if (liberationFondsEnCours(rdv)) return "Libération des fonds en cours";
+  return `Libération des fonds le ${formaterDateLiberation(rdv.liberation_prevue_le)}`;
+}
+
+/**
+ * Statut d'AFFICHAGE d'un RDV (libellé + classe de pastille).
+ * Une consultation terminée dont les fonds attendent T heures garde le statut
+ * serveur « confirme » / « en_attente_presence » jusqu'à la libération : afficher
+ * « Confirmé » serait trompeur, on affiche « Terminé ». Les autres statuts
+ * suivent la table fournie par l'écran appelant.
+ * @param {{ statut?: string, termine_le?: string|null }} rdv
+ * @param {Record<string, { label: string, classe: string }>} infosParStatut
+ * @returns {{ label: string, classe: string }}
+ */
+export function infosStatutRdv(rdv, infosParStatut = {}) {
+  if (
+    estConsultationTerminee(rdv) &&
+    (rdv.statut === "confirme" || rdv.statut === "en_attente_presence")
+  ) {
+    return { label: "Terminé", classe: "chip-semaine" };
+  }
+  return infosParStatut[rdv?.statut] || { label: rdv?.statut ?? "—", classe: "chip-info" };
+}

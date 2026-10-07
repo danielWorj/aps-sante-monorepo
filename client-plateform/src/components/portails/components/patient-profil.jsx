@@ -24,6 +24,12 @@
 //   3. Lister ses rendez-vous avec filtre par statut, via
 //      GET /patients/:id/rendez-vous.
 //
+// Libération différée des fonds (T heures) : une consultation dont la fin est
+// constatée (`termine_le`) garde le statut serveur « confirme » jusqu'à la
+// libération (cron). Cette page affiche alors « Terminé » (et non « Confirmé »),
+// la mention « Libération des fonds le … », et n'affiche plus cette consultation
+// comme « Prochain rendez-vous ».
+//
 // Si un jour une vraie édition du profil patient est nécessaire
 // (téléphone, pays de résidence, etc.), il faudra d'abord ajouter côté
 // backend une route dédiée (ex. PATCH /patients/mon-profil ou
@@ -36,6 +42,11 @@ import { Link, useNavigate } from "react-router-dom";
 import PortailSidebar from "../layouts/portail-sidebar";
 import { useAuth } from "./../../../context/AuthContext";
 import * as patientService from "../../../services/patientService";
+import {
+  estConsultationTerminee,
+  infosStatutRdv,
+  libelleLiberationFonds,
+} from "./../../../utils/rdv";
 
 // Labels + classes d'affichage pour les statuts de rendez-vous.
 // Valeurs alignées sur STATUTS_RDV côté backend
@@ -172,7 +183,10 @@ const PatientProfil = () => {
     );
   }
 
-  const prochainRdv = statistiques?.prochain_rendez_vous;
+  // Le serveur peut renvoyer comme « prochain » un RDV dont la consultation est déjà
+  // terminée (fonds en séquestre pendant T heures) : il n'est plus « à venir ».
+  const prochainBrut = statistiques?.prochain_rendez_vous;
+  const prochainRdv = prochainBrut && !estConsultationTerminee(prochainBrut) ? prochainBrut : null;
 
   return (
     <div className="container-aps">
@@ -244,8 +258,8 @@ const PatientProfil = () => {
                   </strong>
                   <div className="text-muted small">{formaterDate(prochainRdv.date_creneau, true)}</div>
                 </div>
-                <span className={`chip ${STATUT_RDV_INFOS[prochainRdv.statut]?.classe || "chip-info"}`}>
-                  {STATUT_RDV_INFOS[prochainRdv.statut]?.label || prochainRdv.statut}
+                <span className={`chip ${infosStatutRdv(prochainRdv, STATUT_RDV_INFOS).classe}`}>
+                  {infosStatutRdv(prochainRdv, STATUT_RDV_INFOS).label}
                 </span>
               </div>
             </div>
@@ -303,9 +317,15 @@ const PatientProfil = () => {
                         </td>
                         <td>{rdv.structure?.nom || "—"}</td>
                         <td>
-                          <span className={`chip ${STATUT_RDV_INFOS[rdv.statut]?.classe || "chip-info"}`}>
-                            {STATUT_RDV_INFOS[rdv.statut]?.label || rdv.statut}
+                          <span className={`chip ${infosStatutRdv(rdv, STATUT_RDV_INFOS).classe}`}>
+                            {infosStatutRdv(rdv, STATUT_RDV_INFOS).label}
                           </span>
+                          {libelleLiberationFonds(rdv) && (
+                            <div className="text-muted small mt-1">
+                              <i className="fa-solid fa-hourglass-half me-1"></i>
+                              {libelleLiberationFonds(rdv)}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}

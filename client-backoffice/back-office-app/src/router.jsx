@@ -57,6 +57,7 @@ import GestionApk from './pages/GestionApk';
 import FraisAgregateur from './pages/FraisAgregateur';
 import LignesTarifaires from './pages/LignesTarifaires';
 import ParametreAmende from './pages/ParametreAmende';
+import ParametreDelaiLiberation from './pages/ParametreDelaiLiberation';
 import RemboursementsCampay from './pages/RemboursementsCampay';
 
 export const router = createBrowserRouter([
@@ -104,6 +105,7 @@ export const router = createBrowserRouter([
           { path: '/frais-agregateur', element: <FraisAgregateur /> },
           { path: '/lignes-tarifaires', element: <LignesTarifaires /> },
           { path: '/parametre-amende', element: <ParametreAmende /> },
+          { path: '/parametre-delai-liberation', element: <ParametreDelaiLiberation /> },
           { path: '/remboursements-campay', element: <RemboursementsCampay /> },
 
           // RENDEZ VOUS 
