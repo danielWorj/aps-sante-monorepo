@@ -13,6 +13,7 @@
 //     rendez_vous[], ordonnances[] }
 
 import prisma from "../lib/prisma.js";
+import { ROLES_VISIBILITE, projeterRdvPourRole } from "../services/visibiliteRole.service.js";
 
 const STATUTS_RDV = [
   "cree",
@@ -250,7 +251,12 @@ export async function listerRendezVousPatient(req, res, next) {
       orderBy: { date_creneau: "desc" },
     });
 
-    return res.status(200).json({ rendez_vous: rendezVous });
+    // Le médecin tiers (niveau « restreint ») ne reçoit JAMAIS code_unique : c'est
+    // le secret du patient, que le médecin doit se faire dicter à la fin de la
+    // consultation. Le patient lui-même et l'admin le conservent. Dans tous les
+    // cas : jamais de qr_token_secret ni d'état anti force-brute.
+    const role = niveau === "restreint" ? ROLES_VISIBILITE.MEDECIN : estAdmin(req.utilisateur) ? ROLES_VISIBILITE.ADMIN : ROLES_VISIBILITE.PATIENT;
+    return res.status(200).json({ rendez_vous: rendezVous.map((r) => projeterRdvPourRole(r, role)) });
   } catch (err) {
     next(err);
   }

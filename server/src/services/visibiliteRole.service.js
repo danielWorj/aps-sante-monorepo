@@ -12,6 +12,7 @@
 // | médecin | son versement (H − CM, avant amendes), CM, son amende            | CP, montants du patient   |
 // | admin   | tout                                                              | —                         |
 
+import { etatLiberation } from "../lib/delaiLiberation.js";
 import { EVENEMENTS } from "./politiqueFonds.service.js";
 
 export const ROLES_VISIBILITE = Object.freeze({
@@ -95,4 +96,53 @@ export function projeterRdvNonPayePourMedecin(rdv) {
     statut: rdv.statut,
     non_paye: true,
   };
+}
+
+// Champs internes d'un RDV qui ne sortent JAMAIS de l'API, quel que soit le rôle :
+//   - qr_token_secret : plus utilisé (le scan du QR est remplacé par le code) ;
+//   - tentatives_code_echouees / code_verrouille_jusqu_a : état anti force-brute
+//     de la saisie du code (informerait un attaquant sur sa progression).
+const CHAMPS_RDV_INTERNES = Object.freeze([
+  "qr_token_secret",
+  "tentatives_code_echouees",
+  "code_verrouille_jusqu_a",
+]);
+
+// Rôles qui voient le code de consultation (voir projeterRdvPourRole).
+export const ROLES_VOYANT_LE_CODE = Object.freeze([ROLES_VISIBILITE.PATIENT, ROLES_VISIBILITE.ADMIN]);
+
+/**
+ * Libération différée des fonds — projection d'une LIGNE de RDV selon le rôle
+ * de CELUI QUI REÇOIT la réponse (même principe que filtrerResultatAnnulation :
+ * on filtre ici, pas dans les services).
+ *
+ *   - tout le monde : jamais les CHAMPS_RDV_INTERNES ;
+ *   - médecin       : jamais `code_unique` (secret du patient : le médecin doit
+ *                     le recevoir de la bouche du patient, jamais de l'API) ;
+ *   - patient       : `code_unique` conservé (il en a besoin pour le donner) ;
+ *   - admin         : `code_unique` conservé (dépannage d'un patient qui a
+ *                     perdu son code). Pour le retirer aussi à l'admin, il
+ *                     suffit de retirer ROLES_VISIBILITE.ADMIN de
+ *                     ROLES_VOYANT_LE_CODE ci-dessous ;
+ *   - rôle inconnu  : vue la plus restrictive (sans code).
+ *
+ * Ajoute `liberation_prevue_le` (termine_le + T, RECALCULÉE, jamais stockée ;
+ * null tant que la consultation n'est pas constatée terminée).
+ *
+ * Fonction pure : ne modifie pas `rdv`. Les objets imbriqués (medecin,
+ * patient…) sont conservés tels quels.
+ *
+ * @param {object} rdv ligne RendezVous (éventuellement avec ses include)
+ * @param {string} role une valeur de ROLES_VISIBILITE
+ * @returns {object}
+ */
+export function projeterRdvPourRole(rdv, role) {
+  if (!rdv || typeof rdv !== "object") return rdv;
+
+  const sortie = { ...rdv };
+  for (const champ of CHAMPS_RDV_INTERNES) delete sortie[champ];
+  if (!ROLES_VOYANT_LE_CODE.includes(role)) delete sortie.code_unique;
+
+  sortie.liberation_prevue_le = etatLiberation(rdv).date_liberation;
+  return sortie;
 }

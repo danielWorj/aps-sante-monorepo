@@ -13,8 +13,11 @@ import {
   heuresDelaiValides,
 } from "../lib/delaiLiberation.js";
 import {
+  ALPHABET_CODE,
+  LONGUEUR_CODE,
   MAX_TENTATIVES,
   appliquerEchecCode,
+  genererCodeConsultation,
   codeCorrespond,
   etatVerrou,
   normaliserCode,
@@ -118,4 +121,35 @@ test("appliquerEchecCode : valeurs par défaut cohérentes", () => {
   assert.ok(Number.isInteger(MAX_TENTATIVES) && MAX_TENTATIVES > 0);
   const r = appliquerEchecCode({ tentatives_code_echouees: null }, T0);
   assert.equal(r.donnees.tentatives_code_echouees, 1);
+});
+
+test("genererCodeConsultation : 6 caractères, alphabet sans symboles ambigus", () => {
+  assert.equal(LONGUEUR_CODE, 6);
+  assert.equal(ALPHABET_CODE.length, 32);
+  for (const interdit of ["0", "O", "1", "I"]) assert.equal(ALPHABET_CODE.includes(interdit), false);
+
+  for (let i = 0; i < 500; i += 1) {
+    const code = genererCodeConsultation();
+    assert.match(code, /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/);
+  }
+});
+
+test("genererCodeConsultation : tirage injectable, couvre tout l'alphabet", () => {
+  let n = -1;
+  const sequentiel = (max) => {
+    n += 1;
+    return n % max;
+  };
+  assert.equal(genererCodeConsultation(sequentiel), ALPHABET_CODE.slice(0, 6));
+  // 500 tirages aléatoires : de nombreux codes distincts (pas de constante).
+  const codes = new Set(Array.from({ length: 500 }, () => genererCodeConsultation()));
+  assert.ok(codes.size > 490);
+});
+
+test("codeCorrespond : accepte le nouveau code (6) et l'ancien (8), jamais un code tronqué", () => {
+  assert.equal(codeCorrespond("k7m2xp", "K7M2XP"), true);
+  assert.equal(codeCorrespond("K7M2 XP", "K7M2XP"), true);
+  assert.equal(codeCorrespond("K7M2X", "K7M2XP"), false);
+  assert.equal(codeCorrespond("K7M2XP", "K7M2XP9Z"), false);
+  assert.equal(codeCorrespond("K7M2XP9Z", "K7M2XP9Z"), true);
 });

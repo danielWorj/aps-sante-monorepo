@@ -93,16 +93,12 @@ export {
   creerRendezVous,
   modifierRendezVous,
   changerStatutRendezVous,
-  // Phase 2 — confirmation effective du service + libération de
-  // l'escrow (voir rendezVous.controller.js) : scan du QR par le
-  // médecin (RDV physique) ; la clôture de téléconsultation, elle, ne
-  // passe plus par un endpoint du médecin mais par le webhook de fin de
-  // session Jitsi (visio.controller.js, traiterFinSessionVisio).
-  // NB : cet export référençait encore
-  // cloturerTeleconsultationRendezVous, supprimée du contrôleur au
-  // commit qui a introduit le webhook — l'import échouait donc au
-  // chargement du module et empêchait le serveur de démarrer.
-  scannerQrRendezVous,
+  // Libération différée des fonds : fin d'un RDV physique par saisie du code
+  // de consultation par le médecin (voir rendezVous.controller.js,
+  // terminerRendezVous) ; la clôture de téléconsultation, elle, ne passe pas
+  // par un endpoint du médecin mais par le webhook de fin de session Jitsi
+  // (visio.controller.js, traiterFinSessionVisio). Remplace scannerQrRendezVous.
+  terminerRendezVous,
   // Correction manuelle admin (voir rendezVous.controller.js) : importée
   // par medecin.routes.js, mais jamais ré-exportée ici — même cause que
   // la note ci-dessus (le serveur ne démarrait pas).

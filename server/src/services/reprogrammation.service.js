@@ -29,6 +29,7 @@ import prisma from "../lib/prisma.js";
 import { STATUTS_RDV_ACTIFS, DELAI_REPROGRAMMATION_H } from "./politiqueFonds.service.js";
 import { estViolationCreneauActif, MESSAGE_CRENEAU_PRIS } from "../utils/erreursPrisma.js";
 import { notifierAcceptation, notifierProposition } from "./notification.service.js";
+import { ROLES_VISIBILITE, projeterRdvPourRole } from "./visibiliteRole.service.js";
 import {
   creneauAgendaDepuisDate,
   echeanceReprogrammation,
@@ -46,10 +47,15 @@ const INCLUSION_PARTIES = {
 const MESSAGE_HORS_AGENDA =
   "Cette date ne correspond à aucun créneau disponible de l'agenda du médecin.";
 
-/** Le secret du QR ne quitte jamais ces réponses. */
-function sansSecret(rdv) {
-  const { qr_token_secret, ...reste } = rdv; // eslint-disable-line no-unused-vars
-  return reste;
+/**
+ * Ces réponses servent LES DEUX parties : la projection dépend de celle qui
+ * reçoit. Le secret du QR et l'état anti force-brute ne sortent jamais ; le
+ * code de consultation (secret du patient) n'est jamais renvoyé au médecin.
+ * @param {object} rdv
+ * @param {"patient"|"medecin"} partie
+ */
+function projeterPourPartie(rdv, partie) {
+  return projeterRdvPourRole(rdv, partie === "medecin" ? ROLES_VISIBILITE.MEDECIN : ROLES_VISIBILITE.PATIENT);
 }
 
 /**
@@ -137,7 +143,7 @@ export async function proposerNouvelleDate(rdv_id, utilisateur, dateBrute, { mai
   }
 
   const rdvMisAJour = await prisma.rendezVous.findUnique({ where: { rdv_id } });
-  return { rdv: sansSecret(rdvMisAJour), echeance: echeanceReprogrammation(rdv.a_reprogrammer_le) };
+  return { rdv: projeterPourPartie(rdvMisAJour, partie), echeance: echeanceReprogrammation(rdv.a_reprogrammer_le) };
 }
 
 /**
@@ -216,5 +222,5 @@ export async function accepterProposition(rdv_id, utilisateur, { nouvelle_date_p
   }
 
   const rdvMisAJour = await prisma.rendezVous.findUnique({ where: { rdv_id } });
-  return { rdv: sansSecret(rdvMisAJour) };
+  return { rdv: projeterPourPartie(rdvMisAJour, partie) };
 }

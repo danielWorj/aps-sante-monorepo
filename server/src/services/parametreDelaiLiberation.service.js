@@ -21,7 +21,8 @@ const LONGUEUR_MAX_LIBELLE = 100;
 /**
  * Erreur métier attendue (saisie invalide, pays inconnu) : le contrôleur la
  * traduit en réponse HTTP via `status`. Toute autre exception reste une
- * erreur technique.
+ * erreur technique. Code « PARAMETRE_DELAI_ABSENT » (409) : aucun T actif pour
+ * le pays d'exercice du médecin.
  */
 export class ErreurParametreDelai extends Error {
   constructor(message, status = 400, code = "PARAMETRE_DELAI_INVALIDE") {
@@ -44,8 +45,12 @@ export async function obtenirParametreDelaiActif(pays_id, client = prisma) {
     orderBy: { date_debut_validite: "desc" },
   });
   if (!ligne) {
-    throw new Error(
-      `Aucun délai de libération des fonds actif pour le pays ${pays_id} : un administrateur doit saisir le délai T avant toute fin de consultation.`
+    // Erreur TYPÉE (409) : les contrôleurs la traduisent en réponse claire
+    // (terminer) ou en « événement ignoré » (webhook visio) au lieu d'un 500.
+    throw new ErreurParametreDelai(
+      `Aucun délai de libération des fonds actif pour le pays ${pays_id} : un administrateur doit saisir le délai T avant toute fin de consultation.`,
+      409,
+      "PARAMETRE_DELAI_ABSENT"
     );
   }
   return ligne;
