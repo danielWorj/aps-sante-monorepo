@@ -62,6 +62,7 @@ import {
   fondsEnAttenteDeLiberation,
   formaterDateLiberation,
 } from "./../../../utils/rdv";
+import ContestationRdv from "./contestation-rdv";
 import PaiementMobileMoney from "./../../paiement/PaiementMobileMoney";
 import ChoixMoyenPaiement from "./../../paiement/ChoixMoyenPaiement";
 import { FactureRdv } from "./../../paiement/FactureRecapitulative";
@@ -208,6 +209,23 @@ const PatientRdv = () => {
     }
     setCodeCopieRdvId(rdv.rdv_id);
     setTimeout(() => setCodeCopieRdvId((id) => (id === rdv.rdv_id ? null : id)), 1800);
+  };
+
+  // ─── Contestation pendant le délai T ────────────────────────
+  // Le RDV passe « conteste » (onglet « Annulés », mention « Contesté ») ; la
+  // libération différée l'ignore, les fonds restent en séquestre.
+  const apresContestation = (rdvId) => {
+    setRendezVous((prev) =>
+      prev.map((r) =>
+        r.rdv_id === rdvId ? { ...r, statut: "conteste", liberation_prevue_le: null } : r
+      )
+    );
+    fermerDetail();
+    showToast(
+      "Consultation contestée. Les fonds restent bloqués et ne seront pas versés au médecin.",
+      7000
+    );
+    chargerRendezVous();
   };
 
   // ─── Paiement d'un RDV « cree » (en attente de paiement) ────
@@ -627,15 +645,7 @@ const PatientRdv = () => {
           )}
 
           {fondsEnAttente && (
-            <div className="note-box">
-              <i className="fa-solid fa-hourglass-half"></i>
-              <span>
-                Consultation terminée. Les fonds seront libérés au médecin le{" "}
-                <strong>{formaterDateLiberation(rdv.liberation_prevue_le)}</strong>.
-                Si la consultation ne s&apos;est pas déroulée correctement, vous pouvez
-                encore la contester avant cette date.
-              </span>
-            </div>
+            <ContestationRdv rdv={rdv} onContestation={apresContestation} />
           )}
 
           <div className="rdv-modal-actions">

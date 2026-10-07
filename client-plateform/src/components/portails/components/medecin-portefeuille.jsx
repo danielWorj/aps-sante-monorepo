@@ -7,10 +7,18 @@
 // Libellés : la retenue sur les honoraires est la commission APS « part médecin » (CM).
 // La commission patient (CP) est à la charge du patient : elle n'apparaît jamais ici
 // comme une déduction sur les honoraires du médecin.
+//
+// Libération différée (T heures) : après une fin de consultation constatée, les honoraires
+// restent en séquestre jusqu'à `liberation_prevue_le` puis sont crédités par le cron. Le
+// « Solde disponible » ne les inclut donc PAS ; un encart « Fonds en attente de libération »
+// les signale (nombre de consultations + prochaine échéance, déduits de la liste des RDV —
+// aucun montant n'est calculé côté client).
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { listerMesRetraits, demanderRetrait } from '../../../services/retraitService';
 import { obtenirPortefeuille } from '../../../services/fondsService';
+import { listerRendezVousMedecinConnecte } from '../../../services/medecinService';
+import { resumerFondsEnAttente, formaterDateLiberation } from '../../../utils/rdv';
 
 const STATUTS = {
   en_attente_validation: { label: 'En attente de validation', classe: 'chip-st-attente', icone: 'fa-hourglass-half' },
@@ -46,6 +54,7 @@ export default function MedecinPortefeuille({ medecinId, mobileMoneys = [], onSo
   const racine = useRef(null);
   const [donnees, setDonnees] = useState(null); // { solde, retraits, limites }
   const [ledger, setLedger] = useState(null); // { solde, mouvements, amendes_en_attente }
+  const [fondsEnAttente, setFondsEnAttente] = useState(null); // { nombre, prochaineLiberation } | null
   const [erreurChargement, setErreurChargement] = useState(null);
   const [mobileMoneyId, setMobileMoneyId] = useState(mobileMoneys[0]?.id || '');
   const [montant, setMontant] = useState('');
@@ -60,6 +69,11 @@ export default function MedecinPortefeuille({ medecinId, mobileMoneys = [], onSo
       onSoldeChange?.(d.solde);
       // Mouvements et amendes en attente : échec non bloquant, le portefeuille reste utilisable.
       try { setLedger(await obtenirPortefeuille(medecinId)); } catch { /* ignoré */ }
+      // Fonds en séquestre (libération différée) : même principe, échec non bloquant.
+      try {
+        const { nombre, prochaineLiberation } = resumerFondsEnAttente(await listerRendezVousMedecinConnecte());
+        setFondsEnAttente({ nombre, prochaineLiberation });
+      } catch { /* ignoré */ }
     } catch (err) {
       setErreurChargement(err.message || 'Impossible de charger votre portefeuille.');
     }
@@ -132,6 +146,18 @@ export default function MedecinPortefeuille({ medecinId, mobileMoneys = [], onSo
             <span className="wallet-solde-label">Solde disponible</span>
             <strong className="wallet-solde-valeur">{fcfa(donnees.solde)}</strong>
           </div>
+
+          {fondsEnAttente?.nombre > 0 && (
+            <div className="note-box mt-3" role="status">
+              <i className="fa-solid fa-hourglass-half"></i>
+              <span>
+                <strong>Fonds en attente de libération :</strong> {fondsEnAttente.nombre} consultation
+                {fondsEnAttente.nombre > 1 ? 's terminées' : ' terminée'}, dont les honoraires restent en
+                séquestre avant d&apos;être crédités sur votre solde. Prochaine libération le{' '}
+                <strong>{formaterDateLiberation(fondsEnAttente.prochaineLiberation)}</strong>.
+              </span>
+            </div>
+          )}
 
           {mobileMoneys.length === 0 ? (
             <div className="note-box">

@@ -20,6 +20,14 @@ export function annulerRendezVousDetaille(id, { motif, commentaire } = {}) {
   return apiFetch(`/rendez-vous/${id}/statut`, { method: 'PATCH', body });
 }
 
+/** PATCH /rendez-vous/:id/statut { statut: 'conteste' } — le PATIENT conteste une consultation
+ *  terminée pendant le délai T : le RDV passe « conteste », le cron de libération l'ignore et les
+ *  fonds restent en séquestre. Irréversible côté patient (aucune transition sortante).
+ *  Erreurs : 403 (transition refusée / pas le patient du RDV), 400 (déjà contesté). */
+export function contesterRendezVous(id) {
+  return apiFetch(`/rendez-vous/${id}/statut`, { method: 'PATCH', body: { statut: 'conteste' } });
+}
+
 /** Propose (ou remplace) une nouvelle date. `nouvelleDateISO` : ISO 8601 d'un créneau libre. */
 export function proposerReprogrammation(rdvId, nouvelleDateISO) {
   return apiFetch(`/rendez-vous/${rdvId}/reprogrammation/proposer`, {
