@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
+import logoApsa from '../assets/img/logoapsa.jpeg';
 
 function navLinkClass({ isActive }) {
   return isActive ? 'active' : undefined;
@@ -30,7 +31,7 @@ export default function Navbar() {
     <header className="aps-navbar">
       <div className="container-aps navbar-inner">
         <Link to="/" className="aps-logo" onClick={closeAll}>
-          <span className="mark"><i className="fa-solid fa-staff-snake" /></span> ApSa
+          <img src={logoApsa} alt="ApSa" className="aps-logo-img" />
         </Link>
 
         <nav className={open ? 'is-open' : ''}>
