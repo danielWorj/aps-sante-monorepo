@@ -284,6 +284,35 @@ class ActionsRendezVousController extends AsyncNotifier<void> {
     }
   }
 
+  /// Termine un RDV physique avec le code de consultation donné par le
+  /// patient (POST /rendez-vous/:id/terminer). Réservé au médecin du RDV.
+  ///
+  /// Lève [ApiException] avec le message précis du serveur (403 code
+  /// incorrect + tentatives restantes, 429 saisie verrouillée, 409 délai T non
+  /// paramétré / déjà terminé…) ; la liste des RDV est invalidée seulement en
+  /// cas de succès.
+  Future<ResultatTerminaison> terminer(
+    String id, {
+    required String code,
+    required String token,
+  }) async {
+    state = const AsyncLoading<void>().copyWithPrevious(state);
+    try {
+      final resultat =
+          await ref.read(rendezVousRepositoryProvider).terminerRendezVous(
+                id: id,
+                code: code,
+                token: token,
+              );
+      state = const AsyncData(null);
+      ref.invalidate(listeRendezVousControllerProvider);
+      return resultat;
+    } catch (e, pile) {
+      state = AsyncError<void>(e, pile);
+      rethrow;
+    }
+  }
+
   /// Propose une nouvelle date pour un RDV `a_reprogrammer` (phase 5).
   /// [nouvelleDateIso] vient de `CreneauAgenda.iso`. Lève [ApiException]
   /// avec le message du serveur ; la liste des RDV est invalidée seulement

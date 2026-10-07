@@ -33,18 +33,28 @@
 //   - RÉPARTITION DU PAIEMENT : la modale de détail (admin, RDV payé) affiche la
 //     décomposition complète via GET /paiement/rendez-vous/:id/facture :
 //     H, frais d'agrégateur, CP, total payé, puis CM et net médecin (D7 : l'admin voit tout).
-//   - `honore` n'est JAMAIS posé via le PUT/PATCH générique : seule la
-//     libération forcée (POST .../forcer-liberation, admin) le fait, en
-//     libérant aussi les fonds vers le médecin.
+//   - `honore` n'est JAMAIS posé via le PUT/PATCH générique. Il résulte soit
+//     de la libération différée (cron serveur, une fois `termine_le` + T
+//     écoulé), soit de la libération forcée (POST .../forcer-liberation,
+//     admin) qui court-circuite T ; dans les deux cas les fonds partent aussi
+//     vers le médecin.
+//   - FIN DE CONSULTATION (libération différée des fonds) : le médecin valide
+//     le code de consultation (RDV physique) ou la visio est clôturée
+//     (téléconsultation). Le serveur renseigne alors `termine_le` et fige T
+//     (`delai_liberation_heures`) ; le statut reste « confirmé » /
+//     « en attente de présence » et les fonds restent en séquestre jusqu'à
+//     `liberation_prevue_le` (= termine_le + T, recalculée côté serveur).
+//     La page affiche ces trois informations, jamais modifiables ici.
 //   - `a_reprogrammer` est posé par le traitement d'absence (deux
 //     absents) ; la nouvelle date ne se fixe que par proposition +
 //     acceptation de l'autre partie (portail patient/médecin), jamais
 //     par un PUT unilatéral (409).
 //
-// `code_unique` (contrôle de présence à l'accueil) est affiché tel que
-// renvoyé par le serveur ; `qr_token_secret` n'est JAMAIS affiché ici,
-// même si le serveur le renvoie dans le corps de la réponse — c'est un
-// secret de vérification, pas une donnée d'écran.
+// `code_unique` est le code de consultation, SECRET DU PATIENT : le médecin
+// le reçoit oralement du patient pour clôturer le rendez-vous physique, et
+// l'API ne le lui renvoie jamais. Seuls le patient et l'admin le voient ; il
+// est affiché ici (vue admin) uniquement pour dépanner un patient qui l'a
+// perdu. `qr_token_secret` (obsolète) n'est JAMAIS affiché ici.
 //
 // Le rôle de l'utilisateur connecté détermine la vue :
 //   - patient  → ne voit/ne filtre que SES rendez-vous (patient_id
@@ -71,7 +81,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import AnnulationAdminModal from '../components/AnnulationAdminModal';
 import { annulerRendezVousAdmin, forcerLiberation, obtenirFactureRendezVous } from '../services/fondsService';
-import { DELAI_REPROGRAMMATION_H, dateHeure, lignesRepartitionPaiement, resumerAnnulation } from '../utils/fonds';
+import { DELAI_REPROGRAMMATION_H, dateHeure, heuresLisibles, lignesRepartitionPaiement, resumerAnnulation } from '../utils/fonds';
 import {
   listerRendezVous,
   creerRendezVous,
@@ -180,7 +190,7 @@ function statutsProposes(role, statutActuel) {
   if (statutActuel) ensemble.add(statutActuel);
   // Cibles refusées par le PUT/PATCH générique côté serveur :
   //   - annule          → bouton dédié (motif + initiateur + remboursement) ;
-  //   - honore          → libération forcée (libère aussi les fonds) ;
+  //   - honore          → libération différée (cron) ou forcée (libère aussi les fonds) ;
   //   - a_reprogrammer  → posé par le traitement d'absence uniquement.
   // Le statut ACTUEL reste toujours affiché, même s'il fait partie de la liste.
   const CIBLES_REFUSEES = ['annule', 'honore', 'a_reprogrammer'];
@@ -232,6 +242,24 @@ function peutAnnulerStatut(statut) {
 // P4 du guide : libération forcée proposée sur ces statuts ; le serveur
 // renvoie de toute façon un 409 clair (pas d'escrow / déjà traité).
 const STATUTS_LIBERATION_FORCEE = ['confirme', 'en_attente_presence'];
+
+// Libération différée : une fois la fin de consultation constatée (code validé
+// ou visio clôturée), `termine_le` est renseigné mais le statut reste
+// « confirmé » / « en attente de présence » pendant T heures ; le cron serveur
+// le passe ensuite à « honoré » en libérant les fonds.
+function consultationTerminee(rdv) {
+  return Boolean(rdv?.termine_le) && STATUTS_LIBERATION_FORCEE.includes(rdv.statut);
+}
+
+// Date de libération prévue : fournie par le serveur (`liberation_prevue_le`),
+// recalculée ici (termine_le + T) en secours si le champ est absent.
+function dateLiberationPrevue(rdv) {
+  if (rdv?.liberation_prevue_le) return rdv.liberation_prevue_le;
+  if (!rdv?.termine_le || rdv.delai_liberation_heures == null) return null;
+  const debut = new Date(rdv.termine_le).getTime();
+  if (Number.isNaN(debut)) return null;
+  return new Date(debut + Number(rdv.delai_liberation_heures) * 3600 * 1000).toISOString();
+}
 
 // Répartition du paiement d'un RDV payé (vue admin, D7 : tout est visible) :
 // facture du patient (H, frais d'agrégateur, CP, total) + CM et net médecin.
@@ -312,6 +340,58 @@ function InfoReprogrammation({ rdv }) {
           Proposition ({rdv.proposee_par || '—'}) : {dateHeure(rdv.nouvelle_date_proposee)}
         </>
       )}
+    </div>
+  );
+}
+
+// Ligne de tableau : consultation terminée, fonds encore en séquestre.
+function InfoLiberation({ rdv }) {
+  if (!consultationTerminee(rdv)) return null;
+  const prevue = dateLiberationPrevue(rdv);
+  return (
+    <div className="small aps-text-muted mt-1">
+      <i className="fa-solid fa-hourglass-half me-1"></i>
+      Consultation terminée — fonds libérés le {prevue ? formaterDateHeure(prevue) : '—'}
+    </div>
+  );
+}
+
+// Détail du RDV : fin de consultation constatée, T figé et date de libération.
+// Affiché dès que `termine_le` est renseigné (aussi après passage à « honoré »).
+function DetailLiberation({ rdv }) {
+  if (!rdv?.termine_le) return null;
+  const prevue = dateLiberationPrevue(rdv);
+  const enAttente = consultationTerminee(rdv);
+  return (
+    <div className="mb-3">
+      <div className="row g-3">
+        <div className="col-md-4">
+          <label className="form-label">Terminé le</label>
+          <div className="form-control-plaintext" style={{ fontSize: 14 }}>{formaterDateHeure(rdv.termine_le)}</div>
+        </div>
+        <div className="col-md-4">
+          <label className="form-label">Libération prévue le</label>
+          <div className="form-control-plaintext" style={{ fontSize: 14 }}>{prevue ? formaterDateHeure(prevue) : '—'}</div>
+        </div>
+        <div className="col-md-4">
+          <label className="form-label">T appliqué</label>
+          <div className="form-control-plaintext" style={{ fontSize: 14 }}>
+            {rdv.delai_liberation_heures == null ? '—' : heuresLisibles(rdv.delai_liberation_heures)}
+          </div>
+        </div>
+      </div>
+      {enAttente && (
+        <div className="aps-notice is-info mt-2">
+          <i className="fa-solid fa-hourglass-half"></i>
+          <div>
+            Consultation terminée : les fonds restent en séquestre jusqu'à cette date, puis sont libérés automatiquement
+            au médecin. « Libérer maintenant » court-circuite ce délai.
+          </div>
+        </div>
+      )}
+      <small className="aps-text-muted d-block mt-1">
+        T est figé à la fin de la consultation : une modification ultérieure du paramètre ne s'applique pas à ce rendez-vous.
+      </small>
     </div>
   );
 }
@@ -647,9 +727,16 @@ export default function RendezVous() {
     }
   }
 
-  // Arbitrage admin : « les deux présents mais RDV jamais clôturé » (spec §5).
+  // Libération manuelle (dernier recours) : court-circuite le délai T quand la
+  // consultation est déjà terminée, ou arbitre un RDV jamais clôturé (spec §5).
   async function libererFonds(rdv) {
-    if (!window.confirm('Marquer ce rendez-vous comme honoré et libérer les fonds vers le médecin ? Action définitive.')) return;
+    const prevue = dateLiberationPrevue(rdv);
+    const message = consultationTerminee(rdv)
+      ? `Le délai de libération (T) est court-circuité : les fonds étaient prévus pour le ${prevue ? formaterDateHeure(prevue) : '—'}. ` +
+        'Marquer ce rendez-vous comme honoré et libérer les fonds vers le médecin maintenant ? Action définitive.'
+      : "Ce rendez-vous n'a pas été clôturé (aucun code validé, aucune visio clôturée) : le délai T est ignoré. " +
+        'Marquer ce rendez-vous comme honoré et libérer les fonds vers le médecin maintenant ? Action définitive.';
+    if (!window.confirm(message)) return;
     setMessageFonds(null);
     try {
       const rep = await forcerLiberation(rdv.rdv_id);
@@ -924,6 +1011,7 @@ export default function RendezVous() {
                               <i className={`fa-solid ${meta.icone || 'fa-circle'}`}></i> {libelleStatut(rdv.statut)}
                             </span>
                             <InfoReprogrammation rdv={rdv} />
+                            <InfoLiberation rdv={rdv} />
                           </td>
                           <td className="text-end">
                             <div className="d-flex gap-1 justify-content-end">
@@ -942,7 +1030,7 @@ export default function RendezVous() {
                               {peutLiberer && (
                                 <button
                                   className="btn btn-sm btn-light"
-                                  title="Forcer la libération des fonds (arbitrage)"
+                                  title="Libérer maintenant (avant T) — arbitrage"
                                   onClick={() => libererFonds(rdv)}
                                 >
                                   <i className="fa-solid fa-hand-holding-dollar"></i>
@@ -1107,7 +1195,7 @@ export default function RendezVous() {
             )}
             {rdvActif && estAdmin && STATUTS_LIBERATION_FORCEE.includes(rdvActif.statut) && !modeEdition && (
               <button className="btn btn-outline-secondary" onClick={() => libererFonds(rdvActif)} disabled={enregistrementEnCours}>
-                <i className="fa-solid fa-hand-holding-dollar me-1"></i>Libérer les fonds
+                <i className="fa-solid fa-hand-holding-dollar me-1"></i>Libérer maintenant (avant T)
               </button>
             )}
             {rdvActif && peutSupprimer && (
@@ -1155,7 +1243,7 @@ export default function RendezVous() {
                 </div>
               </div>
               <div className="col-md-6">
-                <label className="form-label">Code de contrôle (accueil)</label>
+                <label className="form-label">Code de consultation (secret du patient)</label>
                 <div className="form-control-plaintext rdv-code-unique">{rdvActif.code_unique || '—'}</div>
               </div>
             </div>
@@ -1209,6 +1297,8 @@ export default function RendezVous() {
                 )}
               </div>
             </div>
+
+            <DetailLiberation rdv={rdvActif} />
 
             {rdvActif.type_rdv === 'physique' && (
               <div className="mb-3">

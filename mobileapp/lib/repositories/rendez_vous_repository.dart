@@ -50,10 +50,27 @@ class ApiException implements Exception {
   final String message;
   final int? statusCode;
 
-  const ApiException(this.message, {this.statusCode});
+  /// Corps JSON de la réponse d'erreur, quand il s'agit d'un objet. Sert à
+  /// lire les champs annexes du serveur (ex. `tentatives_restantes` et
+  /// `reessayer_apres` à la saisie du code de consultation).
+  final Map<String, dynamic>? donnees;
+
+  const ApiException(this.message, {this.statusCode, this.donnees});
 
   /// Vrai si l'échec vient d'une absence/expiration d'authentification.
   bool get estNonAutorise => statusCode == 401 || statusCode == 403;
+
+  /// Saisie du code : nombre d'essais restants avant verrouillage (403).
+  int? get tentativesRestantes {
+    final v = donnees?['tentatives_restantes'];
+    return v is num ? v.toInt() : null;
+  }
+
+  /// Saisie du code : fin du verrouillage temporaire (429).
+  DateTime? get reessayerApres {
+    final v = donnees?['reessayer_apres'];
+    return v is String ? DateTime.tryParse(v) : null;
+  }
 
   @override
   String toString() => message;
@@ -78,15 +95,23 @@ class RendezVousRepository {
   dynamic _decoder(http.Response reponse) {
     if (reponse.statusCode < 200 || reponse.statusCode >= 300) {
       String message = 'Erreur ${reponse.statusCode}: ${reponse.body}';
+      Map<String, dynamic>? donnees;
       try {
         final corps = jsonDecode(reponse.body);
-        if (corps is Map && corps['message'] is String) {
-          message = corps['message'] as String;
+        if (corps is Map<String, dynamic>) {
+          donnees = corps;
+          if (corps['message'] is String) {
+            message = corps['message'] as String;
+          }
         }
       } catch (_) {
         // Corps non-JSON : on garde le message par défaut.
       }
-      throw ApiException(message, statusCode: reponse.statusCode);
+      throw ApiException(
+        message,
+        statusCode: reponse.statusCode,
+        donnees: donnees,
+      );
     }
     if (reponse.body.isEmpty) return null;
     return jsonDecode(reponse.body);
@@ -258,6 +283,39 @@ class RendezVousRepository {
       token: token,
     );
     return RendezVous.fromJson(donnees['rendez_vous'] as Map<String, dynamic>);
+  }
+
+  /// POST /rendez-vous/:id/terminer  { code }
+  ///
+  /// Fin d'un RDV PHYSIQUE : réservé au médecin du rendez-vous, qui saisit le
+  /// code de consultation que le patient lui communique. Succès : le RDV passe
+  /// `honore` et les fonds restent en séquestre T heures (T figé par le
+  /// serveur), puis sont libérés automatiquement — la réponse porte la date
+  /// prévue ([ResultatTerminaison.liberationPrevueLe]).
+  ///
+  /// Le code est envoyé tel que saisi (le serveur le normalise). Lève
+  /// [ApiException] avec le message du serveur :
+  ///   - 400 format invalide, ou RDV non physique ;
+  ///   - 403 code incorrect ([ApiException.tentativesRestantes]) ou pas le
+  ///     médecin du RDV ;
+  ///   - 409 délai T non paramétré pour le pays, RDV déjà terminé / plus
+  ///     terminable, pas de paiement en séquestre ;
+  ///   - 429 trop de tentatives ([ApiException.reessayerApres]).
+  Future<ResultatTerminaison> terminerRendezVous({
+    required String id,
+    required String code,
+    required String token,
+  }) async {
+    final donnees = await _post(
+      ApiRealEndpoints.terminerRendezVous(id),
+      body: {'code': code},
+      token: token,
+    );
+    if (donnees is! Map<String, dynamic>) {
+      // 2xx sans corps exploitable : la consultation est terminée côté serveur.
+      return const ResultatTerminaison();
+    }
+    return ResultatTerminaison.fromJson(donnees);
   }
 
   /// PATCH /rendez-vous/:id/statut avec `statut: annule`.

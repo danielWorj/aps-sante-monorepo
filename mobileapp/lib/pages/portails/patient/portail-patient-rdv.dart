@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../components/buttons/bouton_payer_rdv.dart';
+import '../../../components/cards/info_liberation_fonds.dart';
 import '../../../components/components.dart';
 import '../../../components/dialogs/avertissement_annulation.dart';
 import '../../../components/dialogs/dialogue_motif_annulation.dart';
@@ -35,6 +37,13 @@ import '../teleconsultation_screen.dart';
 ///   Un patient ne peut ni confirmer ni refuser une demande (ça, c'est
 ///   le rôle du médecin) : "Annuler" et "Contester" remplacent donc
 ///   "Confirmer"/"Refuser" de l'espace médecin.
+///
+/// Code de consultation : pour un RDV PHYSIQUE payé et pas encore terminé,
+/// la carte affiche le code (6 caractères) que le patient communique au
+/// médecin à la FIN de la consultation (le médecin le saisit pour la
+/// clôturer ; le serveur ne le lui renvoie jamais). Une fois le RDV `honore`,
+/// la carte indique quand les fonds sont libérés au médecin : le patient peut
+/// encore contester jusque-là.
 ///
 /// ⚠️ Ce widget ne gère plus sa propre barre de navigation basse :
 /// il est destiné à être affiché comme un onglet parmi d'autres à
@@ -352,6 +361,7 @@ class _SegmentedTabs extends ConsumerWidget {
           count: rdvList
               .where((r) =>
                   r.statut == StatutRendezVous.confirme ||
+                  r.statut == StatutRendezVous.enAttentePresence ||
                   r.statut == StatutRendezVous.aReprogrammer)
               .length,
         ),
@@ -543,6 +553,7 @@ class _PanelConfirme extends ConsumerWidget {
         final rdvConfirmes = rdvList
             .where((r) =>
                 r.statut == StatutRendezVous.confirme ||
+                r.statut == StatutRendezVous.enAttentePresence ||
                 r.statut == StatutRendezVous.aReprogrammer)
             .toList();
 
@@ -610,6 +621,13 @@ class _PanelConfirme extends ConsumerWidget {
                               ),
                               const SizedBox(height: 8),
                             ],
+                            // Code de consultation : RDV physique payé, pas
+                            // encore terminé. Jamais affiché au médecin.
+                            if (rdv.estTerminableParCode &&
+                                rdv.codeUnique.isNotEmpty) ...[
+                              _CarteCodeConsultation(code: rdv.codeUnique),
+                              const SizedBox(height: 8),
+                            ],
                             _LienFacture(rdvId: rdv.rdvId),
                           ],
                         ),
@@ -620,10 +638,15 @@ class _PanelConfirme extends ConsumerWidget {
                                   style: BadgeChipStyle.coral,
                                   icon: Icons.event_busy_outlined,
                                 )
-                              : const BadgeChip(
-                                  label: 'Confirmé',
-                                  style: BadgeChipStyle.green,
-                                ),
+                              : rdv.statut == StatutRendezVous.enAttentePresence
+                                  ? const BadgeChip(
+                                      label: 'En cours',
+                                      style: BadgeChipStyle.amber,
+                                    )
+                                  : const BadgeChip(
+                                      label: 'Confirmé',
+                                      style: BadgeChipStyle.green,
+                                    ),
                           action: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -851,7 +874,22 @@ class _PanelTermines extends ConsumerWidget {
                   subtitle2: rdv.typeRdv == TypeRdv.teleconsultation
                       ? 'Téléconsultation'
                       : 'Cabinet',
-                  footer: _LienFacture(rdvId: rdv.rdvId),
+                  footer: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Fonds encore en séquestre : le patient peut contester
+                      // jusqu'à la date de libération.
+                      if (rdv.fondsEnAttenteDeLiberation) ...[
+                        InfoLiberationFonds(
+                          message:
+                              'Fonds libérés au médecin le ${dateCourte(rdv.liberationPrevueLe)}. '
+                              'Vous pouvez contester ce rendez-vous avant cette date.',
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      _LienFacture(rdvId: rdv.rdvId),
+                    ],
+                  ),
                   bottom: _Frow(
                     badge: BadgeChip(
                       label: rdv.statut == StatutRendezVous.honore
@@ -1082,6 +1120,84 @@ class _AppointmentCard extends StatelessWidget {
               const SizedBox(height: 12),
               footer!,
             ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Carte « Votre code de consultation » (RDV physique payé, pas encore
+/// terminé). Le patient dicte ce code au médecin à la FIN de la consultation :
+/// le médecin le saisit pour la clôturer et déclencher la libération des
+/// fonds. Secret du patient : à ne donner qu'à ce moment-là.
+class _CarteCodeConsultation extends StatelessWidget {
+  final String code;
+
+  const _CarteCodeConsultation({required this.code});
+
+  void _copier(BuildContext context) {
+    Clipboard.setData(ClipboardData(text: code));
+    HapticFeedback.selectionClick();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Code copié dans le presse-papiers'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.green50,
+        border: Border.all(color: AppColors.green100),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Votre code de consultation',
+            style: TextStyle(
+              fontFamily: AppTextStyles.fontDisplay,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: AppColors.green900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: SelectableText(
+                  code,
+                  style: const TextStyle(
+                    fontFamily: AppTextStyles.fontMono,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 6,
+                    color: AppColors.green700,
+                  ),
+                ),
+              ),
+              AppOutlineButton(
+                label: 'Copier',
+                icon: Icons.copy_rounded,
+                onPressed: () => _copier(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'À donner au médecin uniquement à la fin de la consultation.',
+            style: TextStyle(
+              fontSize: 11,
+              height: 1.35,
+              color: AppColors.inkSoft,
+            ),
+          ),
         ],
       ),
     );

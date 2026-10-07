@@ -256,13 +256,21 @@ class PatientRdvRef {
 /// systématiquement inclus par le backend sur tous les endpoints de
 /// lecture/écriture de ce module (INCLUSION_NOMS_RDV).
 ///
-/// `code_unique` et `qr_token_secret` servent au contrôle de présence à
-/// l'accueil (scan/QR) : générés côté serveur à la création, jamais
-/// saisis par le client — [qrTokenSecret] est donc à traiter comme une
-/// donnée sensible côté app (ne jamais l'afficher en clair à l'écran,
-/// ne l'utiliser que pour générer/vérifier le QR). Il est NULLABLE : les
-/// réponses de reprogrammation (proposer/accepter) renvoient le
-/// rendez-vous sans ce champ (voir sansSecret côté serveur).
+/// `code_unique` est le CODE DE CONSULTATION : un secret du PATIENT
+/// (6 caractères), généré côté serveur à la création et jamais saisi par le
+/// client. Le patient le communique au médecin à la FIN de la consultation ;
+/// le médecin le saisit pour terminer le RDV physique. Le serveur ne le
+/// renvoie JAMAIS au médecin : [codeUnique] vaut donc `''` dans l'espace
+/// médecin et ne doit jamais y être affiché. [qrTokenSecret] n'est plus
+/// utilisé (le scan QR a été remplacé par ce code) et n'est plus renvoyé.
+///
+/// Libération différée des fonds (T heures) :
+///   - [termineLe]           : fin de consultation constatée (code valide
+///                             ou clôture de la visio) ;
+///   - [liberationPrevueLe]  : date à laquelle les fonds sont libérés au
+///                             médecin (`termine_le` + T, calculée par le
+///                             serveur) ; `null` tant que la consultation
+///                             n'est pas terminée.
 ///
 /// Politique de fonds v2 — reprogrammation « deux absents » :
 ///   - [aReprogrammerLe]       : date de passage au statut `a_reprogrammer`
@@ -292,6 +300,9 @@ class RendezVous {
   final PartieRendezVous? proposeePar;
   final DateTime? dateProposition;
 
+  final DateTime? termineLe;
+  final DateTime? liberationPrevueLe;
+
   final MedecinRdvRef? medecin;
   final PatientRdvRef? patient;
 
@@ -318,10 +329,28 @@ class RendezVous {
     this.nouvelleDateProposee,
     this.proposeePar,
     this.dateProposition,
+    this.termineLe,
+    this.liberationPrevueLe,
     this.medecin,
     this.patient,
     this.nonPaye = false,
   });
+
+  /// RDV physique pour lequel le patient doit pouvoir consulter son code de
+  /// consultation (consultation pas encore terminée) et le médecin peut
+  /// cliquer sur « Terminé ».
+  bool get estTerminableParCode =>
+      !estNonPaye &&
+      typeRdv == TypeRdv.physique &&
+      (statut == StatutRendezVous.confirme ||
+          statut == StatutRendezVous.enAttentePresence);
+
+  /// Les fonds de ce RDV honoré sont encore en séquestre : leur libération
+  /// est prévue dans le futur.
+  bool get fondsEnAttenteDeLiberation =>
+      statut == StatutRendezVous.honore &&
+      liberationPrevueLe != null &&
+      liberationPrevueLe!.isAfter(DateTime.now());
 
   /// RDV non payé (D8) : `non_paye: true` renvoyé par le serveur, ou statut
   /// `cree` (miroir de `estRdvNonPaye` côté web). Pour le médecin, un tel
@@ -363,6 +392,8 @@ class RendezVous {
       nouvelleDateProposee: _lireDate(json, 'nouvelle_date_proposee'),
       proposeePar: PartieRendezVous.fromApi(_lire<String>(json, 'proposee_par')),
       dateProposition: _lireDate(json, 'date_proposition'),
+      termineLe: _lireDate(json, 'termine_le'),
+      liberationPrevueLe: _lireDate(json, 'liberation_prevue_le'),
       medecin: json['medecin'] is Map<String, dynamic>
           ? MedecinRdvRef.fromJson(json['medecin'] as Map<String, dynamic>)
           : null,
@@ -391,6 +422,9 @@ class RendezVous {
     if (proposeePar != null) 'proposee_par': proposeePar!.toApi(),
     if (dateProposition != null)
       'date_proposition': dateProposition!.toIso8601String(),
+    if (termineLe != null) 'termine_le': termineLe!.toIso8601String(),
+    if (liberationPrevueLe != null)
+      'liberation_prevue_le': liberationPrevueLe!.toIso8601String(),
     if (medecin != null) 'medecin': medecin!.toJson(),
     if (patient != null) 'patient': patient!.toJson(),
     if (nonPaye) 'non_paye': true,
@@ -412,6 +446,8 @@ class RendezVous {
     DateTime? nouvelleDateProposee,
     PartieRendezVous? proposeePar,
     DateTime? dateProposition,
+    DateTime? termineLe,
+    DateTime? liberationPrevueLe,
     MedecinRdvRef? medecin,
     PatientRdvRef? patient,
     bool? nonPaye,
@@ -433,6 +469,8 @@ class RendezVous {
       nouvelleDateProposee: nouvelleDateProposee ?? this.nouvelleDateProposee,
       proposeePar: proposeePar ?? this.proposeePar,
       dateProposition: dateProposition ?? this.dateProposition,
+      termineLe: termineLe ?? this.termineLe,
+      liberationPrevueLe: liberationPrevueLe ?? this.liberationPrevueLe,
       medecin: medecin ?? this.medecin,
       patient: patient ?? this.patient,
       nonPaye: nonPaye ?? this.nonPaye,
@@ -965,6 +1003,37 @@ class ResultatReprogrammation {
       message: _lire<String>(json, 'message'),
       rendezVous: _rendezVousTolerant(json['rendez_vous']),
       echeance: _lireDate(json, 'echeance_reprogrammation'),
+    );
+  }
+}
+
+/// Réponse de POST /rendez-vous/:id/terminer :
+/// `{ message, rendez_vous, liberation_prevue_le }`.
+///   - [rendezVous]         : RDV passé `honore`, SANS `code_unique` (le
+///                            médecin ne le reçoit jamais), parsé de façon
+///                            tolérante : une consultation déjà terminée côté
+///                            serveur ne doit jamais apparaître comme un échec
+///                            à cause d'un champ illisible ;
+///   - [liberationPrevueLe] : date de libération des fonds (`termine_le` + T,
+///                            T étant figé par le serveur à la validation).
+class ResultatTerminaison {
+  final String? message;
+  final RendezVous? rendezVous;
+  final DateTime? liberationPrevueLe;
+
+  const ResultatTerminaison({
+    this.message,
+    this.rendezVous,
+    this.liberationPrevueLe,
+  });
+
+  factory ResultatTerminaison.fromJson(Map<String, dynamic> json) {
+    final rdv = _rendezVousTolerant(json['rendez_vous']);
+    return ResultatTerminaison(
+      message: _lire<String>(json, 'message'),
+      rendezVous: rdv,
+      liberationPrevueLe:
+          _lireDate(json, 'liberation_prevue_le') ?? rdv?.liberationPrevueLe,
     );
   }
 }
