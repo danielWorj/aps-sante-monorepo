@@ -8,19 +8,26 @@
 // (patient concerné, médecin concerné, ou admin/superadmin) est
 // appliquée ICI, au cas par cas.
 //
-// code_unique / qr_token_secret servent au contrôle de présence à
-// l'accueil (scan/QR) : générés côté serveur à la création, jamais
-// saisis par le client.
+// code_unique est le CODE DE CONSULTATION : un secret du PATIENT (6
+// caractères), généré côté serveur à la création, jamais saisi par le
+// client et jamais renvoyé au médecin. Pour un RDV physique, le médecin le
+// reçoit de la bouche du patient à la FIN de la consultation et le saisit
+// (POST .../terminer) : la fin est alors constatée et les fonds restent en
+// séquestre T heures avant libération différée (liberationDifferee.service.js).
+// qr_token_secret n'est plus utilisé (colonne conservée, jamais lue ni exposée).
 
 import crypto from "crypto";
 import prisma from "../lib/prisma.js";
 import { libererEscrow } from "../services/liberationEscrow.service.js";
 import { traiterAnnulation } from "../services/annulation.service.js";
-import { enregistrerPresence } from "../services/presence.service.js";
+import { STATUTS_FIN_CONSULTATION, validerCodeConsultation } from "../services/finConsultation.service.js";
+import { ErreurParametreDelai } from "../services/parametreDelaiLiberation.service.js";
+import { genererCodeConsultation } from "../lib/codeConsultation.js";
 import {
   ROLES_VISIBILITE,
   filtrerResultatAnnulation,
   projeterRdvNonPayePourMedecin,
+  projeterRdvPourRole,
 } from "../services/visibiliteRole.service.js";
 import { estViolationCreneauActif, MESSAGE_CRENEAU_PRIS } from "../utils/erreursPrisma.js";
 
@@ -85,7 +92,7 @@ async function profilMedecinCourant(utilisateurCourant) {
  * D8 — RDV non payé : lecture seule pour le médecin, verrouillé côté serveur.
  * Un RDV « cree » (avant finaliserPaiement) n'a ni fonds, ni CP, ni CM : le
  * médecin ne peut ni le confirmer, ni l'annuler, ni déclarer d'absence, ni
- * le reprogrammer, ni le scanner, ni émettre d'ordonnance. Le statut est
+ * le reprogrammer, ni le terminer, ni émettre d'ordonnance. Le statut est
  * toujours relu en base (jamais d'après le client). Seuls le patient
  * propriétaire, un admin ou l'expiration automatique peuvent l'annuler.
  * ------------------------------------------------------------------- */
@@ -142,25 +149,32 @@ async function donneesPresenceTransition(rdv, utilisateurCourant, nouveauStatut,
 }
 
 /**
- * Génère un code_unique (8 caractères alphanumériques, majuscules) et
- * retire sur collision — extrêmement improbable vu l'espace de
- * recherche, mais code_unique porte une contrainte @unique en base.
+ * Génère un code_unique (code de consultation : 6 caractères, alphabet sans
+ * caractères ambigus, voir lib/codeConsultation.js) et retire sur collision —
+ * rarissime (32^6 combinaisons) mais code_unique porte une contrainte @unique
+ * en base.
  */
 async function genererCodeUnique() {
-  const genere = () =>
-    crypto
-      .randomBytes(6)
-      .toString("base64")
-      .replace(/[^A-Za-z0-9]/g, "")
-      .slice(0, 8)
-      .toUpperCase();
-
-  let code = genere();
+  let code = genererCodeConsultation();
   // eslint-disable-next-line no-await-in-loop
   while (await prisma.rendezVous.findUnique({ where: { code_unique: code } })) {
-    code = genere();
+    code = genererCodeConsultation();
   }
   return code;
+}
+
+/**
+ * Rôle de visibilité de CELUI QUI REÇOIT la réponse, pour projeterRdvPourRole.
+ * Même ordre de priorité qu'agitEnTantQueMedecinDuRdv : un admin voit tout, le
+ * patient propriétaire voit son code, sinon (médecin du RDV) le code est masqué.
+ * Par prudence, tout appelant qui n'est ni admin ni le patient du RDV est
+ * traité comme un médecin (vue la plus restrictive).
+ */
+async function roleDeVisibilite(rdv, utilisateurCourant) {
+  if (estAdmin(utilisateurCourant)) return ROLES_VISIBILITE.ADMIN;
+  const patient = await profilPatientCourant(utilisateurCourant);
+  if (patient && patient.patient_id === rdv.patient_id) return ROLES_VISIBILITE.PATIENT;
+  return ROLES_VISIBILITE.MEDECIN;
 }
 
 /**
@@ -287,7 +301,8 @@ async function annulerRendezVous(req, res, rdv) {
   // (`frais_annulation` de l'ancienne politique n'existe plus.)
   return res.status(200).json({
     message: "Rendez-vous annulé.",
-    rendez_vous: rdvMisAJour,
+    // Projection par rôle : jamais de qr_token_secret ; code_unique masqué au médecin.
+    rendez_vous: projeterRdvPourRole(rdvMisAJour, roleReponse),
     ...filtrerResultatAnnulation(resultat, roleReponse),
   });
 }
@@ -315,6 +330,8 @@ export async function listerRendezVous(req, res, next) {
 
     const where = {};
     let vueMedecin = false;
+    // Rôle de CELUI QUI REÇOIT la liste (projection du code de consultation).
+    let roleListe = ROLES_VISIBILITE.ADMIN;
 
     if (estAdmin(req.utilisateur)) {
       if (statut) where.statut = statut;
@@ -331,10 +348,13 @@ export async function listerRendezVous(req, res, next) {
       // Un compte n'a normalement qu'un seul des deux profils ; on
       // scope sur celui qui existe (patient prioritaire si les deux
       // existaient, cas non prévu par le schéma).
-      if (patient) where.patient_id = patient.patient_id;
-      else if (medecin) {
+      if (patient) {
+        where.patient_id = patient.patient_id;
+        roleListe = ROLES_VISIBILITE.PATIENT;
+      } else if (medecin) {
         where.medecin_id = medecin.medecin_id;
         vueMedecin = true;
+        roleListe = ROLES_VISIBILITE.MEDECIN;
       }
 
       if (statut) where.statut = statut;
@@ -349,9 +369,13 @@ export async function listerRendezVous(req, res, next) {
     // D8 : pour le médecin, un RDV non payé se réduit au strict nécessaire
     // (identifiant, créneau, statut, `non_paye: true`) — ni patient, ni motif,
     // ni code, ni QR : ces données ne doivent pas figurer dans le JSON.
-    const visibles = vueMedecin
-      ? rendezVous.map((r) => (r.statut === STATUT_RDV_NON_PAYE ? projeterRdvNonPayePourMedecin(r) : r))
-      : rendezVous;
+    // Pour tous : projection par rôle (jamais de qr_token_secret ; le médecin ne
+    // reçoit jamais code_unique, secret du patient).
+    const visibles = rendezVous.map((r) =>
+      vueMedecin && r.statut === STATUT_RDV_NON_PAYE
+        ? projeterRdvNonPayePourMedecin(r)
+        : projeterRdvPourRole(r, roleListe)
+    );
 
     return res.status(200).json({ rendez_vous: visibles });
   } catch (err) {
@@ -377,7 +401,9 @@ export async function obtenirRendezVous(req, res, next) {
       return res.status(200).json({ rendez_vous: projeterRdvNonPayePourMedecin(rdv) });
     }
 
-    return res.status(200).json({ rendez_vous: rdv });
+    return res.status(200).json({
+      rendez_vous: projeterRdvPourRole(rdv, await roleDeVisibilite(rdv, req.utilisateur)),
+    });
   } catch (err) {
     next(err);
   }
@@ -462,7 +488,11 @@ export async function creerRendezVous(req, res, next) {
       },
     });
 
-    return res.status(201).json({ message: "Rendez-vous créé.", rendez_vous: rdv });
+    // Réponse au PATIENT : il reçoit son code de consultation (secret à ne
+    // donner au médecin qu'à la fin de la consultation) ; jamais le secret QR.
+    return res
+      .status(201)
+      .json({ message: "Rendez-vous créé.", rendez_vous: projeterRdvPourRole(rdv, ROLES_VISIBILITE.PATIENT) });
   } catch (err) {
     // Politique de fonds v2 §6 : index unique partiel — un seul RDV actif
     // par (médecin, créneau). Course entre deux réservations simultanées.
@@ -607,7 +637,10 @@ export async function modifierRendezVous(req, res, next) {
       data: donnees,
     });
 
-    return res.status(200).json({ message: "Rendez-vous mis à jour.", rendez_vous: rdvMisAJour });
+    return res.status(200).json({
+      message: "Rendez-vous mis à jour.",
+      rendez_vous: projeterRdvPourRole(rdvMisAJour, await roleDeVisibilite(rdvMisAJour, req.utilisateur)),
+    });
   } catch (err) {
     // Déplacement vers un créneau déjà occupé par un autre RDV actif du médecin (§6).
     if (estViolationCreneauActif(err)) return res.status(409).json({ message: MESSAGE_CRENEAU_PRIS });
@@ -633,10 +666,12 @@ export async function modifierRendezVous(req, res, next) {
  * conditionnelle) : la transition medecin "en_attente_presence" ->
  * "honore" a été VOLONTAIREMENT retirée de cette table. Elle n'est
  * plus atteignable que via les trois déclencheurs dédiés qui
- * appellent libererEscrow (services/liberationEscrow.service.js) :
- *   - scannerQrRendezVous ci-dessous (RDV physique) ;
- *   - la clôture de session de téléconsultation (visio.controller.js) ;
- *   - forcerLiberationEscrow ci-dessous (admin/superadmin uniquement).
+ * passent par la libération des fonds (services/liberationEscrow.service.js) :
+ *   - la libération DIFFÉRÉE (liberationDifferee.service.js), T heures après
+ *     la fin de consultation constatée par terminerRendezVous (code saisi par
+ *     le médecin, RDV physique) ou par la clôture de la téléconsultation
+ *     (visio.controller.js) ;
+ *   - forcerLiberationEscrow ci-dessous (admin/superadmin, immédiat).
  * Pour admin/superadmin, qui bypassent normalement cette table
  * entière (voir verifierTransitionAutorisee), la cible "honore" est
  * bloquée séparément, en tête de verifierTransitionAutorisee — sinon
@@ -705,18 +740,17 @@ const TRANSITIONS_AUTORISEES = {
 async function verifierTransitionAutorisee(rdv, utilisateurCourant, nouveauStatut) {
   // Phase 2 — verrou financier : "honore" ne peut JAMAIS être posé via
   // ce chemin générique (PATCH .../statut ou PUT .../:id), y compris
-  // par un admin/superadmin. Seuls scannerQrRendezVous (RDV
-  // physique), traiterFinSessionVisio (webhook visio) et
-  // forcerLiberationEscrow (admin, ci-dessous) y mènent, car eux
-  // seuls appellent libererEscrow et libèrent réellement les fonds
-  // vers le portefeuille du médecin. Sans ce verrou, un admin pouvait
+  // par un admin/superadmin. Seules la libération différée (après T
+  // heures, constatée par terminerRendezVous ou la clôture visio) et
+  // forcerLiberationEscrow (admin, ci-dessous) y mènent, car elles
+  // seules libèrent réellement les fonds vers le portefeuille du médecin. Sans ce verrou, un admin pouvait
   // marquer un rdv "honoré" sans jamais libérer l'escrow — statut du
   // rdv et statut de l'escrow désynchronisés.
   if (nouveauStatut === "honore") {
     return {
       status: 400,
       message:
-        'Le statut "honore" ne peut pas être posé directement : utilisez POST .../scan-qr (RDV physique), la clôture de la visio, ou POST .../forcer-liberation (admin/superadmin) — ces chemins libèrent aussi les fonds vers le médecin.',
+        'Le statut "honore" ne peut pas être posé directement : le RDV passe à « honore » lors de la libération différée des fonds, une fois le délai T écoulé après la fin de consultation (POST .../terminer pour un RDV physique, clôture de la visio pour une téléconsultation), ou via POST .../forcer-liberation (admin/superadmin, immédiat).',
     };
   }
 
@@ -740,6 +774,24 @@ async function verifierTransitionAutorisee(rdv, utilisateurCourant, nouveauStatu
   // que l'un des deux correspond au rdv ; on détermine lequel pour
   // choisir la bonne matrice de transitions.
   const role = patient && patient.patient_id === rdv.patient_id ? "patient" : "medecin";
+
+  // Libération différée : une fois la fin de consultation constatée (termine_le),
+  // les fonds attendent T heures en séquestre et le statut du RDV reste
+  // « confirme » / « en_attente_presence » jusqu'à la libération.
+  //   - le PATIENT peut CONTESTER pendant ce délai : le RDV passe « conteste »,
+  //     la libération différée l'ignore et les fonds restent bloqués ;
+  //   - le MÉDECIN ne peut plus rien faire sur ce RDV (ni annuler, ni
+  //     « non_honore ») : la consultation est constatée terminée.
+  const consultationTerminee = Boolean(rdv.termine_le) && STATUTS_FIN_CONSULTATION.includes(rdv.statut);
+  if (consultationTerminee) {
+    if (role === "medecin") {
+      return {
+        status: 409,
+        message: "La consultation de ce rendez-vous est terminée : le médecin ne peut plus en modifier le statut.",
+      };
+    }
+    if (nouveauStatut === "conteste") return null;
+  }
 
   const transitionsPermises = TRANSITIONS_AUTORISEES[role][rdv.statut] || [];
   if (!transitionsPermises.includes(nouveauStatut)) {
@@ -819,7 +871,10 @@ export async function changerStatutRendezVous(req, res, next) {
       include: INCLUSION_NOMS_RDV,
     });
 
-    return res.status(200).json({ message: "Statut du rendez-vous mis à jour.", rendez_vous: rdvMisAJour });
+    return res.status(200).json({
+      message: "Statut du rendez-vous mis à jour.",
+      rendez_vous: projeterRdvPourRole(rdvMisAJour, await roleDeVisibilite(rdvMisAJour, req.utilisateur)),
+    });
   } catch (err) {
     // Un admin qui réactive un RDV sur un créneau repris entre-temps (§6).
     if (estViolationCreneauActif(err)) return res.status(409).json({ message: MESSAGE_CRENEAU_PRIS });
@@ -828,91 +883,84 @@ export async function changerStatutRendezVous(req, res, next) {
 }
 
 /**
- * Comparaison en temps constant (même motif que
- * authentification.controller.js, comparerConstant) — évite qu'une
- * mesure de timing sur la réponse HTTP ne renseigne un attaquant sur
- * le nombre de caractères corrects d'un qr_token_secret deviné.
- */
-function comparerQrTokenSecret(a, b) {
-  const bufA = Buffer.from(String(a));
-  const bufB = Buffer.from(String(b));
-  if (bufA.length !== bufB.length) return false;
-  return crypto.timingSafeEqual(bufA, bufB);
-}
-
-/**
- * POST /api/rendez-vous/:id/scan-qr
- * Body: { code_unique: string, qr_token_secret: string }
+ * POST /api/rendez-vous/:id/terminer
+ * Body: { code: string }
  *
- * Déclencheur dédié de la libération d'escrow pour un RDV physique
- * (politique de gestion des fonds §2 : "le médecin scanne le QR code
- * du patient ; le statut passe à Honoré"). Réservé au médecin du
- * rendez-vous — ni le patient, ni admin/superadmin (une correction
- * manuelle exceptionnelle passe par PATCH .../statut vers "honore",
- * qui reste ouvert à admin/superadmin et ne passe donc PAS par
- * libererEscrow ; à signaler si ce n'est pas le comportement voulu
- * pour une correction administrative).
+ * Fin d'un RDV PHYSIQUE : le médecin du RDV clique « Terminé » et saisit le
+ * code de consultation que le patient lui communique de vive voix. Le code
+ * remplace l'ancien couple code_unique + qr_token_secret (le scan du QR
+ * disparaît). Réservé au médecin du rendez-vous — ni le patient, ni
+ * admin/superadmin (dépannage admin : POST .../forcer-liberation).
  *
- * Double vérification demandée : code_unique ET qr_token_secret
- * doivent tous les deux correspondre au rendez-vous ciblé par :id —
- * empêche qu'un qr_token_secret correct mais un code_unique erroné
- * (ou inversement, copié-collé depuis un autre rendez-vous) ne
- * déclenche la libération.
+ * Toute la règle vit dans finConsultation.service.js (validerCodeConsultation) :
+ * propriété du RDV, statut, escrow en séquestre, délai T actif (vérifié AVANT
+ * le code : un T manquant ne consomme aucune tentative), anti force-brute
+ * (5 échecs consécutifs => verrou de 15 min, 429) et écriture atomique de
+ * termine_le + delai_liberation_heures (T figé). Ici : traduction en HTTP.
+ *
+ * Succès : les FONDS RESTENT EN SÉQUESTRE. Ils sont libérés par le cron de
+ * libération différée une fois termine_le + T écoulé, et c'est cette
+ * libération qui passe le RDV à « honore » : le statut du RDV est donc
+ * inchangé dans la réponse. Idempotent : un RDV déjà terminé répond 200 avec
+ * `deja_constate: true` (un double envoi du formulaire ne coûte rien).
+ *
+ * Réponses d'erreur : 400 (code absent / type de RDV), 403 (autre médecin, ou
+ * code incorrect + `tentatives_restantes`), 409 (non payé, statut, pas de
+ * séquestre, T non paramétré), 429 (verrou + `reessayer_dans_secondes`,
+ * en-tête Retry-After).
  */
-export async function scannerQrRendezVous(req, res, next) {
+export async function terminerRendezVous(req, res, next) {
   try {
-    const rdv = await prisma.rendezVous.findUnique({ where: { rdv_id: req.params.id } });
-    if (!rdv) {
-      return res.status(404).json({ message: "Rendez-vous introuvable." });
-    }
-
     const medecin = await profilMedecinCourant(req.utilisateur);
-    if (!medecin || medecin.medecin_id !== rdv.medecin_id) {
+    if (!medecin) {
       return res.status(403).json({ message: "Accès refusé : vous n'êtes pas le médecin de ce rendez-vous." });
     }
 
-    // D8 : un RDV non payé n'a ni fonds ni QR exploitable côté médecin.
-    if (rdv.statut === STATUT_RDV_NON_PAYE) return repondreRdvNonPaye(res);
-
-    if (rdv.type_rdv !== "physique") {
-      return res.status(400).json({ message: "Ce rendez-vous n'est pas un rendez-vous physique." });
+    let resultat;
+    try {
+      resultat = await validerCodeConsultation({
+        rdv_id: req.params.id,
+        medecin_id: medecin.medecin_id,
+        code: req.body?.code,
+      });
+    } catch (err) {
+      // Aucun délai T actif pour le pays du médecin : échec explicite voulu, rien n'a été modifié.
+      if (err instanceof ErreurParametreDelai) {
+        return res.status(err.status).json({
+          code: err.code,
+          message:
+            "Le délai de libération des fonds n'est pas paramétré pour votre pays : " +
+            "la consultation ne peut pas être terminée pour le moment. Contactez l'administrateur.",
+        });
+      }
+      throw err;
     }
 
-    const { code_unique, qr_token_secret } = req.body;
-    if (!code_unique || !qr_token_secret) {
-      return res.status(400).json({ message: "Champs requis manquants : code_unique, qr_token_secret." });
-    }
-
-    if (
-      !comparerQrTokenSecret(code_unique, rdv.code_unique) ||
-      !comparerQrTokenSecret(qr_token_secret, rdv.qr_token_secret)
-    ) {
-      return res.status(403).json({ message: "QR code invalide pour ce rendez-vous." });
-    }
-
-    if (rdv.statut !== "en_attente_presence") {
-      return res.status(409).json({
-        message: `Ce rendez-vous ne peut pas être marqué "honoré" depuis son statut actuel (${rdv.statut}).`,
+    if (resultat.erreur) {
+      const { status, message, code, tentatives_restantes, reessayer_dans_secondes } = resultat.erreur;
+      if (reessayer_dans_secondes !== undefined) res.set("Retry-After", String(reessayer_dans_secondes));
+      return res.status(status).json({
+        message,
+        ...(code ? { code } : {}),
+        ...(tentatives_restantes !== undefined ? { tentatives_restantes } : {}),
+        ...(reessayer_dans_secondes !== undefined ? { reessayer_dans_secondes } : {}),
       });
     }
 
-    // Politique de fonds v2 §5 (étape 6) : un scan valide constate les DEUX
-    // présences — le patient (son QR est scanné) et le médecin (il scanne).
-    // Faits enregistrés AVANT la libération : si celle-ci échoue, ils restent
-    // vrais et un nouveau scan ne réécrit rien (UPDATE conditionnel).
-    await enregistrerPresence(rdv.rdv_id, "patient");
-    await enregistrerPresence(rdv.rdv_id, "medecin");
-
-    await libererEscrow(rdv.rdv_id);
-
     const rdvMisAJour = await prisma.rendezVous.findUnique({
-      where: { rdv_id: rdv.rdv_id },
+      where: { rdv_id: req.params.id },
       include: INCLUSION_NOMS_RDV,
     });
 
     return res.status(200).json({
-      message: "Présence confirmée : rendez-vous honoré, fonds libérés vers le portefeuille du médecin.",
-      rendez_vous: rdvMisAJour,
+      message: resultat.deja_constate
+        ? "Cette consultation a déjà été terminée."
+        : `Consultation terminée. Les fonds seront libérés dans ${resultat.delai_liberation_heures} h.`,
+      deja_constate: resultat.deja_constate,
+      rendez_vous: projeterRdvPourRole(rdvMisAJour, ROLES_VISIBILITE.MEDECIN),
+      termine_le: resultat.termine_le,
+      delai_liberation_heures: resultat.delai_liberation_heures,
+      liberation_prevue_le: resultat.date_liberation,
     });
   } catch (err) {
     next(err);
@@ -924,14 +972,16 @@ export async function scannerQrRendezVous(req, res, next) {
  * Réservé admin/superadmin.
  *
  * Correction manuelle exceptionnelle : seul chemin restant pour poser
- * "honore" quand ni scannerQrRendezVous (QR abîmé/perdu) ni la
- * clôture normale de la visio (webhook en panne, par exemple) n'ont
- * pu déclencher la libération. Ajouté suite au constat que le PATCH
+ * "honore" HORS libération différée, quand ni la saisie du code
+ * (terminerRendezVous : code perdu, patient injoignable) ni la clôture
+ * normale de la visio (webhook en panne, par exemple) n'ont pu constater la
+ * fin de consultation. COURT-CIRCUITE le délai T : libération immédiate,
+ * action de dernier recours. Ajouté suite au constat que le PATCH
  * générique laissait un admin marquer un rdv "honoré" SANS jamais
  * libérer l'escrow — désormais bloqué pour tout le monde (voir
  * verifierTransitionAutorisee) : ceci est le remplacement explicite.
  *
- * Contrairement à scannerQrRendezVous, ne vérifie ni QR ni
+ * Contrairement à terminerRendezVous, ne vérifie ni code ni
  * type_rdv : c'est une action administrative de dernier recours, pas
  * un contrôle de présence. Mais, contrairement à un simple appel à
  * libererEscrow (qui ignore silencieusement un rdv sans escrow ou déjà
@@ -968,7 +1018,7 @@ export async function forcerLiberationEscrow(req, res, next) {
 
     return res.status(200).json({
       message: "Libération forcée par un administrateur : rendez-vous honoré, fonds libérés vers le portefeuille du médecin.",
-      rendez_vous: rdvMisAJour,
+      rendez_vous: projeterRdvPourRole(rdvMisAJour, ROLES_VISIBILITE.ADMIN),
     });
   } catch (err) {
     next(err);

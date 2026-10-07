@@ -12,7 +12,8 @@
 
 import prisma from "../lib/prisma.js";
 import { genererJitsiToken } from "../services/jitsi.service.js";
-import { libererEscrow } from "../services/liberationEscrow.service.js";
+import { constaterFinConsultation } from "../services/finConsultation.service.js";
+import { ErreurParametreDelai } from "../services/parametreDelaiLiberation.service.js";
 import { verifierSignatureWebhookVisio } from "../lib/jitsiWebhookService.js";
 import { enregistrerPresence } from "../services/presence.service.js";
 import { partieDepuisParticipant } from "../services/reglesPresenceReprogrammation.service.js";
@@ -111,8 +112,12 @@ export async function obtenirTokenVisio(req, res, next) {
  *     fait dont se déduit l'absence (§5), voir presence.service.js.
  *
  *   - `muc-room-destroyed` : dernier participant parti. Déclencheur de la
- *     libération (§2 : « à la clôture de la session »), MAIS uniquement si
- *     les DEUX présences sont enregistrées. Sinon on ne libère rien : le
+ *     FIN DE CONSULTATION (§2 : « à la clôture de la session »), MAIS
+ *     uniquement si les DEUX présences sont enregistrées. Libération
+ *     différée : la clôture ne libère PAS les fonds, elle constate la fin
+ *     (termine_le) et fige T (delai_liberation_heures) ; le cron libère après
+ *     T heures (liberationDifferee.service.js). Sans délai T actif pour le
+ *     pays du médecin, la fin n'est pas constatée (événement ignoré, journalisé). Sinon on ne libère rien : le
  *     cron (detecterCreneauxDepasses.job.js) tranche après le délai de
  *     grâce selon la matrice §5 (médecin absent, patient absent, deux
  *     absents). Libérer ici sur une seule présence paierait le médecin
@@ -184,8 +189,8 @@ export async function traiterFinSessionVisio(req, res, next) {
     }
     if (!STATUTS_AUTORISES_VISIO.includes(rdv.statut)) {
       // Déjà honoré (double événement), annulé, à reprogrammer, contesté... :
-      // rien à enregistrer ni à libérer (libererEscrow est de toute façon
-      // idempotent via CompteEscrow.statut, mais on évite l'appel inutile).
+      // rien à enregistrer ni à constater (constaterFinConsultation est de
+      // toute façon idempotent, mais on évite l'appel inutile).
       return res.status(200).json({ ignore: true });
     }
 
@@ -209,9 +214,29 @@ export async function traiterFinSessionVisio(req, res, next) {
       return res.status(200).json({ ignore: true, raison: "presences_incompletes" });
     }
 
-    await libererEscrow(rdv_id);
+    // Fin de consultation constatée (idempotent : un événement rejoué ne
+    // réécrit ni termine_le ni T). Les fonds restent en séquestre T heures.
+    let fin;
+    try {
+      fin = await constaterFinConsultation(rdv_id, { source: "visio" });
+    } catch (err) {
+      // Aucun T actif pour le pays du médecin : un webhook ne peut pas « refuser ».
+      // Rien n'est modifié ; le RDV reste confirmé et le cron d'absence le
+      // signalera en arbitrage admin tant que T n'est pas saisi.
+      if (err instanceof ErreurParametreDelai) {
+        console.error(
+          `[visio] rdv ${rdv_id} : aucun délai de libération actif pour le pays du médecin — fin de consultation NON constatée.`
+        );
+        return res.status(200).json({ ignore: true, raison: "parametre_delai_absent" });
+      }
+      throw err;
+    }
+    if (fin.erreur) {
+      console.warn(`[visio] rdv ${rdv_id} : fin de consultation non constatée (${fin.erreur.code}) — ${fin.erreur.message}`);
+      return res.status(200).json({ ignore: true, raison: fin.erreur.code });
+    }
 
-    return res.status(200).json({ traite: true });
+    return res.status(200).json({ traite: true, deja_constate: fin.deja_constate });
   } catch (err) {
     next(err);
   }

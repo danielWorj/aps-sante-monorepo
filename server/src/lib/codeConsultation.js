@@ -13,7 +13,13 @@
 //     le médecin dispose d'une nouvelle série de MAX_TENTATIVES essais ;
 //   - une saisie correcte remet compteur et verrou à zéro.
 // Avec les valeurs par défaut (5 essais / 15 min) un attaquant ne peut pas
-// dépasser ~480 essais par jour et par RDV, sur un espace de 36^8 codes.
+// dépasser ~480 essais par jour et par RDV, sur un espace de 32^6 (~1,07
+// milliard) codes pour les RDV créés depuis la libération différée.
+//
+// Format du code : 6 caractères tirés d'un alphabet de 32 symboles SANS
+// caractères ambigus (ni 0/O, ni 1/I) — le patient dicte son code à voix
+// haute. Les RDV antérieurs gardent leur code de 8 caractères
+// (code_unique reste VarChar(8)) : la comparaison ci-dessous accepte les deux.
 
 import crypto from "crypto";
 
@@ -22,6 +28,25 @@ function entierPositifEnv(nom, defaut) {
   if (brut === undefined || brut === "") return defaut;
   const n = Number(brut);
   return Number.isInteger(n) && n > 0 ? n : defaut;
+}
+
+// Génération d'un code de consultation (secret du PATIENT, jamais renvoyé au
+// médecin par l'API). Tirage CSPRNG sans biais (crypto.randomInt).
+export const LONGUEUR_CODE = 6;
+export const ALPHABET_CODE = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/**
+ * Un code de consultation brut (sans test d'unicité : la contrainte @unique
+ * de la base et la boucle de genererCodeUnique du contrôleur s'en chargent).
+ * @param {(max: number) => number} [tirage] injectable pour les tests
+ * @returns {string}
+ */
+export function genererCodeConsultation(tirage = (max) => crypto.randomInt(max)) {
+  let code = "";
+  for (let i = 0; i < LONGUEUR_CODE; i += 1) {
+    code += ALPHABET_CODE[tirage(ALPHABET_CODE.length)];
+  }
+  return code;
 }
 
 export const MAX_TENTATIVES = entierPositifEnv("CODE_CONSULTATION_MAX_TENTATIVES", 5);

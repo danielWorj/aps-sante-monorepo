@@ -41,6 +41,7 @@
 // l'intérieur de chaque handler (voir agenda.controller.js).
 
 import { Router } from "express";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { authentifier } from "../middlewares/auth.middleware.js";
 import { authentifierOptionnel } from "../middlewares/authOptionnel.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
@@ -82,7 +83,7 @@ import {
   creerRendezVous,
   modifierRendezVous,
   changerStatutRendezVous,
-  scannerQrRendezVous,
+  terminerRendezVous,
   forcerLiberationEscrow,
   supprimerRendezVous,
   // Ordonnances
@@ -322,11 +323,25 @@ router.put("/rendez-vous/:id", authentifier, modifierRendezVous);
 // au PUT générique ci-dessus qui accepte "statut" sans ce contrôle.
 router.patch("/rendez-vous/:id/statut", authentifier, changerStatutRendezVous);
 
-// Phase 2 — Libération conditionnelle de l'escrow (RDV physique) :
-// voir rendezVous.controller.js, scannerQrRendezVous et
-// TRANSITIONS_AUTORISEES (la transition générique vers "honore" a été
-// retirée pour le médecin, précisément pour forcer ce chemin dédié).
-router.post("/rendez-vous/:id/scan-qr", authentifier, scannerQrRendezVous);
+// Libération différée des fonds — fin d'un RDV PHYSIQUE : le médecin saisit le
+// code de consultation que le patient lui communique (Body : { code }). Les
+// fonds restent en séquestre T heures puis sont libérés par le cron (voir
+// rendezVous.controller.js, terminerRendezVous). Remplace POST .../scan-qr
+// (supprimée : aucun chemin ne doit libérer les fonds sans respecter T).
+//
+// Limiteur par UTILISATEUR (puis par IP à défaut) : défense en profondeur. La
+// vraie protection anti force-brute est le verrou par RDV (5 échecs consécutifs
+// => 15 min), appliqué dans finConsultation.service.js. `authentifier` passe
+// AVANT le limiteur pour que req.utilisateur soit disponible à la clé.
+const limiteurTerminer = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.utilisateur?.utilisateur_id ?? ipKeyGenerator(req.ip),
+  message: { message: "Trop de tentatives, réessayez plus tard." },
+});
+router.post("/rendez-vous/:id/terminer", authentifier, limiteurTerminer, terminerRendezVous);
 
 // Politique de fonds v2 §5 (étape 6) — reprogrammation d'un RDV « a_reprogrammer »
 // (les deux parties absentes) : l'une des parties PROPOSE une nouvelle date,
@@ -335,9 +350,9 @@ router.post("/rendez-vous/:id/scan-qr", authentifier, scannerQrRendezVous);
 router.post("/rendez-vous/:id/reprogrammation/proposer", authentifier, proposerReprogrammation);
 router.post("/rendez-vous/:id/reprogrammation/accepter", authentifier, accepterReprogrammation);
 
-// Correction manuelle admin — seul chemin restant pour "honore" quand
-// scan-qr/webhook visio n'ont pas pu se déclencher (voir
-// forcerLiberationEscrow, rendezVous.controller.js).
+// Correction manuelle admin — seul chemin pour libérer IMMÉDIATEMENT (court-circuite
+// le délai T) quand la saisie du code / le webhook visio n'ont pas pu constater la
+// fin de consultation (voir forcerLiberationEscrow, rendezVous.controller.js).
 router.post(
   "/rendez-vous/:id/forcer-liberation",
   authentifier,
