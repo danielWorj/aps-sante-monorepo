@@ -120,3 +120,18 @@
 @media (max-width:420px){
   .onboarding-container-lg .service-type-grid{grid-template-columns:repeat(2,1fr);}
 }
+
+/* ---------------------------- Écran 1 — logo et description ---------------------------- */
+.onboarding-logo{
+  display:block;
+  width:96px;
+  height:96px;
+  object-fit:contain;
+  margin:0 auto 1rem;
+  border-radius:var(--radius-lg);
+}
+.onboarding-description{
+  margin:.7rem 0 0;
+  color:var(--ink-soft, var(--ink-faint));
+  font-size:.95rem;
+}

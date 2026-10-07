@@ -17,9 +17,16 @@ export default function OnboardingAccueil() {
     <section className="onboarding-shell">
       <div className="container-aps onboarding-container">
         <div className="onboarding-intro">
+          <img
+            src="/favicon.jpeg"
+            alt="Logo ApSa Santé"
+            className="onboarding-logo"
+          />
           <span className="eyebrow">Bienvenue sur ApSa Santé</span>
-          <h1 style={{ fontSize: '1.7rem', marginTop: '.6rem' }}>Que souhaitez-vous faire ?</h1>
-          <p>Choisissez une option pour démarrer, ou passez directement à l&apos;accueil.</p>
+          <p className="onboarding-description">
+            Trouvez en un clic un professionnel (médecin, assurance, pharmacien, ...)
+          </p>
+          <h1 style={{ fontSize: '1.7rem', marginTop: '1.2rem' }}>Que souhaitez-vous faire ?</h1>
         </div>
 
         <div className="onboarding-choices">
@@ -28,7 +35,7 @@ export default function OnboardingAccueil() {
               <i className="fa-solid fa-magnifying-glass" />
             </span>
             <span>
-              <span className="choice-title">Rechercher un professionnel</span>
+              <span className="choice-title">Je recherche un professionnel</span>
               <span className="choice-sub">Médecins, pharmacies, structures de santé…</span>
             </span>
             <i className="fa-solid fa-chevron-right" />
@@ -39,7 +46,7 @@ export default function OnboardingAccueil() {
               <i className="fa-solid fa-user-doctor" />
             </span>
             <span>
-              <span className="choice-title">Je suis professionnel</span>
+              <span className="choice-title">Je suis un professionnel</span>
               <span className="choice-sub">Connexion à mon espace professionnel</span>
             </span>
             <i className="fa-solid fa-chevron-right" />

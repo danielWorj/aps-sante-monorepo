@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { listerPays, listerVilles } from '../../services/geoService';
 import { detecterPaysUtilisateur } from '../../lib/geoloc';
 import OnboardingProgress from './OnboardingProgess';
+import OnboardingSkip from './OnboardingSkip';
 
 /**
  * Écran 1.1.1 — Choix de la ville (étape 1/2 du sous-parcours
@@ -129,7 +130,7 @@ export default function OnboardingMedecinVille() {
       <div className="container-aps onboarding-container-lg">
         <OnboardingProgress current={1} total={2} />
 
-        <span className="eyebrow">Médecins et professionnels</span>
+        <span className="eyebrow">Médecins et autres professionnels</span>
         <h1 style={{ fontSize: '1.6rem', marginTop: '.5rem' }}>Dans quelle ville ?</h1>
 
         {detectionGeoloc === 'en_cours' && (
@@ -186,6 +187,8 @@ export default function OnboardingMedecinVille() {
             Suivant <i className="fa-solid fa-arrow-right" />
           </button>
         </div>
+
+        <OnboardingSkip />
       </div>
     </section>
   );

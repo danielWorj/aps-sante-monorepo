@@ -1,4 +1,5 @@
 import ServiceCard from './ServiceCard';
+import OnboardingSkip from './OnboardingSkip';
 
 /**
  * Écran 1.1 — Liste des services de ApSa Santé.
@@ -11,10 +12,9 @@ import ServiceCard from './ServiceCard';
  * 1.1.1/1.1.2 et 1.3.1/1.3.2) ; les autres services, déjà pourvus d'un
  * annuaire complet, y renvoient directement.
  *
- * "Pompes funèbres" n'a pas encore d'annuaire dédié côté client
- * (aucune route existante, seul le rôle `agent_pompes_funebres` existe
- * côté serveur) : la carte reste visible pour annoncer le service,
- * mais désactivée plutôt que de pointer vers une page inexistante.
+ * "Autre service" n'a pas encore de page dédiée côté client : la
+ * carte reste visible pour annoncer d'autres services à venir, mais
+ * désactivée plutôt que de pointer vers une page inexistante.
  */
 export default function OnboardingServices() {
   return (
@@ -29,7 +29,7 @@ export default function OnboardingServices() {
           <ServiceCard
             to="/onboarding/medecins/ville"
             icon="fa-user-doctor"
-            title="Médecins et professionnels"
+            title="Médecins et autres professionnels"
             subtitle="Généralistes, spécialistes, dentistes…"
           />
           <ServiceCard
@@ -58,11 +58,13 @@ export default function OnboardingServices() {
           />
           <ServiceCard
             disabled
-            icon="fa-hands-holding"
-            title="Pompes funèbres"
+            icon="fa-ellipsis"
+            title="Autre service"
             subtitle="Bientôt disponible"
           />
         </div>
+
+        <OnboardingSkip />
       </div>
     </section>
   );
