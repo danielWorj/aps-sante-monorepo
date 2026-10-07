@@ -790,11 +790,15 @@ export default function RendezVous() {
                           </div>
                           <div className="ticket-divider" />
                           <div className="ticket-bottom">
-                            {rendezVousCree.code_unique && (
+                            {rendezVousCree.code_unique && rendezVousCree.type_rdv !== 'teleconsultation' && (
                               <>
                                 <div className="ticket-code">{rendezVousCree.code_unique}</div>
-                                <div className="ticket-code-label">Code à présenter à l&apos;accueil</div>
-                                <div className="qr-ph"><i className="fa-solid fa-qrcode" /></div>
+                                <div className="ticket-code-label">Votre code de consultation</div>
+                                <p className="text-faint" style={{ fontSize: '.8rem', margin: '.4rem 0 0' }}>
+                                  <i className="fa-solid fa-triangle-exclamation" /> Ne communiquez ce code au médecin
+                                  qu&apos;à la <strong>fin</strong> de la consultation : il le saisira pour la clôturer.
+                                  Retrouvez-le à tout moment dans « Mes rendez-vous ».
+                                </p>
                               </>
                             )}
 
@@ -863,7 +867,7 @@ export default function RendezVous() {
                             )}
 
                             <div className="d-flex gap-2 mt-3">
-                              {rendezVousCree.code_unique && (
+                              {rendezVousCree.code_unique && rendezVousCree.type_rdv !== 'teleconsultation' && (
                                 <button type="button" className="btn btn-outline-primary btn-block-aps" onClick={copyCode}>
                                   <i className={`fa-solid ${copied ? 'fa-check' : 'fa-copy'}`} /> {copied ? 'Copié' : 'Copier le code'}
                                 </button>

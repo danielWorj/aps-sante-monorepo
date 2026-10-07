@@ -14,8 +14,8 @@
  * (et non son heure — voir note ci-dessous).
  *   - 'cree'                 → attente (RDV NON PAYÉ : en attente du paiement du patient ;
  *                              le médecin ne peut rien faire dessus, voir D8)
- *   - 'confirme'             → avenir
- *   - 'en_attente_presence'  → avenir (le RDV est confirmé, en cours)
+ *   - 'confirme'             → avenir (ou passes si la fin de consultation est constatée)
+ *   - 'en_attente_presence'  → avenir (idem : passes si `termine_le` est renseigné)
  *   - 'honore' / 'non_honore'→ passes
  *   - 'annule'               → annules
  *   - 'conteste'             → annules (avec mention spéciale)
@@ -38,7 +38,12 @@ export function categoriserRdv(rdv) {
       return "attente";
     case "confirme":
     case "en_attente_presence":
-      return "avenir";
+      // Libération différée : une fois la fin de consultation constatée (code
+      // validé par le médecin, ou visio clôturée), `termine_le` est renseigné
+      // mais le statut reste « confirme » pendant T heures — c'est le cron de
+      // libération qui le passe ensuite à « honore ». La consultation est
+      // terminée : elle ne doit plus apparaître dans « À venir ».
+      return estConsultationTerminee(rdv) ? "passes" : "avenir";
     case "a_reprogrammer": // deux absents : reste dans « À venir », avec le panneau de reprogrammation
       return "avenir";
     case "honore":
@@ -74,4 +79,69 @@ export function estRdvNonPaye(rdv) {
  */
 export function estErreurRdvNonPaye(err) {
   return err?.status === 409 && err?.data?.code === "RDV_NON_PAYE";
+}
+
+// ─── Libération différée des fonds (code de fin de consultation) ─────────
+
+/**
+ * Longueur du code de consultation émis par le serveur pour les nouveaux RDV.
+ * Les anciens RDV encore actifs peuvent avoir un code de 6 à 8 caractères
+ * (la colonne reste en VarChar(8)) : la saisie accepte donc 6 à 8 caractères.
+ */
+export const CODE_CONSULTATION_LONGUEUR_MIN = 6;
+export const CODE_CONSULTATION_LONGUEUR_MAX = 8;
+
+/**
+ * La fin de consultation a-t-elle été constatée ? (`termine_le` renseigné :
+ * code validé par le médecin, ou clôture de la visio).
+ * @param {{ termine_le?: string|null }} rdv
+ * @returns {boolean}
+ */
+export function estConsultationTerminee(rdv) {
+  return Boolean(rdv?.termine_le);
+}
+
+/**
+ * Le médecin peut-il saisir le code pour terminer ce RDV ? Réservé aux RDV
+ * PHYSIQUES payés (confirme / en_attente_presence) dont la fin n'est pas déjà
+ * constatée. Une téléconsultation se termine à la clôture de la visio (pas de
+ * code). Le verrou réel reste côté serveur.
+ * @param {object} rdv
+ * @returns {boolean}
+ */
+export function peutTerminerRdv(rdv) {
+  return (
+    rdv?.type_rdv === "physique" &&
+    !estRdvNonPaye(rdv) &&
+    (rdv.statut === "confirme" || rdv.statut === "en_attente_presence") &&
+    !estConsultationTerminee(rdv)
+  );
+}
+
+/**
+ * Les fonds de ce RDV sont-ils encore en attente de libération ? Vrai tant
+ * que la fin est constatée et que le RDV n'est pas encore passé « honore »
+ * par le cron (statut confirme / en_attente_presence), ou qu'il est
+ * « honore » avec une libération prévue dans le futur.
+ * @param {{ statut?: string, termine_le?: string|null, liberation_prevue_le?: string|null }} rdv
+ * @returns {boolean}
+ */
+export function fondsEnAttenteDeLiberation(rdv) {
+  if (!estConsultationTerminee(rdv) || !rdv.liberation_prevue_le) return false;
+  if (rdv.statut === "confirme" || rdv.statut === "en_attente_presence") return true;
+  return rdv.statut === "honore" && new Date(rdv.liberation_prevue_le) > new Date();
+}
+
+/**
+ * « 12/10 à 14:30 » — date de libération prévue, en heure locale.
+ * @param {string|null|undefined} iso
+ * @returns {string}
+ */
+export function formaterDateLiberation(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const jour = d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+  const heure = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  return `${jour} à ${heure}`;
 }
