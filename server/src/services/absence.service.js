@@ -56,6 +56,13 @@ export async function traiterAbsence(rdvRef, { maintenant = new Date() } = {}) {
   const rdv = await prisma.rendezVous.findUnique({ where: { rdv_id: rdvRef.rdv_id } });
   if (!rdv || !STATUTS_ABSENCE_ELIGIBLES.includes(rdv.statut)) return { deja_traite: true };
 
+  // Libération différée : une fin de consultation constatée (code validé ou
+  // visio clôturée) n'est plus une absence ni un RDV « jamais clôturé » :
+  // les fonds attendent termine_le + T (liberationDifferee.service.js). Sans
+  // cette garde, le cron signalerait un faux « arbitrage admin » à chaque
+  // passage pendant tout le délai T.
+  if (rdv.termine_le) return { deja_traite: true };
+
   const evenement = determinerEvenementAbsence(rdv);
   if (!evenement) return { deja_traite: false, arbitrage_admin: true };
 

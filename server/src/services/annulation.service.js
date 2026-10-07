@@ -104,6 +104,19 @@ export async function traiterAnnulation(
     return { erreur: { status: 409, message: STATUTS_NON_ANNULABLES[rdv.statut] } };
   }
 
+  // Libération différée : consultation déjà constatée terminée (code validé ou
+  // visio clôturée), fonds en attente du délai T. Annuler maintenant ferait
+  // rembourser un RDV qui a eu lieu : le désaccord relève du litige, pas de
+  // l'annulation.
+  if (rdv.termine_le) {
+    return {
+      erreur: {
+        status: 409,
+        message: "La consultation de ce rendez-vous est terminée : il ne peut plus être annulé.",
+      },
+    };
+  }
+
   // D8 : un RDV non payé (« cree ») est hors de portée du médecin, et il n'y a
   // aucun médecin fautif possible (ni fonds, ni CP, ni CM). Un admin ne peut
   // donc pas l'annuler « au nom du médecin » : on refuse explicitement plutôt
