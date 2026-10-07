@@ -323,6 +323,10 @@ model Pays {
   // pays (voir ParametreAmende plus bas).
   parametres_amende ParametreAmende[]
 
+  // Libération différée des fonds : délai T (heures) par pays, versionné
+  // (voir ParametreDelaiLiberation plus bas).
+  parametres_delai_liberation ParametreDelaiLiberation[]
+
   @@index([devise_id])
   @@index([langue_id])
   @@map("pays")
@@ -1297,6 +1301,33 @@ model ParametreAmende {
   @@map("parametre_amende")
 }
 
+// -----------------------------------------------------------------
+// ParametreDelaiLiberation — délai T (en heures) pendant lequel les
+// fonds d'un RDV terminé restent en séquestre avant libération vers le
+// portefeuille du médecin. Saisi par le super admin, versionné par
+// pays (un seul paramètre actif par pays : index unique partiel
+// parametre_delai_liberation_pays_id_actif_key, déclaré uniquement dans
+// la migration car Prisma ne sait pas exprimer un index partiel). Lu au
+// moment de la validation de fin de consultation puis figé sur le RDV
+// (rendez_vous.delai_liberation_heures). Aucune valeur par défaut :
+// sans paramètre actif pour le pays d'exercice du médecin, la fin de
+// consultation échoue explicitement. Bornes (0 à 720 h) garanties par
+// la contrainte CHECK parametre_delai_liberation_heures_check.
+// -----------------------------------------------------------------
+model ParametreDelaiLiberation {
+  parametre_delai_id  String   @id @default(uuid()) @db.Uuid
+  pays_id             String   @db.Uuid
+  libelle             String   @db.VarChar(100) // ex: "Délai de libération des fonds"
+  heures              Int // T, en heures
+  actif               Boolean  @default(true)
+  date_debut_validite DateTime @default(now())
+
+  pays Pays @relation(fields: [pays_id], references: [pays_id])
+
+  @@index([pays_id])
+  @@map("parametre_delai_liberation")
+}
+
 /// @ref module 06_paiement_escrow — définition complète à fusionner
 enum StatutTransactionPaiement {
   en_attente
@@ -1847,6 +1878,21 @@ model RendezVous {
   nouvelle_date_proposee DateTime?
   proposee_par           PartieRendezVous?
   date_proposition       DateTime?
+
+  // Libération différée des fonds — fin de consultation constatée (code
+  // validé par le médecin, ou clôture de la visio) : FAIT horodaté. La
+  // date de libération se RECALCULE (termine_le + delai_liberation_heures),
+  // elle n'est jamais stockée. NULL = consultation pas encore terminée.
+  termine_le              DateTime?
+  // T (en heures) figé à la validation, lu dans parametre_delai_liberation
+  // (comme taux_applique pour les amendes) : une modification ultérieure
+  // de T ne touche pas les RDV déjà terminés.
+  delai_liberation_heures Int?
+
+  // Protection anti force-brute sur la saisie du code par le médecin :
+  // compteur d'échecs consécutifs et verrou temporaire.
+  tentatives_code_echouees Int       @default(0)
+  code_verrouille_jusqu_a  DateTime?
 
   patient   Patient         @relation(fields: [patient_id], references: [patient_id])
   medecin   Medecin         @relation(fields: [medecin_id], references: [medecin_id])
