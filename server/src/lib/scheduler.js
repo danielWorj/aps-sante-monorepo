@@ -8,6 +8,7 @@
 import cron from "node-cron";
 import { detecterCreneauxDepasses } from "../jobs/detecterCreneauxDepasses.job.js";
 import { traiterReprogrammations } from "../jobs/traiterReprogrammations.job.js";
+import { libererFondsEchusJob } from "../jobs/libererFondsEchus.job.js";
 import { reconcilierCampayEnAttente } from "../services/paiementCampay.service.js";
 import { reconcilierRetraitsEnCours } from "../services/retrait.service.js";
 
@@ -28,6 +29,11 @@ const CRON_RECONCILIATION_CAMPAY = process.env.CRON_RECONCILIATION_CAMPAY || "* 
 
 // Phase 6 : retraits médecins envoyés à CamPay dont le résultat n'est pas encore connu (callback perdu…).
 const CRON_RECONCILIATION_RETRAITS = process.env.CRON_RECONCILIATION_RETRAITS || "*/2 * * * *";
+
+// Libération différée des fonds (phase 3) : libère les escrows dont
+// termine_le + T est échu. Précision de libération ≈ la fréquence du cron
+// (5 min par défaut), réglable sans redéploiement de code.
+const CRON_LIBERATION_FONDS = process.env.CRON_LIBERATION_FONDS || "*/5 * * * *";
 
 /**
  * Démarre tous les jobs planifiés du back-end. Appelé une seule fois,
@@ -64,7 +70,13 @@ export function demarrerScheduler() {
     });
   });
 
+  cron.schedule(CRON_LIBERATION_FONDS, () => {
+    libererFondsEchusJob().catch((err) => {
+      console.error("[scheduler] Échec libération différée des fonds :", err);
+    });
+  });
+
   console.info(
-    `[scheduler] Démarré — detecterCreneauxDepasses planifié (${CRON_DETECTION_DEFAILLANCE}), traiterReprogrammations planifié (${CRON_REPROGRAMMATIONS}), reconcilierCampayEnAttente planifié (${CRON_RECONCILIATION_CAMPAY}), reconcilierRetraitsEnCours planifié (${CRON_RECONCILIATION_RETRAITS}).`
+    `[scheduler] Démarré — detecterCreneauxDepasses planifié (${CRON_DETECTION_DEFAILLANCE}), traiterReprogrammations planifié (${CRON_REPROGRAMMATIONS}), reconcilierCampayEnAttente planifié (${CRON_RECONCILIATION_CAMPAY}), reconcilierRetraitsEnCours planifié (${CRON_RECONCILIATION_RETRAITS}), libererFondsEchus planifié (${CRON_LIBERATION_FONDS}).`
   );
 }
