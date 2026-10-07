@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { listerSpecialites } from '../../services/medecinService';
 import OnboardingProgress from './OnboardingProgess';
+import OnboardingSkip from './OnboardingSkip';
 
 /**
  * Écran 1.1.2 — Choix de la spécialité (étape 2/2 du sous-parcours
@@ -82,7 +83,7 @@ export default function OnboardingMedecinSpecialite() {
       <div className="container-aps onboarding-container-lg">
         <OnboardingProgress current={2} total={2} />
 
-        <span className="eyebrow">Médecins et professionnels</span>
+        <span className="eyebrow">Médecins et autres professionnels</span>
         <h1 style={{ fontSize: '1.6rem', marginTop: '.5rem' }}>Quelle spécialité recherchez-vous ?</h1>
         {villeNom && (
           <p className="mb-4">
@@ -132,6 +133,8 @@ export default function OnboardingMedecinSpecialite() {
             <i className="fa-solid fa-arrow-left" /> Retour
           </button>
         </div>
+
+        <OnboardingSkip />
       </div>
     </section>
   );

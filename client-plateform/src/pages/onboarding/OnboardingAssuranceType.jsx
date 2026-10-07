@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import OnboardingProgress from './OnboardingProgess';
+import OnboardingSkip from './OnboardingSkip';
 
 /**
  * Écran 1.3.2 — Choix du type d'acteur (étape 2/2 du sous-parcours
@@ -98,6 +99,8 @@ export default function OnboardingAssuranceType() {
             <i className="fa-solid fa-magnifying-glass" /> Voir l&apos;annuaire
           </button>
         </div>
+
+        <OnboardingSkip />
       </div>
     </section>
   );
