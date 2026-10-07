@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../components/cards/info_liberation_fonds.dart';
 import '../../../components/components.dart';
 import '../../../components/panels/panneau_reprogrammation.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/authentification_models.dart';
 import '../../../models/rendez_vous_models.dart';
+import '../../../utils/fonds.dart';
 import '../teleconsultation_screen.dart';
+import 'terminer_rdv_sheet.dart';
 
 /// ============================================================
 /// portail-medecin-rdv.dart - VERSION ADAPTÉE
@@ -28,6 +31,13 @@ import '../teleconsultation_screen.dart';
 /// ni ne « refuse » plus un RDV : la confirmation `cree → confirme` résulte du
 /// seul paiement du patient (il est alors notifié). Un 409 `RDV_NON_PAYE`
 /// éventuel (visio) est géré dans teleconsultation_screen.dart.
+///
+/// Fin de consultation PHYSIQUE : le médecin clique sur « Terminé » et saisit
+/// le code de consultation que le patient lui communique (feuille
+/// terminer_rdv_sheet.dart). Le code n'est jamais renvoyé au médecin. Une fois
+/// validé, le RDV passe `honore` et les fonds sont libérés après T heures
+/// (date « Fonds libérés le … » affichée dans l'onglet « Terminés »). Les
+/// téléconsultations n'ont pas de code : leur fin est détectée par la visio.
 ///
 /// ⚠️ Ce widget ne gère plus sa propre barre de navigation basse :
 /// il est destiné à être affiché comme un onglet parmi d'autres à
@@ -385,6 +395,7 @@ class _SegmentedTabs extends ConsumerWidget {
                     count: rdvList
                         .where((r) =>
                             r.statut == StatutRendezVous.confirme ||
+                            r.statut == StatutRendezVous.enAttentePresence ||
                             r.statut == StatutRendezVous.aReprogrammer)
                         .length,
                 ),
@@ -575,6 +586,7 @@ class _PanelConfirme extends ConsumerWidget {
                 final rdvConfirmes = rdvList
                     .where((r) =>
                         r.statut == StatutRendezVous.confirme ||
+                        r.statut == StatutRendezVous.enAttentePresence ||
                         r.statut == StatutRendezVous.aReprogrammer)
                     .toList();
 
@@ -645,38 +657,62 @@ class _PanelConfirme extends ConsumerWidget {
                                                             style: BadgeChipStyle.coral,
                                                             icon: Icons.event_busy_outlined,
                                                         )
-                                                        : const BadgeChip(
-                                                            label: 'Confirmé',
-                                                            style: BadgeChipStyle.green,
-                                                        ),
+                                                        : rdv.statut ==
+                                                                StatutRendezVous.enAttentePresence
+                                                            ? const BadgeChip(
+                                                                label: 'En cours',
+                                                                style: BadgeChipStyle.amber,
+                                                            )
+                                                            : const BadgeChip(
+                                                                label: 'Confirmé',
+                                                                style: BadgeChipStyle.green,
+                                                            ),
                                                     // Ni visio ni dossier pour `a_reprogrammer`
                                                     // (créneau initial passé).
+                                                    // Téléconsultation : « Démarrer » (fin détectée par
+                                                    // la visio, aucun code). RDV physique : « Terminé »
+                                                    // (saisie du code donné par le patient).
                                                     action: rdv.estAReprogrammer
                                                         ? null
-                                                        : RdvButton(
-                                                        label: rdv.typeRdv == TypeRdv.teleconsultation
-                                                            ? 'Démarrer'
-                                                            : 'Dossier',
-                                                        icon: rdv.typeRdv == TypeRdv.teleconsultation
-                                                            ? Icons.videocam_outlined
-                                                            : Icons.description_outlined,
-                                                        onPressed: () {
-                                                            if (rdv.typeRdv ==
-                                                                TypeRdv.teleconsultation) {
-                                                                Navigator.of(context).push(
-                                                                    MaterialPageRoute(
-                                                                        builder: (_) =>
-                                                                            TeleconsultationScreen(
-                                                                                rdv: rdv,
-                                                                            ),
+                                                        : rdv.typeRdv == TypeRdv.teleconsultation
+                                                            ? RdvButton(
+                                                                label: 'Démarrer',
+                                                                icon: Icons.videocam_outlined,
+                                                                onPressed: () {
+                                                                    Navigator.of(context).push(
+                                                                        MaterialPageRoute(
+                                                                            builder: (_) =>
+                                                                                TeleconsultationScreen(
+                                                                                    rdv: rdv,
+                                                                                ),
+                                                                        ),
+                                                                    );
+                                                                },
+                                                            )
+                                                            : Row(
+                                                                mainAxisSize: MainAxisSize.min,
+                                                                children: [
+                                                                    AppOutlineButton(
+                                                                        label: 'Dossier',
+                                                                        icon: Icons.description_outlined,
+                                                                        onPressed: () {
+                                                                            // TODO: Naviguer vers le dossier
+                                                                            // patient (RDV en cabinet).
+                                                                        },
                                                                     ),
-                                                                );
-                                                            } else {
-                                                                // TODO: Naviguer vers le dossier
-                                                                // patient (RDV en cabinet).
-                                                            }
-                                                        },
-                                                    ),
+                                                                    const SizedBox(width: 8),
+                                                                    RdvButton(
+                                                                        label: 'Terminé',
+                                                                        icon: Icons.check_circle_outline,
+                                                                        onPressed: () => afficherTerminerRdv(
+                                                                            context,
+                                                                            rdv: rdv,
+                                                                            nomPatient:
+                                                                                '${rdv.patient?.utilisateur?.prenom ?? ''} ${rdv.patient?.utilisateur?.nom ?? ''}',
+                                                                        ),
+                                                                    ),
+                                                                ],
+                                                            ),
                                                 ),
                                             );
                                         }).toList(),
@@ -950,6 +986,13 @@ class _PanelTermines extends ConsumerWidget {
                                     subtitle2: rdv.typeRdv == TypeRdv.teleconsultation
                                         ? 'Téléconsultation'
                                         : 'Cabinet',
+                                    // Fonds encore en séquestre : date de libération prévue.
+                                    footer: rdv.fondsEnAttenteDeLiberation
+                                        ? InfoLiberationFonds(
+                                            message:
+                                                'Fonds libérés le ${dateCourte(rdv.liberationPrevueLe)}',
+                                        )
+                                        : null,
                                     bottom: _Frow(
                                         badge: BadgeChip(
                                             label: rdv.statut == StatutRendezVous.honore

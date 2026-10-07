@@ -254,7 +254,9 @@ class RendezVousPatient {
       statut: StatutRendezVous.fromApi(json['statut'] as String?),
       statutBrut: json['statut'] as String?,
       motif: json['motif'] as String?,
-      codeUnique: json['code_unique'] as String,
+      // Le code de consultation est un secret du patient : absent de toute
+      // réponse destinée à un médecin. Lecture tolérante (jamais de crash).
+      codeUnique: (json['code_unique'] as String?) ?? '',
       medecin: MedecinResume.fromJson(json['medecin'] as Map<String, dynamic>),
       structure: json['structure'] == null
           ? null

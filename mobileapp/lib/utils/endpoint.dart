@@ -192,6 +192,12 @@ class ApiRealEndpoints {
   static String statutRendezVous(String id) =>
       '${baseUrl}/rendez-vous/$id/statut';
 
+  // Fin de consultation physique : le médecin saisit le code de
+  // consultation (secret du patient). POST { code } — voir
+  // terminerRendezVous (rendezVous.controller.js).
+  static String terminerRendezVous(String id) =>
+      '${baseUrl}/rendez-vous/$id/terminer';
+
   // ─── Politique de fonds v2 : reprogrammation « deux absents » ─────
   // Voir reprogrammation.controller.js : authentifié, réservé aux deux
   // parties du rendez-vous (un admin n'est pas une partie), statut

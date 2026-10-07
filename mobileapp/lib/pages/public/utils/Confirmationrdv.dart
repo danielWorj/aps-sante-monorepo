@@ -79,7 +79,8 @@ class ConfirmationRdvPage extends StatefulWidget {
   /// Tarif indicatif en FCFA — affiché comme montant bloqué sous séquestre.
   final int? tarifFcfa;
 
-  /// Code unique à présenter au cabinet. `null` si le backend ne l'a pas
+  /// Code de consultation (secret du patient, à donner au médecin à la fin de
+  /// la consultation). `null` si le backend ne l'a pas
   /// encore renvoyé (l'écran affiche alors un message de repli).
   final String? codeUnique;
 
@@ -487,7 +488,8 @@ class _RecapCard extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text('Code unique', style: AppTextStyles.body.copyWith(fontSize: 11.5)),
+        Text('Code de consultation',
+            style: AppTextStyles.body.copyWith(fontSize: 11.5)),
         InkWell(
           onTap: onCopierCode,
           borderRadius: BorderRadius.circular(8),
@@ -551,12 +553,15 @@ class _NextStepsList extends StatelessWidget {
       ),
       _NextStepData(
         icon: Icons.qr_code_2_rounded,
-        titre: codeConnu ? 'Code unique généré' : 'Code unique en préparation',
+        titre: codeConnu
+            ? 'Code de consultation généré'
+            : 'Code de consultation en préparation',
         description: codeConnu
-            ? "Présentez ce code (ou le QR code envoyé par e-mail) à "
-            "l'accueil du cabinet."
-            : 'Un code unique et un QR code vous seront envoyés par e-mail '
-            'dans quelques instants.',
+            ? 'Ne communiquez ce code au médecin qu\'à la fin de la '
+            'consultation : il lui sert à la clôturer. Vous le retrouverez '
+            'dans « Mes rendez-vous ».'
+            : 'Votre code de consultation vous sera communiqué dans '
+            'quelques instants.',
       ),
       const _NextStepData(
         icon: Icons.event_available_outlined,
