@@ -906,7 +906,7 @@ export default function Home() {
             <div className="step-card">
               <span className="step-num">02</span>
               <h3><i className="fa-solid fa-calendar-check text-primary" /> Choisir un créneau</h3>
-              <p>Sélectionnez un horaire libre, recevez un code unique et un QR code de confirmation instantanés.</p>
+              <p>Sélectionnez un horaire libre et recevez instantanément votre code de consultation, à remettre au médecin à la fin du rendez-vous.</p>
             </div>
             <div className="step-card">
               <span className="step-num">03</span>

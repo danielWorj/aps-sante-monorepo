@@ -75,7 +75,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import PortailNavbar from "./../layouts/portail-navbar";
 import PortailFooter from "./../layouts/portail-footer";
 import PortailSidebar from "./../layouts/portail-sidebar";
-import { estRdvNonPaye } from "./../../../utils/rdv";
+import { estRdvNonPaye, estConsultationTerminee } from "./../../../utils/rdv";
 import "./medecin-agenda-non-paye.css";
 import {
   obtenirMonProfil,
@@ -145,6 +145,10 @@ function libelleRendezVous(rdv) {
   if (!rdv) return "";
   // D8 : aucun motif ni type n'est exposé au médecin avant paiement.
   if (estRdvNonPaye(rdv)) return "En attente de paiement";
+  // Libération différée : fin de consultation constatée, fonds en séquestre pendant T heures.
+  if (estConsultationTerminee(rdv) && (rdv.statut === "confirme" || rdv.statut === "en_attente_presence")) {
+    return "Terminé";
+  }
   if (rdv.statut === "en_attente_presence") return "En attente · présence";
   // Politique de fonds v2 : deux absents, en attente d'une nouvelle date (48 h).
   if (rdv.statut === "a_reprogrammer") return "À reprogrammer";

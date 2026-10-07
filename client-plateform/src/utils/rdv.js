@@ -145,3 +145,21 @@ export function formaterDateLiberation(iso) {
   const heure = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   return `${jour} à ${heure}`;
 }
+
+/**
+ * Fonds du médecin encore en séquestre après une fin de consultation constatée
+ * (libération différée à `termine_le + T`). Le client ne calcule AUCUN montant :
+ * il compte les RDV concernés et repère la prochaine échéance renvoyée par le
+ * serveur (`liberation_prevue_le`).
+ * @param {Array<object>} rdvs liste des RDV du médecin (GET /rendez-vous)
+ * @returns {{ rdvs: object[], nombre: number, prochaineLiberation: string|null }}
+ */
+export function resumerFondsEnAttente(rdvs) {
+  const enAttente = (Array.isArray(rdvs) ? rdvs : []).filter(fondsEnAttenteDeLiberation);
+  enAttente.sort((a, b) => new Date(a.liberation_prevue_le) - new Date(b.liberation_prevue_le));
+  return {
+    rdvs: enAttente,
+    nombre: enAttente.length,
+    prochaineLiberation: enAttente[0]?.liberation_prevue_le ?? null,
+  };
+}
