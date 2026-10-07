@@ -19,8 +19,10 @@
 
 import { apiFetch } from '../lib/apiClient';
 
-// Cycle de vie d'un rendez-vous (statut), y compris le contrôle de
-// présence à l'accueil (code_unique / QR) et la contestation a
+// Cycle de vie d'un rendez-vous (statut), y compris la fin de
+// consultation constatée par le CODE du patient (code_unique, 6
+// caractères, saisi par le médecin via terminerRendezVous), la
+// libération différée des fonds (T heures) et la contestation a
 // posteriori — voir la section "Rendez-vous" plus bas.
 export const STATUTS_RENDEZ_VOUS = [
   { valeur: 'cree', libelle: 'Créé' },
@@ -749,8 +751,11 @@ export async function supprimerLigneAbonnementMedecin(ligneId) {
  *
  * `patient_id` est TOUJOURS déduit du token côté serveur à la création
  * (jamais lu dans le corps de la requête) — inutile de l'envoyer
- * depuis le front. `code_unique` / `qr_token_secret` (contrôle de
- * présence à l'accueil) sont eux aussi générés côté serveur.
+ * depuis le front. `code_unique` (code de fin de consultation, 6
+ * caractères) est lui aussi généré côté serveur : c'est un SECRET du
+ * patient, jamais renvoyé au médecin (le médecin le reçoit oralement du
+ * patient et le saisit via terminerRendezVous). `qr_token_secret` n'est
+ * plus utilisé ni exposé.
  *
  * `motif` (string, optionnelle, 1000 caractères max, trim() côté
  * serveur) : précision libre du motif de
@@ -890,6 +895,36 @@ export async function annulerRendezVous(id, { motif, commentaire } = {}) {
     body,
   });
   return data.rendez_vous;
+}
+
+/**
+ * POST /rendez-vous/:id/terminer { code }
+ * Réservé au MÉDECIN du rendez-vous (RDV PHYSIQUE payé). Le médecin saisit le
+ * code de consultation que le patient lui communique à la fin de la
+ * consultation. Succès : la fin est constatée (`termine_le` posé, T figé) et
+ * les fonds restent en séquestre jusqu'à `liberation_prevue_le`, date à
+ * laquelle le cron les libère. Idempotent : un RDV déjà terminé répond 200
+ * avec `deja_constate: true`.
+ *
+ * Erreurs (Error avec `.status` et `.data`, voir apiFetch) :
+ *   - 400 : code absent ou type de RDV invalide (téléconsultation) ;
+ *   - 403 : code incorrect — `data.tentatives_restantes` — ou autre médecin ;
+ *   - 409 : RDV non payé, statut incompatible, fonds pas en séquestre, ou
+ *           délai T non paramétré pour le pays (`data.code`) ;
+ *   - 429 : saisie verrouillée — `data.reessayer_dans_secondes`.
+ *
+ * @param {string} rdvId
+ * @param {string} code - saisi par le médecin (6 à 8 caractères ; le serveur
+ *   normalise espaces et casse)
+ * @returns {Promise<{ message: string, deja_constate: boolean,
+ *   rendez_vous: Object, termine_le: string,
+ *   delai_liberation_heures: number, liberation_prevue_le: string }>}
+ */
+export async function terminerRendezVous(rdvId, code) {
+  return apiFetch(`/rendez-vous/${rdvId}/terminer`, {
+    method: 'POST',
+    body: { code },
+  });
 }
 
 /**

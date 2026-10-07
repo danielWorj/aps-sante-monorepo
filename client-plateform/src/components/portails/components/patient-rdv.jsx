@@ -34,6 +34,15 @@
 //   - un RDV « cree » est NON PAYÉ : il attend le PAIEMENT du patient (le médecin ne peut
 //     ni le confirmer ni l'annuler, D8) et non plus une « confirmation du médecin » ;
 //   - le client n'invente aucun montant : il affiche ce que le serveur renvoie.
+//
+// Code de fin de consultation & libération différée des fonds (T heures) :
+//   - RDV PHYSIQUE à venir : carte « Votre code de consultation » (code_unique, 6
+//     caractères, secret du patient) + bouton « Copier » + avertissement : ne le
+//     donner au médecin qu'à la FIN de la consultation (c'est lui qui le saisit
+//     pour clôturer le rendez-vous) ;
+//   - une fois la fin constatée (`termine_le`), le RDV passe dans « Passés » avec
+//     « Fonds libérés au médecin le jj/mm à hh:mm » (`liberation_prevue_le`) et le
+//     rappel que le patient peut contester avant cette date.
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import PortailSidebar from "./../layouts/portail-sidebar";
@@ -48,7 +57,11 @@ import {
 import { annulerRendezVousDetaille } from "./../../../services/fondsService";
 import { resumerAnnulation } from "./../../../utils/fonds";
 import { useAuth } from "./../../../context/AuthContext";
-import { categoriserRdv } from "./../../../utils/rdv";
+import {
+  categoriserRdv,
+  fondsEnAttenteDeLiberation,
+  formaterDateLiberation,
+} from "./../../../utils/rdv";
 import PaiementMobileMoney from "./../../paiement/PaiementMobileMoney";
 import ChoixMoyenPaiement from "./../../paiement/ChoixMoyenPaiement";
 import { FactureRdv } from "./../../paiement/FactureRecapitulative";
@@ -182,6 +195,19 @@ const PatientRdv = () => {
     setToast(msg);
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), dureeMs);
+  };
+
+  // ─── Code de consultation : copie dans le presse-papiers ────
+  const [codeCopieRdvId, setCodeCopieRdvId] = useState(null);
+  const copierCode = async (rdv) => {
+    if (!rdv?.code_unique) return;
+    try {
+      await navigator.clipboard.writeText(rdv.code_unique);
+    } catch {
+      /* ignore — certains navigateurs/contextes bloquent l'API clipboard */
+    }
+    setCodeCopieRdvId(rdv.rdv_id);
+    setTimeout(() => setCodeCopieRdvId((id) => (id === rdv.rdv_id ? null : id)), 1800);
   };
 
   // ─── Paiement d'un RDV « cree » (en attente de paiement) ────
@@ -402,6 +428,12 @@ const PatientRdv = () => {
                 <i className="fa-solid fa-calendar-xmark"></i> À reprogrammer
               </span>
             )}
+            {fondsEnAttenteDeLiberation(rdv) && (
+              <span className="chip chip-st-confirme">
+                <i className="fa-solid fa-hourglass-half"></i> Fonds libérés le{" "}
+                {formaterDateLiberation(rdv.liberation_prevue_le)}
+              </span>
+            )}
           </div>
         </div>
         {peutRejoindreVisio && (
@@ -445,6 +477,13 @@ const PatientRdv = () => {
     const peutAnnuler =
       (categorie === "attente" || categorie === "avenir") &&
       rdv.statut !== "annule";
+    // Code de consultation : RDV physique payé, à venir, dont la fin n'est pas constatée.
+    const afficheCode =
+      categorie === "avenir" &&
+      !isTeleconsultation &&
+      rdv.statut !== "a_reprogrammer" &&
+      Boolean(rdv.code_unique);
+    const fondsEnAttente = fondsEnAttenteDeLiberation(rdv);
 
     return (
       <div className="rdv-modal-overlay" onClick={fermerDetail}>
@@ -548,6 +587,56 @@ const PatientRdv = () => {
               </div>
             )}
           </div>
+
+          {afficheCode && (
+            <div className="note-box" style={{ display: "block" }}>
+              <div className="fw-semibold mb-1">
+                <i className="fa-solid fa-key me-2"></i>Votre code de consultation
+              </div>
+              <div
+                aria-label={`Code de consultation ${rdv.code_unique}`}
+                style={{
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+                  fontSize: "1.75rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.35em",
+                  textAlign: "center",
+                  padding: ".4rem 0",
+                }}
+              >
+                {rdv.code_unique}
+              </div>
+              <div className="d-flex justify-content-center mb-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-primary btn-sm-aps"
+                  onClick={() => copierCode(rdv)}
+                >
+                  <i
+                    className={`fa-solid ${codeCopieRdvId === rdv.rdv_id ? "fa-check" : "fa-copy"}`}
+                  ></i>{" "}
+                  {codeCopieRdvId === rdv.rdv_id ? "Copié" : "Copier le code"}
+                </button>
+              </div>
+              <div style={{ fontSize: ".85rem" }}>
+                <i className="fa-solid fa-triangle-exclamation me-1"></i>
+                Ne communiquez ce code au médecin qu&apos;à la <strong>fin</strong> de
+                la consultation : il le saisira pour la clôturer.
+              </div>
+            </div>
+          )}
+
+          {fondsEnAttente && (
+            <div className="note-box">
+              <i className="fa-solid fa-hourglass-half"></i>
+              <span>
+                Consultation terminée. Les fonds seront libérés au médecin le{" "}
+                <strong>{formaterDateLiberation(rdv.liberation_prevue_le)}</strong>.
+                Si la consultation ne s&apos;est pas déroulée correctement, vous pouvez
+                encore la contester avant cette date.
+              </span>
+            </div>
+          )}
 
           <div className="rdv-modal-actions">
             {rdv.statut === "cree" && (

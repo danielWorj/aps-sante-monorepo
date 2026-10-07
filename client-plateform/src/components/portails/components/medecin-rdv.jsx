@@ -17,6 +17,15 @@
 //     identité patient, aucun motif. Un 409 RDV_NON_PAYE est géré proprement. Le
 //     médecin n'« accepte » plus un RDV : la confirmation résulte du paiement.
 //   - le client n'invente aucun montant : il affiche ce que le serveur renvoie.
+//
+// Code de fin de consultation & libération différée des fonds (T heures) :
+//   - RDV PHYSIQUE payé (confirme / en_attente_presence) : bouton « Terminé » ->
+//     carte de saisie du code de consultation (TerminerRdvModal). Le code n'est
+//     JAMAIS fourni au médecin par l'API : il le reçoit oralement du patient ;
+//   - une fois la fin constatée (`termine_le`), le RDV passe dans « Passés » avec la
+//     mention « Fonds libérés le jj/mm à hh:mm » (`liberation_prevue_le`, calculée
+//     par le serveur) ; le statut ne passe à « honore » qu'à la libération (cron) ;
+//   - téléconsultation : pas de code, la fin est constatée par la clôture de la visio.
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import PortailSidebar from "./../layouts/portail-sidebar";
@@ -24,6 +33,7 @@ import VisioModal from "./visio-modal";
 import MotifAnnulationModal from "./motif-annulation-modal";
 import AvertissementAnnulation from "./avertissement-annulation";
 import ReprogrammationPanel from "./reprogrammation-panel";
+import TerminerRdvModal from "./terminer-rdv-modal";
 import {
   listerRendezVousMedecinConnecte,
   MOTIFS_ANNULATION_MEDECIN,
@@ -31,7 +41,14 @@ import {
 import { annulerRendezVousDetaille } from "./../../../services/fondsService";
 import { obtenirStatutPaiementRdv } from "./../../../services/paiementService";
 import { useAuth } from "./../../../context/AuthContext";
-import { categoriserRdv, estRdvNonPaye, estErreurRdvNonPaye } from "./../../../utils/rdv";
+import {
+  categoriserRdv,
+  estRdvNonPaye,
+  estErreurRdvNonPaye,
+  peutTerminerRdv,
+  fondsEnAttenteDeLiberation,
+  formaterDateLiberation,
+} from "./../../../utils/rdv";
 import { montantDevise, resumerAnnulation } from "./../../../utils/fonds";
 import "./medecin-rdv-non-paye.css";
 
@@ -337,6 +354,46 @@ const MedecinRdv = () => {
     }
   };
 
+  // ─── Terminer la consultation (code du patient) ─────────────
+  // Réservé aux RDV physiques payés : le médecin saisit le code que le patient
+  // lui donne à la fin de la consultation. Le serveur refuse tout le reste.
+  const [rdvATerminer, setRdvATerminer] = useState(null); // rdv | null
+  const ouvrirTerminer = (rdv) => {
+    fermerDetail();
+    setRdvATerminer(rdv);
+  };
+  const fermerTerminer = () => setRdvATerminer(null);
+
+  const apresTerminaison = (resultat) => {
+    const id = rdvATerminer?.rdv_id;
+    setRdvATerminer(null);
+    if (id) {
+      // Fusionne la ligne renvoyée par le serveur (termine_le, liberation_prevue_le).
+      setRendezVous((prev) =>
+        prev.map((r) =>
+          r.rdv_id === id
+            ? {
+                ...r,
+                ...(resultat?.rendez_vous || {}),
+                termine_le: resultat?.termine_le ?? resultat?.rendez_vous?.termine_le ?? r.termine_le,
+                liberation_prevue_le:
+                  resultat?.liberation_prevue_le ?? resultat?.rendez_vous?.liberation_prevue_le ?? null,
+              }
+            : r
+        )
+      );
+    }
+    const quand = formaterDateLiberation(resultat?.liberation_prevue_le);
+    showToast(
+      resultat?.deja_constate || !quand
+        ? resultat?.message || "Consultation terminée."
+        : `Consultation terminée. Fonds libérés le ${quand}.`,
+      7000
+    );
+    // Resynchronise avec le serveur (statut, notifications, etc.).
+    chargerRendezVous();
+  };
+
   const tabs = [
     { key: "avenir", label: "À venir", count: rdvParCategorie.avenir.length },
     { key: "attente", label: "En attente", count: rdvParCategorie.attente.length },
@@ -394,6 +451,12 @@ const MedecinRdv = () => {
                 <i className="fa-solid fa-calendar-xmark"></i> À reprogrammer
               </span>
             )}
+            {fondsEnAttenteDeLiberation(rdv) && (
+              <span className="chip chip-st-confirme">
+                <i className="fa-solid fa-hourglass-half"></i> Fonds libérés le{" "}
+                {formaterDateLiberation(rdv.liberation_prevue_le)}
+              </span>
+            )}
           </div>
         </div>
         <i className="fa-solid fa-chevron-right rdv-chevron" aria-hidden="true"></i>
@@ -424,6 +487,8 @@ const MedecinRdv = () => {
     const lieu = isTeleconsultation ? "Téléconsultation" : rdv.structure?.nom || "Cabinet";
     const lieuIcon = isTeleconsultation ? "fa-video" : "fa-location-dot";
     const typeIcon = isTeleconsultation ? "fa-video" : "fa-stethoscope";
+    const peutTerminer = categorie === "avenir" && peutTerminerRdv(rdv);
+    const fondsEnAttente = fondsEnAttenteDeLiberation(rdv);
 
     // B7 : net perçu, uniquement si le RDV est payé et que le serveur a
     // renvoyé la décomposition (absente pour les transactions pré-v2).
@@ -555,6 +620,17 @@ const MedecinRdv = () => {
             </div>
           )}
 
+          {fondsEnAttente && (
+            <div className="note-box">
+              <i className="fa-solid fa-hourglass-half"></i>
+              <span>
+                Consultation terminée. Les fonds restent en séquestre et seront
+                libérés sur votre portefeuille le{" "}
+                <strong>{formaterDateLiberation(rdv.liberation_prevue_le)}</strong>.
+              </span>
+            </div>
+          )}
+
           {decomposition && (
             <div className="note-box">
               <i className="fa-solid fa-wallet"></i>
@@ -608,6 +684,15 @@ const MedecinRdv = () => {
                   <i className="fa-solid fa-video"></i> Démarrer la visio
                 </button>
               )}
+            {peutTerminer && (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm-aps"
+                onClick={() => ouvrirTerminer(rdv)}
+              >
+                <i className="fa-solid fa-circle-check"></i> Terminé
+              </button>
+            )}
             {categorie === "avenir" &&
               !isTeleconsultation &&
               rdv.statut !== "a_reprogrammer" && (
@@ -902,6 +987,14 @@ const MedecinRdv = () => {
         enCours={actionEnCours !== null && actionEnCours === rdvARefuser}
         onClose={fermerRefus}
         onConfirm={confirmerRefus}
+      />
+
+      <TerminerRdvModal
+        open={rdvATerminer !== null}
+        rdv={rdvATerminer}
+        patientNom={rdvATerminer ? nomPatient(rdvATerminer) : ""}
+        onClose={fermerTerminer}
+        onTermine={apresTerminaison}
       />
 
       {visioRdv && (
