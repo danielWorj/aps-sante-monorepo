@@ -2,7 +2,7 @@
 //
 // Miroir front-end des routes « politique de fonds v2 » côté admin :
 //   /frais-agregateur, /parametres-amende, /lignes-tarifaires,
-//   /remboursements-campay, PATCH /rendez-vous/:id/statut (annulation),
+//   /parametres-delai-liberation (T), /remboursements-campay, PATCH /rendez-vous/:id/statut (annulation),
 //   POST /rendez-vous/:id/forcer-liberation, GET /paiement/rendez-vous/:id/facture.
 //
 // Vocabulaire : CM = commission MÉDECIN (type_frais « commission », retenue sur
@@ -38,6 +38,19 @@ export const listerParametresAmende = (filtres) =>
 
 /** POST /parametres-amende { pays_id, libelle, taux } */
 export const creerParametreAmende = (body) => apiFetch('/parametres-amende', { method: 'POST', body });
+
+/* ── Délai de libération des fonds T (par pays, en heures) ─────── */
+/** GET /parametres-delai-liberation (admin + superadmin ; ?pays_id=&actif=)
+ *  -> [{ parametre_delai_id, pays_id, libelle, heures, actif, date_debut_validite, pays }]
+ *  Historique inclus par défaut : une seule ligne `actif` par pays. */
+export const listerParametresDelaiLiberation = (filtres) =>
+  apiFetch(`/parametres-delai-liberation${qs(filtres)}`).then((d) => d.parametres_delai_liberation);
+
+/** POST /parametres-delai-liberation { pays_id, libelle, heures }  (SUPERADMIN uniquement)
+ *  `heures` : entier 0..720. Crée une nouvelle version active et désactive l'ancienne ;
+ *  ne s'applique qu'aux consultations terminées ensuite (T est figé sur chaque RDV). */
+export const creerParametreDelaiLiberation = (body) =>
+  apiFetch('/parametres-delai-liberation', { method: 'POST', body });
 
 /* ── Commissions APS (lignes tarifaires : CM et CP) ─────────────── */
 /** Valeurs de `type_frais` gérées par cet écran. `commission` reste la part
