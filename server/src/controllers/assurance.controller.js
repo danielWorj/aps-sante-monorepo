@@ -40,6 +40,7 @@
 import prisma from "../lib/prisma.js";
 import { televerserFichier, supprimerFichier, construireUrl } from "../lib/cloudinaryService.js";
 import { creerAccesseurGeospatial, validerCoordonnees } from "../lib/geo.js";
+import { resoudreDroitsEnLot, resoudreDroits, droitsPublics } from "../lib/droitsAssurance.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt"; // même bibliothèque que authentification.controller.js
 
@@ -177,6 +178,30 @@ async function enrichirServiceAssurance(serviceAssurance) {
 }
 
 /* ===================================================================
+ * Filtrage de la fiche publique selon les droits d'abonnement
+ * (guide abonnements assurances v3, §1.3.2)
+ *
+ * Le serveur décide : une fiche sans droit `siege_complet` n'expose que
+ * la présence minimale. enrichirServiceAssurance est conservée telle
+ * quelle ; le filtre s'applique APRÈS, et le format de réponse
+ * (enveloppes service_assurance / services_assurance) reste inchangé.
+ * =================================================================== */
+
+// pays_id / ville_id : le modèle mobile les exige non nuls (voir guide §4.1.1)
+const CHAMPS_MINIMAUX = [
+  "service_assurance_id", "nom", "type_acteur", "statut_verification",
+  "pays_id", "ville_id", "pays", "ville", "geolocalisation", "distance_km",
+];
+
+export function filtrerFiche(fiche, droits) {
+  if (droits.siege_complet) return fiche;
+  const reduite = {};
+  for (const c of CHAMPS_MINIMAUX) if (c in fiche) reduite[c] = fiche[c];
+  return reduite;
+  // Absents volontairement : telephone, email, agrement, description, file_url, image_url
+}
+
+/* ===================================================================
  * Recherche par proximité (query params ?lat=...&lng=...&rayon_km=...)
  *
  * Utilisée par listerServicesAssurance ET listerAgences : factorisée
@@ -232,12 +257,29 @@ function analyserParametresProximite({ lat, lng, rayon_km }) {
  * =================================================================== */
 
 /**
+ * Applique les droits d'abonnement à une liste de fiches enrichies :
+ * UNE seule requête (resoudreDroitsEnLot) pour toute la liste. Le tri
+ * (pertinence > distance > nom) n'est pas modifié.
+ */
+async function appliquerDroitsALaListe(fiches) {
+  const droitsParId = await resoudreDroitsEnLot(fiches.map((f) => f.service_assurance_id));
+  return fiches.map((f) => {
+    const { droits, statut_abonnement } = droitsParId.get(f.service_assurance_id);
+    return { ...filtrerFiche(f, droits), droits: droitsPublics(droits), statut_abonnement };
+  });
+}
+
+/**
  * GET /api/services-assurance
  * PUBLIQUE, sans authentification — même logique que Centre de santé /
  * Pharmacie : l'Annuaire Assurance doit être consultable avant
  * inscription.
  * Filtres optionnels : ?pays_id=...&ville_id=...&type_acteur=...
- *                      &statut_verification=...&recherche=...(nom, insensible à la casse)
+ *                      &recherche=...(nom, insensible à la casse)
+ * Seules les fiches `publie` sont renvoyées (le paramètre statut_verification
+ * est validé mais ne peut plus élargir le résultat ; voir le guide §1.1.4).
+ * Chaque fiche porte `droits` et `statut_abonnement` ; sans droit
+ * siege_complet, seuls les champs de CHAMPS_MINIMAUX sont renvoyés.
  * Recherche par proximité optionnelle : ?lat=...&lng=...&rayon_km=...
  * (voir analyserParametresProximite / lib/geo.js) — combinable avec les
  * filtres ci-dessus. lat/lng doivent être fournis ensemble ; rayon_km
@@ -269,7 +311,10 @@ export async function listerServicesAssurance(req, res, next) {
     if (pays_id) where.pays_id = pays_id;
     if (ville_id) where.ville_id = ville_id;
     if (type_acteur) where.type_acteur = type_acteur;
-    if (statut_verification) where.statut_verification = statut_verification;
+    // Route PUBLIQUE : seules les fiches publiées sont visibles, quel que soit
+    // le filtre demandé (guide §1.1.4). La liste complète, tous statuts,
+    // relève de la route admin GET /api/admin/services-assurance (§1.4.3).
+    where.statut_verification = "publie";
     if (recherche) where.nom = { contains: recherche, mode: "insensitive" };
 
     if (proximite.actif) {
@@ -304,7 +349,7 @@ export async function listerServicesAssurance(req, res, next) {
         resultat.push({ ...enrichi, distance_km: Math.round(distanceParId.get(id) * 10) / 10 });
       }
 
-      return res.status(200).json({ services_assurance: resultat });
+      return res.status(200).json({ services_assurance: await appliquerDroitsALaListe(resultat) });
     }
 
     const servicesAssurance = await prisma.serviceAssurance.findMany({
@@ -315,7 +360,7 @@ export async function listerServicesAssurance(req, res, next) {
 
     const resultat = await Promise.all(servicesAssurance.map(enrichirServiceAssurance));
 
-    return res.status(200).json({ services_assurance: resultat });
+    return res.status(200).json({ services_assurance: await appliquerDroitsALaListe(resultat) });
   } catch (err) {
     next(err);
   }
@@ -330,12 +375,17 @@ export async function obtenirServiceAssurance(req, res, next) {
       where: { service_assurance_id: req.params.id },
       include: { pays: true, ville: true },
     });
-    if (!serviceAssurance) {
+    // 404 aussi pour une fiche non publiée : le public n'a pas à savoir qu'elle existe.
+    if (!serviceAssurance || serviceAssurance.statut_verification !== "publie") {
       return res.status(404).json({ message: "Service d'assurance introuvable." });
     }
 
-    const resultat = await enrichirServiceAssurance(serviceAssurance);
-    return res.status(200).json({ service_assurance: resultat });
+    const enrichi = await enrichirServiceAssurance(serviceAssurance);
+    const { droits, statut_abonnement } = await resoudreDroits(serviceAssurance.service_assurance_id);
+
+    return res.status(200).json({
+      service_assurance: { ...filtrerFiche(enrichi, droits), droits: droitsPublics(droits), statut_abonnement },
+    });
   } catch (err) {
     next(err);
   }
