@@ -327,6 +327,11 @@ model Pays {
   // (voir ParametreDelaiLiberation plus bas).
   parametres_delai_liberation ParametreDelaiLiberation[]
 
+  // Abonnements assurance : grille tarifaire et configuration (gratuité
+  // d'amorçage, durée de grâce) par pays.
+  tarifs_abonnement_assurance TarifAbonnementAssurance[]
+  config_abonnement_assurance ConfigAbonnementAssurance?
+
   @@index([devise_id])
   @@index([langue_id])
   @@map("pays")
@@ -809,6 +814,10 @@ model ServiceAssurance {
   mises_en_relation MiseEnRelation[]
   activites         Activite[]
   agences           Agence[]
+
+  // Abonnements de présence (niveaux Enrichie / Premium, etc.). Voir
+  // AbonnementAssurance plus bas.
+  abonnements AbonnementAssurance[]
 
   @@index([pays_id])
   @@index([ville_id])
@@ -1357,6 +1366,13 @@ model TransactionPaiement {
   numero_payeur    String? @db.VarChar(20)
   rdv_id_cible     String? @db.Uuid
 
+  // Abonnement assurance payé par cette transaction. Sans clé étrangère,
+  // comme rdv_id_cible (la cible est connue dès la création, la relation
+  // métier fait foi via AbonnementAssurance.transaction_id une fois payé).
+  // Une transaction vise un RDV OU un abonnement, jamais les deux
+  // (contrainte CHECK transaction_objet_unique, ajoutée en SQL).
+  abonnement_assurance_id_cible String? @db.Uuid
+
   // Décomposition du montant capturé — uniquement renseignés pour une
   // transaction liée à un rendez-vous (compte_escrow non nul) : une
   // transaction d'abonnement (medecin/pharmacie) n'a pas d'honoraires
@@ -1393,6 +1409,7 @@ model TransactionPaiement {
   frais_remboursement   FraisAgregateur?      @relation("TransactionFraisRemboursement", fields: [frais_remboursement_id], references: [frais_agregateur_id])
   abonnements_pharmacie AbonnementPharmacie[]
   abonnements_medecin   AbonnementMedecin[]
+  abonnements_assurance AbonnementAssurance[]
   compte_escrow         CompteEscrow?
   remboursements        RemboursementPaiement[]
 
@@ -1407,6 +1424,7 @@ model TransactionPaiement {
   @@index([frais_remboursement_id])
   @@index([fournisseur, statut])
   @@index([rdv_id_cible])
+  @@index([abonnement_assurance_id_cible])
   @@map("transaction_paiement")
 }
 
@@ -2177,4 +2195,192 @@ model Annonce {
   statut         Boolean  @default(true)
 
   @@map("annonce")
+}
+// =====================================================================
+// Abonnements des assurances (guide_implementation_abonnement_assurances
+// v3, §1.1.1 et §1.2)
+//
+// Principe : le serveur décide des droits d'une fiche à partir de son
+// abonnement valide (voir lib/droitsAssurance.js) ; sans abonnement, la
+// fiche n'a qu'une présence minimale. Les prix vivent dans la grille de
+// tarifs, jamais sur le niveau.
+//
+// Contraintes que Prisma ne sait pas exprimer (CHECK, index uniques
+// partiels, déclencheurs d'ajout seul) : elles sont créées en SQL dans
+// les migrations 20261013100000 et 20261013100100.
+// =====================================================================
+
+// Journal d'audit immuable (EF-AUD-01). Ajout seul : un déclencheur SQL
+// interdit UPDATE et DELETE (voir la migration journal_audit).
+model JournalAudit {
+  audit_id      String   @id @default(uuid()) @db.Uuid
+  date_creation DateTime @default(now())
+  acteur_id     String?  @db.Uuid // null = système (webhook, cron)
+  type          String   @db.VarChar(60) // ex. ABONNEMENT_ASSURANCE_ACTIVE
+  objet_type    String   @db.VarChar(40)
+  objet_id      String?  @db.Uuid
+  details       Json?
+
+  @@index([objet_type, objet_id])
+  @@index([type, date_creation])
+  @@map("journal_audit")
+}
+
+enum StatutAbonnementAssurance {
+  en_attente_paiement // brouillon créé au clic « Payer », sans date
+  actif
+  expire
+  annule
+  suspendu
+  remplace // remplacé par une montée de niveau
+}
+
+enum OrigineAbonnementAssurance {
+  self_service
+  admin
+  virement
+  geste
+  gratuite
+}
+
+model NiveauAbonnementAssurance {
+  niveau_id String @id @default(uuid()) @db.Uuid
+
+  code    String  @unique @db.VarChar(30) // "enrichie", "premium"
+  libelle String  @db.VarChar(100)
+  rang    Int // 1 = le plus bas (unicité vérifiée par l'API) ; sert à comparer montée / descente
+  actif   Boolean @default(true) // actif = vendable. N'affecte PAS les abonnés en cours.
+
+  // Drapeaux d'avantages (cochés par l'admin)
+  siege_complet      Boolean @default(true)
+  afficher_activites Boolean @default(true)
+  afficher_agences   Boolean @default(true)
+  formulaire_contact Boolean @default(true)
+  suivi_demandes     Boolean @default(true)
+  // RÉSERVÉS : stockés mais non appliqués tant que le modèle de données
+  // manque (phase 9).
+  video_presentation Boolean @default(false)
+  vitrine_premium    Boolean @default(false)
+  stats_completes    Boolean @default(false)
+  export_stats       Boolean @default(false)
+
+  // Quotas (null = illimité)
+  max_agences       Int?
+  max_photos        Int? // réservé
+  max_gestionnaires Int? // réservé
+
+  abonnements AbonnementAssurance[]
+  tarifs      TarifAbonnementAssurance[]
+
+  @@map("niveau_abonnement_assurance")
+}
+
+model AbonnementAssurance {
+  abonnement_id String @id @default(uuid()) @db.Uuid
+
+  service_assurance_id String @db.Uuid
+  niveau_id            String @db.Uuid
+
+  // Figés à la création du brouillon (une modification de grille n'est
+  // jamais rétroactive).
+  duree_mois            Int
+  prix_mensuel_applique Decimal @db.Decimal(12, 2)
+  remise_pourcent       Decimal @default(0) @db.Decimal(5, 2)
+  credit_prorata        Decimal @default(0) @db.Decimal(12, 2) // montée de niveau
+  montant_total         Decimal @db.Decimal(12, 2)
+  devise                String  @db.VarChar(3) // minuscule, comme TransactionPaiement ("xaf")
+
+  // Renseignées à l'activation. date_fin est EXCLUSIVE : premier jour
+  // non couvert.
+  date_debut DateTime?                 @db.Date
+  date_fin   DateTime?                 @db.Date
+  statut     StatutAbonnementAssurance @default(en_attente_paiement)
+
+  abonnement_remplace_id String? @db.Uuid // montée de niveau : l'abonnement remplacé
+  dernier_rappel_jours   Int? // 30, 7 ou 1 : dernier rappel d'échéance envoyé
+
+  transaction_id String? @db.Uuid // null : brouillon, geste commercial, gratuité
+  motif          String? @db.Text // obligatoire pour geste / prolongation
+  origine        OrigineAbonnementAssurance @default(self_service)
+
+  date_creation    DateTime @default(now())
+  date_mise_a_jour DateTime @updatedAt
+
+  service     ServiceAssurance            @relation(fields: [service_assurance_id], references: [service_assurance_id])
+  niveau      NiveauAbonnementAssurance   @relation(fields: [niveau_id], references: [niveau_id])
+  transaction TransactionPaiement?        @relation(fields: [transaction_id], references: [transaction_id])
+  facture     FactureAbonnementAssurance?
+
+  @@index([service_assurance_id, statut])
+  @@index([statut, date_fin])
+  @@index([niveau_id])
+  @@index([transaction_id])
+  @@map("abonnement_assurance")
+}
+
+// Grille de prix : niveau × pays × type d'acteur. type_acteur NULL =
+// tarif générique. L'unicité (qui doit tenir compte des NULL) est portée
+// par deux index uniques PARTIELS créés en SQL, pas par @@unique.
+model TarifAbonnementAssurance {
+  tarif_id           String               @id @default(uuid()) @db.Uuid
+  niveau_id          String               @db.Uuid
+  pays_id            String               @db.Uuid
+  type_acteur        TypeActeurAssurance? // null = tous
+  devise             String               @db.VarChar(3) // "xaf" au Cameroun (CamPay n'accepte que XAF)
+  prix_mensuel       Decimal              @db.Decimal(12, 2)
+  prix_usd_indicatif Decimal?             @db.Decimal(12, 2)
+  actif              Boolean              @default(true)
+
+  niveau NiveauAbonnementAssurance @relation(fields: [niveau_id], references: [niveau_id])
+  pays   Pays                      @relation(fields: [pays_id], references: [pays_id])
+
+  @@index([niveau_id, pays_id])
+  @@index([pays_id])
+  @@map("tarif_abonnement_assurance")
+}
+
+model RemiseDureeAbonnementAssurance {
+  duree_mois      Int     @id // 1, 3, 6, 12
+  remise_pourcent Decimal @db.Decimal(5, 2)
+
+  @@map("remise_duree_abonnement_assurance")
+}
+
+// Gratuité d'amorçage et durée de grâce, par pays (EF-ADM-03).
+model ConfigAbonnementAssurance {
+  pays_id            String    @id @db.Uuid
+  gratuite_active    Boolean   @default(false)
+  gratuite_niveau_id String?   @db.Uuid
+  gratuite_jusqu_au  DateTime? @db.Date
+  grace_jours        Int       @default(7)
+
+  pays Pays @relation(fields: [pays_id], references: [pays_id])
+
+  @@map("config_abonnement_assurance")
+}
+
+// Facture archivée, numérotée sans trou (EF-PAY-13). Ajout seul
+// (déclencheur SQL).
+model FactureAbonnementAssurance {
+  facture_id     String   @id @default(uuid()) @db.Uuid
+  numero         String   @unique @db.VarChar(30) // FAC-ABO-2026-000123
+  abonnement_id  String   @unique @db.Uuid
+  transaction_id String   @unique @db.Uuid
+  date_emission  DateTime @default(now())
+  devise         String   @db.VarChar(3)
+  total          Decimal  @db.Decimal(12, 2)
+  snapshot       Json // contenu immuable au moment de l'émission
+
+  abonnement AbonnementAssurance @relation(fields: [abonnement_id], references: [abonnement_id])
+
+  @@map("facture_abonnement_assurance")
+}
+
+// Compteur annuel verrouillé (INSERT ... ON CONFLICT DO UPDATE) : une
+// séquence PostgreSQL laisserait des trous en cas d'annulation.
+model CompteurFactureAbonnement {
+  annee   Int @id
+  dernier Int @default(0)
+
+  @@map("compteur_facture_abonnement")
 }
