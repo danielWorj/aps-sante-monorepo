@@ -275,6 +275,53 @@ class Geolocalisation {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Droits d'abonnement (guide abonnements assurances v3, §4.1.1)
+// ─────────────────────────────────────────────────────────────────
+
+/// Droits de la fiche, résolus par le SERVEUR à partir de son abonnement
+/// (objet `droits` de la réponse). L'app affiche selon ces drapeaux ; elle
+/// ne masque jamais une donnée reçue comme mécanisme de sécurité (le serveur
+/// n'envoie déjà que ce qui est autorisé).
+class DroitsAssurance {
+  /// Code du niveau ("enrichie", "premium"…) ou "minimale" sans abonnement.
+  final String niveauPresence;
+  final bool siegeComplet;
+  final bool afficherActivites;
+  final bool afficherAgences;
+  final bool formulaireContact;
+
+  const DroitsAssurance({
+    required this.niveauPresence,
+    this.siegeComplet = false,
+    this.afficherActivites = false,
+    this.afficherAgences = false,
+    this.formulaireContact = false,
+  });
+
+  /// Valeur sûre par défaut : sans objet `droits`, on considère la
+  /// présence minimale.
+  static const DroitsAssurance minimaux = DroitsAssurance(niveauPresence: 'minimale');
+
+  factory DroitsAssurance.fromJson(Map<String, dynamic>? j) => DroitsAssurance(
+        niveauPresence: _lire<String>(j ?? const {}, 'niveau_presence') ?? 'minimale',
+        siegeComplet: j?['siege_complet'] == true,
+        afficherActivites: j?['afficher_activites'] == true,
+        afficherAgences: j?['afficher_agences'] == true,
+        formulaireContact: j?['formulaire_contact'] == true,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'niveau_presence': niveauPresence,
+        'siege_complet': siegeComplet,
+        'afficher_activites': afficherActivites,
+        'afficher_agences': afficherAgences,
+        'formulaire_contact': formulaireContact,
+      };
+
+  bool get estMinimale => !siegeComplet;
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Modèle principal : ServiceAssurance
 // ─────────────────────────────────────────────────────────────────
 
@@ -285,14 +332,18 @@ class Geolocalisation {
 /// `services_assurance` de la réponse, déjà enrichi par
 /// enrichirServiceAssurance() : geolocalisation résolue + image_url
 /// Cloudinary reconstruite).
+///
+/// Abonnements (guide v3) : sans droit `siege_complet`, le serveur ne renvoie
+/// que la présence minimale (dénomination, type, localisation) — d'où les
+/// champs telephone / email / agrement / fileUrl / imageUrl NULLABLES.
 class ServiceAssurance {
   final String serviceAssuranceId;
   final String nom;
   final String paysId;
   final String villeId;
-  final String telephone;
-  final String email;
-  final String agrement;
+  final String? telephone;
+  final String? email;
+  final String? agrement;
   final String? description;
   final StatutVerificationAssurance statutVerification;
   final TypeActeurAssurance typeActeur;
@@ -300,11 +351,17 @@ class ServiceAssurance {
   /// public_id Cloudinary (jamais l'URL) de l'image compagnie/courtier.
   /// Nom de champ trompeur hérité du schéma (voir commentaire d'en-tête du
   /// contrôleur) : c'est bien un nom Cloudinary, pas une URL.
-  final String fileUrl;
+  final String? fileUrl;
 
   /// URL publique reconstruite côté serveur — à utiliser directement dans
   /// un Image.network par ex.
-  final String imageUrl;
+  final String? imageUrl;
+
+  /// Droits résolus par le serveur (présence minimale par défaut).
+  final DroitsAssurance droits;
+
+  /// "actif" | "grace" | "aucun" (absent sur les réponses d'écriture).
+  final String? statutAbonnement;
 
   final Geolocalisation? geolocalisation;
 
@@ -319,14 +376,16 @@ class ServiceAssurance {
     required this.nom,
     required this.paysId,
     required this.villeId,
-    required this.telephone,
-    required this.email,
-    required this.agrement,
+    this.telephone,
+    this.email,
+    this.agrement,
     this.description,
     required this.statutVerification,
     required this.typeActeur,
-    required this.fileUrl,
-    required this.imageUrl,
+    this.fileUrl,
+    this.imageUrl,
+    this.droits = DroitsAssurance.minimaux,
+    this.statutAbonnement,
     this.geolocalisation,
     this.pays,
     this.ville,
@@ -338,16 +397,20 @@ class ServiceAssurance {
       nom: json['nom'] as String,
       paysId: json['pays_id'] as String,
       villeId: json['ville_id'] as String,
-      telephone: json['telephone'] as String,
-      email: json['email'] as String,
-      agrement: json['agrement'] as String,
+      telephone: _lire<String>(json, 'telephone'),
+      email: _lire<String>(json, 'email'),
+      agrement: _lire<String>(json, 'agrement'),
       description: _lire<String>(json, 'description'),
       statutVerification: StatutVerificationAssurance.fromApi(
         json['statut_verification'] as String?,
       ),
       typeActeur: TypeActeurAssurance.fromApi(json['type_acteur'] as String?),
-      fileUrl: json['file_url'] as String,
-      imageUrl: json['image_url'] as String,
+      fileUrl: _lire<String>(json, 'file_url'),
+      imageUrl: _lire<String>(json, 'image_url'),
+      droits: json['droits'] is Map<String, dynamic>
+          ? DroitsAssurance.fromJson(json['droits'] as Map<String, dynamic>)
+          : DroitsAssurance.minimaux,
+      statutAbonnement: _lire<String>(json, 'statut_abonnement'),
       geolocalisation: json['geolocalisation'] is Map<String, dynamic>
           ? Geolocalisation.fromJson(
           json['geolocalisation'] as Map<String, dynamic>)
@@ -374,6 +437,8 @@ class ServiceAssurance {
     'type_acteur': typeActeur.toApi(),
     'file_url': fileUrl,
     'image_url': imageUrl,
+    'droits': droits.toJson(),
+    'statut_abonnement': statutAbonnement,
     'geolocalisation': geolocalisation?.toJson(),
     'pays': pays?.toJson(),
     'ville': ville?.toJson(),
@@ -392,6 +457,8 @@ class ServiceAssurance {
     TypeActeurAssurance? typeActeur,
     String? fileUrl,
     String? imageUrl,
+    DroitsAssurance? droits,
+    String? statutAbonnement,
     Geolocalisation? geolocalisation,
     PaysLite? pays,
     VilleLite? ville,
@@ -409,6 +476,8 @@ class ServiceAssurance {
       typeActeur: typeActeur ?? this.typeActeur,
       fileUrl: fileUrl ?? this.fileUrl,
       imageUrl: imageUrl ?? this.imageUrl,
+      droits: droits ?? this.droits,
+      statutAbonnement: statutAbonnement ?? this.statutAbonnement,
       geolocalisation: geolocalisation ?? this.geolocalisation,
       pays: pays ?? this.pays,
       ville: ville ?? this.ville,

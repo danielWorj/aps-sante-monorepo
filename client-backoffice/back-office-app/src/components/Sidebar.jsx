@@ -108,6 +108,12 @@ const APS_MENU = [
         label: "Rendez-vous",
         icon: "fa-solid fa-calendar-check",
         to: "/rendez-vous"
+      },
+      {
+        key: "parametre-delai-confirmation",
+        label: "Délai de confirmation",
+        icon: "fa-solid fa-hourglass-start",
+        to: "/parametre-delai-confirmation"
       }
     ]
   },
@@ -129,7 +135,14 @@ const APS_MENU = [
         key: "assurances",
         label: "Assurances",
         icon: "fa-solid fa-shield-alt",
-        to: "/assurances"
+        to: "/assurances",
+        // Abonnements des assurances (guide abonnements v3, §3)
+        children: [
+          { key: "abonnements-assurance", label: "Abonnements", icon: "fa-solid fa-id-card-clip", to: "/abonnements-assurance" },
+          { key: "niveaux-abonnement-assurance", label: "Niveaux", icon: "fa-solid fa-layer-group", to: "/niveaux-abonnement-assurance" },
+          { key: "tarifs-abonnement-assurance", label: "Tarifs & paramètres", icon: "fa-solid fa-tags", to: "/tarifs-abonnement-assurance" },
+          { key: "paiements-abonnement-assurance", label: "Paiements", icon: "fa-solid fa-receipt", to: "/paiements-abonnement-assurance" }
+        ]
       }
     ]
   },

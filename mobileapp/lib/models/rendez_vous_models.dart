@@ -303,6 +303,12 @@ class RendezVous {
   final DateTime? termineLe;
   final DateTime? liberationPrevueLe;
 
+  /// Agenda : heure limite de confirmation (paiement) d'un RDV « cree ».
+  /// Renseignée uniquement dans la réponse de POST /rendez-vous
+  /// (`echeance_confirmation`) : passé cette heure sans paiement, la demande
+  /// est annulée automatiquement et le créneau est libéré.
+  final DateTime? echeanceConfirmation;
+
   final MedecinRdvRef? medecin;
   final PatientRdvRef? patient;
 
@@ -331,6 +337,7 @@ class RendezVous {
     this.dateProposition,
     this.termineLe,
     this.liberationPrevueLe,
+    this.echeanceConfirmation,
     this.medecin,
     this.patient,
     this.nonPaye = false,
@@ -394,6 +401,7 @@ class RendezVous {
       dateProposition: _lireDate(json, 'date_proposition'),
       termineLe: _lireDate(json, 'termine_le'),
       liberationPrevueLe: _lireDate(json, 'liberation_prevue_le'),
+      echeanceConfirmation: _lireDate(json, 'echeance_confirmation'),
       medecin: json['medecin'] is Map<String, dynamic>
           ? MedecinRdvRef.fromJson(json['medecin'] as Map<String, dynamic>)
           : null,
@@ -448,6 +456,7 @@ class RendezVous {
     DateTime? dateProposition,
     DateTime? termineLe,
     DateTime? liberationPrevueLe,
+    DateTime? echeanceConfirmation,
     MedecinRdvRef? medecin,
     PatientRdvRef? patient,
     bool? nonPaye,
@@ -471,6 +480,7 @@ class RendezVous {
       dateProposition: dateProposition ?? this.dateProposition,
       termineLe: termineLe ?? this.termineLe,
       liberationPrevueLe: liberationPrevueLe ?? this.liberationPrevueLe,
+      echeanceConfirmation: echeanceConfirmation ?? this.echeanceConfirmation,
       medecin: medecin ?? this.medecin,
       patient: patient ?? this.patient,
       nonPaye: nonPaye ?? this.nonPaye,
@@ -538,22 +548,33 @@ class CreerRendezVousPayload {
   final String medecinId;
   final String? structureId;
   final TypeRdv typeRdv;
-  final DateTime dateCreneau;
+
+  /// Créneau LIBRE choisi dans l'agenda du médecin
+  /// (GET /medecins/:id/agenda?libres=true) — c'est lui qui fixe la date du
+  /// rendez-vous côté serveur. Obligatoire en pratique.
+  final String? creneauId;
+
+  /// Compatibilité : début exact d'un créneau libre, envoyé seulement si
+  /// [creneauId] est absent (converti en UTC pour lever toute ambiguïté).
+  final DateTime? dateCreneau;
   final String? motif;
 
   const CreerRendezVousPayload({
     required this.medecinId,
     this.structureId,
     required this.typeRdv,
-    required this.dateCreneau,
+    this.creneauId,
+    this.dateCreneau,
     this.motif,
-  });
+  }) : assert(creneauId != null || dateCreneau != null);
 
   Map<String, dynamic> toJson() => {
     'medecin_id': medecinId,
     if (structureId != null) 'structure_id': structureId,
     'type_rdv': typeRdv.toApi(),
-    'date_creneau': dateCreneau.toIso8601String(),
+    if (creneauId != null) 'creneau_id': creneauId,
+    if (creneauId == null && dateCreneau != null)
+      'date_creneau': dateCreneau!.toUtc().toIso8601String(),
     if (motif != null && motif!.isNotEmpty) 'motif': motif,
   };
 }

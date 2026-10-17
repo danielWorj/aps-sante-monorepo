@@ -30,6 +30,18 @@ import {
   projeterRdvPourRole,
 } from "../services/visibiliteRole.service.js";
 import { estViolationCreneauActif, MESSAGE_CRENEAU_PRIS } from "../utils/erreursPrisma.js";
+import {
+  ErreurCreneau,
+  libererCreneauxDuRdv,
+  reserverCreneau,
+  resoudreCreneauReservable,
+} from "../services/agendaCreneau.service.js";
+import { resoudreDelaiConfirmationMedecin } from "../services/parametreDelaiConfirmation.service.js";
+import { echeanceConfirmation } from "../lib/delaiConfirmation.js";
+
+function repondreErreurCreneau(res, err) {
+  return res.status(err.status).json({ message: err.message, code: err.code });
+}
 
 const TYPES_RDV = ["physique", "teleconsultation"];
 const STATUTS_RDV = [
@@ -416,6 +428,17 @@ export async function obtenirRendezVous(req, res, next) {
  * exige que le médecin ait activé teleconsultation_activee ;
  * structure_id n'a de sens que pour un rdv "physique" (sinon cabinet
  * libéral, structure_id reste null).
+ *
+ * Agenda : le patient choisit une case LIBRE de l'agenda du médecin
+ * (GET /medecins/:id/agenda?libres=true) et envoie son `creneau_id`.
+ * Par compatibilité, un client qui n'envoie que `date_creneau` est
+ * accepté si cette date est EXACTEMENT le début d'une case libre. La
+ * date du RDV est toujours celle de la case (jamais celle du client).
+ * Dès la demande (statut « cree »), la case passe à « reserve » et
+ * disparaît de la grille des autres patients, pour au plus H heures
+ * (délai du pays, figé sur le RDV) : sans confirmation (paiement) dans ce
+ * délai, le cron annule le RDV et libère la case. La réponse porte
+ * `echeance_confirmation` (ISO) pour l'afficher au patient.
  */
 export async function creerRendezVous(req, res, next) {
   try {
@@ -424,11 +447,11 @@ export async function creerRendezVous(req, res, next) {
       return res.status(403).json({ message: "Seul un compte patient peut réserver un rendez-vous." });
     }
 
-    const { medecin_id, structure_id, type_rdv, date_creneau, motif } = req.body;
+    const { medecin_id, structure_id, type_rdv, creneau_id, date_creneau, motif } = req.body;
 
-    if (!medecin_id || !type_rdv || !date_creneau) {
+    if (!medecin_id || !type_rdv || (!creneau_id && !date_creneau)) {
       return res.status(400).json({
-        message: "Champs requis manquants : medecin_id, type_rdv, date_creneau.",
+        message: "Champs requis manquants : medecin_id, type_rdv, creneau_id.",
       });
     }
 
@@ -449,11 +472,6 @@ export async function creerRendezVous(req, res, next) {
       });
     }
 
-    const dateCreneau = new Date(date_creneau);
-    if (Number.isNaN(dateCreneau.getTime())) {
-      return res.status(400).json({ message: "date_creneau invalide." });
-    }
-
     const medecin = await prisma.medecin.findUnique({ where: { medecin_id } });
     if (!medecin) {
       return res.status(400).json({ message: "medecin_id introuvable." });
@@ -471,29 +489,45 @@ export async function creerRendezVous(req, res, next) {
       }
     }
 
+    // Case demandée : libre, de ce médecin, pas encore passée.
+    const { creneau, debut } = await resoudreCreneauReservable({ medecin_id, creneau_id, date_creneau });
+    const delai = await resoudreDelaiConfirmationMedecin(medecin_id);
+
     const code_unique = await genererCodeUnique();
     const qr_token_secret = crypto.randomBytes(32).toString("hex");
 
-    const rdv = await prisma.rendezVous.create({
-      data: {
-        patient_id: patient.patient_id,
-        medecin_id,
-        structure_id: structure_id || null,
-        type_rdv,
-        date_creneau: dateCreneau,
-        statut: "cree",
-        motif: motifNettoye ? motifNettoye : null,
-        code_unique,
-        qr_token_secret,
-      },
+    // Création du RDV et réservation de la case dans UNE transaction : si un
+    // autre patient a pris la case entre-temps, rien n'est créé (409).
+    const rdv = await prisma.$transaction(async (tx) => {
+      const cree = await tx.rendezVous.create({
+        data: {
+          patient_id: patient.patient_id,
+          medecin_id,
+          structure_id: structure_id || null,
+          type_rdv,
+          date_creneau: debut,
+          statut: "cree",
+          motif: motifNettoye ? motifNettoye : null,
+          code_unique,
+          qr_token_secret,
+          delai_confirmation_heures: delai.heures,
+        },
+      });
+      await reserverCreneau(tx, creneau.creneau_id, cree.rdv_id);
+      return cree;
     });
 
     // Réponse au PATIENT : il reçoit son code de consultation (secret à ne
     // donner au médecin qu'à la fin de la consultation) ; jamais le secret QR.
-    return res
-      .status(201)
-      .json({ message: "Rendez-vous créé.", rendez_vous: projeterRdvPourRole(rdv, ROLES_VISIBILITE.PATIENT) });
+    return res.status(201).json({
+      message: "Rendez-vous créé.",
+      rendez_vous: projeterRdvPourRole(rdv, ROLES_VISIBILITE.PATIENT),
+      creneau_id: creneau.creneau_id,
+      delai_confirmation_heures: delai.heures,
+      echeance_confirmation: echeanceConfirmation(rdv).toISOString(),
+    });
   } catch (err) {
+    if (err instanceof ErreurCreneau) return repondreErreurCreneau(res, err);
     // Politique de fonds v2 §6 : index unique partiel — un seul RDV actif
     // par (médecin, créneau). Course entre deux réservations simultanées.
     if (estViolationCreneauActif(err)) return res.status(409).json({ message: MESSAGE_CRENEAU_PRIS });
@@ -536,8 +570,10 @@ export async function modifierRendezVous(req, res, next) {
     // sur un RDV non payé, quelle que soit la route d'entrée.
     if (await refuserActionMedecinSiNonPaye(req, res, rdv)) return;
 
-    const { statut, date_creneau, structure_id, motif } = req.body;
+    const { statut, date_creneau, creneau_id, structure_id, motif } = req.body;
     const donnees = {};
+    // Agenda : nouvelle case visée par une reprogrammation (voir plus bas).
+    let nouvelleCase = null;
 
     // CORRECTIF SÉCURITÉ : ce PUT généraliste acceptait auparavant
     // n'importe quel statut, de la part de n'importe quelle partie
@@ -569,7 +605,7 @@ export async function modifierRendezVous(req, res, next) {
         // structure/motif rendrait ambigu ce qui a été appliqué si
         // l'un des deux échoue.
         if (statut === "annule") {
-          if (date_creneau !== undefined || structure_id !== undefined || motif !== undefined) {
+          if (date_creneau !== undefined || creneau_id !== undefined || structure_id !== undefined || motif !== undefined) {
             return res.status(400).json({
               message:
                 "L'annulation doit être demandée seule : n'envoyez ni date_creneau, ni structure_id, ni motif avec statut=\"annule\".",
@@ -582,7 +618,7 @@ export async function modifierRendezVous(req, res, next) {
       Object.assign(donnees, await donneesPresenceTransition(rdv, req.utilisateur, statut));
     }
 
-    if (date_creneau !== undefined) {
+    if (date_creneau !== undefined || creneau_id !== undefined) {
       // Politique de fonds v2 §5 : un RDV « a_reprogrammer » ne change de date
       // QUE par proposition + acceptation de l'autre partie (POST
       // .../reprogrammation/proposer puis .../accepter). Un PUT unilatéral
@@ -594,11 +630,16 @@ export async function modifierRendezVous(req, res, next) {
             "et doit être acceptée par l'autre partie.",
         });
       }
-      const dateCreneau = new Date(date_creneau);
-      if (Number.isNaN(dateCreneau.getTime())) {
-        return res.status(400).json({ message: "date_creneau invalide." });
-      }
-      donnees.date_creneau = dateCreneau;
+      // Agenda : la nouvelle date est une case LIBRE de l'agenda du médecin
+      // (creneau_id, ou date exacte de début d'une case). La réservation
+      // est déplacée dans la même transaction que la mise à jour du RDV.
+      nouvelleCase = await resoudreCreneauReservable({
+        medecin_id: rdv.medecin_id,
+        creneau_id,
+        date_creneau,
+        rdvCourant: rdv.rdv_id,
+      });
+      donnees.date_creneau = nouvelleCase.debut;
     }
 
     if (structure_id !== undefined) {
@@ -632,9 +673,16 @@ export async function modifierRendezVous(req, res, next) {
       return res.status(400).json({ message: "Aucune donnée valide à mettre à jour." });
     }
 
-    const rdvMisAJour = await prisma.rendezVous.update({
-      where: { rdv_id: req.params.id },
-      data: donnees,
+    const rdvMisAJour = await prisma.$transaction(async (tx) => {
+      const maj = await tx.rendezVous.update({
+        where: { rdv_id: req.params.id },
+        data: donnees,
+      });
+      if (nouvelleCase) {
+        await libererCreneauxDuRdv(rdv.rdv_id, tx);
+        await reserverCreneau(tx, nouvelleCase.creneau.creneau_id, rdv.rdv_id);
+      }
+      return maj;
     });
 
     return res.status(200).json({
@@ -642,6 +690,7 @@ export async function modifierRendezVous(req, res, next) {
       rendez_vous: projeterRdvPourRole(rdvMisAJour, await roleDeVisibilite(rdvMisAJour, req.utilisateur)),
     });
   } catch (err) {
+    if (err instanceof ErreurCreneau) return repondreErreurCreneau(res, err);
     // Déplacement vers un créneau déjà occupé par un autre RDV actif du médecin (§6).
     if (estViolationCreneauActif(err)) return res.status(409).json({ message: MESSAGE_CRENEAU_PRIS });
     next(err);

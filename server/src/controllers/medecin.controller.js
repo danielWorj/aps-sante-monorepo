@@ -123,6 +123,7 @@ export {
   supprimerHoraire,
   listerDisponibilitesMedecin,
   creerDisponibiliteMedecin,
+  remplacerDisponibilitesMedecin,
   supprimerDisponibiliteMedecin,
   listerCreneauxAgenda,
   obtenirCreneauAgenda,

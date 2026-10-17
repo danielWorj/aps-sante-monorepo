@@ -73,12 +73,17 @@ function lignesCheckout({ montant, devise, libelle, lignes }) {
  * SESSION (et sur la facture), jamais sur le PaymentIntent du Checkout : un
  * PaymentIntent qui les porterait serait retraité par le webhook
  * `payment_intent.succeeded` et retrouvé par annulerPaymentIntentsRdv.
+ *
+ * `rdv_id` est optionnel : un paiement d'abonnement assurance n'a pas de
+ * RDV et passe `metadata: { objet: "abonnement_assurance" }` (le webhook
+ * aiguille sur `objet` ; l'abonnement se lit via la transaction en base).
  */
 export async function creerSessionCheckout({
-  montant, devise, transaction_id, rdv_id, libelle, lignes, description_facture,
+  montant, devise, transaction_id, rdv_id, metadata = {}, libelle, lignes, description_facture,
   email_client, url_succes, url_annulation,
 }) {
   const descriptionFacture = description_facture ?? libelle;
+  const meta = { transaction_id, ...(rdv_id ? { rdv_id } : {}), ...metadata };
   return stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
@@ -90,11 +95,11 @@ export async function creerSessionCheckout({
       enabled: true,
       invoice_data: {
         description: descriptionFacture,
-        metadata: { transaction_id, rdv_id },
+        metadata: meta,
       },
     },
     payment_intent_data: { description: descriptionFacture },
-    metadata: { transaction_id, rdv_id },
+    metadata: meta,
     success_url: url_succes,
     cancel_url: url_annulation,
   });

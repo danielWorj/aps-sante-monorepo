@@ -277,11 +277,27 @@ class ApiRealEndpoints {
   static String portefeuilleMedecin(String medecinId) =>
       '${baseUrl}/medecins/$medecinId/portefeuille';
 
-  // ─── Agenda médecin (créneaux libres, pour la reprogrammation) ────
-  // Voir agenda.controller.js : GET public → { creneaux }. Filtres :
-  // ?date_debut&date_fin&statut=disponible.
+  // ─── Agenda médecin ───────────────────────────────────────────────
+  // Voir agenda.controller.js :
+  //   - GET public → { creneaux, fuseau_horaire }. Filtres :
+  //     ?date_debut&date_fin&statut&libres=true (créneaux réservables).
+  //     Chaque créneau porte `debut` / `fin` (instants réels, ISO).
   static String agendaMedecin(String medecinId) =>
       '${baseUrl}/medecins/$medecinId/agenda';
+
+  //   - GET public → { horaires } : référentiel des tranches de 30 min.
+  static String get horaires => '${baseUrl}/horaires';
+
+  //   - GET public → { disponibilites } : gabarit hebdomadaire ;
+  //     PUT (médecin propriétaire) { disponibilites: [{ jour_semaine,
+  //     horaire_id }] } remplace tout le gabarit et republie les créneaux.
+  static String disponibilitesMedecin(String medecinId) =>
+      '${baseUrl}/medecins/$medecinId/disponibilites';
+
+  //   - PUT { statut: disponible|bloque } / DELETE (médecin propriétaire)
+  //     sur un créneau précis.
+  static String creneauAgenda(String creneauId) =>
+      '${baseUrl}/creneaux-agenda/$creneauId';
 
   // ─── Notifications in-app (politique de fonds v2) ─────────────────
   // Voir notification.controller.js : authentifié, toujours scopé à

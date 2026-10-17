@@ -15,11 +15,17 @@
 //     le bouton « Payer » ouvre ChoixMoyenPaiement, qui affiche la facture
 //     détaillée (consultation + frais d'agrégateur + commission APS) avant tout
 //     débit. Aucun montant n'est calculé ni envoyé ici : le serveur recalcule tout.
-//   - Plus de grille de créneaux prédéfinis (DAYS/TIME_SLOTS) : aucune
-//     route de disponibilité n'est exposée par medecinService.js. Le
-//     patient choisit donc directement une date + une heure
-//     (date_creneau), combinées en ISO. À remplacer par un vrai
-//     sélecteur de créneaux le jour où une API de disponibilité existe.
+//   - Créneaux : le patient ne choisit QUE parmi les créneaux libres de
+//     l'agenda du médecin (GET /medecins/:id/agenda?libres=true, via
+//     listerCreneauxLibres) : ce sont les jours et horaires déclarés par le
+//     médecin, moins ceux déjà demandés (en attente de paiement) ou
+//     confirmés par d'autres patients. Le calendrier n'active que les jours
+//     qui ont au moins un créneau libre ; on envoie le `creneau_id` choisi.
+//     Si le créneau est pris entre-temps (409 CRENEAU_INDISPONIBLE), la
+//     grille est rechargée et le patient revient à l'étape 1.
+//   - Une fois créé (statut « cree »), le RDV garde son créneau jusqu'à
+//     `echeance_confirmation` : sans paiement d'ici là, il est annulé
+//     automatiquement et le créneau est remis à disposition.
 //   - Type de consultation (`type_rdv`) piloté par TYPES_RENDEZ_VOUS ;
 //     "teleconsultation" est désactivée si le médecin n'a pas activé
 //     teleconsultation_activee (sinon 400 côté serveur).
@@ -44,17 +50,26 @@
 // accès ci-dessous restent défensifs (optional chaining + fallback) et
 // sont à ajuster une fois la forme réelle de la réponse confirmée.
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import med1 from '../assets/img/med1.jpg';
 import { useAuth } from '../context/AuthContext';
 import {
   obtenirMedecin,
   creerRendezVous,
+  listerCreneauxLibres,
   TYPES_RENDEZ_VOUS,
   MOTIF_RENDEZ_VOUS_LONGUEUR_MAX,
 } from '../services/medecinService';
+import {
+  dateHeureLisible,
+  dateLocaleISO,
+  estCreneauPerdu,
+  grouperParJour,
+  heureLocale,
+  plageRecherche,
+} from '../utils/creneaux';
 import { inscrirePatient } from '../services/authService';
 import PaiementMobileMoney from '../components/paiement/PaiementMobileMoney';
 import ChoixMoyenPaiement from '../components/paiement/ChoixMoyenPaiement';
@@ -83,15 +98,6 @@ function StepperNav({ steps, current }) {
       })}
     </div>
   );
-}
-
-// Combine une date (YYYY-MM-DD) et une heure (HH:mm) locales en ISO
-// 8601, tel qu'attendu par `date_creneau`.
-function versDateCreneauISO(dateStr, heureStr) {
-  if (!dateStr || !heureStr) return '';
-  const d = new Date(`${dateStr}T${heureStr}:00`);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toISOString();
 }
 
 function formatDateLabel(dateStr) {
@@ -135,11 +141,9 @@ const MOIS_LABELS = [
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ];
 
-// Toutes les heures de la journée (00:00 à 23:00), en remplacement de
-// la précédente liste restreinte de créneaux d'exemple.
-const CRENEAUX_JOURNEE = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`);
-
-function CalendrierJour({ jourSelectionne, onSelectionner }) {
+// Calendrier mensuel : seuls les jours qui ont au moins un créneau libre
+// (joursDisponibles) sont cliquables.
+function CalendrierJour({ jourSelectionne, onSelectionner, joursDisponibles, chargement }) {
   const aujourdHui = useMemo(() => debutJournee(new Date()), []);
   const [moisAffiche, setMoisAffiche] = useState(
     () => new Date(aujourdHui.getFullYear(), aujourdHui.getMonth(), 1)
@@ -198,18 +202,21 @@ function CalendrierJour({ jourSelectionne, onSelectionner }) {
           if (!jour) return <span key={`vide-${idx}`} />;
           const iso = dateVersISO(jour);
           const estPasse = jour < aujourdHui;
+          const estOuvert = !estPasse && joursDisponibles.has(iso);
           const estSelectionne = iso === jourSelectionne;
           return (
             <button
               key={iso}
               type="button"
               className="slot-mini"
-              disabled={estPasse}
+              disabled={!estOuvert}
               onClick={() => onSelectionner(iso)}
+              title={estOuvert ? `${joursDisponibles.get(iso)} créneau(x) libre(s)` : 'Aucun créneau libre'}
               style={{
-                cursor: estPasse ? 'not-allowed' : 'pointer',
+                cursor: estOuvert ? 'pointer' : 'not-allowed',
                 border: 0,
-                opacity: estPasse ? 0.35 : 1,
+                opacity: estOuvert ? 1 : 0.35,
+                fontWeight: estOuvert ? 700 : undefined,
                 background: estSelectionne ? 'var(--primary, #1C8FE0)' : undefined,
                 color: estSelectionne ? '#fff' : undefined,
               }}
@@ -219,39 +226,51 @@ function CalendrierJour({ jourSelectionne, onSelectionner }) {
           );
         })}
       </div>
+      {chargement && (
+        <p className="text-faint mb-0 mt-2" style={{ fontSize: '.78rem' }}>Chargement des disponibilités…</p>
+      )}
+      {!chargement && joursDisponibles.size === 0 && (
+        <p className="text-faint mb-0 mt-2" style={{ fontSize: '.8rem' }}>
+          Ce médecin n&apos;a aucun créneau disponible pour le moment.
+        </p>
+      )}
     </div>
   );
 }
 
 /* =====================================================================
- * Carte de sélection de l'heure — reprend désormais toutes les heures
- * de la journée (CRENEAUX_JOURNEE) plutôt qu'une liste restreinte.
+ * Carte de sélection de l'heure : les créneaux LIBRES du jour choisi.
  * Désactivée tant qu'aucun jour n'a été choisi.
  * ===================================================================== */
-function CarteHeure({ heureSelectionnee, onSelectionner, desactivee }) {
+function CarteHeure({ creneaux, creneauSelectionne, onSelectionner, desactivee }) {
   return (
     <div className="info-card">
       <h3><i className="fa-solid fa-clock" /> Choisir une heure</h3>
       {desactivee ? (
         <p style={{ fontSize: '.85rem', color: 'var(--ink-soft)' }}>Sélectionnez d&apos;abord un jour ci-dessus.</p>
+      ) : creneaux.length === 0 ? (
+        <p style={{ fontSize: '.85rem', color: 'var(--ink-soft)' }}>Plus aucun créneau libre ce jour-là.</p>
       ) : (
         <div className="slot-mini-grid">
-          {CRENEAUX_JOURNEE.map((h) => (
-            <button
-              type="button"
-              key={h}
-              className="slot-mini"
-              onClick={() => onSelectionner(h)}
-              style={{
-                cursor: 'pointer',
-                border: 0,
-                background: h === heureSelectionnee ? 'var(--primary, #1C8FE0)' : undefined,
-                color: h === heureSelectionnee ? '#fff' : undefined,
-              }}
-            >
-              {h}
-            </button>
-          ))}
+          {creneaux.map((c) => {
+            const actif = c.creneau_id === creneauSelectionne;
+            return (
+              <button
+                type="button"
+                key={c.creneau_id}
+                className="slot-mini"
+                onClick={() => onSelectionner(c.creneau_id)}
+                style={{
+                  cursor: 'pointer',
+                  border: 0,
+                  background: actif ? 'var(--primary, #1C8FE0)' : undefined,
+                  color: actif ? '#fff' : undefined,
+                }}
+              >
+                {heureLocale(c.debut)}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -260,6 +279,10 @@ function CarteHeure({ heureSelectionnee, onSelectionner, desactivee }) {
 
 export default function RendezVous() {
   const { id: medecinId } = useParams();
+  // Présélection depuis la fiche médecin : ?type=physique|teleconsultation&creneau=<creneau_id>
+  const [parametres] = useSearchParams();
+  const creneauDemande = parametres.get('creneau');
+  const typeDemande = parametres.get('type');
   const { user, status: authStatus, isAuthenticated, connecter } = useAuth();
 
   const totalSteps = 3;
@@ -267,10 +290,15 @@ export default function RendezVous() {
   const formRef = useRef(null);
 
   // Étape 1 — créneau souhaité
-  const [typeRdv, setTypeRdv] = useState('physique');
+  const [typeRdv, setTypeRdv] = useState(typeDemande === 'teleconsultation' ? 'teleconsultation' : 'physique');
   const [date, setDate] = useState('');
-  const [heure, setHeure] = useState('');
+  const [creneauId, setCreneauId] = useState('');
   const [motif, setMotif] = useState('');
+
+  // Créneaux libres de l'agenda du médecin (GET .../agenda?libres=true)
+  const [creneauxLibres, setCreneauxLibres] = useState([]);
+  const [chargementCreneaux, setChargementCreneaux] = useState(true);
+  const [erreurCreneaux, setErreurCreneaux] = useState(null);
 
   // Étape 2 (uniquement si personne n'est connectée) — infos patient à
   // inscrire avant de pouvoir poser la demande de rendez-vous. Non
@@ -363,6 +391,47 @@ export default function RendezVous() {
     };
   }, [medecinId]);
 
+  // Recharge la grille des créneaux libres (au chargement, et quand le
+  // créneau choisi vient d'être pris par quelqu'un d'autre).
+  const recupererCreneaux = useCallback(async () => {
+    const { date_debut, date_fin } = plageRecherche();
+    return (await listerCreneauxLibres(medecinId, date_debut, date_fin)) || [];
+  }, [medecinId]);
+
+  useEffect(() => {
+    let annule = false;
+    if (!medecinId) return undefined;
+    recupererCreneaux()
+      .then((liste) => {
+        if (annule) return;
+        setCreneauxLibres(liste);
+        const preselection = creneauDemande && liste.find((c) => c.creneau_id === creneauDemande);
+        if (preselection) {
+          setDate(dateLocaleISO(preselection.debut));
+          setCreneauId(preselection.creneau_id);
+        }
+      })
+      .catch((err) => {
+        if (!annule) setErreurCreneaux(err?.message || 'Impossible de charger les disponibilités du médecin.');
+      })
+      .finally(() => { if (!annule) setChargementCreneaux(false); });
+    return () => {
+      annule = true;
+    };
+  }, [medecinId, recupererCreneaux, creneauDemande]);
+
+  const creneauxParJour = useMemo(() => grouperParJour(creneauxLibres), [creneauxLibres]);
+  const joursDisponibles = useMemo(
+    () => new Map([...creneauxParJour].map(([jour, liste]) => [jour, liste.length])),
+    [creneauxParJour]
+  );
+  const creneauxDuJour = useMemo(() => (date ? creneauxParJour.get(date) || [] : []), [date, creneauxParJour]);
+  const creneauChoisi = useMemo(
+    () => creneauxLibres.find((c) => c.creneau_id === creneauId) || null,
+    [creneauxLibres, creneauId]
+  );
+  const heure = creneauChoisi ? heureLocale(creneauChoisi.debut) : '';
+
   const nomComplet = medecin
     ? `Dr. ${medecin.utilisateur?.prenom ?? ''} ${medecin.utilisateur?.nom ?? ''}`.trim()
     : '';
@@ -370,7 +439,6 @@ export default function RendezVous() {
   const villeLabel = medecin?.ville_exercice?.nom ?? medecin?.ville_exercice ?? '';
   const teleconsultationDisponible = Boolean(medecin?.teleconsultation_activee);
 
-  const dateCreneauISO = useMemo(() => versDateCreneauISO(date, heure), [date, heure]);
   const dateLabel = formatDateLabel(date);
   const typeRdvLabel = TYPES_RENDEZ_VOUS.find((t) => t.valeur === typeRdv)?.libelle ?? typeRdv;
 
@@ -392,7 +460,12 @@ export default function RendezVous() {
   };
 
   const goNext = () => {
+    if (step === 1 && !creneauChoisi) {
+      setErreurCreneaux('Choisissez un jour puis un horaire parmi les créneaux disponibles.');
+      return;
+    }
     if (!validerPage(step)) return;
+    setErreurCreneaux(null);
     setStep((s) => Math.min(s + 1, totalSteps));
   };
   const goPrev = () => setStep((s) => Math.max(s - 1, 1));
@@ -435,7 +508,7 @@ export default function RendezVous() {
       const donnees = {
         medecin_id: medecinId,
         type_rdv: typeRdv,
-        date_creneau: dateCreneauISO,
+        creneau_id: creneauId,
         // structure_id : non envoyé — aucune API de structures n'est
         // fournie pour l'instant (voir note d'en-tête).
         ...(motif.trim() ? { motif: motif.trim() } : {}),
@@ -444,8 +517,21 @@ export default function RendezVous() {
       setRendezVousCree(rdv);
       setStep(3);
     } catch (err) {
+      // Créneau pris entre-temps par un autre patient (ou fermé) : on
+      // recharge la grille et on renvoie le patient au choix du créneau.
+      if (estCreneauPerdu(err)) {
+        setCreneauId('');
+        try {
+          setCreneauxLibres(await recupererCreneaux());
+        } catch {
+          /* la grille reste celle affichée ; le message ci-dessous suffit */
+        }
+        setStep(1);
+        setErreurCreneaux(err.message || "Ce créneau n'est plus disponible : choisissez-en un autre.");
+        return;
+      }
       // Erreurs attendues côté serveur : 400 (email déjà utilisé,
-      // téléconsultation non activée pour ce médecin, créneau/motif
+      // téléconsultation non activée pour ce médecin, motif
       // invalide...), 403 (compte non patient), 404 (médecin
       // introuvable).
       setErreurEnvoi(err?.message || "La demande de rendez-vous a échoué. Veuillez réessayer.");
@@ -574,16 +660,29 @@ export default function RendezVous() {
 
                       <CalendrierJour
                         jourSelectionne={date}
-                        onSelectionner={(iso) => { setDate(iso); setHeure(''); }}
+                        onSelectionner={(iso) => { setDate(iso); setCreneauId(''); setErreurCreneaux(null); }}
+                        joursDisponibles={joursDisponibles}
+                        chargement={chargementCreneaux}
                       />
 
                       <div className="mt-3">
                         <CarteHeure
-                          heureSelectionnee={heure}
-                          onSelectionner={setHeure}
+                          creneaux={creneauxDuJour}
+                          creneauSelectionne={creneauId}
+                          onSelectionner={(id) => { setCreneauId(id); setErreurCreneaux(null); }}
                           desactivee={!date}
                         />
                       </div>
+
+                      {erreurCreneaux && (
+                        <div
+                          className="p-3 mb-3"
+                          role="alert"
+                          style={{ background: 'var(--danger-tint, #fdecea)', borderRadius: 10, fontSize: '.85rem' }}
+                        >
+                          {erreurCreneaux}
+                        </div>
+                      )}
 
                       <div className="info-card">
                         <h3><i className="fa-solid fa-note-sticky" /> Motif (facultatif)</h3>
@@ -763,7 +862,7 @@ export default function RendezVous() {
                           type="button"
                           className="btn btn-primary"
                           onClick={confirmerRendezVous}
-                          disabled={envoiEnCours || !dateCreneauISO}
+                          disabled={envoiEnCours || !creneauId}
                         >
                           {envoiEnCours ? 'Envoi…' : 'Confirmer le rendez-vous'} <i className="fa-solid fa-check" />
                         </button>
@@ -838,6 +937,13 @@ export default function RendezVous() {
                               <div className="mt-3">
                                 <p className="text-faint mb-2" style={{ fontSize: '.85rem' }}>
                                   Ce rendez-vous n&apos;est confirmé qu&apos;une fois le paiement effectué.
+                                  {rendezVousCree.echeance_confirmation && (
+                                    <>
+                                      {' '}Le créneau vous est réservé jusqu&apos;au{' '}
+                                      <strong>{dateHeureLisible(rendezVousCree.echeance_confirmation)}</strong> :
+                                      sans paiement d&apos;ici là, la demande sera annulée et le créneau libéré.
+                                    </>
+                                  )}
                                 </p>
                                 <button
                                   type="button"

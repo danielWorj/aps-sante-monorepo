@@ -102,8 +102,11 @@ class CardAssurance extends StatelessWidget {
                 BadgeChip(label: numeroAgrement!, style: BadgeChipStyle.outline, mono: true),
             ],
           ),
-          const SizedBox(height: 9),
-          Text(description, style: AppTextStyles.body.copyWith(fontSize: 11)),
+          // Description absente en présence minimale (fiche sans abonnement).
+          if (description.isNotEmpty) ...[
+            const SizedBox(height: 9),
+            Text(description, style: AppTextStyles.body.copyWith(fontSize: 11)),
+          ],
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerRight,

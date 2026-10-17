@@ -9,6 +9,10 @@
 
 import { getNearestCity } from "offline-geocode-city";
 import prisma from "../lib/prisma.js";
+import { estFuseauValide, FUSEAU_PAR_DEFAUT } from "../lib/fuseauHoraire.js";
+
+const MESSAGE_FUSEAU_INVALIDE =
+  "fuseau_horaire invalide : identifiant IANA attendu (ex. Africa/Douala, Africa/Abidjan, Europe/Paris).";
 
 const STATUTS_ACTIVATION_PAYS = ["pilote", "actif", "inactif"];
 
@@ -277,7 +281,7 @@ export async function obtenirPays(req, res, next) {
  */
 export async function creerPays(req, res, next) {
   try {
-    const { code_iso2, nom, devise_id, langue_id, statut_activation } = req.body;
+    const { code_iso2, nom, devise_id, langue_id, statut_activation, fuseau_horaire } = req.body;
 
     if (!code_iso2 || !nom || !devise_id || !langue_id || !statut_activation) {
       return res.status(400).json({
@@ -294,6 +298,10 @@ export async function creerPays(req, res, next) {
       return res.status(400).json({
         message: `statut_activation invalide. Valeurs acceptées : ${STATUTS_ACTIVATION_PAYS.join(", ")}.`,
       });
+    }
+
+    if (fuseau_horaire !== undefined && fuseau_horaire !== "" && !estFuseauValide(fuseau_horaire)) {
+      return res.status(400).json({ message: MESSAGE_FUSEAU_INVALIDE });
     }
 
     const [devise, langue, paysExistant] = await Promise.all([
@@ -319,6 +327,7 @@ export async function creerPays(req, res, next) {
         devise_id,
         langue_id,
         statut_activation,
+        fuseau_horaire: fuseau_horaire || FUSEAU_PAR_DEFAUT,
       },
       include: { devise: true, langue: true },
     });
@@ -334,7 +343,7 @@ export async function creerPays(req, res, next) {
  */
 export async function modifierPays(req, res, next) {
   try {
-    const { code_iso2, nom, devise_id, langue_id, statut_activation } = req.body;
+    const { code_iso2, nom, devise_id, langue_id, statut_activation, fuseau_horaire } = req.body;
 
     const existant = await prisma.pays.findUnique({ where: { pays_id: req.params.id } });
     if (!existant) {
@@ -345,6 +354,10 @@ export async function modifierPays(req, res, next) {
       return res.status(400).json({
         message: `statut_activation invalide. Valeurs acceptées : ${STATUTS_ACTIVATION_PAYS.join(", ")}.`,
       });
+    }
+
+    if (fuseau_horaire && !estFuseauValide(fuseau_horaire)) {
+      return res.status(400).json({ message: MESSAGE_FUSEAU_INVALIDE });
     }
 
     if (devise_id) {
@@ -381,6 +394,7 @@ export async function modifierPays(req, res, next) {
         ...(devise_id && { devise_id }),
         ...(langue_id && { langue_id }),
         ...(statut_activation && { statut_activation }),
+        ...(fuseau_horaire && { fuseau_horaire }),
       },
       include: { devise: true, langue: true },
     });

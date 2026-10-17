@@ -109,8 +109,11 @@ function construireFormData(donnees = {}) {
  * @returns {Promise<Array>} liste des services d'assurance
  */
 export function listerServicesAssurance(filtres = {}) {
+  // Route ADMIN (tous statuts, fiche complète + état d'abonnement) : la route
+  // publique /services-assurance ne renvoie plus que les fiches publiées,
+  // réduites à la présence minimale sans abonnement (guide abonnements v3, §1.1.4).
   const suffixe = construireParametres(filtres);
-  return apiFetch(`/services-assurance${suffixe}`).then((d) => d.services_assurance ?? []);
+  return apiFetch(`/admin/services-assurance${suffixe}`).then((d) => d.services_assurance ?? []);
 }
 
 /**
@@ -118,7 +121,9 @@ export function listerServicesAssurance(filtres = {}) {
  * @returns {Promise<Object>} le service d'assurance
  */
 export function obtenirServiceAssurance(id) {
-  return apiFetch(`/services-assurance/${id}`).then((d) => d.service_assurance);
+  // Vue propriétaire/admin : fiche complète quel que soit son statut ou son
+  // abonnement (la route publique renvoie 404 pour une fiche non publiée).
+  return apiFetch(`/services-assurance/${id}/gestion`).then((d) => d.service_assurance);
 }
 
 /**

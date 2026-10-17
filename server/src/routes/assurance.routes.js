@@ -26,7 +26,10 @@
 //     GET/DELETE : agent du service_assurance concerné, ou admin/superadmin
 //
 //   activite / option_activite / agence
-//     GET        : PUBLIQUE
+//     GET        : PUBLIQUE, filtrée par les droits d'abonnement de la
+//                  fiche (afficher_activites / afficher_agences — guide
+//                  abonnements assurances v3, §1.4.1) ; le propriétaire
+//                  lit ses contenus via /services-assurance/:id/gestion
 //     POST/PUT/DELETE : agent du service_assurance concerné (déduit
 //                  directement ou, pour option_activite, via l'activité
 //                  parente), ou admin/superadmin — voir
@@ -37,6 +40,8 @@ import { Router } from "express";
 import {
   listerServicesAssurance,
   obtenirServiceAssurance,
+  obtenirMonServiceAssurance,
+  obtenirGestionServiceAssurance,
   creerServiceAssurance,
   modifierServiceAssurance,
   supprimerServiceAssurance,
@@ -60,6 +65,9 @@ import {
   supprimerAgence,
 } from "../controllers/assurance.controller.js";
 import { authentifier } from "../middlewares/auth.middleware.js";
+// GET publics des contenus annexes : jeton FACULTATIF, pour que l'admin et
+// l'agent de la fiche lisent leurs contenus même hors droits d'abonnement.
+import { authentifierOptionnel } from "../middlewares/authOptionnel.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
 import { gererTeleversementAssurance } from "../middlewares/upload.middleware.js";
 
@@ -76,7 +84,13 @@ const router = Router();
 // proximité est active, chaque fiche renvoyée gagne un champ
 // distance_km et le tri se fait par distance croissante.
 router.get("/services-assurance", listerServicesAssurance);
+// Déclarée AVANT "/services-assurance/:id" (Express résout par ordre de
+// déclaration) : sinon "mon-service" serait pris pour un :id.
+router.get("/services-assurance/mon-service", authentifier, obtenirMonServiceAssurance);
 router.get("/services-assurance/:id", obtenirServiceAssurance);
+// Vue propriétaire (agent de la fiche ou admin) : fiche complète, contenus,
+// abonnement, quotas — guide abonnements assurances v3, §1.4.2.
+router.get("/services-assurance/:id/gestion", authentifier, obtenirGestionServiceAssurance);
 
 router.post(
   "/services-assurance",
@@ -114,8 +128,8 @@ router.delete(
 // ─── Activités (catalogue produits) ────────────────────────────
 // GET publique ; écriture réservée à l'agent du service_assurance
 // concerné ou à admin/superadmin (vérifié dans le contrôleur).
-router.get("/activites", listerActivites);
-router.get("/activites/:id", obtenirActivite);
+router.get("/activites", authentifierOptionnel, listerActivites);
+router.get("/activites/:id", authentifierOptionnel, obtenirActivite);
 router.post("/activites", authentifier, creerActivite);
 router.put("/activites/:id", authentifier, modifierActivite);
 router.delete("/activites/:id", authentifier, supprimerActivite);
@@ -124,8 +138,8 @@ router.delete("/activites/:id", authentifier, supprimerActivite);
 // Pas de route GET liste sans filtre : toujours scopée à une activité
 // (voir listerOptionsActivite). Même autorisation que activite, déduite
 // via l'activité parente.
-router.get("/options-activite", listerOptionsActivite);
-router.get("/options-activite/:id", obtenirOptionActivite);
+router.get("/options-activite", authentifierOptionnel, listerOptionsActivite);
+router.get("/options-activite/:id", authentifierOptionnel, obtenirOptionActivite);
 router.post("/options-activite", authentifier, creerOptionActivite);
 router.put("/options-activite/:id", authentifier, modifierOptionActivite);
 router.delete("/options-activite/:id", authentifier, supprimerOptionActivite);
@@ -140,8 +154,8 @@ router.delete("/options-activite/:id", authentifier, supprimerOptionActivite);
 // proche d'un point donné. Quand la proximité est active, chaque
 // agence renvoyée gagne un champ distance_km et le tri se fait par
 // distance croissante.
-router.get("/agences", listerAgences);
-router.get("/agences/:id", obtenirAgence);
+router.get("/agences", authentifierOptionnel, listerAgences);
+router.get("/agences/:id", authentifierOptionnel, obtenirAgence);
 router.post("/agences", authentifier, creerAgence);
 router.put("/agences/:id", authentifier, modifierAgence);
 router.delete("/agences/:id", authentifier, supprimerAgence);

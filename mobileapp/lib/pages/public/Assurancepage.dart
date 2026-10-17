@@ -304,8 +304,13 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
       nom: service.nom,
       sigle: sigle,
       ville: service.ville?.nom ?? '',
+      // Présence minimale (sans abonnement) : ni description ni agrément,
+      // le serveur ne les envoie pas (guide abonnements v3, §4.1.2).
       description: service.description ?? '',
       numeroAgrement: service.agrement,
+      typeStructure: service.typeActeur == TypeActeurAssurance.courtier
+          ? 'Courtier'
+          : "Compagnie d'assurance",
       verifieeAps: verifiee,
       couleurLogo: couleurs.logo,
       fondLogo: couleurs.fond,

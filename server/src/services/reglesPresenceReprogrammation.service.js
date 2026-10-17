@@ -96,10 +96,11 @@ export function validerDateProposee(dateBrute, maintenant) {
  * Correspondance date_creneau (DateTime) -> case de l'agenda
  * (CreneauAgenda.date @db.Date + Horaire.heure_debut @db.Time).
  *
- * ⚠️ Hypothèse (point ouvert I) : date et heure sont lues en UTC, comme la
- * génération des créneaux (agenda.controller.js, `T00:00:00Z` et getUTCDay).
- * Si le front saisit des heures locales (Douala = UTC+1) sans conversion,
- * cette fonction est le SEUL endroit à ajuster.
+ * ⚠️ Lecture en UTC, sans fuseau. Point ouvert I résolu ailleurs : la
+ * reprogrammation et la réservation passent désormais par
+ * agendaCreneau.service.js (trouverCreneauParInstant), qui lit la date dans
+ * le fuseau du pays d'exercice du médecin. Fonction conservée pour ses
+ * appelants éventuels et ses tests.
  *
  * @returns {{ date: Date, heure: Date, alignee: boolean }}
  *   `alignee` = faux si secondes/millisecondes non nulles (ne peut pas être

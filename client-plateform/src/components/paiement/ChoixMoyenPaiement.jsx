@@ -15,12 +15,17 @@
 // pas encore saisi côté admin (503) est grisé avec le message du serveur.
 //
 // Le montant n'est jamais envoyé : le serveur le recalcule. Aucun montant n'est calculé ici.
-import { useCallback, useEffect, useState } from 'react';
+//
+// Objet payé : `rdvId` (RDV, historique) OU `adaptateur` (abonnement assurance…,
+// voir adaptateurs.jsx — guide abonnements v3, §2.2.3). Le comportement du RDV
+// est inchangé.
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { demanderPaiementRdv, obtenirDevisPaiement, estPaiementEnCours } from '../../services/paiementService';
+import { estPaiementEnCours } from '../../services/paiementService';
 import AnnulerPaiementEnCours from './AnnulerPaiementEnCours';
-import { FactureRdv } from './FactureRecapitulative';
+import { FactureAdaptateur } from './FactureRecapitulative';
 import { montantDevise } from '../../utils/fonds';
+import { adaptateurRdv } from './adaptateurs';
 
 // Résumé du devis sous un moyen de paiement. `d` : undefined = chargement, { erreur } = indisponible.
 // Le détail ligne par ligne est dans la facture affichée plus haut.
@@ -43,7 +48,15 @@ const MOYENS = [
   { agregateur: 'campay', libelle: 'Mobile Money' },
 ];
 
-export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMoney }) {
+// `actionsSupplementaires` (facultatif) : options rendues sous Carte / Mobile Money
+// (ex. virement bancaire pour un abonnement).
+export default function ChoixMoyenPaiement({
+  rdvId, adaptateur: adaptateurFourni, onFermer, onChoisirMobileMoney, actionsSupplementaires = null,
+}) {
+  const cleAdaptateur = adaptateurFourni?.cle ?? (rdvId ? `rdv:${rdvId}` : null);
+  // Stable tant que l'objet payé ne change pas (dépendance des effets).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const adaptateur = useMemo(() => adaptateurFourni ?? (rdvId ? adaptateurRdv(rdvId) : null), [cleAdaptateur]);
   const [redirection, setRedirection] = useState(false);
   const [erreur, setErreur] = useState(null);
   const [paiementEnCours, setPaiementEnCours] = useState(false); // 409 annulable
@@ -66,28 +79,33 @@ export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMon
 
   // Chargement des deux devis en parallèle ; l'échec de l'un n'affecte pas l'autre.
   useEffect(() => {
-    if (!rdvId) return undefined;
+    if (!adaptateur) return undefined;
     let annule = false;
     setDevis({ stripe: undefined, campay: undefined });
     ['stripe', 'campay'].forEach(async (agregateur) => {
       try {
-        const d = await obtenirDevisPaiement(rdvId, agregateur);
+        const d = await adaptateur.obtenirDevis(agregateur);
         if (!annule) setDevis((p) => ({ ...p, [agregateur]: d }));
       } catch (err) {
         if (!annule) setDevis((p) => ({ ...p, [agregateur]: { erreur: err?.message || 'Montant indisponible.' } }));
       }
     });
     return () => { annule = true; };
-  }, [rdvId]);
+  }, [adaptateur]);
+
+  const resume = (d) => {
+    if (d === undefined || d.erreur || !adaptateur?.texteDevis) return <DetailDevis d={d} />;
+    return adaptateur.texteDevis(d);
+  };
 
   const payerParCarte = async () => {
-    if (redirection || !rdvId) return;
+    if (redirection || !adaptateur) return;
     setErreur(null);
     setInfoAnnulation(null);
     setPaiementEnCours(false);
     setRedirection(true);
     try {
-      window.location.href = await demanderPaiementRdv(rdvId); // Stripe Checkout
+      window.location.href = await adaptateur.demanderStripe(); // Stripe Checkout
     } catch (err) {
       setErreur(err?.message || 'Impossible de lancer le paiement. Veuillez réessayer.');
       setPaiementEnCours(estPaiementEnCours(err));
@@ -111,9 +129,7 @@ export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMon
         <div className="status-card-icon"><i className="fa-solid fa-wallet" /></div>
         <span className="status-card-badge">Paiement sécurisé</span>
         <h1 id="choix-paiement-titre">Comment souhaitez-vous payer ?</h1>
-        <p className="status-card-text">
-          Choisissez votre moyen de paiement. Votre rendez-vous sera confirmé dès la réception du règlement.
-        </p>
+        <p className="status-card-text">{adaptateur?.texteIntro}</p>
 
         {erreur && (
           <p className="status-card-error">
@@ -122,7 +138,7 @@ export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMon
         )}
         {paiementEnCours && (
           <AnnulerPaiementEnCours
-            rdvId={rdvId}
+            annuler={adaptateur?.annuler}
             onAnnule={() => {
               setErreur(null);
               setPaiementEnCours(false);
@@ -151,7 +167,7 @@ export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMon
           {devis[apercu]?.erreur ? (
             <p className="status-card-error"><i className="fa-solid fa-circle-exclamation" /> {devis[apercu].erreur}</p>
           ) : (
-            <FactureRdv rdvId={rdvId} agregateur={apercu} compact />
+            adaptateur && <FactureAdaptateur adaptateur={adaptateur} agregateur={apercu} compact />
           )}
         </div>
 
@@ -172,7 +188,7 @@ export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMon
             </span>
             <span className="choix-paiement-option-body">
               <strong>Carte bancaire</strong>
-              {redirection ? <small>Redirection vers Stripe…</small> : <DetailDevis d={devis.stripe} />}
+              {redirection ? <small>Redirection vers Stripe…</small> : resume(devis.stripe)}
             </span>
             <i className="fa-solid fa-chevron-right choix-paiement-option-arrow" />
           </button>
@@ -191,10 +207,11 @@ export default function ChoixMoyenPaiement({ rdvId, onFermer, onChoisirMobileMon
             </span>
             <span className="choix-paiement-option-body">
               <strong>Mobile Money</strong>
-              <DetailDevis d={devis.campay} />
+              {resume(devis.campay)}
             </span>
             <i className="fa-solid fa-chevron-right choix-paiement-option-arrow" />
           </button>
+          {actionsSupplementaires}
         </div>
 
         <button type="button" className="btn btn-ghost btn-sm-aps w-100 mt-3" onClick={fermer} disabled={redirection}>

@@ -1543,6 +1543,17 @@ export default function Assurances() {
                         <i className={`fa-solid ${TYPE_META[service.type_acteur]?.icone || 'fa-building'} me-1`}></i>
                         {libelleType(service.type_acteur)}
                       </p>
+                      {/* État d'abonnement (route admin /admin/services-assurance) */}
+                      <p className="card-text mb-2" style={{ fontSize: 12 }}>
+                        <span className={`aps-badge ${service.statut_abonnement === 'actif' ? 'is-success' : service.statut_abonnement === 'grace' ? 'is-warning' : 'is-neutral'}`}>
+                          <i className="fa-solid fa-id-card-clip"></i>{' '}
+                          {service.statut_abonnement === 'actif'
+                            ? `Abonnement ${service.niveau_presence}`
+                            : service.statut_abonnement === 'grace'
+                              ? 'Abonnement échu (grâce)'
+                              : 'Présence minimale'}
+                        </span>
+                      </p>
                       <p className="card-text aps-text-muted mb-2" style={{ fontSize: 13 }}>
                         <i className="fa-solid fa-location-dot me-1"></i>
                         {service.ville?.nom || '—'}

@@ -321,7 +321,7 @@ body.portail{ background:var(--surface-alt); }
   border-radius:var(--radius-lg); box-shadow:var(--shadow-sm);
   overflow-x:auto; -webkit-overflow-scrolling:touch;
 }
-.agenda-grid{ display:grid; grid-template-columns:70px repeat(6, minmax(122px,1fr)); min-width:860px; }
+.agenda-grid{ display:grid; grid-template-columns:70px repeat(7, minmax(112px,1fr)); min-width:930px; }
 .ag-corner{ background:var(--surface-alt); border-bottom:1px solid var(--line); }
 .ag-head{
   background:var(--surface-alt); border-bottom:1px solid var(--line); border-left:1px solid var(--line);
@@ -658,19 +658,21 @@ RESPONSIVE
   .agenda-grid{ grid-template-columns:56px minmax(0,1fr); min-width:0; }
 
   /* On masque toutes les colonnes "jour" (motif 7n+k), on réaffiche le jour choisi */
-  .agenda-grid > *:nth-child(7n+2),
-  .agenda-grid > *:nth-child(7n+3),
-  .agenda-grid > *:nth-child(7n+4),
-  .agenda-grid > *:nth-child(7n+5),
-  .agenda-grid > *:nth-child(7n+6),
-  .agenda-grid > *:nth-child(7n){ display:none; }
+  .agenda-grid > *:nth-child(8n+2),
+  .agenda-grid > *:nth-child(8n+3),
+  .agenda-grid > *:nth-child(8n+4),
+  .agenda-grid > *:nth-child(8n+5),
+  .agenda-grid > *:nth-child(8n+6),
+  .agenda-grid > *:nth-child(8n+7),
+  .agenda-grid > *:nth-child(8n){ display:none; }
 
-  .agenda-card[data-day="1"] .agenda-grid > *:nth-child(7n+2),
-  .agenda-card[data-day="2"] .agenda-grid > *:nth-child(7n+3),
-  .agenda-card[data-day="3"] .agenda-grid > *:nth-child(7n+4),
-  .agenda-card[data-day="4"] .agenda-grid > *:nth-child(7n+5),
-  .agenda-card[data-day="5"] .agenda-grid > *:nth-child(7n+6),
-  .agenda-card[data-day="6"] .agenda-grid > *:nth-child(7n){ display:block; }
+  .agenda-card[data-day="1"] .agenda-grid > *:nth-child(8n+2),
+  .agenda-card[data-day="2"] .agenda-grid > *:nth-child(8n+3),
+  .agenda-card[data-day="3"] .agenda-grid > *:nth-child(8n+4),
+  .agenda-card[data-day="4"] .agenda-grid > *:nth-child(8n+5),
+  .agenda-card[data-day="5"] .agenda-grid > *:nth-child(8n+6),
+  .agenda-card[data-day="6"] .agenda-grid > *:nth-child(8n+7),
+  .agenda-card[data-day="7"] .agenda-grid > *:nth-child(8n){ display:block; }
 
   .ag-head{ border-left:none; }
   .ag-cell{ border-left:none; min-height:64px; }

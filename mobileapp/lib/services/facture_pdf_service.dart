@@ -98,7 +98,7 @@ class FacturePdfService {
       if (e.pays != null) ('Pays', e.pays!),
       if (e.ville != null) ('Ville', e.ville!),
       if (e.dateCreneau != null)
-        ('Rendez-vous', dateHeureUtc(e.dateCreneau)),
+        ('Rendez-vous', dateHeure(e.dateCreneau)),
     ];
 
     return pw.Column(

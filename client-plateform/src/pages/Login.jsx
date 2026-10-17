@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import med7 from '../assets/img/med7.jpg';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { connecter } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: '', password: '', remember: true });
@@ -70,9 +71,16 @@ export default function Login() {
       const destinationParRole = {
         patient: '/portail/patient-rdv',
         medecin: '/portail/medecin-agenda',
+        agent_assurance: '/mon-espace-assurance',
       };
 
-      navigate(destinationParRole[role] ?? '/home', { replace: true });
+      // Retour à la page qui a demandé la connexion (ex. /pricing), si fournie
+      // par l'appelant (`state.from`, chemin interne uniquement).
+      // `from` : chaîne, ou objet location (posé par RequireAuth).
+      const from = location.state?.from;
+      const retour = typeof from === 'string' ? from : from?.pathname ? `${from.pathname}${from.search ?? ''}` : null;
+      const retourValide = typeof retour === 'string' && retour.startsWith('/') && !retour.startsWith('//');
+      navigate(retourValide ? retour : destinationParRole[role] ?? '/home', { replace: true });
     } catch (err) {
       setErrors({
         general:

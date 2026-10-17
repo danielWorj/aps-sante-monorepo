@@ -16,6 +16,7 @@ import { obtenirFraisActifs, calculerFrais } from "../services/fraisAgregateur.s
 import { creerTransactionSansDoublon, invaliderCheckoutsOuverts, annulerPaiementsEnCours, PaiementDejaExistantError } from "../services/antiDoublePaiement.service.js";
 import { decimalesPourMontant, arrondir } from "../utils/montants.js";
 import { finaliserPaiement } from "../services/finalisationPaiement.service.js";
+import { finaliserAbonnementAssurance } from "../services/finalisationAbonnementAssurance.service.js";
 import { synchroniserCampayPourRdv, derniereTentativeCampay, verifierEtFinaliserTransactionCampay } from "../services/paiementCampay.service.js";
 
 const DEVISE_PAR_DEFAUT = process.env.STRIPE_DEVISE_PAR_DEFAUT || "xaf";
@@ -258,7 +259,7 @@ export function repondreSiBaremeAbsent(err, res) {
 }
 
 /** Une transaction dont la création chez le fournisseur a échoué ne doit pas bloquer une nouvelle tentative. */
-async function marquerTransactionEchouee(transaction_id) {
+export async function marquerTransactionEchouee(transaction_id) {
   await prisma.transactionPaiement.updateMany({
     where: { transaction_id, statut: "en_attente" },
     data: { statut: "echouee" },
@@ -595,6 +596,21 @@ export async function obtenirStatutPaiementRdv(req, res, next) {
 // n'a aucune metadata) ne doit PAS provoquer un 500 : Stripe
 // réessaierait pendant des jours. On l'ignore proprement (200).
 async function traiterPaiementReussi(session) {
+  // Abonnement assurance (guide v3, §1.5.6.1) : branche placée AVANT le
+  // garde `!rdv_id` ci-dessous, qui l'ignorerait sinon. L'abonnement est lu
+  // via la transaction en base, jamais via les metadata.
+  if (session.metadata?.objet === "abonnement_assurance") {
+    if (!session.metadata.transaction_id) return;
+    if (session.payment_status !== "paid") {
+      console.warn(`[paiement] session ${session.id} (abonnement) non payée (${session.payment_status}) — ignorée.`);
+      return;
+    }
+    await finaliserAbonnementAssurance({
+      transaction_id: session.metadata.transaction_id,
+      payment_intent_id: session.payment_intent,
+    });
+    return;
+  }
   const { transaction_id, rdv_id } = session.metadata ?? {};
   if (!transaction_id || !rdv_id) {
     console.warn("[paiement] checkout.session.completed sans metadata APS — ignoré.");

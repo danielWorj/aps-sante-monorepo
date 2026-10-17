@@ -32,6 +32,14 @@ const formatDate = (iso) =>
     ? new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
     : null;
 
+/** date_fin d'un abonnement est EXCLUSIVE : dernier jour couvert = veille. */
+const finInclusive = (iso) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString();
+};
+
 /** Détail du calcul d'une ligne : « 10 000 FCFA × 2 % », éventuellement « + montant fixe ». */
 function formule(ligne, devise) {
   const parts = [];
@@ -70,15 +78,29 @@ function FactureCorps({ facture, compact = false, className = '' }) {
         </div>
       </header>
 
-      <section className="facture-consultation">
-        <div className="facture-consultation-titre">Consultation auprès de {entete.medecin || 'votre médecin'}</div>
-        <dl className="facture-infos">
-          {entete.specialite && (<><dt>Spécialité</dt><dd>{entete.specialite}</dd></>)}
-          {entete.pays && (<><dt>Pays</dt><dd>{entete.pays}</dd></>)}
-          {entete.ville && (<><dt>Ville</dt><dd>{entete.ville}</dd></>)}
-          {entete.date_creneau && (<><dt>Rendez-vous</dt><dd>{dateHeure(entete.date_creneau)}</dd></>)}
-        </dl>
-      </section>
+      {entete.assurance ? (
+        // Abonnement assurance (devis ou facture archivée — guide abonnements v3, §1.5.9).
+        <section className="facture-consultation">
+          <div className="facture-consultation-titre">Abonnement de {entete.assurance}</div>
+          <dl className="facture-infos">
+            {entete.niveau?.libelle && (<><dt>Niveau</dt><dd>{entete.niveau.libelle}</dd></>)}
+            {entete.duree_mois && (<><dt>Durée</dt><dd>{entete.duree_mois} mois</dd></>)}
+            {facture.periode?.debut && (
+              <><dt>Période</dt><dd>du {formatDate(facture.periode.debut)} au {formatDate(finInclusive(facture.periode.fin_exclusive))}</dd></>
+            )}
+          </dl>
+        </section>
+      ) : (
+        <section className="facture-consultation">
+          <div className="facture-consultation-titre">Consultation auprès de {entete.medecin || 'votre médecin'}</div>
+          <dl className="facture-infos">
+            {entete.specialite && (<><dt>Spécialité</dt><dd>{entete.specialite}</dd></>)}
+            {entete.pays && (<><dt>Pays</dt><dd>{entete.pays}</dd></>)}
+            {entete.ville && (<><dt>Ville</dt><dd>{entete.ville}</dd></>)}
+            {entete.date_creneau && (<><dt>Rendez-vous</dt><dd>{dateHeure(entete.date_creneau)}</dd></>)}
+          </dl>
+        </section>
+      )}
 
       <ul className="facture-lignes">
         {lignes.map((l) => {
@@ -99,6 +121,13 @@ function FactureCorps({ facture, compact = false, className = '' }) {
         <span>Total</span>
         <strong>{montantDevise(total, devise)}</strong>
       </div>
+
+      {facture.frais_operateur && (
+        <p className="facture-note">
+          {facture.frais_operateur.mention} : environ {montantDevise(facture.frais_operateur.montant, devise)},
+          prélevés par l&apos;opérateur au moment du paiement.
+        </p>
+      )}
 
       {facture.minimale && (
         <p className="facture-note">
@@ -158,20 +187,52 @@ export function FactureRecapitulative({ facture, telechargeable = true, compact 
  * @param {{ rdvId: string, agregateur?: 'stripe'|'campay', telechargeable?: boolean, compact?: boolean }} props
  */
 export function FactureRdv({ rdvId, agregateur, telechargeable = true, compact = false }) {
+  if (!rdvId) return null;
+  return (
+    <FactureChargee
+      cle={`rdv:${rdvId}|${agregateur || ''}`}
+      charger={() => obtenirFacture(rdvId, agregateur)}
+      telechargeable={telechargeable}
+      compact={compact}
+    />
+  );
+}
+
+/**
+ * Charge puis affiche la facture (ou le devis) d'un objet payé via son
+ * adaptateur (voir adaptateurs.jsx).
+ * @param {{ adaptateur: object, agregateur?: string, telechargeable?: boolean, compact?: boolean }} props
+ */
+export function FactureAdaptateur({ adaptateur, agregateur, telechargeable = true, compact = false }) {
+  return (
+    <FactureChargee
+      cle={`${adaptateur.cle}|${agregateur || ''}`}
+      charger={() => adaptateur.obtenirFacture(agregateur)}
+      telechargeable={telechargeable}
+      compact={compact}
+    />
+  );
+}
+
+/**
+ * @param {{ cle: string, charger: () => Promise<object>, telechargeable?: boolean, compact?: boolean }} props
+ *   `cle` identifie la requête : un changement de cle relance le chargement.
+ */
+export function FactureChargee({ cle, charger, telechargeable = true, compact = false }) {
   // etat : { cle, facture?, erreur? } — `cle` identifie la requête à laquelle il répond.
   const [etat, setEtat] = useState({ cle: null });
-  const cle = `${rdvId}|${agregateur || ''}`;
 
   useEffect(() => {
-    if (!rdvId) return undefined;
     let annule = false;
-    obtenirFacture(rdvId, agregateur)
+    charger()
       .then((facture) => { if (!annule) setEtat({ cle, facture }); })
       .catch((err) => {
         if (!annule) setEtat({ cle, erreur: err?.message || 'Facture indisponible pour le moment.' });
       });
     return () => { annule = true; };
-  }, [rdvId, agregateur, cle]);
+    // `charger` change à chaque rendu ; `cle` décrit seule la requête.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cle]);
 
   // Un état qui répond à une autre requête (changement d'agrégateur) = chargement.
   const courant = etat.cle === cle ? etat : null;

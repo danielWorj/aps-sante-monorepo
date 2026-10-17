@@ -7,7 +7,13 @@ import med3 from '../assets/img/med3.jpg';
 import med4 from '../assets/img/med4.jpg';
 import med5 from '../assets/img/med5.jpg';
 
-import { obtenirMedecin } from '../services/medecinService';
+import {
+  obtenirMedecin,
+  listerCreneauxLibres,
+  listerDisponibilitesMedecin,
+  JOURS_SEMAINE_AGENDA,
+} from '../services/medecinService';
+import { dateHeureLisible, grouperParJour, heureLocale, plageRecherche } from '../utils/creneaux';
 import GoogleMapView from '../components/maps/GoogleMapView';
 // La prise de rendez-vous (créneau, motif, inscription patient,
 // POST /rendez-vous...) ne se fait plus dans une modale sur cette
@@ -28,13 +34,39 @@ const TABS = [
   { id: 'tarifs', label: 'Tarifs & assurances' },
 ];
 
-// Créneaux d'exemple affichés dans la colonne latérale. Aucun endpoint
-// de disponibilités n'est exposé par medecinService.js à ce jour — un
-// clic sur un créneau pré-remplit simplement la date/heure du
-// formulaire de rendez-vous ci-dessous plutôt que de réserver un vrai
-// slot serveur. À remplacer par un vrai référentiel de disponibilités
-// dès qu'il existera côté API.
-const CRENEAUX_EXEMPLE = ['08:30', '09:15', '10:00', '14:00', '14:45', '16:30'];
+// Colonne latérale : les prochains créneaux LIBRES de l'agenda du médecin
+// (GET /medecins/:id/agenda?libres=true). Un clic ouvre la page de prise de
+// rendez-vous avec ce créneau présélectionné (?creneau=<id>).
+const NB_PROCHAINS_CRENEAUX = 6;
+
+// "09:00:00" | ISO "1970-01-01T09:00:00.000Z" -> "09:00" (heure murale du
+// médecin, sans conversion de fuseau : c'est ce qu'il a déclaré).
+function heureMurale(valeur) {
+  const m = String(valeur ?? '').match(/(\d{2}):(\d{2})/);
+  return m ? `${m[1]}:${m[2]}` : '--:--';
+}
+
+// Gabarit hebdomadaire -> plages lisibles par jour : les tranches
+// consécutives (fin de l'une = début de la suivante) sont fusionnées.
+function plagesParJour(disponibilites) {
+  const parJour = new Map();
+  (disponibilites || []).forEach((d) => {
+    if (!parJour.has(d.jour_semaine)) parJour.set(d.jour_semaine, []);
+    parJour.get(d.jour_semaine).push({ debut: heureMurale(d.horaire?.heure_debut), fin: heureMurale(d.horaire?.heure_fin) });
+  });
+  const resultat = new Map();
+  parJour.forEach((tranches, jour) => {
+    const triees = tranches.sort((a, b) => a.debut.localeCompare(b.debut));
+    const plages = [];
+    triees.forEach((t) => {
+      const derniere = plages[plages.length - 1];
+      if (derniere && derniere.fin === t.debut) derniere.fin = t.fin;
+      else plages.push({ ...t });
+    });
+    resultat.set(jour, plages);
+  });
+  return resultat;
+}
 
 export default function ProfilMedecin() {
   // ⚠️ Suppose une route déclarée `/profil/:id` (cohérent avec les
@@ -48,6 +80,37 @@ export default function ProfilMedecin() {
   const [medecin, setMedecin] = useState(null);
   const [chargement, setChargement] = useState(true);
   const [erreurChargement, setErreurChargement] = useState(null);
+
+  // Agenda public : prochains créneaux libres + horaires de la semaine.
+  const [creneauxLibres, setCreneauxLibres] = useState([]);
+  const [disponibilites, setDisponibilites] = useState([]);
+  const [chargementAgenda, setChargementAgenda] = useState(true);
+
+  useEffect(() => {
+    let annule = false;
+    const { date_debut, date_fin } = plageRecherche(21);
+    Promise.all([
+      listerCreneauxLibres(id, date_debut, date_fin).catch(() => []),
+      listerDisponibilitesMedecin(id).catch(() => []),
+    ])
+      .then(([libres, gabarit]) => {
+        if (annule) return;
+        setCreneauxLibres(libres || []);
+        setDisponibilites(gabarit || []);
+      })
+      .finally(() => {
+        if (!annule) setChargementAgenda(false);
+      });
+    return () => {
+      annule = true;
+    };
+  }, [id]);
+
+  const prochainsCreneaux = useMemo(
+    () => [...grouperParJour(creneauxLibres).values()].flat().slice(0, NB_PROCHAINS_CRENEAUX),
+    [creneauxLibres]
+  );
+  const plagesHebdo = useMemo(() => plagesParJour(disponibilites), [disponibilites]);
 
   useEffect(() => {
     let annule = false;
@@ -88,9 +151,9 @@ export default function ProfilMedecin() {
   // RendezVous.jsx peut les lire via useSearchParams() pour pré-remplir
   // l'étape 1 si besoin (non fait par défaut, la page démarre sinon
   // avec ses valeurs par défaut : type "physique", aucun jour/heure).
-  function allerVersRendezVous(type, heureCreneau) {
+  function allerVersRendezVous(type, creneauId) {
     const params = new URLSearchParams({ type });
-    if (heureCreneau) params.set('heure', heureCreneau);
+    if (creneauId) params.set('creneau', creneauId);
     navigate(`/rendez-vous/${id}?${params.toString()}`);
   }
 
@@ -232,6 +295,34 @@ export default function ProfilMedecin() {
                 {tab === 'horaires' && (
                   <div className="tab-panel active">
                     <div className="info-card">
+                      <h3><i className="fa-solid fa-clock" /> Horaires de consultation</h3>
+                      {chargementAgenda ? (
+                        <p style={{ fontSize: '.88rem', color: 'var(--ink-soft)' }}>Chargement…</p>
+                      ) : plagesHebdo.size === 0 ? (
+                        <p style={{ fontSize: '.88rem', color: 'var(--ink-soft)' }}>
+                          Ce médecin n&apos;a pas encore publié ses horaires de consultation.
+                        </p>
+                      ) : (
+                        <table className="hours-table">
+                          <tbody>
+                            {JOURS_SEMAINE_AGENDA.map((j) => {
+                              const plages = plagesHebdo.get(j.valeur);
+                              return (
+                                <tr key={j.valeur}>
+                                  <td>{j.libelle}</td>
+                                  <td>
+                                    {plages
+                                      ? plages.map((pl) => `${pl.debut} – ${pl.fin}`).join(' · ')
+                                      : <span className="text-faint">Fermé</span>}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                    <div className="info-card">
                       <h3><i className="fa-solid fa-location-dot" /> Localisation</h3>
                       <p style={{ fontSize: '.9rem' }}>{localisation || 'Localisation non renseignée'}</p>
                       {aUneLocalisation ? (
@@ -292,20 +383,33 @@ export default function ProfilMedecin() {
             <div className="col-lg-4">
               <div className="info-card">
                 <h3><i className="fa-solid fa-calendar-days" /> Prendre rendez-vous</h3>
-                <p style={{ fontSize: '.85rem', color: 'var(--ink-soft)' }}>Choisissez un créneau indicatif ou saisissez votre propre date.</p>
-                <div className="slot-mini-grid">
-                  {CRENEAUX_EXEMPLE.map((slot) => (
-                    <button
-                      type="button"
-                      className="slot-mini"
-                      key={slot}
-                      onClick={() => allerVersRendezVous('physique', slot)}
-                      style={{ cursor: 'pointer', border: 0 }}
-                    >
-                      {slot}
-                    </button>
-                  ))}
-                </div>
+                {chargementAgenda ? (
+                  <p style={{ fontSize: '.85rem', color: 'var(--ink-soft)' }}>Chargement des disponibilités…</p>
+                ) : prochainsCreneaux.length === 0 ? (
+                  <p style={{ fontSize: '.85rem', color: 'var(--ink-soft)' }}>
+                    Aucun créneau disponible dans les prochains jours.
+                  </p>
+                ) : (
+                  <>
+                    <p style={{ fontSize: '.85rem', color: 'var(--ink-soft)' }}>Prochains créneaux disponibles :</p>
+                    <div className="slot-mini-grid">
+                      {prochainsCreneaux.map((c) => (
+                        <button
+                          type="button"
+                          className="slot-mini"
+                          key={c.creneau_id}
+                          title={dateHeureLisible(c.debut)}
+                          onClick={() => allerVersRendezVous('physique', c.creneau_id)}
+                          style={{ cursor: 'pointer', border: 0 }}
+                        >
+                          {new Date(c.debut).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })}
+                          {' · '}
+                          {heureLocale(c.debut)}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
                 <button type="button" className="btn btn-primary btn-block-aps mt-3" onClick={() => allerVersRendezVous('physique')}>
                   Prendre rendez-vous
                 </button>

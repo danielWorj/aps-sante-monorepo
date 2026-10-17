@@ -7,7 +7,9 @@
 import { useState } from 'react';
 import { annulerPaiementEnCours } from '../../services/paiementService';
 
-export default function AnnulerPaiementEnCours({ rdvId, onAnnule }) {
+// `annuler` (facultatif) : fonction d'annulation de l'adaptateur (abonnement
+// assurance…). Sans elle, annule le paiement du RDV `rdvId` (comportement historique).
+export default function AnnulerPaiementEnCours({ rdvId, annuler: annulerObjet, onAnnule }) {
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState(null);
 
@@ -16,7 +18,7 @@ export default function AnnulerPaiementEnCours({ rdvId, onAnnule }) {
     setErreur(null);
     setEnCours(true);
     try {
-      await annulerPaiementEnCours(rdvId);
+      await (annulerObjet ? annulerObjet() : annulerPaiementEnCours(rdvId));
       onAnnule?.();
     } catch (err) {
       setErreur(err?.message || "Impossible d'annuler le paiement. Veuillez réessayer.");

@@ -41,7 +41,7 @@ export default function ReprogrammationPanel({ rdv, role, onChange }) {
   const jePeuxAccepter = aProposition && !jeSuisAuteur;
   const autrePartie = role === 'patient' ? 'le médecin' : 'le patient';
 
-  // Créneaux libres des 30 prochains jours, futurs uniquement.
+  // Créneaux libres (disponibles, sans RDV, futurs) des 30 prochains jours.
   const chargerCreneaux = async () => {
     setChargement(true);
     setRetour(null);
@@ -49,7 +49,7 @@ export default function ReprogrammationPanel({ rdv, role, onChange }) {
       const debut = new Date();
       const fin = new Date(Date.now() + 30 * 24 * 3600 * 1000);
       const liste = await listerCreneauxAgenda(rdv.medecin_id, {
-        date_debut: jourISO(debut), date_fin: jourISO(fin), statut: 'disponible',
+        date_debut: jourISO(debut), date_fin: jourISO(fin), libres: true,
       });
       setCreneaux(
         (liste || [])

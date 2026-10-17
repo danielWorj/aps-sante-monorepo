@@ -85,7 +85,11 @@ function InsurerCard({ insurer, positionActuelle, demanderPosition }) {
                   <i className="fa-solid fa-circle-check" /> Vérifiée ApSa
                 </span>
               )}
-              <span className="chip chip-complet">Agrément {insurer.agrement}</span>
+              {/* Absent en présence minimale (guide abonnements v3, §2.1.4) : on
+                  n'affiche que ce que l'API renvoie, le tri n'est pas modifié. */}
+              {insurer.droits?.siege_complet && insurer.agrement && (
+                <span className="chip chip-complet">Agrément {insurer.agrement}</span>
+              )}
             </div>
           </div>
         </div>

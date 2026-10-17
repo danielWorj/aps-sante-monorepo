@@ -97,6 +97,24 @@ const List<String> _moisLongs = [
 
 String _deuxChiffres(int n) => n.toString().padLeft(2, '0');
 
+/// « lundi 12 octobre » dans le fuseau local de l'appareil.
+String jourLongLocal(DateTime date) {
+  final d = date.toLocal();
+  return '${_joursLongs[d.weekday - 1]} ${d.day} ${_moisLongs[d.month - 1]}';
+}
+
+/// « 09:30 » dans le fuseau local de l'appareil.
+String heureLocale(DateTime date) {
+  final d = date.toLocal();
+  return '${_deuxChiffres(d.hour)}:${_deuxChiffres(d.minute)}';
+}
+
+/// Clé de jour local « AAAA-MM-JJ ».
+String cleJourLocal(DateTime date) {
+  final d = date.toLocal();
+  return '${d.year.toString().padLeft(4, '0')}-${_deuxChiffres(d.month)}-${_deuxChiffres(d.day)}';
+}
+
 /// « lun. 12 oct., 14:30 » dans le fuseau local de l'appareil.
 /// Chaîne vide si [date] est `null`.
 String dateHeure(DateTime? date) {

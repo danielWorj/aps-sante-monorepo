@@ -31,7 +31,12 @@ import { estViolationCreneauActif, MESSAGE_CRENEAU_PRIS } from "../utils/erreurs
 import { notifierAcceptation, notifierProposition } from "./notification.service.js";
 import { ROLES_VISIBILITE, projeterRdvPourRole } from "./visibiliteRole.service.js";
 import {
-  creneauAgendaDepuisDate,
+  libererCreneauxDuRdv,
+  reserverCreneau,
+  trouverCreneauParInstant,
+  ErreurCreneau,
+} from "./agendaCreneau.service.js";
+import {
   echeanceReprogrammation,
   evaluerAcceptation,
   evaluerProposition,
@@ -60,27 +65,18 @@ function projeterPourPartie(rdv, partie) {
 
 /**
  * La date est-elle une case libre de l'agenda du médecin ? (voir en-tête)
- * @returns {Promise<{ libre: true } | { libre: false, message: string }>}
+ * La date est lue dans le fuseau du pays d'exercice du médecin
+ * (agendaCreneau.service.js -> trouverCreneauParInstant).
+ * @returns {Promise<{ libre: true, creneau_id: string } | { libre: false, message: string }>}
  */
 async function verifierCreneauLibre(rdv, dateCreneau, db = prisma) {
-  const c = creneauAgendaDepuisDate(dateCreneau);
-  if (!c.alignee) return { libre: false, message: MESSAGE_HORS_AGENDA };
+  const creneau = await trouverCreneauParInstant(rdv.medecin_id, dateCreneau, db);
+  if (!creneau || creneau.statut !== "disponible" || creneau.rdv_id) {
+    return { libre: false, message: MESSAGE_HORS_AGENDA };
+  }
 
-  const creneau = await db.creneauAgenda.findFirst({
-    where: {
-      medecin_id: rdv.medecin_id,
-      date: c.date,
-      statut: "disponible",
-      rdv_id: null,
-      horaire: { heure_debut: c.heure },
-    },
-    select: { creneau_id: true },
-  });
-  if (!creneau) return { libre: false, message: MESSAGE_HORS_AGENDA };
-
-  // Le rattachement RDV <-> CreneauAgenda n'étant pas tenu à jour par
-  // rendezVous.controller.js (point ouvert J), la table des RDV fait foi
-  // pour l'occupation réelle du créneau.
+  // Double contrôle sur la table des RDV (RDV actifs non rattachés à une
+  // case, antérieurs au module de réservation).
   const occupe = await db.rendezVous.findFirst({
     where: {
       medecin_id: rdv.medecin_id,
@@ -92,7 +88,7 @@ async function verifierCreneauLibre(rdv, dateCreneau, db = prisma) {
   });
   if (occupe) return { libre: false, message: MESSAGE_CRENEAU_PRIS };
 
-  return { libre: true };
+  return { libre: true, creneau_id: creneau.creneau_id };
 }
 
 async function chargerRdv(rdv_id) {
@@ -180,31 +176,43 @@ export async function accepterProposition(rdv_id, utilisateur, { nouvelle_date_p
   const limiteDelai = new Date(maintenant.getTime() - DELAI_REPROGRAMMATION_H * 60 * 60 * 1000);
   let count;
   try {
-    ({ count } = await prisma.rendezVous.updateMany({
-      where: {
-        rdv_id,
-        statut: "a_reprogrammer",
-        // Délai NON écoulé, à l'exact complément de delaiReprogrammationEcoule (>= 48h).
-        a_reprogrammer_le: { gt: limiteDelai },
-        // La proposition lue est bien celle qu'on accepte.
-        nouvelle_date_proposee: rdv.nouvelle_date_proposee,
-        proposee_par: rdv.proposee_par,
-      },
-      data: {
-        date_creneau: rdv.nouvelle_date_proposee,
-        statut: "confirme",
-        // Nouveau créneau : aucune présence, aucune proposition, plus de cycle.
-        medecin_present_le: null,
-        patient_present_le: null,
-        a_reprogrammer_le: null,
-        nouvelle_date_proposee: null,
-        proposee_par: null,
-        date_proposition: null,
-      },
-    }));
+    // Acceptation et déplacement de la réservation dans UNE transaction : si
+    // la case est prise entre-temps, rien n'est modifié.
+    count = await prisma.$transaction(async (tx) => {
+      const { count: n } = await tx.rendezVous.updateMany({
+        where: {
+          rdv_id,
+          statut: "a_reprogrammer",
+          // Délai NON écoulé, à l'exact complément de delaiReprogrammationEcoule (>= 48h).
+          a_reprogrammer_le: { gt: limiteDelai },
+          // La proposition lue est bien celle qu'on accepte.
+          nouvelle_date_proposee: rdv.nouvelle_date_proposee,
+          proposee_par: rdv.proposee_par,
+        },
+        data: {
+          date_creneau: rdv.nouvelle_date_proposee,
+          statut: "confirme",
+          // Nouveau créneau : aucune présence, aucune proposition, plus de cycle.
+          medecin_present_le: null,
+          patient_present_le: null,
+          a_reprogrammer_le: null,
+          nouvelle_date_proposee: null,
+          proposee_par: null,
+          date_proposition: null,
+        },
+      });
+      if (n === 1) {
+        await libererCreneauxDuRdv(rdv_id, tx);
+        await reserverCreneau(tx, libre.creneau_id, rdv_id);
+      }
+      return n;
+    });
   } catch (err) {
     // Index unique partiel (médecin, créneau) pour les RDV actifs : course avec une réservation.
     if (estViolationCreneauActif(err)) return { erreur: { status: 409, message: MESSAGE_CRENEAU_PRIS } };
+    if (err instanceof ErreurCreneau) {
+      return { erreur: { status: 409, message: `${err.message} Une nouvelle proposition est nécessaire.` } };
+    }
     throw err;
   }
   if (count === 0) {

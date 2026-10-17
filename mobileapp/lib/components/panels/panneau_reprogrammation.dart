@@ -20,10 +20,10 @@
 // saisie et gestion des refus (409 : créneau pris ou proposition modifiée →
 // on recharge).
 //
-// Dates : les créneaux de l'agenda sont « épinglés en UTC » (voir
-// agenda_models.dart). La date proposée s'affiche donc sans conversion de
-// fuseau ([dateHeureUtc]), comme les heures des créneaux ; seule l'échéance,
-// qui est un instant réel, s'affiche dans le fuseau local ([dateHeure]).
+// Dates : chaque créneau porte son instant réel (`debut`, calculé par le
+// serveur dans le fuseau du médecin, voir agenda_models.dart). La date
+// proposée, les heures des créneaux et l'échéance s'affichent donc toutes
+// dans le fuseau local de l'appareil ([dateHeure]).
 //
 // Volontairement NON exporté par components.dart : il dépend de la couche
 // contrôleurs/modèles, comme avertissement_annulation.dart.
@@ -331,7 +331,7 @@ class _PanneauReprogrammationState
                   children: [
                     TextSpan(text: 'Nouvelle date proposée par $_autrePartie : '),
                     TextSpan(
-                      text: dateHeureUtc(rdv.nouvelleDateProposee),
+                      text: dateHeure(rdv.nouvelleDateProposee),
                       style: gras,
                     ),
                   ],
@@ -355,7 +355,7 @@ class _PanneauReprogrammationState
                   children: [
                     const TextSpan(text: 'Vous avez proposé '),
                     TextSpan(
-                      text: dateHeureUtc(rdv.nouvelleDateProposee),
+                      text: dateHeure(rdv.nouvelleDateProposee),
                       style: gras,
                     ),
                     TextSpan(

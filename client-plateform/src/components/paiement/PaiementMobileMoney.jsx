@@ -16,14 +16,15 @@
 //
 // Règle d'or : le client ne confirme jamais rien lui-même. Le montant n'est
 // pas envoyé non plus : le serveur le recalcule.
-import { useCallback, useEffect, useRef, useState } from 'react';
+//
+// Objet payé : `rdvId` (RDV, historique) OU `adaptateur` (abonnement assurance…,
+// voir adaptateurs.jsx — guide abonnements v3, §2.2.3). Même polling : le statut
+// garde la forme { paiement.statut, tentative_campay } quel que soit l'objet.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import {
-  demanderPaiementCampay,
-  obtenirStatutPaiementRdv,
-} from '../../services/paiementService';
-import { FactureRdv } from './FactureRecapitulative';
+import { FactureAdaptateur } from './FactureRecapitulative';
+import { adaptateurRdv } from './adaptateurs';
 import {
   estNumeroCMValide,
   formaterNumeroAffichage,
@@ -32,8 +33,11 @@ import {
 const INTERVALLE_MS = 3000;
 const TENTATIVES_MAX = 30; // ~90 s : le temps de valider sur le téléphone
 
-export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFermer }) {
+export default function PaiementMobileMoney({ rdvId, adaptateur: adaptateurFourni, telephoneInitial = '', onFermer }) {
   const navigate = useNavigate();
+  const cleAdaptateur = adaptateurFourni?.cle ?? `rdv:${rdvId}`;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const adaptateur = useMemo(() => adaptateurFourni ?? adaptateurRdv(rdvId), [cleAdaptateur]);
   const [numero, setNumero] = useState(telephoneInitial || '');
   const [etape, setEtape] = useState('saisie'); // saisie | attente | echec | delai
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
@@ -72,15 +76,16 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
     timer.current = setTimeout(async () => {
       if (demonte.current) return;
       try {
-        const data = await obtenirStatutPaiementRdv(rdvId);
+        const data = await adaptateur.lireStatut();
         if (demonte.current) return;
 
         if (data.paiement?.statut === 'reussie') {
-          navigate(`/paiement/succes?rdv_id=${rdvId}`); // page existante, inchangée
+          navigate(adaptateur.urlSucces);
           return;
         }
-        if (data.statut_rdv === 'annule') {
-          setErreur('Ce rendez-vous a été annulé.');
+        if (adaptateur.estAnnule(data)) {
+          setErreur(adaptateur.texteAnnule);
+          setSansReessai(true);
           setEtape('echec');
           return;
         }
@@ -90,7 +95,7 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
             // le serveur ne le valide pas. On signale l'échec SANS proposer de repayer.
             setErreur(
               "Votre paiement a été reçu par l'opérateur mais son montant ne correspond pas à celui attendu : " +
-              "il n'a pas pu être validé. Ne payez pas une seconde fois, contactez le support en indiquant ce rendez-vous."
+              "il n'a pas pu être validé. Ne payez pas une seconde fois, contactez le support en indiquant ce paiement."
             );
             setSansReessai(true);
           } else {
@@ -109,7 +114,7 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
       }
       boucle(essai + 1);
     }, INTERVALLE_MS);
-  }, [rdvId, navigate]);
+  }, [adaptateur, navigate]);
 
   const numeroValide = estNumeroCMValide(numero);
 
@@ -118,7 +123,7 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
     setErreur(null);
     setEnvoiEnCours(true);
     try {
-      const data = await demanderPaiementCampay(rdvId, numero);
+      const data = await adaptateur.demanderCampay(numero);
       if (demonte.current) return;
       setInfo(data);
       setEtape('attente');
@@ -171,7 +176,7 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
         {etape === 'saisie' && (
           <>
             <div className="mb-3">
-              <FactureRdv rdvId={rdvId} agregateur="campay" compact />
+              <FactureAdaptateur adaptateur={adaptateur} agregateur="campay" compact />
             </div>
             <label htmlFor="momo-numero" className="form-label">
               Numéro MTN ou Orange
@@ -250,7 +255,7 @@ export default function PaiementMobileMoney({ rdvId, telephoneInitial = '', onFe
               <i className="fa-solid fa-circle-exclamation" />{' '}
               {erreur || 'Le paiement a été refusé ou a expiré.'}
             </p>
-            {!sansReessai && !erreur?.includes('annulé') && (
+            {!sansReessai && (
               <button type="button" className="btn btn-primary btn-block-aps w-100" onClick={reessayer}>
                 <i className="fa-solid fa-rotate-right" /> Réessayer
               </button>
