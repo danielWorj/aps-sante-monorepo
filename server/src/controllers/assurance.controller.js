@@ -40,7 +40,20 @@
 import prisma from "../lib/prisma.js";
 import { televerserFichier, supprimerFichier, construireUrl } from "../lib/cloudinaryService.js";
 import { creerAccesseurGeospatial, validerCoordonnees } from "../lib/geo.js";
-import { resoudreDroitsEnLot, resoudreDroits, droitsPublics } from "../lib/droitsAssurance.js";
+import {
+  resoudreDroitsEnLot,
+  resoudreDroits,
+  droitsPublics,
+  droitPublicAccorde,
+  idsServicesAvecDroit,
+  debutDuJourUtc,
+} from "../lib/droitsAssurance.js";
+import {
+  estAdminOuSuperadmin,
+  estAgentDuServiceAssurance,
+  peutGererServiceAssurance,
+  serviceAssuranceDeLAgent,
+} from "../lib/accesAssurance.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt"; // même bibliothèque que authentification.controller.js
 
@@ -58,9 +71,8 @@ const LIBELLE_ROLE_AGENT = "agent_assurance";
 
 const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function estAdminOuSuperadmin(utilisateur) {
-  return utilisateur?.role === "admin" || utilisateur?.role === "superadmin";
-}
+// estAdminOuSuperadmin / estAgentDuServiceAssurance : voir lib/accesAssurance.js
+// (partagés avec les contrôleurs d'abonnement — guide v3 §1.1.2).
 
 /* ===================================================================
  * Agent rattaché au service d'assurance (nouveau compte)
@@ -192,6 +204,29 @@ const CHAMPS_MINIMAUX = [
   "service_assurance_id", "nom", "type_acteur", "statut_verification",
   "pays_id", "ville_id", "pays", "ville", "geolocalisation", "distance_km",
 ];
+
+/**
+ * Lecture d'un contenu annexe (activités, options, agences) d'une fiche :
+ * l'admin et l'agent de la fiche lisent toujours (jeton facultatif,
+ * authentifierOptionnel sur les GET) ; le public seulement si la fiche est
+ * publiée et que son abonnement accorde le droit `cle` (guide v3, §1.4.1).
+ */
+async function lectureAutorisee(req, serviceAssuranceId, cle) {
+  if (req.utilisateur && (await peutGererServiceAssurance(req.utilisateur, serviceAssuranceId))) return true;
+  return droitPublicAccorde(serviceAssuranceId, cle);
+}
+
+/**
+ * Ids des fiches dont le contenu `cle` est lisible par l'appelant.
+ * null = aucun filtre (admin sans filtre de fiche).
+ */
+async function idsLisibles(req, serviceAssuranceId, cle) {
+  if (serviceAssuranceId) {
+    return (await lectureAutorisee(req, serviceAssuranceId, cle)) ? [serviceAssuranceId] : [];
+  }
+  if (estAdminOuSuperadmin(req.utilisateur)) return null;
+  return idsServicesAvecDroit(cle);
+}
 
 export function filtrerFiche(fiche, droits) {
   if (droits.siege_complet) return fiche;
@@ -385,6 +420,132 @@ export async function obtenirServiceAssurance(req, res, next) {
 
     return res.status(200).json({
       service_assurance: { ...filtrerFiche(enrichi, droits), droits: droitsPublics(droits), statut_abonnement },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/services-assurance/mon-service
+ * Fiche gérée par l'utilisateur connecté (un agent = une fiche,
+ * AgentAssurance.utilisateur_id unique). 404 si l'utilisateur n'est
+ * l'agent d'aucune fiche. Sert au web/mobile à trouver l'espace de gestion.
+ */
+export async function obtenirMonServiceAssurance(req, res, next) {
+  try {
+    const serviceAssuranceId = await serviceAssuranceDeLAgent(req.utilisateur.utilisateur_id);
+    if (!serviceAssuranceId) {
+      return res.status(404).json({ message: "Aucune fiche d'assurance rattachée à ce compte." });
+    }
+    const service = await prisma.serviceAssurance.findUnique({
+      where: { service_assurance_id: serviceAssuranceId },
+      select: { service_assurance_id: true, nom: true, statut_verification: true },
+    });
+    return res.status(200).json({ service_assurance: service });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/services-assurance/:id/gestion
+ * Vue PROPRIÉTAIRE (guide v3, §1.4.2) : agent de la fiche ou admin.
+ * Les GET publics renvoient [] hors droits ; cette route renvoie toujours
+ * la fiche complète, ses activités et agences (données conservées même
+ * sans abonnement : à la réactivation tout réapparaît sans ressaisie),
+ * l'état de l'abonnement et les quotas.
+ */
+export async function obtenirGestionServiceAssurance(req, res, next) {
+  try {
+    const id = req.params.id;
+    if (!(await peutGererServiceAssurance(req.utilisateur, id))) {
+      return res.status(403).json({
+        message: "Accès réservé à l'agent du service d'assurance concerné ou à un administrateur.",
+      });
+    }
+
+    const serviceAssurance = await prisma.serviceAssurance.findUnique({
+      where: { service_assurance_id: id },
+      include: { pays: true, ville: true },
+    });
+    if (!serviceAssurance) {
+      return res.status(404).json({ message: "Service d'assurance introuvable." });
+    }
+
+    const [enrichi, resolution, activites, agences, historique, brouillon] = await Promise.all([
+      enrichirServiceAssurance(serviceAssurance),
+      resoudreDroits(id),
+      prisma.activite.findMany({
+        where: { service_assurance_id: id },
+        include: { options: true },
+        orderBy: { titre: "asc" },
+      }),
+      prisma.agence.findMany({ where: { service_assurance_id: id }, orderBy: { libelle: "asc" } }),
+      prisma.abonnementAssurance.findMany({
+        where: { service_assurance_id: id, statut: { not: "en_attente_paiement" } },
+        include: {
+          niveau: { select: { code: true, libelle: true, rang: true } },
+          facture: { select: { facture_id: true, numero: true, date_emission: true } },
+        },
+        orderBy: { date_creation: "desc" },
+      }),
+      prisma.abonnementAssurance.findFirst({
+        where: { service_assurance_id: id, statut: "en_attente_paiement" },
+        include: { niveau: { select: { code: true, libelle: true } } },
+      }),
+    ]);
+    const agencesEnrichies = await Promise.all(agences.map(enrichirAgence));
+
+    const { droits, statut_abonnement, date_fin, en_grace, abonnement_id } = resolution;
+    let niveau = null;
+    let joursRestants = null;
+    if (abonnement_id) {
+      const courant = historique.find((a) => a.abonnement_id === abonnement_id);
+      niveau = courant?.niveau ?? null;
+    }
+    if (statut_abonnement === "actif" && date_fin) {
+      joursRestants = Math.round((date_fin - debutDuJourUtc()) / 86_400_000);
+    }
+
+    return res.status(200).json({
+      service_assurance: enrichi,
+      activites,
+      agences: agencesEnrichies,
+      droits,
+      abonnement: {
+        statut_abonnement,
+        abonnement_id,
+        niveau,
+        date_fin,
+        en_grace,
+        jours_restants: joursRestants,
+      },
+      brouillon: brouillon
+        ? {
+            abonnement_id: brouillon.abonnement_id,
+            niveau: brouillon.niveau,
+            duree_mois: brouillon.duree_mois,
+            montant_total: brouillon.montant_total,
+            devise: brouillon.devise,
+            date_creation: brouillon.date_creation,
+          }
+        : null,
+      historique: historique.map((a) => ({
+        abonnement_id: a.abonnement_id,
+        niveau: a.niveau,
+        duree_mois: a.duree_mois,
+        date_debut: a.date_debut,
+        date_fin: a.date_fin,
+        statut: a.statut,
+        origine: a.origine,
+        montant_total: a.montant_total,
+        devise: a.devise,
+        facture: a.facture,
+      })),
+      quotas: {
+        agences: { utilise: agences.length, max: droits.max_agences },
+      },
     });
   } catch (err) {
     next(err);
@@ -778,14 +939,6 @@ export async function supprimerServiceAssurance(req, res, next) {
   }
 }
 
-async function estAgentDuServiceAssurance(utilisateur, serviceAssuranceId) {
-  if (!utilisateur) return false;
-  const agent = await prisma.agentAssurance.findUnique({
-    where: { utilisateur_id: utilisateur.utilisateur_id },
-  });
-  return !!agent && agent.service_assurance_id === serviceAssuranceId;
-}
-
 /* ===================================================================
  * Activités (catalogue produits d'un service d'assurance)
  *
@@ -800,14 +953,22 @@ async function estAgentDuServiceAssurance(utilisateur, serviceAssuranceId) {
 /**
  * GET /api/activites?service_assurance_id=...
  * PUBLIQUE. Filtre optionnel par service_assurance_id ; sans filtre,
- * retourne l'ensemble du catalogue.
+ * retourne le catalogue des seules fiches ayant le droit
+ * `afficher_activites` (guide abonnements v3, §1.4.1). Une fiche sans ce
+ * droit renvoie [] : son propriétaire lit ses activités via
+ * GET /services-assurance/:id/gestion.
  */
 export async function listerActivites(req, res, next) {
   try {
     const { service_assurance_id } = req.query;
 
+    const ids = await idsLisibles(req, service_assurance_id, "afficher_activites");
+    if (ids && !ids.length) {
+      return res.status(200).json({ activites: [] });
+    }
+
     const activites = await prisma.activite.findMany({
-      where: service_assurance_id ? { service_assurance_id } : {},
+      where: ids ? { service_assurance_id: { in: ids } } : {},
       include: { options: true },
       orderBy: { titre: "asc" },
     });
@@ -820,7 +981,7 @@ export async function listerActivites(req, res, next) {
 
 /**
  * GET /api/activites/:id
- * PUBLIQUE.
+ * PUBLIQUE. 404 si la fiche propriétaire n'a pas le droit `afficher_activites`.
  */
 export async function obtenirActivite(req, res, next) {
   try {
@@ -828,7 +989,7 @@ export async function obtenirActivite(req, res, next) {
       where: { activite_id: req.params.id },
       include: { options: true },
     });
-    if (!activite) {
+    if (!activite || !(await lectureAutorisee(req, activite.service_assurance_id, "afficher_activites"))) {
       return res.status(404).json({ message: "Activité introuvable." });
     }
     return res.status(200).json({ activite });
@@ -983,6 +1144,12 @@ export async function listerOptionsActivite(req, res, next) {
       return res.status(400).json({ message: "Paramètre requis : activite_id." });
     }
 
+    // Le droit se lit sur la fiche de l'activité parente (guide v3, §1.4.1).
+    const serviceAssuranceId = await obtenirServiceAssuranceIdDeLActivite(activite_id);
+    if (!serviceAssuranceId || !(await lectureAutorisee(req, serviceAssuranceId, "afficher_activites"))) {
+      return res.status(200).json({ options_activite: [] });
+    }
+
     const options = await prisma.optionActivite.findMany({
       where: { activite_id },
       orderBy: { libelle: "asc" },
@@ -1003,7 +1170,8 @@ export async function obtenirOptionActivite(req, res, next) {
     const option = await prisma.optionActivite.findUnique({
       where: { option_activite_id: req.params.id },
     });
-    if (!option) {
+    const serviceAssuranceId = option ? await obtenirServiceAssuranceIdDeLActivite(option.activite_id) : null;
+    if (!option || !serviceAssuranceId || !(await lectureAutorisee(req, serviceAssuranceId, "afficher_activites"))) {
       return res.status(404).json({ message: "Option d'activité introuvable." });
     }
     return res.status(200).json({ option_activite: option });
@@ -1148,6 +1316,9 @@ async function enrichirAgence(agence) {
  * service_assurance_id. Quand elle est active, chaque agence renvoyée
  * gagne un champ distance_km (arrondi à 1 décimale) et la liste est
  * triée par distance croissante plutôt que par libellé.
+ * Droits d'abonnement (guide v3, §1.4.1) : seules les agences des fiches
+ * ayant le droit `afficher_agences` sont renvoyées, filtre appliqué dans
+ * le `where` AVANT la recherche par proximité.
  */
 export async function listerAgences(req, res, next) {
   try {
@@ -1158,7 +1329,12 @@ export async function listerAgences(req, res, next) {
       return res.status(400).json({ message: proximite.erreur });
     }
 
-    const where = service_assurance_id ? { service_assurance_id } : {};
+    const ids = await idsLisibles(req, service_assurance_id, "afficher_agences");
+    if (ids && !ids.length) {
+      return res.status(200).json({ agences: [] });
+    }
+
+    const where = ids ? { service_assurance_id: { in: ids } } : {};
 
     if (proximite.actif) {
       const proches = await geoAgence.rechercherParProximite({
@@ -1206,12 +1382,12 @@ export async function listerAgences(req, res, next) {
 
 /**
  * GET /api/agences/:id
- * PUBLIQUE.
+ * PUBLIQUE. 404 si la fiche propriétaire n'a pas le droit `afficher_agences`.
  */
 export async function obtenirAgence(req, res, next) {
   try {
     const agence = await prisma.agence.findUnique({ where: { agence_id: req.params.id } });
-    if (!agence) {
+    if (!agence || !(await lectureAutorisee(req, agence.service_assurance_id, "afficher_agences"))) {
       return res.status(404).json({ message: "Agence introuvable." });
     }
 
@@ -1252,6 +1428,22 @@ export async function creerAgence(req, res, next) {
       return res.status(403).json({
         message: "Accès réservé à l'agent du service d'assurance concerné ou à un administrateur.",
       });
+    }
+
+    // Quota d'agences du niveau d'abonnement (guide v3, §1.4.1). Sans
+    // abonnement, max_agences vaut 0 : il faut souscrire avant de saisir.
+    // L'admin n'est pas limité.
+    if (!estAdmin) {
+      const { droits } = await resoudreDroits(service_assurance_id);
+      if (droits.max_agences !== null) {
+        const n = await prisma.agence.count({ where: { service_assurance_id } });
+        if (n >= droits.max_agences) {
+          return res.status(409).json({
+            code: "QUOTA_ATTEINT",
+            message: "Quota d'agences atteint pour votre niveau d'abonnement.",
+          });
+        }
+      }
     }
 
     const agence = await prisma.agence.create({
@@ -1413,6 +1605,17 @@ export async function creerMiseEnRelationAssurance(req, res, next) {
     const service = await prisma.serviceAssurance.findUnique({ where: { service_assurance_id } });
     if (!service) {
       return res.status(400).json({ message: "service_assurance_id introuvable." });
+    }
+
+    // Formulaire de contact réservé aux fiches publiées dont l'abonnement
+    // l'inclut (guide v3, §1.4.1) : le front masque le formulaire, le
+    // serveur refuse quand même (abonnement expiré pendant la consultation,
+    // appel direct à l'API).
+    if (!(await droitPublicAccorde(service_assurance_id, "formulaire_contact"))) {
+      return res.status(403).json({
+        code: "PRESENCE_MINIMALE",
+        message: "La mise en relation n'est pas disponible pour cette fiche.",
+      });
     }
 
     const miseEnRelation = await prisma.miseEnRelation.create({

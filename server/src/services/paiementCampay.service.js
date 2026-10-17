@@ -2,6 +2,18 @@
 import prisma from "../lib/prisma.js";
 import { obtenirStatutTransaction, DEVISE_CAMPAY, CampayError } from "../lib/campayService.js";
 import { finaliserPaiement } from "./finalisationPaiement.service.js";
+import { finaliserAbonnementAssurance } from "./finalisationAbonnementAssurance.service.js";
+
+/** Objet payé par une transaction, pour les journaux (RDV ou abonnement assurance). */
+function decrireCible(t) {
+  return t.abonnement_assurance_id_cible ? `abonnement=${t.abonnement_assurance_id_cible}` : `rdv=${t.rdv_id_cible}`;
+}
+
+/** Filtre Prisma de l'objet payé : { rdv_id } ou { abonnement_id }. */
+function filtreCible({ rdv_id, abonnement_id }) {
+  if (abonnement_id) return { abonnement_assurance_id_cible: abonnement_id };
+  return { rdv_id_cible: rdv_id };
+}
 
 // Anti-martèlement : le client interroge le statut toutes les ~1,5 s.
 // On ne rappelle CamPay que toutes les 4 s par transaction.
@@ -65,7 +77,7 @@ export async function verifierEtFinaliserTransactionCampay(transaction, { force 
       if (!montantsIncoherents.has(cle)) {
         montantsIncoherents.set(cle, { attendu: controle.attendu, recu: controle.recu, devise: st.currency ?? null });
         console.error(
-          `[campay] MONTANT INCOHÉRENT transaction=${cle} rdv=${transaction.rdv_id_cible} ` +
+          `[campay] MONTANT INCOHÉRENT transaction=${cle} ${decrireCible(transaction)} ` +
           `attendu=${controle.attendu} reçu=${st.amount} ${st.currency ?? ""} ` +
           `(tolérance : +${controle.surplusMax} XAF max, jamais en dessous) — non finalisé, ` +
           `signalé « échoué » au client. Réponse CamPay : ${JSON.stringify(st)}`
@@ -80,6 +92,16 @@ export async function verifierEtFinaliserTransactionCampay(transaction, { force 
         `(écart de ${controle.recu - controle.attendu} XAF toléré, probablement les frais CamPay). ` +
         `Le séquestre reste au montant demandé.`
       );
+    }
+    // Abonnement assurance (guide v3, §1.5.6.2) : APRÈS le contrôle de
+    // montant (jamais de finalisation sur un montant incohérent), AVANT
+    // finaliserPaiement (propre au RDV : escrow, notification médecin).
+    if (transaction.abonnement_assurance_id_cible) {
+      await finaliserAbonnementAssurance({
+        transaction_id: transaction.transaction_id,
+        campay_reference: transaction.campay_reference,
+      });
+      return "SUCCESSFUL";
     }
     await finaliserPaiement({
       transaction_id: transaction.transaction_id,
@@ -168,18 +190,30 @@ export async function rattacherReferenceCallback(transaction, reference) {
   return prisma.transactionPaiement.findUnique({ where: { transaction_id: transaction.transaction_id } });
 }
 
-/** Auto-guérison : appelée par GET /paiement/rendez-vous/:id/paiement (fonctionne même sans webhook, ex. en local). */
-export async function synchroniserCampayPourRdv(rdv_id) {
+/**
+ * Auto-guérison : appelée par les GET de statut de paiement (RDV ou
+ * abonnement assurance) — fonctionne même sans webhook (ex. en local).
+ * @param {{ rdv_id?: string, abonnement_id?: string }} cible
+ */
+export async function synchroniserCampayPour(cible) {
   const enAttente = await prisma.transactionPaiement.findMany({
-    where: { fournisseur: "campay", rdv_id_cible: rdv_id, statut: "en_attente", campay_reference: { not: null } },
+    where: { fournisseur: "campay", ...filtreCible(cible), statut: "en_attente", campay_reference: { not: null } },
   });
   for (const t of enAttente) await verifierEtFinaliserTransactionCampay(t);
 }
 
-/** Dernière tentative CamPay d'un RDV : permet au client d'afficher « refusé / expiré ». */
-export async function derniereTentativeCampay(rdv_id) {
+export const synchroniserCampayPourRdv = (rdv_id) => synchroniserCampayPour({ rdv_id });
+
+export const derniereTentativeCampay = (rdv_id) => derniereTentativeCampayPour({ rdv_id });
+
+/**
+ * Dernière tentative CamPay d'un RDV ou d'un abonnement : permet au client
+ * d'afficher « refusé / expiré ».
+ * @param {{ rdv_id?: string, abonnement_id?: string }} cible
+ */
+export async function derniereTentativeCampayPour(cible) {
   const t = await prisma.transactionPaiement.findFirst({
-    where: { fournisseur: "campay", rdv_id_cible: rdv_id },
+    where: { fournisseur: "campay", ...filtreCible(cible) },
     orderBy: { date_creation: "desc" },
     select: { transaction_id: true, statut: true, campay_operator: true },
   });
@@ -221,7 +255,10 @@ export async function signalerCollectesIncertainesNonRattachees() {
         lte: new Date(maintenant - SEUIL_A_VERIFIER_MS),
       },
     },
-    select: { transaction_id: true, rdv_id_cible: true, numero_payeur: true, montant: true, date_creation: true },
+    select: {
+      transaction_id: true, rdv_id_cible: true, abonnement_assurance_id_cible: true,
+      numero_payeur: true, montant: true, date_creation: true,
+    },
     orderBy: { date_creation: "asc" },
     take: 100,
   });
@@ -234,7 +271,7 @@ export async function signalerCollectesIncertainesNonRattachees() {
     console.error(
       `[campay] A VERIFIER : collecte à issue incertaine jamais rattachée depuis ` +
       `${Math.round((maintenant - t.date_creation.getTime()) / 60000)} min — ` +
-      `transaction=${t.transaction_id} rdv=${t.rdv_id_cible} montant=${Math.round(Number(t.montant))} XAF ` +
+      `transaction=${t.transaction_id} ${decrireCible(t)} montant=${Math.round(Number(t.montant))} XAF ` +
       `numero=${masquerNumero(t.numero_payeur)}. Chercher dans le tableau de bord CamPay la collecte ` +
       `dont external_reference = ${t.transaction_id} : si elle est SUCCESSFUL, le patient a payé ` +
       `(rattacher la référence à la main) ; sinon aucune action.`

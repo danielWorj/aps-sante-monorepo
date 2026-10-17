@@ -108,6 +108,7 @@ import {
   // Agenda du médecin — DisponibiliteMedecin (gabarit récurrent)
   listerDisponibilitesMedecin,
   creerDisponibiliteMedecin,
+  remplacerDisponibilitesMedecin,
   supprimerDisponibiliteMedecin,
   // Agenda du médecin — CreneauAgenda (instances concrètes)
   listerCreneauxAgenda,
@@ -227,6 +228,7 @@ router.delete("/horaires/:id", authentifier, autoriser("superadmin"), supprimerH
 // /medecins/:id).
 router.get("/medecins/:medecinId/disponibilites", listerDisponibilitesMedecin);
 router.post("/medecins/:medecinId/disponibilites", authentifier, creerDisponibiliteMedecin);
+router.put("/medecins/:medecinId/disponibilites", authentifier, remplacerDisponibilitesMedecin);
 router.delete("/disponibilites/:disponibiliteId", authentifier, supprimerDisponibiliteMedecin);
 
 // -- CreneauAgenda (instances concrètes) -----------------------------

@@ -54,6 +54,7 @@ class ConfirmationRdvPage extends StatefulWidget {
     this.typeRdvLabel = 'Au cabinet',
     this.tarifFcfa,
     this.codeUnique,
+    this.echeanceConfirmation,
     this.compteVientDetreCree = false,
     this.patientPrenom,
     this.paiementBuilder,
@@ -83,6 +84,11 @@ class ConfirmationRdvPage extends StatefulWidget {
   /// la consultation). `null` si le backend ne l'a pas
   /// encore renvoyé (l'écran affiche alors un message de repli).
   final String? codeUnique;
+
+  /// Heure limite de paiement (POST /rendez-vous → `echeance_confirmation`) :
+  /// le créneau reste réservé au patient jusque-là ; sans paiement, la
+  /// demande est annulée automatiquement et le créneau libéré.
+  final DateTime? echeanceConfirmation;
 
   /// `true` si cet écran fait suite à une création de compte patient
   /// enchaînée avec la réservation (voir `RendezVousPage._confirmer`).
@@ -149,9 +155,17 @@ class _ConfirmationRdvPageState extends State<ConfirmationRdvPage> {
             'connecté(e). '
         : '';
     if (_paiementAttendu) {
+      final echeance = widget.echeanceConfirmation?.toLocal();
+      final delaiTxt = echeance == null
+          ? ''
+          : ' Sans paiement avant le ${echeance.day} '
+              '${_moisFrConfirmation[echeance.month - 1]} à '
+              '${echeance.hour.toString().padLeft(2, '0')}:'
+              '${echeance.minute.toString().padLeft(2, '0')}, la demande '
+              'sera annulée et le créneau libéré.';
       return '$salutation${compteTxt}Votre créneau avec ${widget.medecinNom} '
           'est réservé pour le $_dateFormatee à ${widget.heure}. Il sera '
-          'confirmé dès la réception de votre paiement.';
+          'confirmé dès la réception de votre paiement.$delaiTxt';
     }
     return '$salutation${compteTxt}Votre rendez-vous avec '
         '${widget.medecinNom} est confirmé pour le $_dateFormatee à '

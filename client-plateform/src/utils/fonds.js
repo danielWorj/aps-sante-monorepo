@@ -47,16 +47,17 @@ export function tempsRestant(echeance, maintenant = Date.now()) {
 
 /* ── Créneaux d'agenda ──────────────────────────────────────────────
  * Convention du dépôt (voir medecin-agenda.jsx) : `creneau.date` et
- * `horaire.heure_debut` sont des valeurs « épinglées en UTC », lues par
- * découpage de chaîne. Le serveur (reprogrammation) compare la date et
- * l'heure UTC de `nouvelle_date` à l'agenda : on reconstruit donc l'ISO
- * de la même façon. */
+ * `horaire.heure_debut` sont des HEURES MURALES du médecin, « épinglées en
+ * UTC » et lues par découpage de chaîne. L'instant réel du créneau est
+ * `creneau.debut` (ISO), calculé par le serveur dans le fuseau du médecin :
+ * c'est lui qu'il faut envoyer comme `nouvelle_date`. Repli (ancienne
+ * réponse sans `debut`) : reconstruction en UTC. */
 const jour = (v) => String(v).slice(0, 10);
 const hhmm = (v) => {
   const s = String(v);
   return (s.includes('T') ? s.split('T')[1] : s).slice(0, 5);
 };
-export const creneauVersISO = (c) => `${jour(c.date)}T${hhmm(c.horaire.heure_debut)}:00.000Z`;
+export const creneauVersISO = (c) => c.debut ?? `${jour(c.date)}T${hhmm(c.horaire.heure_debut)}:00.000Z`;
 export const libelleJour = (c) =>
   new Date(`${jour(c.date)}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 export const libelleHeure = (c) => hhmm(c.horaire.heure_debut);

@@ -377,12 +377,28 @@ export async function creerDisponibiliteMedecin(medecinId, donnees) {
 
 /**
  * DELETE /disponibilites/:disponibiliteId
- * Médecin propriétaire ou admin/superadmin. ⚠️ N'a aucun effet
- * rétroactif sur les créneaux déjà générés (CreneauAgenda) : ils
- * restent en base tels quels.
+ * Médecin propriétaire ou admin/superadmin. Le serveur re-synchronise
+ * aussitôt les créneaux à venir : les créneaux libres de cette tranche
+ * disparaissent (jamais ceux déjà réservés par un rendez-vous).
  */
 export async function supprimerDisponibiliteMedecin(disponibiliteId) {
   return apiFetch(`/disponibilites/${disponibiliteId}`, { method: 'DELETE' });
+}
+
+/**
+ * PUT /medecins/:medecinId/disponibilites
+ * Médecin propriétaire ou admin/superadmin. REMPLACE tout le gabarit
+ * hebdomadaire en une fois, puis re-synchronise les créneaux à venir.
+ * @param {string} medecinId
+ * @param {Array<{ jour_semaine: string, horaire_id: string }>} disponibilites
+ * @returns {Promise<Array>} le gabarit enregistré
+ */
+export async function remplacerDisponibilitesMedecin(medecinId, disponibilites) {
+  const data = await apiFetch(`/medecins/${medecinId}/disponibilites`, {
+    method: 'PUT',
+    body: { disponibilites },
+  });
+  return data.disponibilites;
 }
 
 /* --- CreneauAgenda (instances concrètes) ---------------------------- */
@@ -393,16 +409,31 @@ export async function supprimerDisponibiliteMedecin(disponibiliteId) {
  * consulte pour voir les créneaux réellement libres avant de prendre
  * rendez-vous. rdv_id n'est jamais exposé ici.
  * @param {string} medecinId
- * @param {Object} [filtres] - { date_debut?, date_fin?, statut? } -
+ * @param {Object} [filtres] - { date_debut?, date_fin?, statut?, libres? } -
  *   bornes de date incluses (AAAA-MM-JJ), statut une valeur de
- *   STATUTS_CRENEAU_AGENDA.
- * @returns {Promise<Array>} liste des créneaux
+ *   STATUTS_CRENEAU_AGENDA ; libres=true ne renvoie que les créneaux
+ *   réservables (disponibles, sans rendez-vous, heure non passée).
+ * @returns {Promise<Array>} liste des créneaux ; chacun porte `debut` /
+ *   `fin` (ISO, instants réels) à afficher tels quels.
  */
 export async function listerCreneauxAgenda(medecinId, filtres = {}) {
   const data = await apiFetch(
     `/medecins/${medecinId}/agenda${construireQueryString(filtres)}`
   );
   return data.creneaux;
+}
+
+/**
+ * Créneaux RÉSERVABLES d'un médecin entre deux dates (incluses) : ceux
+ * que la grille de prise de rendez-vous doit afficher. Un créneau déjà
+ * demandé par un autre patient (en attente de confirmation) ou confirmé
+ * n'y figure pas.
+ * @param {string} medecinId
+ * @param {string} dateDebut AAAA-MM-JJ
+ * @param {string} dateFin AAAA-MM-JJ
+ */
+export async function listerCreneauxLibres(medecinId, dateDebut, dateFin) {
+  return listerCreneauxAgenda(medecinId, { date_debut: dateDebut, date_fin: dateFin, libres: true });
 }
 
 /**
@@ -844,18 +875,25 @@ export async function obtenirRendezVous(id) {
  * @param {Object} donnees - {
  *   medecin_id,       // requis
  *   type_rdv,         // requis — 'physique' | 'teleconsultation'
- *   date_creneau,     // requis — date/heure ISO
+ *   creneau_id,       // requis — créneau LIBRE choisi dans listerCreneauxLibres
  *   structure_id?,    // optionnel, pertinent seulement si type_rdv === 'physique'
  *   motif?,           // optionnel, texte libre, 1000 caractères max — motif de la consultation
  * }
- * @returns {Promise<Object>} le rendez-vous créé
+ * 409 (code CRENEAU_INDISPONIBLE) si le créneau vient d'être pris : recharger la grille.
+ * @returns {Promise<Object>} le rendez-vous créé, avec `echeance_confirmation`
+ *   (ISO : le créneau reste réservé jusqu'à cette heure sans paiement) et
+ *   `delai_confirmation_heures`.
  */
 export async function creerRendezVous(donnees) {
   const data = await apiFetch('/rendez-vous', {
     method: 'POST',
     body: donnees,
   });
-  return data.rendez_vous;
+  return {
+    ...data.rendez_vous,
+    echeance_confirmation: data.echeance_confirmation ?? null,
+    delai_confirmation_heures: data.delai_confirmation_heures ?? null,
+  };
 }
 
 /**

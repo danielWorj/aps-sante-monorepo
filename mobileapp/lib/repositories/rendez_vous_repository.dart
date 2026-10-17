@@ -236,7 +236,13 @@ class RendezVousRepository {
       body: payload.toJson(),
       token: token,
     );
-    return RendezVous.fromJson(donnees['rendez_vous'] as Map<String, dynamic>);
+    // L'échéance de confirmation est à la racine de la réponse : on la
+    // rattache au RDV pour l'afficher au patient.
+    return RendezVous.fromJson({
+      ...donnees['rendez_vous'] as Map<String, dynamic>,
+      if (donnees['echeance_confirmation'] != null)
+        'echeance_confirmation': donnees['echeance_confirmation'],
+    });
   }
 
   /// PUT /rendez-vous/:id

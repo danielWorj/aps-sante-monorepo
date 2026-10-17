@@ -1,20 +1,26 @@
 // lib/models/agenda_models.dart
 //
 // Modèles du module transverse « Agenda du médecin » (Horaire /
-// CreneauAgenda), en miroir de agenda.controller.js côté backend.
+// DisponibiliteMedecin / CreneauAgenda), en miroir de agenda.controller.js
+// côté backend.
 //
-// Périmètre volontairement limité à la LECTURE des créneaux, seule chose
-// dont l'app mobile a besoin pour la reprogrammation « deux absents »
-// (politique de fonds v2, phase 5) : GET /medecins/:medecinId/agenda,
-// route PUBLIQUE qui renvoie `{ creneaux }`. Le gabarit récurrent
-// (DisponibiliteMedecin) et la gestion de l'agenda par le médecin restent
-// hors périmètre.
+// Usages :
+//   - patient : grille des créneaux LIBRES d'un médecin pour prendre
+//     rendez-vous (GET /medecins/:id/agenda?libres=true) — un créneau déjà
+//     demandé par un autre patient (en attente de paiement) ou confirmé n'y
+//     figure pas ;
+//   - reprogrammation « deux absents » : proposer un créneau libre ;
+//   - médecin : déclarer ses horaires de la semaine (gabarit,
+//     DisponibiliteMedecin) et fermer / rouvrir un créneau précis.
 //
-// ⚠️ Convention de dates (identique au web, voir utils/fonds.js) :
-// `date` et `horaire.heure_debut` sont des valeurs « épinglées en UTC »,
-// lues par découpage de chaîne et JAMAIS converties dans le fuseau local.
-// Le serveur compare la date et l'heure UTC de `nouvelle_date` à l'agenda :
-// l'ISO envoyé se reconstruit donc avec [creneauVersIso] (utils/fonds.dart).
+// ⚠️ Convention de dates :
+//   - `date` et `horaire.heure_debut` sont des HEURES MURALES du médecin,
+//     « épinglées en UTC » et lues par découpage de chaîne ;
+//   - `debut` / `fin` sont les instants RÉELS du créneau (ISO), calculés par
+//     le serveur dans le fuseau du pays d'exercice du médecin. Ce sont eux
+//     qu'on affiche (fuseau de l'appareil) et qu'on envoie comme date
+//     (`nouvelle_date`). Repli sur la reconstruction UTC si une ancienne
+//     réponse ne les porte pas.
 //
 // Le serveur n'expose jamais `rdv_id` sur cette route publique : le statut
 // `reserve` suffit à indiquer qu'un créneau n'est plus libre.
@@ -26,6 +32,20 @@ T? _lire<T>(Map<String, dynamic> json, String cle) {
   final valeur = json[cle];
   return valeur is T ? valeur : null;
 }
+
+/// Jours de la semaine (enum Prisma `JourSemaine`), dans l'ordre d'affichage.
+const List<({String valeur, String libelle, String court})> joursSemaineAgenda = [
+  (valeur: 'lundi', libelle: 'Lundi', court: 'LUN'),
+  (valeur: 'mardi', libelle: 'Mardi', court: 'MAR'),
+  (valeur: 'mercredi', libelle: 'Mercredi', court: 'MER'),
+  (valeur: 'jeudi', libelle: 'Jeudi', court: 'JEU'),
+  (valeur: 'vendredi', libelle: 'Vendredi', court: 'VEN'),
+  (valeur: 'samedi', libelle: 'Samedi', court: 'SAM'),
+  (valeur: 'dimanche', libelle: 'Dimanche', court: 'DIM'),
+];
+
+/// Jours ouvrés (copie rapide des horaires du lundi au vendredi).
+const List<String> joursOuvresAgenda = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'];
 
 /// Miroir de l'enum Prisma `StatutCreneauAgenda`. [inconnu] conserve la
 /// valeur brute du serveur dans [CreneauAgenda.statutBrut] : un statut
@@ -67,6 +87,12 @@ class HoraireAgenda {
     required this.heureFin,
   });
 
+  /// « 09:00 » — heure murale déclarée par le médecin.
+  String get libelleDebut => libelleHeureCreneau(heureDebut);
+
+  /// « 09:30 ».
+  String get libelleFin => libelleHeureCreneau(heureFin);
+
   factory HoraireAgenda.fromJson(Map<String, dynamic> json) {
     return HoraireAgenda(
       horaireId: _lire<String>(json, 'horaire_id') ?? '',
@@ -82,13 +108,39 @@ class HoraireAgenda {
       };
 }
 
+/// Une tranche du gabarit hebdomadaire du médecin : « disponible le
+/// [jourSemaine] sur [horaire] ».
+class DisponibiliteMedecin {
+  final String disponibiliteId;
+  final String jourSemaine;
+  final String horaireId;
+  final HoraireAgenda? horaire;
+
+  const DisponibiliteMedecin({
+    required this.disponibiliteId,
+    required this.jourSemaine,
+    required this.horaireId,
+    this.horaire,
+  });
+
+  factory DisponibiliteMedecin.fromJson(Map<String, dynamic> json) {
+    final horaireBrut = json['horaire'];
+    return DisponibiliteMedecin(
+      disponibiliteId: _lire<String>(json, 'disponibilite_id') ?? '',
+      jourSemaine: _lire<String>(json, 'jour_semaine') ?? '',
+      horaireId: _lire<String>(json, 'horaire_id') ?? '',
+      horaire: horaireBrut is Map<String, dynamic> ? HoraireAgenda.fromJson(horaireBrut) : null,
+    );
+  }
+}
+
 /// Créneau concret d'un médecin à une date donnée.
 class CreneauAgenda {
   final String creneauId;
   final String medecinId;
   final String horaireId;
 
-  /// Date épinglée en UTC, chaîne brute (« 2026-10-12T00:00:00.000Z »).
+  /// Date murale épinglée en UTC, chaîne brute (« 2026-10-12T00:00:00.000Z »).
   final String date;
   final StatutCreneauAgenda statut;
   final String? statutBrut;
@@ -96,6 +148,10 @@ class CreneauAgenda {
   /// `genere` (issu du gabarit) ou `manuel`.
   final String? origine;
   final HoraireAgenda? horaire;
+
+  /// Instants réels de début / fin (ISO), calculés par le serveur.
+  final String? debut;
+  final String? fin;
 
   const CreneauAgenda({
     required this.creneauId,
@@ -106,30 +162,48 @@ class CreneauAgenda {
     this.statutBrut,
     this.origine,
     this.horaire,
+    this.debut,
+    this.fin,
   });
 
   bool get estDisponible => statut == StatutCreneauAgenda.disponible;
+  bool get estReserve => statut == StatutCreneauAgenda.reserve;
+  bool get estBloque => statut == StatutCreneauAgenda.bloque;
+  bool get estGenere => origine == 'genere';
 
   /// Vrai si le créneau a bien une heure de début exploitable. Sans elle,
-  /// on ne peut pas construire la date à proposer au serveur.
-  bool get estExploitable => horaire != null && horaire!.heureDebut.isNotEmpty;
+  /// on ne peut ni l'afficher ni le proposer au serveur.
+  bool get estExploitable =>
+      (debut != null && debut!.isNotEmpty) || (horaire != null && horaire!.heureDebut.isNotEmpty);
 
-  /// ISO 8601 envoyé comme `nouvelle_date` : `AAAA-MM-JJTHH:mm:00.000Z`.
+  /// ISO 8601 du début réel du créneau, envoyé comme `nouvelle_date`.
   /// À n'appeler que si [estExploitable].
-  String get iso => creneauVersIso(date, horaire?.heureDebut ?? '');
+  String get iso => debut ?? creneauVersIso(date, horaire?.heureDebut ?? '');
 
-  /// Instant UTC du créneau (pour filtrer les créneaux passés).
-  /// `null` si la date est illisible.
-  DateTime? get instantUtc => DateTime.tryParse(iso);
+  /// Instant UTC du début du créneau. `null` si la date est illisible.
+  DateTime? get instantUtc => DateTime.tryParse(iso)?.toUtc();
 
-  /// Jour lisible, « lundi 12 octobre ».
-  String get libelleJour => libelleJourCreneau(date);
+  /// Jour lisible dans le fuseau de l'appareil, « lundi 12 octobre ».
+  String get libelleJour {
+    final i = instantUtc;
+    return i == null ? libelleJourCreneau(date) : jourLongLocal(i);
+  }
 
-  /// Heure lisible, « 09:30 ».
-  String get libelleHeure => libelleHeureCreneau(horaire?.heureDebut ?? '');
+  /// Heure lisible dans le fuseau de l'appareil, « 09:30 ».
+  String get libelleHeure {
+    final i = instantUtc;
+    return i == null ? libelleHeureCreneau(horaire?.heureDebut ?? '') : heureLocale(i);
+  }
 
-  /// Clé de regroupement par jour (AAAA-MM-JJ).
-  String get cleJour => date.length >= 10 ? date.substring(0, 10) : date;
+  /// Clé de regroupement par jour local (AAAA-MM-JJ).
+  String get cleJour {
+    final i = instantUtc;
+    if (i != null) return cleJourLocal(i);
+    return date.length >= 10 ? date.substring(0, 10) : date;
+  }
+
+  /// Clé du jour MURAL du médecin (AAAA-MM-JJ), pour la grille de son agenda.
+  String get cleJourMural => date.length >= 10 ? date.substring(0, 10) : date;
 
   factory CreneauAgenda.fromJson(Map<String, dynamic> json) {
     final brut = _lire<String>(json, 'statut');
@@ -145,6 +219,8 @@ class CreneauAgenda {
       horaire: horaireBrut is Map<String, dynamic>
           ? HoraireAgenda.fromJson(horaireBrut)
           : null,
+      debut: _lire<String>(json, 'debut'),
+      fin: _lire<String>(json, 'fin'),
     );
   }
 
@@ -156,26 +232,33 @@ class CreneauAgenda {
         'statut': statutBrut ?? statut.name,
         if (origine != null) 'origine': origine,
         if (horaire != null) 'horaire': horaire!.toJson(),
+        if (debut != null) 'debut': debut,
+        if (fin != null) 'fin': fin,
       };
 
   @override
-  String toString() => 'CreneauAgenda($creneauId, $date, ${statutBrut ?? statut.name})';
+  String toString() => 'CreneauAgenda($creneauId, ${debut ?? date}, ${statutBrut ?? statut.name})';
 }
 
 /// Filtres de GET /medecins/:medecinId/agenda. Ne construit que les
-/// paires effectivement renseignées (`?date_debut&date_fin&statut`).
+/// paires effectivement renseignées (`?date_debut&date_fin&statut&libres`).
 class FiltresAgenda {
-  /// Bornes incluses. Seule la partie AAAA-MM-JJ (UTC) est envoyée.
+  /// Bornes incluses, comparées par le serveur à la date MURALE du médecin.
+  /// Seule la partie AAAA-MM-JJ (date locale) est envoyée : prévoir un jour
+  /// de marge de chaque côté si le fuseau peut différer.
   final DateTime? dateDebut;
   final DateTime? dateFin;
   final StatutCreneauAgenda? statut;
 
-  const FiltresAgenda({this.dateDebut, this.dateFin, this.statut});
+  /// Vrai : uniquement les créneaux réservables (disponibles, sans
+  /// rendez-vous, heure non passée).
+  final bool libres;
+
+  const FiltresAgenda({this.dateDebut, this.dateFin, this.statut, this.libres = false});
 
   static String _jourIso(DateTime d) {
-    final u = d.toUtc();
     String deux(int n) => n.toString().padLeft(2, '0');
-    return '${u.year.toString().padLeft(4, '0')}-${deux(u.month)}-${deux(u.day)}';
+    return '${d.year.toString().padLeft(4, '0')}-${deux(d.month)}-${deux(d.day)}';
   }
 
   Map<String, String> toQuery() {
@@ -184,6 +267,7 @@ class FiltresAgenda {
       if (dateDebut != null) 'date_debut': _jourIso(dateDebut!),
       if (dateFin != null) 'date_fin': _jourIso(dateFin!),
       if (statutApi != null) 'statut': statutApi,
+      if (libres) 'libres': 'true',
     };
   }
 }

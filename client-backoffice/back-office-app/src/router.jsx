@@ -29,6 +29,10 @@ import ForfaitPublicitaire from './pages/ForfaitPublicitaire';
 import Annonces from './pages/Annonces';
 // ASSURANCES 
 import Assurances from './pages/Assurances';
+import AbonnementsAssurance from './pages/AbonnementsAssurance';
+import NiveauxAbonnementAssurance from './pages/NiveauxAbonnementAssurance';
+import TarifsAbonnementAssurance from './pages/TarifsAbonnementAssurance';
+import PaiementsAbonnementAssurance from './pages/PaiementsAbonnementAssurance';
 //URGENCES
 import Urgences from './pages/urgences';
 //MEDECIN 
@@ -58,6 +62,7 @@ import FraisAgregateur from './pages/FraisAgregateur';
 import LignesTarifaires from './pages/LignesTarifaires';
 import ParametreAmende from './pages/ParametreAmende';
 import ParametreDelaiLiberation from './pages/ParametreDelaiLiberation';
+import ParametreDelaiConfirmation from './pages/ParametreDelaiConfirmation';
 import RemboursementsCampay from './pages/RemboursementsCampay';
 
 export const router = createBrowserRouter([
@@ -93,6 +98,11 @@ export const router = createBrowserRouter([
           { path: '/annonces', element: <Annonces /> },
           // ASSURANCES 
           { path: '/assurances', element: <Assurances /> },
+          // Abonnements des assurances (guide abonnements v3, §3)
+          { path: '/abonnements-assurance', element: <AbonnementsAssurance /> },
+          { path: '/niveaux-abonnement-assurance', element: <NiveauxAbonnementAssurance /> },
+          { path: '/tarifs-abonnement-assurance', element: <TarifsAbonnementAssurance /> },
+          { path: '/paiements-abonnement-assurance', element: <PaiementsAbonnementAssurance /> },
 
           // URGENCES
           { path: '/urgences', element: <Urgences /> },
@@ -106,6 +116,7 @@ export const router = createBrowserRouter([
           { path: '/lignes-tarifaires', element: <LignesTarifaires /> },
           { path: '/parametre-amende', element: <ParametreAmende /> },
           { path: '/parametre-delai-liberation', element: <ParametreDelaiLiberation /> },
+          { path: '/parametre-delai-confirmation', element: <ParametreDelaiConfirmation /> },
           { path: '/remboursements-campay', element: <RemboursementsCampay /> },
 
           // RENDEZ VOUS 

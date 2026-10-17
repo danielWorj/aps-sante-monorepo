@@ -29,10 +29,12 @@ import ligneTarifaireRoutes from "./src/routes/ligneTarifaire.routes.js";
 import fraisAgregateurRoutes from "./src/routes/fraisAgregateur.routes.js";
 import parametreAmendeRoutes from "./src/routes/parametreAmende.routes.js";
 import parametreDelaiLiberationRoutes from "./src/routes/parametreDelaiLiberation.routes.js";
+import parametreDelaiConfirmationRoutes from "./src/routes/parametreDelaiConfirmation.routes.js";
 import portefeuilleRoutes from "./src/routes/portefeuille.routes.js";
 import retraitRoutes from "./src/routes/retrait.routes.js";
 import remboursementRoutes from "./src/routes/remboursement.routes.js";
 import notificationRoutes from "./src/routes/notification.routes.js";
+import abonnementAssuranceRoutes from "./src/routes/abonnementAssurance.routes.js";
 import { demarrerScheduler } from "./src/lib/scheduler.js";
 
 const app = express();
@@ -147,10 +149,13 @@ app.use("/api", ligneTarifaireRoutes);
 app.use("/api", fraisAgregateurRoutes);
 app.use("/api", parametreAmendeRoutes);
 app.use("/api", parametreDelaiLiberationRoutes);
+app.use("/api", parametreDelaiConfirmationRoutes);
 app.use("/api", portefeuilleRoutes);
 app.use("/api", retraitRoutes);
 app.use("/api", remboursementRoutes);
 app.use("/api", notificationRoutes);
+// Abonnements des assurances : souscription (promoteur) et administration.
+app.use("/api", abonnementAssuranceRoutes);
 // NB : le webhook Stripe (paiementWebhookRoutes) est déjà monté plus
 // haut, avant express.json() — voir commentaire à cet endroit.
 

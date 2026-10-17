@@ -35,6 +35,10 @@ import Assurance from './pages/Assurance';
 import Abonnement from './pages/Abonnement';
 import FicheAssurance from './pages/FicheAssurance';
 import CreationAssurance from './components/assurances/creationAssurance.jsx';
+import GestionAssurance from './pages/GestionAssurance.jsx';
+import MonEspaceAssurance from './pages/MonEspaceAssurance.jsx';
+import PaiementAbonnementSucces from './pages/PaiementAbonnementSucces.jsx';
+import PaiementAbonnementAnnule from './pages/PaiementAbonnementAnnule.jsx';
 
 
 //PORTAIL 
@@ -106,6 +110,18 @@ export const router = createBrowserRouter([
       //PAIEMENTS
       { path: '/paiement/succes', element: <PaiementSucces /> },
       { path: '/paiement/annule', element: <PaiementAnnule /> },
+      // Abonnements assurance (guide abonnements v3, §2.2.4)
+      { path: '/paiement/abonnement/succes', element: <PaiementAbonnementSucces /> },
+      { path: '/paiement/abonnement/annule', element: <PaiementAbonnementAnnule /> },
+      // Espace gestionnaire assurance : connexion requise (le serveur vérifie
+      // en plus que l'utilisateur est l'agent de la fiche ou un admin).
+      {
+        element: <RequireAuth />,
+        children: [
+          { path: '/mon-espace-assurance', element: <MonEspaceAssurance /> },
+          { path: '/assurances/:id/gestion', element: <GestionAssurance /> },
+        ],
+      },
     ],
   },
   {

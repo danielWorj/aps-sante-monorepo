@@ -120,6 +120,46 @@ function SiegePanel({ insurer }) {
   );
 }
 
+/* ============================ VOLET 1 bis — SIÈGE (présence minimale) ============================ */
+// Fiche sans abonnement actif : le serveur n'envoie que la dénomination, le
+// type d'acteur et la localisation (guide abonnements v3, §2.1.3). Encart
+// neutre : pas de badge ni de ton promotionnel.
+function SiegeMinimal({ insurer }) {
+  return (
+    <div className="tab-panel active">
+      <div className="info-card">
+        <h3>
+          <i className="fa-solid fa-building-shield" /> Informations générales
+        </h3>
+        <table className="hours-table" style={{ width: "100%", tableLayout: "fixed" }}>
+          <colgroup>
+            <col style={{ width: "220px" }} />
+            <col />
+          </colgroup>
+          <tbody>
+            <tr>
+              <td>Dénomination</td>
+              <td>{insurer.nom}</td>
+            </tr>
+            <tr>
+              <td>Type d'acteur</td>
+              <td>{LABEL_TYPE_ACTEUR[insurer.type_acteur] || insurer.type_acteur}</td>
+            </tr>
+            <tr>
+              <td>Localisation</td>
+              <td>{[insurer.ville?.nom, insurer.pays?.nom].filter(Boolean).join(", ")}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="minimal-note mt-3 mb-0">
+          <i className="fa-solid fa-circle-info" /> Cette compagnie n'a pas activé sa
+          présence enrichie.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /* ============================ VOLET 2 — ACTIVITÉS ============================ */
 function ActivitesPanel({ activites, chargement }) {
   if (chargement) return <p className="minimal-note">Chargement des activités…</p>;
@@ -271,11 +311,27 @@ function AgencesPanel({ agences, chargement }) {
 }
 
 /* ============================ MISE EN RELATION ============================ */
+function ContactIndisponible() {
+  return (
+    <div className="info-card">
+      <h3>
+        <i className="fa-solid fa-envelope" /> Mise en relation
+      </h3>
+      <p className="minimal-note mb-0">
+        <i className="fa-solid fa-circle-info" /> La mise en relation n'est pas
+        disponible pour cette fiche.
+      </p>
+    </div>
+  );
+}
+
 function ContactSidebar({ insurer }) {
   const [message, setMessage] = useState("");
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState("");
   const [envoye, setEnvoye] = useState(false);
+  // Abonnement expiré pendant la consultation : le serveur refuse (403 PRESENCE_MINIMALE).
+  const [indisponible, setIndisponible] = useState(false);
   const connecte = !!getAccessToken();
 
   const handleSubmit = async (e) => {
@@ -290,11 +346,17 @@ function ContactSidebar({ insurer }) {
       });
       setEnvoye(true);
     } catch (err) {
+      if (err.status === 403 && err.data?.code === "PRESENCE_MINIMALE") {
+        setIndisponible(true);
+        return;
+      }
       setErreur(err.data?.message || err.message || "Échec de l'envoi. Réessayez.");
     } finally {
       setEnvoi(false);
     }
   };
+
+  if (indisponible) return <ContactIndisponible />;
 
   if (envoye) {
     return (
@@ -397,34 +459,44 @@ export default function FicheAssurance() {
     let annule = false;
     setChargementFiche(true);
     setIntrouvable(false);
+    setActiveTab("siege");
+    setActivites([]);
+    setAgences([]);
 
+    // Activités et agences ne sont demandées que si les droits de la fiche
+    // les autorisent (le serveur renverrait [] de toute façon — guide v3, §2.1.2).
     obtenirServiceAssurance(id)
       .then((data) => {
-        if (!annule) setInsurer(data.service_assurance);
+        if (annule) return;
+        const fiche = data.service_assurance;
+        setInsurer(fiche);
+        const droits = fiche?.droits ?? {};
+
+        if (droits.afficher_activites) {
+          setChargementActivites(true);
+          listerActivites(id)
+            .then((d) => { if (!annule) setActivites(d.activites || []); })
+            .catch(() => {})
+            .finally(() => { if (!annule) setChargementActivites(false); });
+        } else {
+          setChargementActivites(false);
+        }
+
+        if (droits.afficher_agences) {
+          setChargementAgences(true);
+          listerAgences(id)
+            .then((d) => { if (!annule) setAgences(d.agences || []); })
+            .catch(() => {})
+            .finally(() => { if (!annule) setChargementAgences(false); });
+        } else {
+          setChargementAgences(false);
+        }
       })
       .catch((err) => {
         if (!annule && err.status === 404) setIntrouvable(true);
       })
       .finally(() => {
         if (!annule) setChargementFiche(false);
-      });
-
-    setChargementActivites(true);
-    listerActivites(id)
-      .then((data) => {
-        if (!annule) setActivites(data.activites || []);
-      })
-      .finally(() => {
-        if (!annule) setChargementActivites(false);
-      });
-
-    setChargementAgences(true);
-    listerAgences(id)
-      .then((data) => {
-        if (!annule) setAgences(data.agences || []);
-      })
-      .finally(() => {
-        if (!annule) setChargementAgences(false);
       });
 
     return () => {
@@ -444,11 +516,14 @@ export default function FicheAssurance() {
     return <FicheIntrouvable />;
   }
 
+  // Le serveur décide (droits), l'interface affiche : rendu conditionnel,
+  // jamais de masquage CSS (guide abonnements v3, principe d'architecture).
+  const droits = insurer.droits ?? {};
   const tabs = [
-    { id: "siege", label: "Siège" },
-    { id: "activites", label: `Activités (${activites.length})` },
-    { id: "agences", label: `Agences (${agences.length})` },
-  ];
+    { id: "siege", label: "Siège", visible: true },
+    { id: "activites", label: `Activités (${activites.length})`, visible: !!droits.afficher_activites },
+    { id: "agences", label: `Agences (${agences.length})`, visible: !!droits.afficher_agences },
+  ].filter((t) => t.visible);
 
   return (
     <>
@@ -498,16 +573,22 @@ export default function FicheAssurance() {
                     <i className="fa-solid fa-hourglass-half" /> En cours de vérification
                   </span>
                 )}
-                <span className="chip chip-complet">Agrément {insurer.agrement}</span>
+                {insurer.agrement && (
+                  <span className="chip chip-complet">Agrément {insurer.agrement}</span>
+                )}
               </div>
             </div>
             <div className="profile-actions">
-              <a href="#mise-en-relation" className="btn btn-primary btn-lg-aps">
-                <i className="fa-solid fa-envelope" /> Mise en relation
-              </a>
-              <a href={`tel:${insurer.telephone}`} className="btn btn-ghost">
-                <i className="fa-solid fa-phone" />
-              </a>
+              {droits.formulaire_contact && (
+                <a href="#mise-en-relation" className="btn btn-primary btn-lg-aps">
+                  <i className="fa-solid fa-envelope" /> Mise en relation
+                </a>
+              )}
+              {insurer.telephone && (
+                <a href={`tel:${insurer.telephone}`} className="btn btn-ghost">
+                  <i className="fa-solid fa-phone" />
+                </a>
+              )}
             </div>
           </div>
         </div>
@@ -534,18 +615,19 @@ export default function FicheAssurance() {
             <div className="col-lg-8">
               <Tabs active={activeTab} onChange={setActiveTab} tabs={tabs} />
 
-              {activeTab === "siege" && <SiegePanel insurer={insurer} />}
-              {activeTab === "activites" && (
+              {activeTab === "siege" &&
+                (droits.siege_complet ? <SiegePanel insurer={insurer} /> : <SiegeMinimal insurer={insurer} />)}
+              {activeTab === "activites" && droits.afficher_activites && (
                 <ActivitesPanel activites={activites} chargement={chargementActivites} />
               )}
-              {activeTab === "agences" && (
+              {activeTab === "agences" && droits.afficher_agences && (
                 <AgencesPanel agences={agences} chargement={chargementAgences} />
               )}
             </div>
 
             {/* Colonne latérale — mise en relation */}
             <div className="col-lg-4" id="mise-en-relation">
-              <ContactSidebar insurer={insurer} />
+              {droits.formulaire_contact ? <ContactSidebar insurer={insurer} /> : <ContactIndisponible />}
             </div>
           </div>
         </div>

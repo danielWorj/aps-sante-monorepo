@@ -4,17 +4,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../components/cards/notifications_bell.dart';
 import '../../../components/navigation/medecin-bottom-navigation-bar.dart';
 import '../../../controllers/notification_controller.dart';
+import 'portail-medecin-agenda.dart';
 import 'portail-medecin-rdv.dart';
 import 'portail-medecin-profil.dart';
 
 /// Shell (Scaffold + MedecinBottomNavigationBar) affiché une fois
 /// connecté avec le rôle "medecin".
 ///
-/// "Rendez-vous" et "Profil" pointent vers les vrais écrans
-/// (`PortailMedecinRdv` / `PortailMedecinProfil`), qui ne gèrent plus
-/// eux-mêmes de barre de navigation : c'est ce shell qui en est
-/// l'unique responsable. "Agenda" et "Aide" restent des placeholders
-/// à remplacer au fur et à mesure qu'ils existent.
+/// "Rendez-vous", "Agenda" et "Profil" pointent vers les vrais écrans
+/// (`PortailMedecinRdv` / `PortailMedecinAgenda` / `PortailMedecinProfil`),
+/// qui ne gèrent pas eux-mêmes de barre de navigation : c'est ce shell qui
+/// en est l'unique responsable. "Aide" reste un placeholder.
 ///
 /// Notifications in-app (politique de fonds v2, phase 6) : il n'y a pas
 /// d'AppBar, la cloche flotte donc en haut à droite, au-dessus de
@@ -36,7 +36,7 @@ class _MedecinHomeShellState extends ConsumerState<MedecinHomeShell> {
 
   static const _pages = <Widget>[
     PortailMedecinRdv(),
-    Center(child: Text('Agenda')), // TODO: écran réel "Agenda"
+    PortailMedecinAgenda(),
     PortailMedecinProfil(),
     Center(child: Text('Aide')), // TODO: écran réel "Aide"
   ];

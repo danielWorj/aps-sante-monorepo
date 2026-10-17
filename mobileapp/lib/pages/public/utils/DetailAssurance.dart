@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../components/components.dart';
 import '../../../controllers/assurance_controller.dart';
 import '../../../models/assurance_models.dart';
+import '../../../repositories/assurance_repository.dart' show PresenceMinimaleException;
 import '../../../utils/mon_espace_navigation.dart';
 import '../publicAcceuil.dart';
 import '../Medecinpage.dart';
@@ -76,6 +77,7 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
   final TextEditingController _agenceSearchController = TextEditingController();
   String _rechercheAgence = '';
   bool _envoiEnCours = false;
+  bool _contactIndisponible = false;
 
   @override
   void initState() {
@@ -167,34 +169,46 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
       BuildContext context,
       AsyncValue<ServiceAssurance> detailAsync,
       ) {
-    final activitesAsync =
-    ref.watch(activitesParServiceProvider(widget.serviceAssuranceId));
-    final agencesAsync =
-    ref.watch(agencesParServiceProvider(widget.serviceAssuranceId));
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
       children: [
         _buildHero(detailAsync),
         const SizedBox(height: 6),
         detailAsync.when(
-          data: (service) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _InsTabRow(
-                tabIndex: _tabIndex,
-                activitesCount: activitesAsync.value?.length ?? 0,
-                agencesCount: agencesAsync.value?.length ?? 0,
-                onChanged: (i) => setState(() => _tabIndex = i),
-              ),
-              const SizedBox(height: 16),
-              if (_tabIndex == 0) _buildSiegeTab(service),
-              if (_tabIndex == 1) _buildActivitesTab(activitesAsync),
-              if (_tabIndex == 2) _buildAgencesTab(agencesAsync),
-              const SizedBox(height: 6),
-              _buildContact(service),
-            ],
-          ),
+          data: (service) {
+            // Le serveur décide (droits), l'app affiche : activités et agences
+            // ne sont même pas demandées si la fiche n'y a pas droit (guide
+            // abonnements v3, §4.1.2). Rendu conditionnel, jamais de masquage.
+            final droits = service.droits;
+            final activitesAsync = droits.afficherActivites
+                ? ref.watch(activitesParServiceProvider(widget.serviceAssuranceId))
+                : null;
+            final agencesAsync = droits.afficherAgences
+                ? ref.watch(agencesParServiceProvider(widget.serviceAssuranceId))
+                : null;
+            final onglet = (_tabIndex == 1 && activitesAsync == null) ||
+                    (_tabIndex == 2 && agencesAsync == null)
+                ? 0
+                : _tabIndex;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _InsTabRow(
+                  tabIndex: onglet,
+                  activitesCount: activitesAsync?.value?.length,
+                  agencesCount: agencesAsync?.value?.length,
+                  onChanged: (i) => setState(() => _tabIndex = i),
+                ),
+                const SizedBox(height: 16),
+                if (onglet == 0)
+                  droits.siegeComplet ? _buildSiegeTab(service) : _buildSiegeMinimal(service),
+                if (onglet == 1 && activitesAsync != null) _buildActivitesTab(activitesAsync),
+                if (onglet == 2 && agencesAsync != null) _buildAgencesTab(agencesAsync),
+                const SizedBox(height: 6),
+                droits.formulaireContact ? _buildContact(service) : _buildContactIndisponible(),
+              ],
+            );
+          },
           loading: () => const Padding(
             padding: EdgeInsets.symmetric(vertical: 40),
             child: Center(child: CircularProgressIndicator()),
@@ -224,13 +238,13 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
           typeActeur: service.typeActeur.libelle,
           ville: service.ville?.nom ?? '—',
           pays: service.pays?.nom ?? '—',
-          agrement: service.agrement,
+          agrement: service.agrement ?? '',
           verifieeAps:
           service.statutVerification == StatutVerificationAssurance.publie,
           couleurLogo: couleurs.couleurLogo,
           fondLogo: couleurs.fondLogo,
           onMiseEnRelation: () => setState(() => _tabIndex = 0),
-          onAppeler: () => _appeler(service.telephone),
+          onAppeler: () => _appeler(service.telephone ?? ''),
         );
       },
       loading: () {
@@ -279,13 +293,13 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
             children: [
               _InsKv(label: 'Dénomination', value: service.nom),
               _InsKv(label: "Type d'acteur", value: service.typeActeur.libelle),
-              _InsKv(label: 'Agrément', value: service.agrement, mono: true),
+              _InsKv(label: 'Agrément', value: service.agrement ?? '—', mono: true),
               _InsKv(
                 label: 'Localisation',
                 value: '${service.ville?.nom ?? '—'}, ${service.pays?.nom ?? '—'}',
               ),
-              _InsKv(label: 'Téléphone', value: service.telephone, mono: true),
-              _InsKv(label: 'Courriel', value: service.email, isLast: true, link: true),
+              _InsKv(label: 'Téléphone', value: service.telephone ?? '—', mono: true),
+              _InsKv(label: 'Courriel', value: service.email ?? '—', isLast: true, link: true),
             ],
           ),
         ),
@@ -300,6 +314,35 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
           ),
         ),
       ],
+    );
+  }
+
+  // ---------------------------------------------------------------
+  // Onglet « Siège » — présence minimale (fiche sans abonnement actif)
+  // Le serveur n'envoie que dénomination, type et localisation ; encart
+  // neutre, sans badge ni ton promotionnel (même texte que le web).
+  // ---------------------------------------------------------------
+  Widget _buildSiegeMinimal(ServiceAssurance service) {
+    return _InsCard(
+      icon: Icons.business_outlined,
+      title: 'Informations générales',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _InsKv(label: 'Dénomination', value: service.nom),
+          _InsKv(label: "Type d'acteur", value: service.typeActeur.libelle),
+          _InsKv(
+            label: 'Localisation',
+            value: '${service.ville?.nom ?? '—'}, ${service.pays?.nom ?? '—'}',
+            isLast: true,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "Cette compagnie n'a pas activé sa présence enrichie.",
+            style: AppTextStyles.body.copyWith(fontSize: 11.5, color: AppColors.inkFaint),
+          ),
+        ],
+      ),
     );
   }
 
@@ -574,9 +617,25 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
   }
 
   // ---------------------------------------------------------------
-  // Mise en relation — toujours visible sous les onglets
+  // Mise en relation indisponible (pas de droit formulaire_contact, ou
+  // 403 PRESENCE_MINIMALE reçu pendant la consultation)
+  // ---------------------------------------------------------------
+  Widget _buildContactIndisponible() {
+    return _InsCard(
+      icon: Icons.forum_outlined,
+      title: 'Mise en relation',
+      child: Text(
+        "La mise en relation n'est pas disponible pour cette fiche.",
+        style: AppTextStyles.body.copyWith(fontSize: 12.5),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------
+  // Mise en relation — visible sous les onglets si la fiche y a droit
   // ---------------------------------------------------------------
   Widget _buildContact(ServiceAssurance service) {
+    if (_contactIndisponible) return _buildContactIndisponible();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -679,11 +738,23 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
         ),
         token: token,
       );
+      // soumettre() passe par AsyncValue.guard : l'erreur est dans l'état,
+      // elle n'est pas relancée. On la relance ici pour la traiter.
+      final etat = ref.read(creationMiseEnRelationControllerProvider);
+      if (etat.hasError) throw etat.error!;
       if (!mounted) return;
       _messageController.clear();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Votre demande a bien été envoyée.')),
       );
+    } on PresenceMinimaleException {
+      // Abonnement expiré pendant la consultation : le serveur refuse.
+      if (!mounted) return;
+      setState(() => _contactIndisponible = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("La mise en relation n'est pas disponible pour cette fiche.")),
+      );
+      ref.invalidate(serviceAssuranceParIdProvider(widget.serviceAssuranceId));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -781,13 +852,20 @@ class _InsTabRow extends StatelessWidget {
   });
 
   final int tabIndex;
-  final int activitesCount;
-  final int agencesCount;
+
+  /// `null` = onglet absent (la fiche n'a pas le droit correspondant).
+  final int? activitesCount;
+  final int? agencesCount;
   final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final labels = ['Siège', 'Activités ($activitesCount)', 'Agences ($agencesCount)'];
+    // (index d'onglet, libellé) — seuls les onglets autorisés sont rendus.
+    final onglets = <(int, String)>[
+      (0, 'Siège'),
+      if (activitesCount != null) (1, 'Activités ($activitesCount)'),
+      if (agencesCount != null) (2, 'Agences ($agencesCount)'),
+    ];
 
     return Container(
       decoration: const BoxDecoration(
@@ -795,7 +873,7 @@ class _InsTabRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          for (var i = 0; i < labels.length; i++)
+          for (final (i, libelle) in onglets)
             Padding(
               padding: const EdgeInsets.only(right: 18),
               child: GestureDetector(
@@ -811,7 +889,7 @@ class _InsTabRow extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    labels[i],
+                    libelle,
                     style: AppTextStyles.buttonLabel.copyWith(
                       fontSize: 12.5,
                       color: tabIndex == i ? AppColors.green700 : AppColors.inkFaint,

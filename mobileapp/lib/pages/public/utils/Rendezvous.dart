@@ -10,13 +10,16 @@ import 'package:riverpod/riverpod.dart';
 import '../.././../components/components.dart';
 import './Confirmationrdv.dart';
 import '../../../components/buttons/bouton_payer_rdv.dart';
+import '../../../controllers/agenda_controller.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/paiement_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
+import '../../../models/agenda_models.dart';
 import '../../../models/authentification_models.dart';
 import '../../../models/rendez_vous_models.dart';
 import '../../../models/referentiel_models.dart';
 import '../../../repositories/referentiel_repository.dart';
+import '../../../repositories/rendez_vous_repository.dart' as rdv_repo show ApiException;
 import '../../../utils/api_client.dart';
 
 /// Container Riverpod utilisé par cet écran.
@@ -36,13 +39,25 @@ final ProviderContainer rendezVousProviderContainer = ProviderContainer();
 
 /// Un horaire proposé au sein d'un [CreneauJour] — `.slot` de la maquette.
 class CreneauHoraire {
-  const CreneauHoraire({required this.heure, this.disponible = true});
+  const CreneauHoraire({
+    required this.heure,
+    this.disponible = true,
+    this.creneauId,
+    this.debut,
+  });
 
-  /// Ex: « 09:00 ».
+  /// Ex: « 09:00 » (fuseau de l'appareil).
   final String heure;
 
   /// `false` si le créneau est déjà pris (`.slot.taken` — non sélectionnable).
   final bool disponible;
+
+  /// Identifiant du créneau de l'agenda du médecin (CreneauAgenda), envoyé
+  /// tel quel à POST /rendez-vous (`creneau_id`).
+  final String? creneauId;
+
+  /// Instant réel de début du créneau.
+  final DateTime? debut;
 }
 
 /// Un jour proposé dans le sélecteur de dates — `.date-pill` / `.slot-grid`.
@@ -64,32 +79,40 @@ class CreneauJour {
 
   bool get aDesCreneauxLibres => creneaux.any((c) => c.disponible);
 
-  /// Jeu de données de démonstration — reprend l'exemple de la maquette
-  /// (5 jours, créneaux 09:00 → 16:30, un créneau déjà pris).
-  ///
-  /// À remplacer par un appel réel (GET /medecins/:id/creneaux) dès que le
-  /// module Rendez-vous/Agenda existe côté API — voir
-  /// [RendezVousPage.onChargerCreneaux].
-  static List<CreneauJour> demo({DateTime? depuis}) {
-    final base = depuis ?? DateTime.now();
-    const heuresType = ['09:00', '10:00', '11:30', '14:30', '15:00', '16:30'];
-    return List.generate(5, (i) {
-      final jour = base.add(Duration(days: i));
-      return CreneauJour(
-        date: jour,
-        creneaux: [
-          for (var h = 0; h < heuresType.length; h++)
-            CreneauHoraire(
-              heure: heuresType[h],
-              // Un créneau sur trois indisponible, pour illustrer l'état
-              // `.taken` de la maquette.
-              disponible: (i + h) % 3 != 0,
-            ),
-        ],
-      );
-    });
+  /// Regroupe les créneaux réservables de l'agenda (déjà triés par heure)
+  /// en jours locaux. Seuls les jours qui ont au moins un créneau libre
+  /// apparaissent : ce sont les jours de consultation déclarés par le
+  /// médecin, moins les créneaux déjà demandés ou confirmés.
+  static List<CreneauJour> depuisAgenda(List<CreneauAgenda> creneaux) {
+    final parJour = <String, List<CreneauAgenda>>{};
+    for (final c in creneaux) {
+      parJour.putIfAbsent(c.cleJour, () => []).add(c);
+    }
+    return [
+      for (final liste in parJour.values)
+        CreneauJour(
+          date: liste.first.instantUtc!.toLocal(),
+          creneaux: [
+            for (final c in liste)
+              CreneauHoraire(
+                heure: c.libelleHeure,
+                creneauId: c.creneauId,
+                debut: c.instantUtc!.toLocal(),
+              ),
+          ],
+        ),
+    ];
   }
 }
+
+/// Codes renvoyés par POST /rendez-vous quand le créneau choisi n'est plus
+/// réservable (pris entre-temps par un autre patient, fermé, passé).
+const Set<String> _codesCreneauPerdu = {
+  'CRENEAU_INDISPONIBLE',
+  'CRENEAU_PASSE',
+  'CRENEAU_HORS_AGENDA',
+  'CRENEAU_INTROUVABLE',
+};
 
 /// Option affichée dans le sélecteur « Pays » du formulaire de création
 /// de compte intégré à [RendezVousPage] (voir [RendezVousPage.paysDisponibles]).
@@ -155,12 +178,13 @@ enum _RdvTab { profil, disponibilites, avis }
 ///     créneau choisi. Réservé à un compte patient authentifié — [token]
 ///     est donc requis pour réserver (le patient_id est déduit du token
 ///     côté backend, jamais saisi ici).
-///   - **Créneaux** — [onChargerCreneaux] → GET /medecins/:id/creneaux.
-///     ⚠️ Ce endpoint (module Agenda) n'existe pas encore côté API dans
-///     ce projet : tant qu'aucun callback n'est fourni, l'écran retombe
-///     sur des données de démonstration ([CreneauJour.demo]) — à
-///     remplacer dès que l'Agenda existera, sans rien changer au reste
-///     de l'écran (même contrat `Future<List<CreneauJour>>`).
+///   - **Créneaux** — par défaut, GET /medecins/:id/agenda?libres=true
+///     ([creneauxReservablesProvider] / [chargerCreneauxReservables]) : seuls
+///     les jours et horaires déclarés par le médecin et encore libres sont
+///     proposés — un créneau déjà demandé par un autre patient (en attente
+///     de paiement) ou confirmé n'apparaît pas. [onChargerCreneaux] permet
+///     de remplacer ce chargement. Si le créneau est pris entre-temps
+///     (409), la grille est rechargée.
 ///
 /// ⚠️ **Patient sans compte** — si [token] est `null` (et qu'aucun
 /// [onConfirmerReservation] personnalisé n'est fourni), l'écran affiche
@@ -262,11 +286,9 @@ class RendezVousPage extends StatefulWidget {
   /// activée — voir CreerRendezVousPayload).
   final bool teleconsultationDisponible;
 
-  /// Charge les créneaux disponibles pour ce médecin. Si `null`, un jeu de
-  /// données de démonstration est utilisé ([CreneauJour.demo]).
-  ///
-  /// À brancher sur GET /medecins/:id/creneaux dès que le module Agenda
-  /// existera côté API (hors périmètre de rendez_vous_repository.dart).
+  /// Charge les créneaux disponibles pour ce médecin. Si `null`, les
+  /// créneaux réservables de son agenda sont chargés
+  /// (GET /medecins/:id/agenda?libres=true, voir [CreneauJour.depuisAgenda]).
   final Future<List<CreneauJour>> Function(String medecinId)?
   onChargerCreneaux;
 
@@ -437,7 +459,13 @@ class _RendezVousPageState extends State<RendezVousPage> {
     try {
       final jours = widget.onChargerCreneaux != null
           ? await widget.onChargerCreneaux!(widget.medecinId)
-          : CreneauJour.demo();
+          : CreneauJour.depuisAgenda(
+              await chargerCreneauxReservables(
+                _container.read(agendaRepositoryProvider),
+                widget.medecinId,
+                jours: horizonCreneauxReservablesJours,
+              ),
+            );
       if (!widget.teleconsultationDisponible) {
         _typeChoisi = TypeRdv.physique;
       }
@@ -546,6 +574,18 @@ class _RendezVousPageState extends State<RendezVousPage> {
         token: token!,
         onCreee: (rdv) => rdvCree = rdv,
       );
+    } on rdv_repo.ApiException catch (e) {
+      succes = false;
+      final code = e.donnees?['code'];
+      if (code is String && _codesCreneauPerdu.contains(code)) {
+        // Créneau pris entre-temps par un autre patient (ou fermé) : on
+        // recharge la grille pour ne proposer que des créneaux libres.
+        _afficherErreur(e.message);
+        if (mounted) setState(() => _reservationEnCours = false);
+        await _charger();
+        return;
+      }
+      _afficherErreur('Échec de la réservation : ${e.message}');
     } catch (e) {
       succes = false;
       final message = e is ErreurAuthentification ? e.message : '$e';
@@ -649,7 +689,12 @@ class _RendezVousPageState extends State<RendezVousPage> {
       medecinId: widget.medecinId,
       structureId: widget.structureId,
       typeRdv: _typeChoisi,
-      dateCreneau: _combinerDateEtHeure(jour.date, creneau.heure),
+      // Le créneau de l'agenda fixe la date côté serveur ; la date composée
+      // n'est envoyée que pour un chargement personnalisé sans identifiant.
+      creneauId: creneau.creneauId,
+      dateCreneau: creneau.creneauId == null
+          ? (creneau.debut ?? _combinerDateEtHeure(jour.date, creneau.heure))
+          : null,
       motif: _motifController.text.trim().isEmpty
           ? null
           : _motifController.text.trim(),
@@ -746,6 +791,7 @@ class _RendezVousPageState extends State<RendezVousPage> {
               : 'Au cabinet',
           tarifFcfa: widget.tarifFcfa,
           codeUnique: rdv?.codeUnique,
+          echeanceConfirmation: rdv?.echeanceConfirmation,
           compteVientDetreCree: compteVientDetreCree,
           patientPrenom:
           compteVientDetreCree ? _prenomCtrl.text.trim() : null,

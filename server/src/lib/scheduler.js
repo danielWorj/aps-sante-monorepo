@@ -9,8 +9,14 @@ import cron from "node-cron";
 import { detecterCreneauxDepasses } from "../jobs/detecterCreneauxDepasses.job.js";
 import { traiterReprogrammations } from "../jobs/traiterReprogrammations.job.js";
 import { libererFondsEchusJob } from "../jobs/libererFondsEchus.job.js";
+import { expirerRdvNonConfirmesJob, synchroniserAgendasJob } from "../jobs/agenda.job.js";
 import { reconcilierCampayEnAttente } from "../services/paiementCampay.service.js";
 import { reconcilierRetraitsEnCours } from "../services/retrait.service.js";
+import {
+  expirerAbonnementsEchus,
+  envoyerRappelsEcheance,
+  annulerBrouillonsPerimes,
+} from "../services/cycleAbonnementAssurance.service.js";
 
 // Fréquence non précisée par le cahier des charges ni par le plan
 // ("fréquence courte, ex. toutes les 15 min") — valeur par défaut
@@ -34,6 +40,19 @@ const CRON_RECONCILIATION_RETRAITS = process.env.CRON_RECONCILIATION_RETRAITS ||
 // termine_le + T est échu. Précision de libération ≈ la fréquence du cron
 // (5 min par défaut), réglable sans redéploiement de code.
 const CRON_LIBERATION_FONDS = process.env.CRON_LIBERATION_FONDS || "*/5 * * * *";
+
+// Agenda : annulation des RDV non confirmés dans le délai du pays (précision
+// ≈ la fréquence du cron, 5 min par défaut) et prolongation nocturne de
+// l'horizon des cases générées depuis le gabarit (00h40 UTC par défaut ; un
+// passage a aussi lieu au démarrage).
+const CRON_EXPIRATION_CONFIRMATION = process.env.CRON_EXPIRATION_CONFIRMATION || "*/5 * * * *";
+const CRON_SYNCHRO_AGENDAS = process.env.CRON_SYNCHRO_AGENDAS || "40 0 * * *";
+
+// Abonnements assurance (guide v3, §1.4.4) : expiration après grâce et
+// rappels d'échéance une fois par jour (00h10 UTC par défaut, dates en
+// jours UTC) ; brouillons périmés (> 24 h) chaque heure.
+const CRON_CYCLE_ABONNEMENTS_ASSURANCE = process.env.CRON_CYCLE_ABONNEMENTS_ASSURANCE || "10 0 * * *";
+const CRON_BROUILLONS_ABONNEMENTS_ASSURANCE = process.env.CRON_BROUILLONS_ABONNEMENTS_ASSURANCE || "25 * * * *";
 
 /**
  * Démarre tous les jobs planifiés du back-end. Appelé une seule fois,
@@ -76,7 +95,43 @@ export function demarrerScheduler() {
     });
   });
 
+  cron.schedule(CRON_EXPIRATION_CONFIRMATION, () => {
+    expirerRdvNonConfirmesJob().catch((err) => {
+      console.error("[scheduler] Échec expiration des RDV non confirmés :", err);
+    });
+  });
+
+  const synchroniserAgendas = () =>
+    synchroniserAgendasJob().catch((err) => {
+      console.error("[scheduler] Échec synchronisation des agendas :", err);
+    });
+  cron.schedule(CRON_SYNCHRO_AGENDAS, synchroniserAgendas, { timezone: "UTC" });
+  synchroniserAgendas();
+
+  cron.schedule(
+    CRON_CYCLE_ABONNEMENTS_ASSURANCE,
+    async () => {
+      try {
+        await expirerAbonnementsEchus();
+      } catch (err) {
+        console.error("[scheduler] Échec expiration des abonnements assurance :", err);
+      }
+      try {
+        await envoyerRappelsEcheance();
+      } catch (err) {
+        console.error("[scheduler] Échec rappels d'échéance des abonnements assurance :", err);
+      }
+    },
+    { timezone: "UTC" }
+  );
+
+  cron.schedule(CRON_BROUILLONS_ABONNEMENTS_ASSURANCE, () => {
+    annulerBrouillonsPerimes().catch((err) => {
+      console.error("[scheduler] Échec annulation des brouillons d'abonnement assurance :", err);
+    });
+  });
+
   console.info(
-    `[scheduler] Démarré — detecterCreneauxDepasses planifié (${CRON_DETECTION_DEFAILLANCE}), traiterReprogrammations planifié (${CRON_REPROGRAMMATIONS}), reconcilierCampayEnAttente planifié (${CRON_RECONCILIATION_CAMPAY}), reconcilierRetraitsEnCours planifié (${CRON_RECONCILIATION_RETRAITS}), libererFondsEchus planifié (${CRON_LIBERATION_FONDS}).`
+    `[scheduler] Démarré — detecterCreneauxDepasses planifié (${CRON_DETECTION_DEFAILLANCE}), traiterReprogrammations planifié (${CRON_REPROGRAMMATIONS}), reconcilierCampayEnAttente planifié (${CRON_RECONCILIATION_CAMPAY}), reconcilierRetraitsEnCours planifié (${CRON_RECONCILIATION_RETRAITS}), libererFondsEchus planifié (${CRON_LIBERATION_FONDS}), expiration RDV non confirmés (${CRON_EXPIRATION_CONFIRMATION}), synchronisation agendas (${CRON_SYNCHRO_AGENDAS}), cycle abonnements assurance (${CRON_CYCLE_ABONNEMENTS_ASSURANCE}), brouillons abonnements assurance (${CRON_BROUILLONS_ABONNEMENTS_ASSURANCE}).`
   );
 }

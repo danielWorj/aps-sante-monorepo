@@ -44,6 +44,7 @@ import prisma from "../lib/prisma.js";
 import { annulerPaymentIntentsRdv } from "../lib/stripeService.js";
 import { EVENEMENTS } from "./politiqueFonds.service.js";
 import { appliquerEvenementFonds } from "./traitementFonds.service.js";
+import { libererCreneauxDuRdv } from "./agendaCreneau.service.js";
 
 // « conteste » : litiges hors périmètre (ne pas toucher). Statuts terminaux :
 // rien à annuler. « a_reprogrammer » N'est PAS ici : il est annulable (point G).
@@ -63,7 +64,7 @@ const STATUTS_NON_ANNULABLES = {
  * résiduel (paiement déjà en cours) est rattrapé par le webhook :
  * finaliserPaiement rembourse (§6) tout paiement arrivé sur un RDV annulé.
  */
-async function neutraliserPaiementsEnCours(rdv_id) {
+export async function neutraliserPaiementsEnCours(rdv_id) {
   try {
     const annules = await annulerPaymentIntentsRdv(rdv_id);
     const transactionIds = annules.map((pi) => pi.metadata?.transaction_id).filter(Boolean);
@@ -187,6 +188,15 @@ export async function traiterAnnulation(
           "aucune opération supplémentaire n'a été effectuée.",
       },
     };
+  }
+
+  // Agenda : la case réservée par ce RDV réapparaît dans la grille. Non
+  // bloquant (l'annulation et ses fonds sont déjà traités) : en cas d'échec,
+  // libererCreneauxOrphelins (cron d'expiration) rattrape la case.
+  try {
+    await libererCreneauxDuRdv(rdv.rdv_id);
+  } catch (err) {
+    console.error(`[annulation] Libération du créneau impossible pour le rdv ${rdv.rdv_id} :`, err.message);
   }
 
   return {

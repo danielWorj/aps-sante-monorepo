@@ -103,7 +103,7 @@ class _FactureRecapitulativeState extends State<FactureRecapitulative> {
       if (e.specialite != null) ('Spécialité', e.specialite!),
       if (e.pays != null) ('Pays', e.pays!),
       if (e.ville != null) ('Ville', e.ville!),
-      if (e.dateCreneau != null) ('Rendez-vous', dateHeureUtc(e.dateCreneau)),
+      if (e.dateCreneau != null) ('Rendez-vous', dateHeure(e.dateCreneau)),
     ];
 
     return Semantics(

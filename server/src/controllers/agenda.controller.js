@@ -26,13 +26,23 @@
 // voir les créneaux libres avant de choisir de prendre rendez-vous.
 //
 // ⚠️ statut "reserve" : jamais positionné à la main via ce module —
-// c'est rendezVous.controller.js (creerRendezVous / changerStatutRendezVous)
-// qui rattache/détache un CreneauAgenda à un rendez-vous et fait
+// c'est agendaCreneau.service.js (appelé à la création, au déplacement et
+// à l'annulation d'un rendez-vous, et par le cron d'expiration des RDV non
+// confirmés) qui rattache/détache un CreneauAgenda à un rendez-vous et fait
 // basculer son statut en conséquence. modifierCreneauAgenda ci-dessous
 // refuse explicitement "reserve" et refuse toute modification d'un
 // créneau déjà occupé (rdv_id renseigné) — voir plus bas.
+//
+// Gabarit -> cases : toute modification du gabarit (ajout, retrait,
+// remplacement de la semaine) re-synchronise aussitôt les cases à venir
+// (synchroniserCreneauxMedecin) ; un passage nocturne prolonge l'horizon.
 
 import prisma from "../lib/prisma.js";
+import {
+  avecInstants,
+  fuseauDuMedecin,
+  synchroniserCreneauxMedecin,
+} from "../services/agendaCreneau.service.js";
 
 const JOURS_SEMAINE = [
   "lundi",
@@ -112,6 +122,21 @@ async function autoriserGestionAgenda(req, res, medecinId) {
   }
 
   return { medecin, estAdministrateur };
+}
+
+/**
+ * Re-synchronise les cases à venir après une modification du gabarit. Non
+ * bloquant : le gabarit est enregistré quoi qu'il arrive, le passage
+ * nocturne rattrape un échec.
+ * @returns {Promise<{ crees: number, supprimes: number } | null>}
+ */
+async function synchroniserApresGabarit(medecin_id) {
+  try {
+    return await synchroniserCreneauxMedecin(medecin_id);
+  } catch (err) {
+    console.error(`[agenda] Synchronisation des créneaux impossible pour le médecin ${medecin_id} :`, err.message);
+    return null;
+  }
 }
 
 /* ===================================================================
@@ -272,8 +297,9 @@ export async function creerDisponibiliteMedecin(req, res, next) {
       data: { medecin_id: req.params.medecinId, horaire_id, jour_semaine },
       include: { horaire: { select: { horaire_id: true, heure_debut: true, heure_fin: true } } },
     });
+    const synchronisation = await synchroniserApresGabarit(req.params.medecinId);
 
-    return res.status(201).json({ message: "Disponibilité ajoutée.", disponibilite });
+    return res.status(201).json({ message: "Disponibilité ajoutée.", disponibilite, synchronisation });
   } catch (err) {
     if (err.code === "P2002") {
       return res.status(409).json({ message: "Cette disponibilité existe déjà pour ce médecin." });
@@ -304,7 +330,79 @@ export async function supprimerDisponibiliteMedecin(req, res, next) {
     if (!autorisation) return;
 
     await prisma.disponibiliteMedecin.delete({ where: { disponibilite_id: req.params.disponibiliteId } });
-    return res.status(200).json({ message: "Disponibilité supprimée." });
+    const synchronisation = await synchroniserApresGabarit(disponibilite.medecin_id);
+    return res.status(200).json({ message: "Disponibilité supprimée.", synchronisation });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PUT /api/medecins/:medecinId/disponibilites
+ * Médecin propriétaire ou admin/superadmin. REMPLACE tout le gabarit
+ * hebdomadaire en une fois (grille « jours × horaires » de l'écran agenda).
+ * Body : { disponibilites: [{ jour_semaine, horaire_id }, ...] } — une liste
+ * vide efface le gabarit. Les cases à venir sont re-synchronisées : les
+ * tranches ajoutées apparaissent, les tranches retirées disparaissent, sauf
+ * celles déjà réservées par un rendez-vous (jamais supprimées).
+ */
+export async function remplacerDisponibilitesMedecin(req, res, next) {
+  try {
+    const autorisation = await autoriserGestionAgenda(req, res, req.params.medecinId);
+    if (!autorisation) return;
+
+    const { disponibilites } = req.body ?? {};
+    if (!Array.isArray(disponibilites)) {
+      return res.status(400).json({ message: "Champ requis : disponibilites (tableau de { jour_semaine, horaire_id })." });
+    }
+    if (disponibilites.length > JOURS_SEMAINE.length * 48) {
+      return res.status(400).json({ message: "Trop de disponibilités dans une seule requête." });
+    }
+
+    const cles = new Map();
+    for (const d of disponibilites) {
+      if (!d || !JOURS_SEMAINE.includes(d.jour_semaine) || typeof d.horaire_id !== "string" || !d.horaire_id) {
+        return res.status(400).json({
+          message: `Chaque disponibilité doit porter un jour_semaine (${JOURS_SEMAINE.join(", ")}) et un horaire_id.`,
+        });
+      }
+      cles.set(`${d.jour_semaine}|${d.horaire_id}`, { jour_semaine: d.jour_semaine, horaire_id: d.horaire_id });
+    }
+    const souhaitees = [...cles.values()];
+
+    const idsHoraires = [...new Set(souhaitees.map((d) => d.horaire_id))];
+    const horairesConnus = await prisma.horaire.count({ where: { horaire_id: { in: idsHoraires } } });
+    if (horairesConnus !== idsHoraires.length) {
+      return res.status(400).json({ message: "horaire_id invalide : au moins un horaire est introuvable." });
+    }
+
+    const medecin_id = req.params.medecinId;
+    await prisma.$transaction(async (tx) => {
+      const existantes = await tx.disponibiliteMedecin.findMany({ where: { medecin_id } });
+      const aRetirer = existantes
+        .filter((e) => !cles.has(`${e.jour_semaine}|${e.horaire_id}`))
+        .map((e) => e.disponibilite_id);
+      if (aRetirer.length) {
+        await tx.disponibiliteMedecin.deleteMany({ where: { disponibilite_id: { in: aRetirer } } });
+      }
+      await tx.disponibiliteMedecin.createMany({
+        data: souhaitees.map((d) => ({ medecin_id, ...d })),
+        skipDuplicates: true,
+      });
+    });
+
+    const synchronisation = await synchroniserApresGabarit(medecin_id);
+    const gabarit = await prisma.disponibiliteMedecin.findMany({
+      where: { medecin_id },
+      include: { horaire: { select: { horaire_id: true, heure_debut: true, heure_fin: true } } },
+      orderBy: [{ jour_semaine: "asc" }, { horaire: { heure_debut: "asc" } }],
+    });
+
+    return res.status(200).json({
+      message: "Horaires de la semaine enregistrés.",
+      disponibilites: gabarit,
+      synchronisation,
+    });
   } catch (err) {
     next(err);
   }
@@ -321,11 +419,23 @@ export async function supprimerDisponibiliteMedecin(req, res, next) {
  * rendez-vous. Filtres optionnels :
  *   ?date_debut=AAAA-MM-JJ&date_fin=AAAA-MM-JJ (bornes incluses)
  *   ?statut=disponible|reserve|bloque
+ *   ?libres=true : uniquement les cases réservables par un patient
+ *     (« disponible », sans rendez-vous, heure non passée). C'est ce
+ *     filtre qu'utilise la grille de prise de rendez-vous : une case
+ *     demandée par un autre patient (RDV en attente de confirmation) ou
+ *     confirmée n'y figure pas.
+ * Chaque case porte `debut` / `fin` (ISO, instants réels calculés dans le
+ * fuseau du pays d'exercice du médecin), à afficher tels quels.
  * rdv_id n'est jamais exposé ici (voir SELECTION_CRENEAU_PUBLIC).
  */
 export async function listerCreneauxAgenda(req, res, next) {
   try {
-    const { date_debut, date_fin, statut } = req.query;
+    const { date_debut, date_fin, statut, libres } = req.query;
+
+    if (libres !== undefined && libres !== "true" && libres !== "false") {
+      return res.status(400).json({ message: "libres invalide. Valeurs acceptées : true, false." });
+    }
+    const seulementLibres = libres === "true";
 
     if (statut !== undefined && !["disponible", "reserve", "bloque"].includes(statut)) {
       return res.status(400).json({
@@ -337,17 +447,29 @@ export async function listerCreneauxAgenda(req, res, next) {
     if (date_debut) filtreDate.gte = new Date(date_debut);
     if (date_fin) filtreDate.lte = new Date(date_fin);
 
+    if (seulementLibres && statut && statut !== "disponible") {
+      return res.status(200).json({ creneaux: [] });
+    }
+
     const creneaux = await prisma.creneauAgenda.findMany({
       where: {
         medecin_id: req.params.medecinId,
         ...(Object.keys(filtreDate).length > 0 ? { date: filtreDate } : {}),
         ...(statut ? { statut } : {}),
+        ...(seulementLibres ? { statut: "disponible", rdv_id: null } : {}),
       },
       orderBy: [{ date: "asc" }, { horaire: { heure_debut: "asc" } }],
       ...SELECTION_CRENEAU_PUBLIC,
     });
 
-    return res.status(200).json({ creneaux });
+    const fuseau = await fuseauDuMedecin(req.params.medecinId);
+    let resultat = avecInstants(creneaux, fuseau);
+    if (seulementLibres) {
+      const maintenant = Date.now();
+      resultat = resultat.filter((c) => new Date(c.debut).getTime() > maintenant);
+    }
+
+    return res.status(200).json({ creneaux: resultat, fuseau_horaire: fuseau });
   } catch (err) {
     next(err);
   }
@@ -366,7 +488,8 @@ export async function obtenirCreneauAgenda(req, res, next) {
     if (!creneau) {
       return res.status(404).json({ message: "Créneau introuvable." });
     }
-    return res.status(200).json({ creneau });
+    const [avecBornes] = avecInstants([creneau], await fuseauDuMedecin(creneau.medecin_id));
+    return res.status(200).json({ creneau: avecBornes });
   } catch (err) {
     next(err);
   }
@@ -566,6 +689,9 @@ export async function modifierCreneauAgenda(req, res, next) {
  * rendez-vous y est rattaché (rdv_id) : il faut d'abord annuler le
  * rendez-vous via le module Rendez-vous, jamais supprimer le créneau
  * sous ses pieds.
+ * Une case GÉNÉRÉE depuis le gabarit n'est pas supprimée mais FERMÉE
+ * (statut « bloque », origine « manuel ») : supprimée, elle serait
+ * recréée par la synchronisation suivante.
  */
 export async function supprimerCreneauAgenda(req, res, next) {
   try {
@@ -581,6 +707,15 @@ export async function supprimerCreneauAgenda(req, res, next) {
       return res.status(409).json({
         message: "Ce créneau est occupé par un rendez-vous : annulez le rendez-vous avant de le supprimer.",
       });
+    }
+
+    if (creneau.origine === "genere") {
+      const ferme = await prisma.creneauAgenda.update({
+        where: { creneau_id: req.params.id },
+        data: { statut: "bloque", origine: "manuel" },
+        ...SELECTION_CRENEAU_PUBLIC,
+      });
+      return res.status(200).json({ message: "Créneau fermé.", creneau: ferme });
     }
 
     await prisma.creneauAgenda.delete({ where: { creneau_id: req.params.id } });

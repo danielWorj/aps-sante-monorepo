@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import logoApsa from '../assets/img/logoapsa.jpeg';
+import { useAuth } from '../context/AuthContext';
 
 function navLinkClass({ isActive }) {
   return isActive ? 'active' : undefined;
@@ -10,6 +11,7 @@ export default function Navbar() {
   const [open, setOpen] = useState(false); // menu mobile
   const [servicesOpen, setServicesOpen] = useState(false); // dropdown Services
   const servicesRef = useRef(null);
+  const { user } = useAuth();
 
   // Ferme le dropdown Services si on clique en dehors
   useEffect(() => {
@@ -106,6 +108,13 @@ export default function Navbar() {
                 <i className="fa-solid fa-coins" /> Abonnement
               </NavLink>
             </li>
+            {user?.role === 'agent_assurance' && (
+              <li>
+                <NavLink to="/mon-espace-assurance" className={navLinkClass} onClick={closeAll}>
+                  <i className="fa-solid fa-building-shield" /> Mon espace
+                </NavLink>
+              </li>
+            )}
             <li>
               <NavLink to="/login" className={navLinkClass} onClick={closeAll}>
                 <i className="fa-solid fa-sign-in-alt" /> Login

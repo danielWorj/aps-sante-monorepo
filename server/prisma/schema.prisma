@@ -201,6 +201,13 @@ enum TypeNotification {
   // notifié à ce moment-là seulement (D8) — jamais avant paiement, ni à la
   // création, ni à l'annulation ou l'expiration d'un RDV non payé.
   rdv_paye
+  // Abonnements assurance (guide v3) : activation, rappels d'échéance
+  // J-30 / J-7 / J-1. Destinataires : les agents de la fiche.
+  abonnement_assurance_active
+  abonnement_assurance_echeance
+  // Agenda : le RDV demandé par le PATIENT n'a pas été confirmé (payé) dans
+  // le délai du pays ; il est annulé et le créneau est libéré.
+  rdv_confirmation_expiree
 }
 
 // Motif d'annulation d'un rendez-vous — liste fermée exigée par la
@@ -213,6 +220,10 @@ enum MotifAnnulation {
   erreur_reservation
   professionnel_indisponible
   autre
+  // Agenda : annulation AUTOMATIQUE d'un RDV « cree » non confirmé
+  // (non payé) dans le délai parametre_delai_confirmation. Jamais choisi
+  // par un utilisateur (absent de la liste exposée par l'API).
+  delai_confirmation_expire
 }
 
 // -----------------------------------------------------------------
@@ -286,6 +297,12 @@ model Pays {
   langue_id         String               @db.Uuid
   statut_activation StatutActivationPays
 
+  // Agenda : fuseau horaire IANA du pays (ex. "Africa/Douala"). Les
+  // tranches d'Horaire et les dates de CreneauAgenda sont des heures
+  // MURALES du médecin ; ce fuseau sert à les convertir en instant
+  // (RendezVous.date_creneau) — voir src/lib/fuseauHoraire.js.
+  fuseau_horaire    String               @default("Africa/Douala") @db.VarChar(64)
+
   devise Devise @relation(fields: [devise_id], references: [devise_id])
   langue Langue @relation(fields: [langue_id], references: [langue_id])
 
@@ -326,6 +343,11 @@ model Pays {
   // Libération différée des fonds : délai T (heures) par pays, versionné
   // (voir ParametreDelaiLiberation plus bas).
   parametres_delai_liberation ParametreDelaiLiberation[]
+
+  // Agenda : délai (heures) pendant lequel un RDV « cree » (non payé)
+  // bloque son créneau avant annulation automatique, par pays, versionné
+  // (voir ParametreDelaiConfirmation plus bas).
+  parametres_delai_confirmation ParametreDelaiConfirmation[]
 
   // Abonnements assurance : grille tarifaire et configuration (gratuité
   // d'amorçage, durée de grâce) par pays.
@@ -1912,6 +1934,17 @@ model RendezVous {
   tentatives_code_echouees Int       @default(0)
   code_verrouille_jusqu_a  DateTime?
 
+  // Agenda — réservation d'un créneau en attente de confirmation (statut
+  // « cree », non payé). FAITS : date de création du RDV et délai H (en
+  // heures) figé à la création, lu dans parametre_delai_confirmation
+  // (4 h par défaut). L'échéance se RECALCULE (min(date_creation + H,
+  // date_creneau), voir src/lib/delaiConfirmation.js), jamais stockée.
+  // À l'échéance, le cron annule le RDV (motif delai_confirmation_expire)
+  // et le créneau redevient disponible. NULL = RDV antérieur à ce module :
+  // le délai actif du pays s'applique.
+  date_creation             DateTime @default(now())
+  delai_confirmation_heures Int?
+
   patient   Patient         @relation(fields: [patient_id], references: [patient_id])
   medecin   Medecin         @relation(fields: [medecin_id], references: [medecin_id])
   structure StructureSante? @relation(fields: [structure_id], references: [structure_id])
@@ -1946,6 +1979,7 @@ model RendezVous {
   @@index([patient_id])
   @@index([medecin_id])
   @@index([structure_id])
+  @@index([statut])
   @@map("rendez_vous")
 }
 
@@ -2105,6 +2139,31 @@ model CreneauAgenda {
   @@index([horaire_id])
   @@index([date])
   @@map("creneau_agenda")
+}
+
+// -----------------------------------------------------------------
+// ParametreDelaiConfirmation : délai H (heures) pendant lequel un
+// rendez-vous « cree » (pas encore confirmé = pas encore payé) garde
+// son créneau réservé. Passé ce délai (ou l'heure du créneau, si elle
+// arrive avant), le RDV est annulé automatiquement et le créneau
+// redevient visible. PAR PAYS (pays d'exercice du médecin), VERSIONNÉ
+// (même mécanique que ParametreDelaiLiberation : jamais d'UPDATE, on
+// désactive l'actif et on en crée un nouveau). Sans paramètre actif,
+// 4 h par défaut (DELAI_CONFIRMATION_PAR_DEFAUT_H). Un seul actif par
+// pays : index unique PARTIEL déclaré dans la migration.
+// -----------------------------------------------------------------
+model ParametreDelaiConfirmation {
+  parametre_delai_confirmation_id String   @id @default(uuid()) @db.Uuid
+  pays_id                         String   @db.Uuid
+  libelle                         String   @db.VarChar(100)
+  heures                          Int
+  actif                           Boolean  @default(true)
+  date_debut_validite             DateTime @default(now())
+
+  pays Pays @relation(fields: [pays_id], references: [pays_id])
+
+  @@index([pays_id])
+  @@map("parametre_delai_confirmation")
 }
 
 // =====================================================================

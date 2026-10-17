@@ -17,6 +17,15 @@ import * as referentielService from '../services/referentielService';
 
 const byId = (arr, key, id) => arr.find((x) => x[key] === id);
 
+// Fuseau horaire d'un pays (agenda des médecins) : valeur par défaut du
+// serveur et suggestions courantes — toute valeur IANA reste acceptée.
+const FUSEAU_PAR_DEFAUT = 'Africa/Douala';
+const FUSEAUX_SUGGERES = [
+  'Africa/Douala', 'Africa/Lagos', 'Africa/Kinshasa', 'Africa/Libreville', 'Africa/Brazzaville',
+  'Africa/Ndjamena', 'Africa/Bangui', 'Africa/Malabo', 'Africa/Abidjan', 'Africa/Dakar',
+  'Africa/Lubumbashi', 'Africa/Casablanca', 'Africa/Tunis', 'Europe/Paris',
+];
+
 const STATUT_LABELS = {
   pays: 'Nouveau pays',
   langues: 'Nouvelle langue',
@@ -110,6 +119,7 @@ export default function Referentiel() {
     devise_id: '',
     langue_id: '',
     statut_activation: 'pilote',
+    fuseau_horaire: FUSEAU_PAR_DEFAUT,
   });
   const [paysSaving, setPaysSaving] = useState(false);
   const [paysError, setPaysError] = useState(null);
@@ -190,7 +200,10 @@ export default function Referentiel() {
   // ---------------------------------------------------------------------
   function openAddPays() {
     setPaysError(null);
-    setPaysForm({ pays_id: '', nom: '', code_iso2: '', devise_id: '', langue_id: '', statut_activation: 'pilote' });
+    setPaysForm({
+      pays_id: '', nom: '', code_iso2: '', devise_id: '', langue_id: '', statut_activation: 'pilote',
+      fuseau_horaire: FUSEAU_PAR_DEFAUT,
+    });
     setPaysModalOpen(true);
   }
   function openEditPays(p) {
@@ -202,6 +215,7 @@ export default function Referentiel() {
       devise_id: p.devise_id || '',
       langue_id: p.langue_id || '',
       statut_activation: p.statut_activation,
+      fuseau_horaire: p.fuseau_horaire || FUSEAU_PAR_DEFAUT,
     });
     setPaysModalOpen(true);
   }
@@ -336,6 +350,7 @@ export default function Referentiel() {
     const devise_id = paysForm.devise_id || '';
     const langue_id = paysForm.langue_id || '';
     const statut_activation = paysForm.statut_activation;
+    const fuseau_horaire = (paysForm.fuseau_horaire || '').trim() || FUSEAU_PAR_DEFAUT;
 
     if (!nom || code_iso2.length !== 2) {
       setPaysError('Merci de renseigner un nom et un code ISO2 à 2 lettres.');
@@ -356,6 +371,7 @@ export default function Referentiel() {
           devise_id,
           langue_id,
           statut_activation,
+          fuseau_horaire,
         });
         setPays((prev) => prev.map((p) => (p.pays_id === maj.pays_id ? maj : p)));
       } else {
@@ -365,6 +381,7 @@ export default function Referentiel() {
           devise_id,
           langue_id,
           statut_activation,
+          fuseau_horaire,
         });
         setPays((prev) => [...prev, nouveau]);
       }
@@ -929,6 +946,23 @@ export default function Referentiel() {
             </select>
             <div className="form-text">
               Devise et langue par défaut sont obligatoires (contrainte du backend).
+            </div>
+          </div>
+          <div className="col-12">
+            <label className="form-label">Fuseau horaire</label>
+            <input
+              className="form-control"
+              list="fuseaux-horaires"
+              value={paysForm.fuseau_horaire}
+              onChange={(e) => setPaysForm((f) => ({ ...f, fuseau_horaire: e.target.value }))}
+              placeholder={FUSEAU_PAR_DEFAUT}
+            />
+            <datalist id="fuseaux-horaires">
+              {FUSEAUX_SUGGERES.map((z) => <option key={z} value={z} />)}
+            </datalist>
+            <div className="form-text">
+              Identifiant IANA (ex. Africa/Douala). Sert à convertir les horaires de l'agenda des médecins
+              de ce pays en heure réelle des rendez-vous.
             </div>
           </div>
         </div>

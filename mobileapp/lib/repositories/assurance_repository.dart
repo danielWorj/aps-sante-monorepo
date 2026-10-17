@@ -59,10 +59,22 @@ class ApiException implements Exception {
   final String message;
   final int? statusCode;
 
-  const ApiException(this.message, {this.statusCode});
+  /// Code métier renvoyé par le serveur (`code` du corps JSON), ex.
+  /// "PRESENCE_MINIMALE", "QUOTA_ATTEINT". `null` s'il n'y en a pas.
+  final String? code;
+
+  const ApiException(this.message, {this.statusCode, this.code});
 
   @override
   String toString() => message;
+}
+
+/// Mise en relation refusée par le serveur (403 PRESENCE_MINIMALE) : la
+/// fiche n'a pas (ou plus) le droit `formulaire_contact` — par exemple un
+/// abonnement expiré pendant la consultation (guide abonnements v3, §4.1.2).
+class PresenceMinimaleException extends ApiException {
+  const PresenceMinimaleException(super.message)
+      : super(statusCode: 403, code: 'PRESENCE_MINIMALE');
 }
 
 /// Description d'un fichier à envoyer en multipart (image_assurance,
@@ -98,15 +110,22 @@ class AssuranceRepository {
   dynamic _decoder(http.Response reponse) {
     if (reponse.statusCode < 200 || reponse.statusCode >= 300) {
       String message = 'Erreur ${reponse.statusCode}: ${reponse.body}';
+      String? code;
       try {
         final corps = jsonDecode(reponse.body);
         if (corps is Map && corps['message'] is String) {
           message = corps['message'] as String;
         }
+        if (corps is Map && corps['code'] is String) {
+          code = corps['code'] as String;
+        }
       } catch (_) {
         // Corps non-JSON : on garde le message par défaut.
       }
-      throw ApiException(message, statusCode: reponse.statusCode);
+      if (reponse.statusCode == 403 && code == 'PRESENCE_MINIMALE') {
+        throw PresenceMinimaleException(message);
+      }
+      throw ApiException(message, statusCode: reponse.statusCode, code: code);
     }
     if (reponse.body.isEmpty) return null;
     return jsonDecode(reponse.body);

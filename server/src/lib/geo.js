@@ -252,8 +252,9 @@ export async function appliquerPoint({ table, colonne, clePrimaire, id, latitude
  *   - recherche texte :        { nom: { contains: "...", mode: "insensitive" } }
  *   - valeur absente :         ignorée (comme Prisma le fait pour `undefined`)
  *   - `null` explicite :       { champ: null } -> IS NULL
+ *   - appartenance :           { champ: { in: [...] } } -> IN (...) ; liste vide -> FALSE
  *
- * Toute autre forme (AND/OR/NOT imbriqués, `in`, `gte`, tableaux...)
+ * Toute autre forme (AND/OR/NOT imbriqués, `gte`, tableaux...)
  * fait volontairement échouer bruyamment plutôt que d'être ignorée en
  * silence : un filtre silencieusement perdu produirait des résultats
  * de proximité incorrects (trop larges) sans qu'aucune erreur ne le
@@ -286,6 +287,19 @@ function traduireWherePrismaSimple(where) {
           ? Prisma.sql`${champSql}::text ILIKE ${motif}`
           : Prisma.sql`${champSql}::text LIKE ${motif}`
       );
+      continue;
+    }
+
+    // Appartenance à une liste ({ champ: { in: [...] } }) : ajoutée pour le
+    // filtrage des agences par droits d'abonnement (guide abonnements
+    // assurances v3, §1.4.1). Liste vide -> FALSE : aucun résultat, jamais
+    // un filtre ignoré qui élargirait la recherche.
+    if (typeof valeurBrute === "object" && Array.isArray(valeurBrute.in) && Object.keys(valeurBrute).length === 1) {
+      if (!valeurBrute.in.length) {
+        conditions.push(Prisma.sql`FALSE`);
+      } else {
+        conditions.push(Prisma.sql`${champSql}::text IN (${Prisma.join(valeurBrute.in.map(String))})`);
+      }
       continue;
     }
 

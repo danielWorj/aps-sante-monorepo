@@ -904,11 +904,9 @@ class _PanelHoraires extends StatelessWidget {
           icon: Icons.access_time,
           title: "Horaires d'ouverture",
           child: const _EtatVide(
-            message: "Vos horaires d'ouverture ne sont pas encore "
-                'configurés. Cette section sera alimentée par le module '
-                'Agenda du praticien.',
-            // TODO: brancher AgendaRepository (créneaux/disponibilités)
-            // quand ce module sera exposé côté client.
+            message: 'Vos horaires de consultation se gèrent dans l’onglet '
+                '« Agenda » : les jours et horaires que vous y cochez sont '
+                'ceux que les patients peuvent réserver.',
           ),
         ),
         _InfoBlock(

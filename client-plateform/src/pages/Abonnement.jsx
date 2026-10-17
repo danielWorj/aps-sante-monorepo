@@ -1,10 +1,23 @@
 // Page "Abonnements" — grille tarifaire par type d'acteur (médecins,
 // cliniques, pharmacies, assurances) et espace annonceurs.
 
-import { useState } from "react";
-import { clientTypes, getClientType } from "../data/subscriptionPlans";
+//
+// Assurances (guide abonnements v3, §2.2.2) : visiteur -> vitrine inchangée
+// (prix indicatifs de data/subscriptionPlans.js) ; agent connecté d'une fiche
+// -> offres CALCULÉES PAR LE SERVEUR (<SouscriptionAssurance />), seule
+// source de vérité pour le montant débité. Un admin peut viser une fiche
+// précise via ?type=assurance&service=<service_assurance_id>.
 
-function PlanCard({ tier, isBase }) {
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { clientTypes, getClientType } from "../data/subscriptionPlans";
+import { useAuth } from "../context/AuthContext";
+import { obtenirMonServiceAssurance } from "../services/abonnementAssuranceService";
+import SouscriptionAssurance from "../components/assurances/SouscriptionAssurance";
+
+const TYPE_ASSURANCE = "assurance";
+
+function PlanCard({ tier, isBase, onChoisir }) {
   return (
     <div className={`plan-card${tier.popular ? " is-popular" : ""}${isBase ? " is-base" : ""}`}>
       {tier.popular && <span className="plan-ribbon">Recommandé</span>}
@@ -33,6 +46,7 @@ function PlanCard({ tier, isBase }) {
       <button
         type="button"
         className={`btn btn-block-aps ${tier.popular || isBase === false ? "btn-primary" : "btn-outline-primary"}`}
+        onClick={isBase ? undefined : onChoisir}
       >
         {isBase ? "Inclus automatiquement" : "Choisir cette formule"}
       </button>
@@ -41,8 +55,44 @@ function PlanCard({ tier, isBase }) {
 }
 
 export default function Abonnement() {
-  const [selected, setSelected] = useState(clientTypes[0].id);
+  const [searchParams] = useSearchParams();
+  const typeDemande = searchParams.get("type");
+  const serviceDemande = searchParams.get("service");
+  const [selected, setSelected] = useState(
+    clientTypes.some((c) => c.id === typeDemande) ? typeDemande : clientTypes[0].id
+  );
   const client = getClientType(selected);
+  const navigate = useNavigate();
+  const { status, user } = useAuth();
+
+  // Fiche assurance de l'agent connecté : null = inconnue, "" = aucune.
+  const [ficheAgent, setFicheAgent] = useState(null);
+  const [messageAssurance, setMessageAssurance] = useState(null);
+  const estAdmin = user?.role === "admin" || user?.role === "superadmin";
+  const ficheVisee = estAdmin && serviceDemande ? serviceDemande : null;
+  const ficheAssurance = ficheVisee ?? ficheAgent;
+
+  useEffect(() => {
+    if (selected !== TYPE_ASSURANCE || status !== "authenticated" || ficheVisee) return undefined;
+    let annule = false;
+    obtenirMonServiceAssurance()
+      .then((d) => { if (!annule) setFicheAgent(d.service_assurance.service_assurance_id); })
+      .catch(() => { if (!annule) setFicheAgent(""); });
+    return () => { annule = true; };
+  }, [selected, status, ficheVisee]);
+
+  const choisirFormule = () => {
+    if (selected !== TYPE_ASSURANCE) return;
+    if (status !== "authenticated") {
+      navigate("/login", { state: { from: "/pricing?type=assurance" } });
+      return;
+    }
+    if (ficheAssurance === "") {
+      setMessageAssurance(true);
+    }
+  };
+
+  const souscriptionAssurance = selected === TYPE_ASSURANCE && status === "authenticated" && !!ficheAssurance;
 
   return (
     <>
@@ -112,14 +162,28 @@ export default function Abonnement() {
             <h2 style={{ fontSize: "1.4rem" }}>{client.tagline}</h2>
           </div>
 
-          <div className="plan-grid">
-            {client.baseTier && (
-              <PlanCard tier={client.baseTier} isBase />
-            )}
-            {client.tiers.map((tier) => (
-              <PlanCard key={tier.id} tier={tier} isBase={false} />
-            ))}
-          </div>
+          {messageAssurance && !souscriptionAssurance && (
+            <div className="banner-institutionnel mb-3">
+              <i className="fa-solid fa-circle-info" />
+              <span>
+                Votre compte n&apos;est rattaché à aucune fiche assurance.{" "}
+                <Link to="/assurances/creation">Référencez votre compagnie ou votre cabinet</Link> pour souscrire.
+              </span>
+            </div>
+          )}
+
+          {souscriptionAssurance ? (
+            <SouscriptionAssurance serviceAssuranceId={ficheAssurance} />
+          ) : (
+            <div className="plan-grid">
+              {client.baseTier && (
+                <PlanCard tier={client.baseTier} isBase />
+              )}
+              {client.tiers.map((tier) => (
+                <PlanCard key={tier.id} tier={tier} isBase={false} onChoisir={choisirFormule} />
+              ))}
+            </div>
+          )}
 
           {client.notes && client.notes.length > 0 && (
             <ul className="plan-notes">

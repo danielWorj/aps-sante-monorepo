@@ -19,11 +19,26 @@
 //     nomPatient() ci-dessous.
 //   - Horaire.heure_debut/heure_fin et CreneauAgenda.date sont stockés
 //     "épinglés" en UTC (ex. new Date(`1970-01-01T${heure}:00Z`) côté
-//     création) : ce sont des chaînes horaires/dates littérales, pas de
-//     vrais instants dépendant du fuseau. On extrait donc l'heure/la
-//     date par découpage de chaîne (formatHeure/dateSeuleISO) plutôt
-//     que via des getters locaux de Date (getHours/getDate), qui
-//     décaleraient le résultat selon le fuseau du navigateur.
+//     création) : ce sont des HEURES MURALES du médecin, pas de vrais
+//     instants. On extrait donc l'heure/la date par découpage de chaîne
+//     (formatHeure/dateSeuleISO) plutôt que via des getters locaux de
+//     Date (getHours/getDate), qui décaleraient le résultat selon le
+//     fuseau du navigateur.
+//   - Chaque créneau porte en plus `debut` (ISO) : l'instant réel,
+//     calculé par le serveur dans le fuseau du pays d'exercice. C'est
+//     aussi la date_creneau du rendez-vous qui l'occupe : la jointure
+//     créneau <-> rendez-vous se fait sur cet instant (rdvParInstant).
+//
+// Réservation (agendaCreneau.service.js côté serveur) : dès qu'un patient
+// DEMANDE un rendez-vous (statut « cree », pas encore payé), le créneau
+// passe à « reserve » et disparaît de la grille des autres patients. Il
+// redevient libre si le rendez-vous est annulé, ou automatiquement si la
+// demande n'est pas confirmée dans le délai du pays (back-office).
+//
+// Gabarit -> créneaux : chaque modification du gabarit est publiée
+// automatiquement sur les semaines à venir (le serveur re-synchronise ;
+// un passage nocturne prolonge l'horizon). « Régénérer la semaine » ne
+// sert plus qu'à recréer une semaine au-delà de cet horizon.
 //
 // Le bloc "Horaires hebdomadaires" (auparavant des plages libres
 // matin/après-midi) a été remplacé par une sélection de créneaux du
@@ -83,6 +98,7 @@ import {
   listerDisponibilitesMedecin,
   creerDisponibiliteMedecin,
   supprimerDisponibiliteMedecin,
+  remplacerDisponibilitesMedecin,
   listerCreneauxAgenda,
   genererCreneauxAgenda,
   creerCreneauAgenda,
@@ -92,7 +108,14 @@ import {
   JOURS_SEMAINE_AGENDA,
 } from "../../../services/medecinService"; // ⚠️ ajuster le chemin selon l'arborescence réelle du projet
 
-const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+const JOURS_OUVRES = ["lundi", "mardi", "mercredi", "jeudi", "vendredi"];
+
+// Clé de jointure créneau <-> rendez-vous : l'instant réel (ms).
+function cleInstant(valeurISO) {
+  const t = new Date(valeurISO).getTime();
+  return Number.isNaN(t) ? null : t;
+}
 const MOIS_LABELS = [
   "janvier", "février", "mars", "avril", "mai", "juin",
   "juillet", "août", "septembre", "octobre", "novembre", "décembre",
@@ -166,7 +189,10 @@ const MedecinAgenda = () => {
   const [modeBlocage, setModeBlocage] = useState(false);
   const [modeAjout, setModeAjout] = useState(false);
   const [modeSuppression, setModeSuppression] = useState(false);
-  const [jourMobile, setJourMobile] = useState(3); // 1 = Lundi ... 6 = Samedi
+  const [jourMobile, setJourMobile] = useState(() => {
+    const j = new Date().getDay(); // 0 = dimanche
+    return j === 0 ? 7 : j; // 1 = Lundi ... 7 = Dimanche
+  });
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
 
@@ -231,11 +257,11 @@ const MedecinAgenda = () => {
     });
   };
 
-  // Jours (Lun -> Sam) de la semaine affichée.
+  // Jours (Lun -> Dim) de la semaine affichée.
   const jours = useMemo(() => {
     const lundi = lundiSemaine(semaineOffset);
     const ajISO = versDateISO(new Date());
-    return Array.from({ length: 6 }).map((_, i) => {
+    return Array.from({ length: 7 }).map((_, i) => {
       const d = new Date(lundi);
       d.setDate(lundi.getDate() + i);
       const iso = versDateISO(d);
@@ -247,7 +273,7 @@ const MedecinAgenda = () => {
     const debut = jours[0];
     const fin = jours[jours.length - 1];
     const finDate = new Date(lundiSemaine(semaineOffset));
-    finDate.setDate(finDate.getDate() + 5);
+    finDate.setDate(finDate.getDate() + 6);
     return {
       debut: debut?.num,
       fin: fin?.num,
@@ -287,14 +313,9 @@ const MedecinAgenda = () => {
         listerDisponibilitesMedecin(medecinId),
       ]);
       setCreneaux(creneauxData || []);
-      // GET /rendez-vous ne filtre pas par date : on limite côté client
-      // à la semaine affichée pour la jointure avec les créneaux "réservé".
-      setRendezVous(
-        (rdvData || []).filter((r) => {
-          const dateISO = dateSeuleISO(r.date_creneau);
-          return dateISO && dateISO >= dateDebut && dateISO <= dateFin;
-        })
-      );
+      // Jointure avec les créneaux "réservé" sur l'instant (voir
+      // rdvParInstant) : un RDV annulé a libéré son créneau, on l'écarte.
+      setRendezVous((rdvData || []).filter((r) => r.statut !== "annule"));
       setHorairesReferentiel(horairesData || []);
       setDisponibilites(disponibilitesData || []);
     } catch (err) {
@@ -335,13 +356,13 @@ const MedecinAgenda = () => {
 
   // rdv_id n'est jamais exposé par GET /medecins/:id/agenda (route
   // publique — voir en-tête de fichier) : on relie donc un créneau
-  // "réservé" à son rendez-vous par (date, heure de début), pas par id.
-  const rdvParCase = useMemo(() => {
+  // "réservé" à son rendez-vous par l'instant de début (creneau.debut ===
+  // rdv.date_creneau), pas par id.
+  const rdvParInstant = useMemo(() => {
     const carte = new Map();
     rendezVous.forEach((r) => {
-      const dateISO = dateSeuleISO(r.date_creneau);
-      if (!dateISO) return;
-      carte.set(`${dateISO}__${formatHeure(r.date_creneau)}`, r);
+      const cle = cleInstant(r.date_creneau);
+      if (cle !== null) carte.set(cle, r);
     });
     return carte;
   }, [rendezVous]);
@@ -353,8 +374,8 @@ const MedecinAgenda = () => {
       if (creneau.statut === "disponible") return { statut: "libre", creneau };
       if (creneau.statut === "bloque") return { statut: "bloque", creneau };
       if (creneau.statut === "reserve") {
-        const heureCreneau = formatHeure(creneau.horaire?.heure_debut ?? horaire.heure_debut);
-        const rdv = rdvParCase.get(`${jourISO}__${heureCreneau}`);
+        const cle = cleInstant(creneau.debut);
+        const rdv = cle !== null ? rdvParInstant.get(cle) : undefined;
         // D8 : RDV non payé -> lecture seule, aucune donnée patient affichée.
         const nonPaye = rdv ? estRdvNonPaye(rdv) : false;
         return {
@@ -375,7 +396,7 @@ const MedecinAgenda = () => {
       }
       return { statut: "ferme", creneau };
     },
-    [creneauParCase, rdvParCase]
+    [creneauParCase, rdvParInstant]
   );
 
   const toggleCreneau = async (ligne, jour) => {
@@ -398,12 +419,17 @@ const MedecinAgenda = () => {
         // fait que changer son statut. Rien à supprimer sur une case
         // déjà vide.
         if (cellule.statut !== "libre" && cellule.statut !== "bloque") return;
+        // Un créneau issu du gabarit n'est pas effacé mais FERMÉ par le
+        // serveur (sinon la synchronisation suivante le recréerait).
+        const issuDuGabarit = cellule.creneau?.origine === "genere";
         const confirmation = window.confirm(
-          `Supprimer définitivement ce créneau ? (${label})\nCette action est irréversible.`
+          issuDuGabarit
+            ? `Retirer ce créneau de l'agenda ? (${label})\nIl vient de vos horaires de la semaine : il sera fermé pour cette date uniquement.`
+            : `Supprimer définitivement ce créneau ? (${label})\nCette action est irréversible.`
         );
         if (!confirmation) return;
-        await supprimerCreneauAgenda(cellule.creneau.creneau_id);
-        showToast(`Créneau supprimé — ${label}`);
+        const resultat = await supprimerCreneauAgenda(cellule.creneau.creneau_id);
+        showToast(`${resultat?.message || "Créneau supprimé."} — ${label}`);
       } else if (modeAjout) {
         // Mode ajout : uniquement les cases vides ("Non proposé")
         // peuvent devenir un nouveau créneau. On le crée directement
@@ -456,7 +482,7 @@ const MedecinAgenda = () => {
       });
       showToast(
         resultat?.message ||
-          `${resultat?.nombre_crees ?? 0} créneau(x) généré(s) pour cette semaine.`
+          `${resultat?.nombre_crees ?? 0} créneau(x) régénéré(s) pour cette semaine.`
       );
       await chargerSemaine();
     } catch (err) {
@@ -483,8 +509,9 @@ const MedecinAgenda = () => {
         });
         showToast(`Disponibilité ajoutée au gabarit — ${formatHeure(horaire.heure_debut)}.`);
       }
-      const fraiches = await listerDisponibilitesMedecin(medecinId);
-      setDisponibilites(fraiches || []);
+      // Le serveur a re-synchronisé les créneaux à venir : on recharge la
+      // semaine pour voir aussitôt l'effet sur la grille.
+      await chargerSemaine();
     } catch (err) {
       showToast(err.message || "Action impossible sur cette disponibilité.");
     } finally {
@@ -492,10 +519,38 @@ const MedecinAgenda = () => {
     }
   };
 
+  // Recopie les horaires d'un jour sur les jours ouvrés (lundi -> vendredi),
+  // en une seule requête (PUT du gabarit complet).
+  const copierSurJoursOuvres = async (jourSource) => {
+    if (!medecinId || enregistrement) return;
+    const source = disponibilites.filter((d) => d.jour_semaine === jourSource).map((d) => d.horaire_id);
+    const libelleSource = JOURS_SEMAINE_AGENDA.find((j) => j.valeur === jourSource)?.libelle ?? jourSource;
+    const confirmation = window.confirm(
+      `Appliquer les horaires du ${libelleSource.toLowerCase()} à tous les jours du lundi au vendredi ?\n` +
+        "Les horaires actuels de ces jours seront remplacés."
+    );
+    if (!confirmation) return;
+    const conserves = disponibilites
+      .filter((d) => !JOURS_OUVRES.includes(d.jour_semaine))
+      .map((d) => ({ jour_semaine: d.jour_semaine, horaire_id: d.horaire_id }));
+    const copies = JOURS_OUVRES.flatMap((jour) => source.map((horaire_id) => ({ jour_semaine: jour, horaire_id })));
+    setEnregistrement(true);
+    try {
+      await remplacerDisponibilitesMedecin(medecinId, [...conserves, ...copies]);
+      showToast(`Horaires du ${libelleSource.toLowerCase()} appliqués du lundi au vendredi.`);
+      await chargerSemaine();
+    } catch (err) {
+      showToast(err.message || "Impossible d'appliquer ces horaires.");
+    } finally {
+      setEnregistrement(false);
+    }
+  };
+
   const regles = [
     { icone: "fa-hourglass-half", titre: "Créneaux du référentiel", description: "Chaque case correspond à un horaire partagé (voir Horaire) — pas de plage libre." },
-    { icone: "fa-repeat", titre: "Gabarit récurrent", description: "Les cases cochées ci-dessous définissent les créneaux régénérés chaque semaine via « Générer les créneaux »." },
-    { icone: "fa-eye", titre: "Synchronisation publique", description: "Les créneaux disponibles apparaissent en temps réel sur votre fiche ApSa." },
+    { icone: "fa-repeat", titre: "Horaires de la semaine", description: "Les horaires cochés ci-dessous sont publiés automatiquement sur les semaines à venir : ce sont eux que voient les patients." },
+    { icone: "fa-eye", titre: "Synchronisation publique", description: "Seuls les créneaux libres apparaissent aux patients. Un créneau demandé par un patient disparaît aussitôt de la grille, même avant le paiement." },
+    { icone: "fa-hourglass-start", titre: "Demande non confirmée", description: "Sans paiement dans le délai fixé par ApSa, la demande est annulée automatiquement et le créneau redevient libre." },
     { icone: "fa-ban", titre: "Blocage manuel", description: "Un créneau bloqué reste invisible des patients tant qu'il n'est pas libéré (réversible, le créneau reste enregistré)." },
     { icone: "fa-trash", titre: "Suppression définitive", description: "Retire un créneau libre ou bloqué de l'agenda ; irréversible, et impossible sur un créneau déjà réservé." },
   ];
@@ -565,8 +620,13 @@ const MedecinAgenda = () => {
                   <i className={`fa-solid ${modeSuppression ? "fa-check" : "fa-trash"}`}></i>{" "}
                   {modeSuppression ? "Terminer la suppression" : "Supprimer des créneaux"}
                 </button>
-                <button className="btn btn-primary btn-sm-aps" onClick={genererSemaine} disabled={enregistrement}>
-                  <i className="fa-solid fa-arrows-rotate"></i> Générer les créneaux de la semaine
+                <button
+                  className="btn btn-outline-primary btn-sm-aps"
+                  onClick={genererSemaine}
+                  disabled={enregistrement}
+                  title="Les horaires de la semaine sont publiés automatiquement ; utile seulement pour une semaine lointaine."
+                >
+                  <i className="fa-solid fa-arrows-rotate"></i> Régénérer la semaine
                 </button>
               </div>
             </div>
@@ -617,8 +677,8 @@ const MedecinAgenda = () => {
               {chargement && <div className="agenda-loading">Chargement de l'agenda…</div>}
               {!chargement && lignes.length === 0 && (
                 <p className="text-muted">
-                  Aucun créneau ni disponibilité pour cette semaine. Déclarez votre gabarit ci-dessous puis générez
-                  les créneaux.
+                  Aucun créneau pour cette semaine. Cochez vos horaires de la semaine ci-dessous : ils seront
+                  publiés automatiquement.
                 </p>
               )}
               {!chargement && lignes.length > 0 && (
@@ -724,7 +784,7 @@ const MedecinAgenda = () => {
               <span className="legend-key"><span className="legend-swatch sw-free"></span> Libre</span>
               <span className="legend-key"><span className="legend-swatch sw-booked"></span> Réservé</span>
               <span className="legend-key"><span className="legend-swatch sw-pending"></span> En attente de présence / à reprogrammer</span>
-              <span className="legend-key"><span className="legend-swatch sw-unpaid"></span> En attente de paiement (lecture seule)</span>
+              <span className="legend-key"><span className="legend-swatch sw-unpaid"></span> Demande en attente de paiement (masqué aux autres patients)</span>
               <span className="legend-key"><span className="legend-swatch sw-blocked"></span> Bloqué / non proposé</span>
               <span className="legend-key"><span className="legend-swatch sw-today"></span> Aujourd'hui</span>
             </div>
@@ -733,11 +793,11 @@ const MedecinAgenda = () => {
             <div className="row g-4 mt-1">
               <div className="col-lg-7">
                 <div className="info-card mb-0">
-                  <h3><i className="fa-solid fa-repeat"></i> Gabarit de disponibilités</h3>
+                  <h3><i className="fa-solid fa-repeat"></i> Mes horaires de la semaine</h3>
                   <p className="form-side-desc">
-                    Cochez les créneaux du référentiel où vous recevez habituellement, par jour de semaine. Chaque
-                    case est enregistrée immédiatement ; utilisez « Générer les créneaux de la semaine » pour les
-                    matérialiser sur l'agenda.
+                    Cochez les horaires où vous recevez, pour chaque jour de la semaine. Chaque case est enregistrée
+                    immédiatement et publiée sur votre agenda des semaines à venir : ce sont ces jours et horaires que
+                    les patients peuvent réserver. Les créneaux déjà réservés ne sont jamais retirés.
                   </p>
                   <div className="table-responsive">
                     <table className="hours-edit">
@@ -750,7 +810,20 @@ const MedecinAgenda = () => {
                       <tbody>
                         {JOURS_SEMAINE_AGENDA.map((j) => (
                           <tr key={j.valeur}>
-                            <td className="day-name">{j.libelle}</td>
+                            <td className="day-name">
+                              {j.libelle}
+                              {disponibilites.some((d) => d.jour_semaine === j.valeur) && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm-aps d-block px-0"
+                                  disabled={enregistrement}
+                                  onClick={() => copierSurJoursOuvres(j.valeur)}
+                                  title="Appliquer ces horaires du lundi au vendredi"
+                                >
+                                  <i className="fa-regular fa-copy"></i> Lun–Ven
+                                </button>
+                              )}
+                            </td>
                             <td>
                               <div className="d-flex flex-wrap gap-1">
                                 {horairesReferentiel.map((h) => {
