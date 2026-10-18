@@ -1,3 +1,5 @@
+import '../../components/publicite/slider_publicite.dart';
+import '../../models/annonceur_publicite_models.dart' show PagesPublicite;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,8 +8,6 @@ import '../../controllers/assurance_controller.dart';
 import '../../controllers/authentification_controller.dart' show authTokenProvider;
 import '../../controllers/publicite_controller.dart';
 import '../../models/assurance_models.dart';
-import '../../models/publicite_models.dart';
-import '../../repositories/publicite_repository.dart' show PublicitesParPageResultat;
 import '../../utils/mon_espace_navigation.dart';
 import './utils/DetailAssurance.dart'; // ⚠️ adapter ce chemin à l'emplacement réel du fichier dans le projet.
 import 'publicAcceuil.dart';
@@ -479,135 +479,20 @@ class _FilterChip extends StatelessWidget {
 /// publicités non "validee" de cet emplacement (mêmes règles de
 /// visibilité que côté backend, voir listerPublicitesParCodePage) ;
 /// laisser à `null` pour le comportement public standard.
-class _InsuranceAdBanner extends ConsumerWidget {
+class _InsuranceAdBanner extends StatelessWidget {
+  // v9 : carrousel des positions payées de PAGE_ASSURANCES + carte
+  // « Réserver cet espace » (voir slider_publicite.dart).
   const _InsuranceAdBanner({this.token});
 
-  /// Code de l'emplacement publicitaire correspondant à l'écran
-  /// Assurances (voir GET /emplacements-publicitaires : PAGE_ASSURANCES
-  /// = « Garanties de page »).
-  static const String _codePage = 'PAGE_ASSURANCES';
-
+  /// Conservé pour la compatibilité des appels existants (inutile : le
+  /// carrousel public ne montre que les publicités en diffusion).
   final String? token;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final resultatAsync = ref.watch(
-      publicitesParCodePageProvider(
-        (codePage: _codePage, paysId: null, token: token),
-      ),
-    );
-
-    return resultatAsync.when(
-      data: (resultat) {
-        if (resultat.publicites.isEmpty) return const SizedBox.shrink();
-        return _CartePublicite(publicite: resultat.publicites.first);
-      },
-      // Chargement/erreur silencieux : un simple encart publicitaire
-      // secondaire ne doit ni afficher de skeleton bruyant, ni faire
-      // échouer l'écran (le reste de la page — recherche, filtres,
-      // annuaire — reste utilisable indépendamment de la pub).
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-    );
-  }
-}
-
-/// Carte d'affichage d'une [Publicite] réelle : visuel Cloudinary
-/// ([Publicite.visuelUrl], déjà prêt à l'emploi côté backend) + titre
-/// saisi par l'annonceur.
-class _CartePublicite extends StatelessWidget {
-  const _CartePublicite({required this.publicite});
-
-  final Publicite publicite;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 18),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.green100),
-        boxShadow: AppColors.shadowCard,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline, size: 11, color: AppColors.green700),
-                const SizedBox(width: 5),
-                Text(
-                  'PUBLICITÉ',
-                  style: AppTextStyles.badge.copyWith(
-                    fontSize: 9,
-                    letterSpacing: 1.0,
-                    color: AppColors.green700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            height: 96,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: AppColors.paper,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            clipBehavior: Clip.antiAlias,
-            alignment: Alignment.center,
-            child: Image.network(
-              publicite.visuelUrl,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: 96,
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) return child;
-                return const Center(
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                );
-              },
-              // Visuel Cloudinary indisponible (lien cassé, hors-ligne...) :
-              // on retombe sur le pictogramme neutre plutôt que de casser
-              // la carte.
-              errorBuilder: (context, error, stackTrace) => const Icon(
-                Icons.image_outlined,
-                size: 28,
-                color: AppColors.inkFaint,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-            child: Text(
-              publicite.titre,
-              style: AppTextStyles.cardTitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Center(
-              child: Text(
-                'APS ne garantit pas les offres de ses annonceurs.',
-                style: AppTextStyles.badge.copyWith(fontSize: 9, color: AppColors.inkFaint),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const Padding(
+        padding: EdgeInsets.only(bottom: 12),
+        child: SliderPublicite(code: PagesPublicite.assurances),
+      );
 }
 
 /// État vide — aucune compagnie ne correspond à la recherche / aux filtres.

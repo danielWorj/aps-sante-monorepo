@@ -42,6 +42,13 @@ import {
   obtenirStatutPaiementPresence,
   annulerPaiementPresence,
 } from '../../services/abonnementPresenceService';
+import {
+  demanderPaiementPublicite,
+  demanderPaiementCampayPublicite,
+  obtenirDevisPublicite,
+  obtenirStatutPaiementPublicite,
+  annulerPaiementPublicite,
+} from '../../services/publiciteService';
 import { montantDevise } from '../../utils/fonds';
 
 export function adaptateurRdv(rdvId) {
@@ -98,5 +105,23 @@ export function adaptateurAbonnementPresence(abonnementId) {
     lireStatut: () => obtenirStatutPaiementPresence(abonnementId),
     annuler: () => annulerPaiementPresence(abonnementId),
     urlSucces: `/paiement/abonnement-presence/succes?abonnement_id=${abonnementId}`,
+  };
+}
+
+/** Publicité acceptée (réservation d'espace) : même contrat, montant initial + frais d'agrégateur. */
+export function adaptateurPublicite(publiciteId) {
+  return {
+    ...adaptateurAbonnement(publiciteId),
+    cle: `publicite:${publiciteId}`,
+    demanderStripe: () => demanderPaiementPublicite(publiciteId),
+    demanderCampay: (numero) => demanderPaiementCampayPublicite(publiciteId, numero),
+    obtenirDevis: (agregateur) => obtenirDevisPublicite(publiciteId, agregateur),
+    obtenirFacture: (agregateur) => obtenirDevisPublicite(publiciteId, agregateur || 'stripe'),
+    lireStatut: () => obtenirStatutPaiementPublicite(publiciteId),
+    estAnnule: (statut) => ['expiree', 'annulee', 'rejetee'].includes(statut?.statut_publicite),
+    annuler: () => annulerPaiementPublicite(publiciteId),
+    urlSucces: `/paiement/publicite/succes?publicite_id=${publiciteId}`,
+    texteIntro: 'Choisissez votre moyen de paiement. Votre publicité sera programmée dès la réception du règlement.',
+    texteAnnule: "Cette publicité n'est plus payable (délai dépassé ou demande close). Contactez APS Santé.",
   };
 }

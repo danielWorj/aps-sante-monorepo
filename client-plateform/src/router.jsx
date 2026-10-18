@@ -74,7 +74,12 @@ import AssuranceAbonnement from './components/portails/assurance/assurance-abonn
 //PORTAIL PATIENT
 import PatientRdv from './components/portails/components/patient-rdv';
 import PatientProfil from './components/portails/components/patient-profil';
-//PUBLICITE 
+//PUBLICITE (réservation d'espace, paiement, portail annonceur)
+import ReserverPublicite from './pages/ReserverPublicite.jsx';
+import PaiementPublicite from './pages/PaiementPublicite.jsx';
+import PaiementPubliciteSucces from './pages/PaiementPubliciteSucces.jsx';
+import PaiementPubliciteAnnule from './pages/PaiementPubliciteAnnule.jsx';
+import PortailAnnonceur from './pages/PortailAnnonceur.jsx';
 
 //ANNONCES 
 import FicheAnnonce from './pages/FicheAnnonce.jsx';
@@ -133,6 +138,9 @@ export const router = createBrowserRouter([
       // Abonnements de présence (pharmacies, centres de santé, médecins)
       { path: '/paiement/abonnement-presence/succes', element: <PaiementAbonnementPresenceSucces /> },
       { path: '/paiement/abonnement-presence/annule', element: <PaiementAbonnementPresenceAnnule /> },
+      // Publicité : retours de paiement (Stripe Checkout / Mobile Money)
+      { path: '/paiement/publicite/succes', element: <PaiementPubliciteSucces /> },
+      { path: '/paiement/publicite/annule', element: <PaiementPubliciteAnnule /> },
       // Espace gestionnaire assurance : connexion requise (le serveur vérifie
       // en plus que l'utilisateur est l'agent de la fiche ou un admin).
       {
@@ -145,6 +153,11 @@ export const router = createBrowserRouter([
           { path: '/mon-espace-structure', element: <MonEspacePresence key="structure" type="structure" /> },
           { path: '/pharmacie/:id/gestion', element: <GestionPresence key="pharmacie" type="pharmacie" /> },
           { path: '/structure-sante/:id/gestion', element: <GestionPresence key="structure" type="structure" /> },
+          // Publicité : compte obligatoire pour réserver, payer et suivre ses statistiques.
+          { path: '/publicite/reserver', element: <ReserverPublicite /> },
+          { path: '/publicite/:id/paiement', element: <PaiementPublicite /> },
+          { path: '/portail/annonceur', element: <PortailAnnonceur /> },
+          { path: '/portail/annonceur/publicites/:id', element: <PortailAnnonceur /> },
         ],
       },
     ],

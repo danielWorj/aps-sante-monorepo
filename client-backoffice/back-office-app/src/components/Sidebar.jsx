@@ -173,7 +173,7 @@ const APS_MENU = [
     // /forfait-publicitaire déclarées dans router.jsx (bloc "PUBLICITE").
     group: "Publicité",
     items: [
-      { key: "publicite", label: "Campagnes publicitaires", icon: "fa-solid fa-bullhorn", to: "/publicite" },
+      { key: "publicite", label: "Réservations publicitaires", icon: "fa-solid fa-bullhorn", to: "/publicite" },
       { key: "emplacement-publicitaire", label: "Emplacements publicitaires", icon: "fa-solid fa-map-location-dot", to: "/emplacement-publicitaire" },
       { key: "forfait-publicitaire", label: "Forfaits publicitaires", icon: "fa-solid fa-tags", to: "/forfait-publicitaire" }
     ]
@@ -202,7 +202,8 @@ const APS_MENU = [
     items: [
       { key: "referentiel-pays", label: "Référentiel pays", icon: "fa-solid fa-earth-africa", to: "/referentiel" }, 
       { key: "moyen-paiement", label: "Moyens de paiement", icon: "fa-solid fa-credit-card", to: "/moyen-paiement" },
-      { key: "apk", label: "Gestion APK", icon: "fa-solid fa-mobile-alt", to: "/apk" }
+      { key: "apk", label: "Gestion APK", icon: "fa-solid fa-mobile-alt", to: "/apk" },
+      { key: "whatsapp", label: "WhatsApp", icon: "fa-brands fa-whatsapp", to: "/whatsapp" }
       // { key: "parametrage-local", label: "Paramétrage local", icon: "fa-solid fa-sliders", to: "/parametrage-local" },
       // { key: "equipe-admin", label: "Équipe & rôles admin", icon: "fa-solid fa-user-shield", to: "/equipe-admin" }
     ]

@@ -116,6 +116,18 @@ enum StatutModerationPublicite {
   rejetee
 }
 
+// Cycle d'une réservation d'espace publicitaire (v9). statut_moderation
+// est conservé et tenu à jour pour les anciens clients ; la diffusion ne
+// dépend QUE de ce statut (payee) et de la période.
+enum StatutPublicite {
+  en_moderation // soumise par l'annonceur, en attente de l'administration
+  rejetee // refusée (motif_rejet envoyé par WhatsApp)
+  en_attente_paiement // acceptée : la place est bloquée jusqu'à date_limite_paiement
+  expiree // acceptée mais non payée à temps : la place est libérée
+  payee // payée : diffusée de date_debut à date_fin (exclue)
+  annulee // retirée par l'annonceur avant paiement
+}
+
 enum StatutPlanningGarde {
   brouillon
   publie
@@ -332,7 +344,8 @@ model Pays {
 
   // v8 : Publicite (module autonome, plus PublicitePharmacie) — voir
   // plus bas.
-  publicites Publicite[]
+  publicites             Publicite[]
+  forfaits_publicitaires ForfaitPublicitaire[]
 
   // v8 : Annuaire assurances (diagramme 08_annuaire_assurances).
   services_assurance ServiceAssurance[]
@@ -465,6 +478,8 @@ model Utilisateur {
 
   // Étape 6 : notifications in-app reçues.
   notifications Notification[]
+  // Messages WhatsApp qui lui ont été adressés (journal d'envoi).
+  messages_whatsapp MessageWhatsapp[]
 
   medecin               Medecin?
   patient               Patient?
@@ -1188,6 +1203,13 @@ model EmplacementPublicitaire {
   libelle     String  @db.VarChar(150)
   description String? @db.Text
 
+  // v9 : un emplacement couvre une page (son code) ou un GROUPE de pages :
+  // codes de pages supplémentaires où le même slider est affiché.
+  pages         String[] @default([])
+  // Nombre de rangs du slider (1 = première pub affichée, la plus chère).
+  nombre_places Int      @default(3) @db.SmallInt
+  actif         Boolean  @default(true)
+
   forfaits   ForfaitPublicitaire[]
   publicites Publicite[]
 
@@ -1202,12 +1224,21 @@ model ForfaitPublicitaire {
   prix                        Decimal @db.Decimal(12, 2)
   duree_jours                 Int
 
+  // v9 : forfait échelonné par rang du slider (1 = première position) et
+  // vendu dans un pays (null = forfait historique, non vendable en ligne).
+  rang    Int     @default(1) @db.SmallInt
+  pays_id String? @db.Uuid
+  devise  String  @default("xaf") @db.VarChar(3) // minuscule, comme TransactionPaiement
+  actif   Boolean @default(true)
+
   emplacement_publicitaire EmplacementPublicitaire @relation(fields: [emplacement_publicitaire_id], references: [emplacement_publicitaire_id])
+  pays                     Pays?                   @relation(fields: [pays_id], references: [pays_id])
 
   lignes     LigneForfaitPublicitaire[]
   publicites Publicite[]
 
   @@index([emplacement_publicitaire_id])
+  @@index([emplacement_publicitaire_id, pays_id, rang])
   @@map("forfait_publicitaire")
 }
 
@@ -1246,20 +1277,92 @@ model Publicite {
   // toujours produite par le serveur, jamais par le client. Voir
   // publicite.controller.js (creerPublicite/modifierPublicite).
   visuel_url                  String                    @db.Text
+  // v9 : date_fin est EXCLUE (date_debut + duree_jours du forfait).
   date_debut                  DateTime                  @db.Date
   date_fin                    DateTime                  @db.Date
   statut_moderation           StatutModerationPublicite @default(en_attente)
+
+  // ─── v9 : réservation d'espace (voir publicite.service.js) ───
+  statut      StatutPublicite @default(en_moderation)
+  rang        Int             @default(1) @db.SmallInt // copié du forfait
+  description String?         @db.Text
+
+  // Contact affiché sur la publicité.
+  telephone_contact String? @db.VarChar(30)
+  email_contact     String? @db.VarChar(150)
+  localisation      String? @db.VarChar(255)
+
+  // Personne qui réserve l'espace (pré-rempli depuis le compte, modifiable).
+  // annonceur_telephone reçoit les messages WhatsApp.
+  annonceur_nom        String? @db.VarChar(150)
+  annonceur_entreprise String? @db.VarChar(150)
+  annonceur_telephone  String? @db.VarChar(30)
+  annonceur_email      String? @db.VarChar(150)
+
+  // Prix figé à la soumission (prix du forfait à cette date).
+  montant Decimal? @db.Decimal(12, 2)
+  devise  String?  @db.VarChar(3)
+
+  motif_rejet          String?   @db.Text
+  date_soumission      DateTime  @default(now())
+  date_moderation      DateTime?
+  moderateur_id        String?   @db.Uuid
+  date_limite_paiement DateTime?
+  date_paiement        DateTime?
+  transaction_id       String?   @unique @db.Uuid
 
   forfait_publicitaire     ForfaitPublicitaire     @relation(fields: [forfait_publicitaire_id], references: [forfait_publicitaire_id])
   emplacement_publicitaire EmplacementPublicitaire @relation(fields: [emplacement_publicitaire_id], references: [emplacement_publicitaire_id])
   utilisateur              Utilisateur             @relation(fields: [utilisateur_id], references: [utilisateur_id])
   pays                     Pays                    @relation(fields: [pays_id], references: [pays_id])
 
+  facture      FacturePublicite?
+  statistiques StatistiquePubliciteJour[]
+
   @@index([forfait_publicitaire_id])
   @@index([emplacement_publicitaire_id])
   @@index([utilisateur_id])
   @@index([pays_id])
+  @@index([emplacement_publicitaire_id, pays_id, rang, statut])
+  @@index([statut, date_limite_paiement])
   @@map("publicite")
+}
+
+// Facture d'une publicité payée : stockée (ajout seul), numérotée sans
+// trou par son propre compteur annuel (FAC-PUB-AAAA-NNNNNN).
+model FacturePublicite {
+  facture_id     String   @id @default(uuid()) @db.Uuid
+  numero         String   @unique @db.VarChar(30)
+  publicite_id   String   @unique @db.Uuid
+  transaction_id String   @unique @db.Uuid
+  date_emission  DateTime @default(now())
+  devise         String   @db.VarChar(3)
+  total          Decimal  @db.Decimal(12, 2) // revenu APS, hors frais d'agrégateur
+  snapshot       Json
+
+  publicite Publicite @relation(fields: [publicite_id], references: [publicite_id])
+
+  @@map("facture_publicite")
+}
+
+model CompteurFacturePublicite {
+  annee   Int @id
+  dernier Int @default(0)
+
+  @@map("compteur_facture_publicite")
+}
+
+// Statistiques de diffusion d'une publicité, par jour UTC (portail annonceur).
+model StatistiquePubliciteJour {
+  publicite_id String   @db.Uuid
+  jour         DateTime @db.Date
+  impressions  Int      @default(0)
+  clics        Int      @default(0)
+
+  publicite Publicite @relation(fields: [publicite_id], references: [publicite_id], onDelete: Cascade)
+
+  @@id([publicite_id, jour])
+  @@map("statistique_publicite_jour")
 }
 
 // -----------------------------------------------------------------
@@ -1509,6 +1612,9 @@ model TransactionPaiement {
   // Une transaction vise UN seul objet (CHECK transaction_objet_unique).
   abonnement_presence_id_cible String? @db.Uuid
 
+  // Publicité (réservation d'espace) payée par cette transaction — même règle.
+  publicite_id_cible String? @db.Uuid
+
   // Décomposition du montant capturé — uniquement renseignés pour une
   // transaction liée à un rendez-vous (compte_escrow non nul) : une
   // transaction d'abonnement (medecin/pharmacie) n'a pas d'honoraires
@@ -1563,6 +1669,7 @@ model TransactionPaiement {
   @@index([rdv_id_cible])
   @@index([abonnement_assurance_id_cible])
   @@index([abonnement_presence_id_cible])
+  @@index([publicite_id_cible])
   @@map("transaction_paiement")
 }
 
@@ -2883,4 +2990,101 @@ model ReponseOffreRdv {
   @@unique([offre_id, medecin_id])
   @@index([medecin_id])
   @@map("reponse_offre_rdv")
+}
+
+// -----------------------------------------------------------------
+// WhatsApp — socle d'envoi (API WhatsApp Cloud de Meta).
+//
+// NumeroWhatsapp : numéro(s) EXPÉDITEUR d'APS Santé, gérés depuis le
+// back-office. Un seul numéro actif à la fois (index unique PARTIEL
+// déclaré dans la migration) : c'est lui qu'utilise tout envoi. Le
+// jeton d'accès Meta n'est PAS stocké ici (secret, variable
+// d'environnement WHATSAPP_ACCESS_TOKEN) : seuls les identifiants
+// publics du numéro le sont.
+//
+// MessageWhatsapp : journal de chaque envoi (une ligne par message),
+// écrit par whatsapp.service.js — point unique d'envoi. `cle` (facultative)
+// rend un envoi idempotent : même événement + même destinataire = un
+// seul message, quel que soit le nombre d'appels.
+// -----------------------------------------------------------------
+enum StatutMessageWhatsapp {
+  en_attente // ligne créée, appel à Meta en cours (ou interrompu)
+  envoye // accepté par Meta (identifiant_fournisseur renseigné)
+  echec // refusé ou injoignable ; `relancable` dit si le job peut réessayer
+}
+
+enum TypeMessageWhatsapp {
+  texte // message libre : n'est délivré que dans les 24 h suivant un message du destinataire
+  modele // modèle (template) approuvé par Meta : seul moyen d'initier une conversation
+}
+
+model NumeroWhatsapp {
+  numero_whatsapp_id String @id @default(uuid()) @db.Uuid
+
+  libelle         String  @db.VarChar(100)
+  // Format international sans « + » (ex. 237690000000).
+  numero          String  @unique @db.VarChar(20)
+  // Identifiant du numéro dans WhatsApp Business (Meta > WhatsApp > Configuration de l'API).
+  phone_number_id String  @unique @db.VarChar(40)
+  // Identifiant du compte WhatsApp Business (WABA), facultatif.
+  waba_id         String? @db.VarChar(40)
+  actif           Boolean @default(false)
+
+  date_creation    DateTime @default(now())
+  date_mise_a_jour DateTime @updatedAt
+
+  messages MessageWhatsapp[]
+
+  @@map("numero_whatsapp")
+}
+
+// ModeleMessageWhatsapp : textes des notifications WhatsApp éditables au
+// back-office (ex. publicité acceptée / rejetée / payée), avec variables
+// {nom}. Envoyés en texte libre, ou via un modèle Meta approuvé dont le
+// corps reçoit le texte rendu en paramètre {{1}} (nom_modele_meta).
+model ModeleMessageWhatsapp {
+  code             String   @id @db.VarChar(60)
+  libelle          String   @db.VarChar(150)
+  texte            String   @db.Text
+  nom_modele_meta  String?  @db.VarChar(512)
+  langue           String   @default("fr") @db.VarChar(10)
+  actif            Boolean  @default(true)
+  date_mise_a_jour DateTime @updatedAt
+
+  @@map("modele_message_whatsapp")
+}
+
+model MessageWhatsapp {
+  message_whatsapp_id String @id @default(uuid()) @db.Uuid
+
+  // Idempotence (ex. « rdv_accepte:<rdv_id>:<utilisateur_id> »).
+  cle                String?               @unique @db.VarChar(200)
+  // Service émetteur (ex. « rdv_accepte », « test_back_office »).
+  origine            String                @db.VarChar(60)
+  // Numéro expéditeur réellement utilisé (null si aucun n'était actif).
+  numero_whatsapp_id String?               @db.Uuid
+  // Destinataire, format international sans « + ».
+  destinataire       String                @db.VarChar(20)
+  utilisateur_id     String?               @db.Uuid
+  type               TypeMessageWhatsapp
+  // texte : { texte } ; modele : { nom, langue, composants }
+  contenu            Json
+  statut             StatutMessageWhatsapp @default(en_attente)
+  // Identifiant Meta du message (wamid…).
+  identifiant_fournisseur String?           @db.VarChar(128)
+  erreur_code        String?               @db.VarChar(40)
+  erreur             String?               @db.Text
+  relancable         Boolean               @default(false)
+  tentatives         Int                   @default(0)
+
+  date_creation DateTime  @default(now())
+  date_envoi    DateTime?
+
+  numero      NumeroWhatsapp? @relation(fields: [numero_whatsapp_id], references: [numero_whatsapp_id], onDelete: SetNull)
+  utilisateur Utilisateur?    @relation(fields: [utilisateur_id], references: [utilisateur_id], onDelete: SetNull)
+
+  @@index([statut, relancable])
+  @@index([utilisateur_id])
+  @@index([date_creation])
+  @@map("message_whatsapp")
 }

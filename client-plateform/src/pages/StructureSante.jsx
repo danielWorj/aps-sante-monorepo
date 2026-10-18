@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import structure1 from "../assets/img/structure1.jpg";
-import pub6 from "../assets/img/ads/pub6.jpg";
+import SliderPublicite from '../components/publicite/SliderPublicite';
+import { PAGES_PUBLICITE } from '../services/publiciteService';
 import "./../assets/styles/StructureSante.css";
 // Services réels — voir src/services/structureSanteService.js (annuaire
 // "structure_sante" : cliniques, hôpitaux, centres médicaux,
@@ -458,36 +459,7 @@ export default function StructureSante() {
             {/* Colonne publicité */}
             <div className="col-md-3">
               <div className="ad-col">
-                <div className="ad-card">
-                  <div className="ad-label">
-                    <span>Publicité</span>
-                    <i className="fa-solid fa-circle-info" title="Emplacement commercial ApSa" />
-                  </div>
-                  <a href="#" aria-label="Tourisme Médical — Soignez-vous, voyagez, revivez">
-                    <img src={pub6} alt="Tourisme Médical — Soignez-vous, voyagez, revivez" />
-                  </a>
-                  <div className="ad-card-body">
-                    <h4>Tourisme Médical</h4>
-                    <p>
-                      Accédez à des soins de qualité à l'étranger : voyage,
-                      hébergement et suivi post-soins inclus, jusqu'à -50%
-                      moins cher qu'en Europe.
-                    </p>
-                    <a href="#" className="btn btn-outline-primary btn-sm-aps btn-block-aps">
-                      <i className="fa-solid fa-plane" /> En savoir plus
-                    </a>
-                  </div>
-                </div>
-                <div className="ad-slot-empty">
-                  <i className="fa-solid fa-bullhorn" />
-                  <p>
-                    Cet emplacement est disponible pour les annonceurs
-                    partenaires d'ApSa.
-                  </p>
-                  <a href="#" className="btn btn-primary btn-sm-aps btn-block-aps">
-                    Réserver cet espace
-                  </a>
-                </div>
+                <SliderPublicite code={PAGES_PUBLICITE.structure} />
               </div>
             </div>
           </div>

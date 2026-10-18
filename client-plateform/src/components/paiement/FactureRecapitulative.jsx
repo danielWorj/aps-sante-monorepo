@@ -82,7 +82,19 @@ function FactureCorps({ facture, compact = false, className = '' }) {
         </div>
       </header>
 
-      {entete.souscripteur ? (
+      {entete.emplacement ? (
+        // Publicité (réservation d'espace publicitaire).
+        <section className="facture-consultation">
+          <div className="facture-consultation-titre">Publicité « {entete.titre} »</div>
+          <dl className="facture-infos">
+            {entete.annonceur && (<><dt>Annonceur</dt><dd>{entete.annonceur}{entete.entreprise ? ` — ${entete.entreprise}` : ''}</dd></>)}
+            <dt>Emplacement</dt><dd>{entete.emplacement}, {Number(entete.position) === 1 ? '1re' : `${entete.position}e`} position</dd>
+            {entete.date_debut && (
+              <><dt>Diffusion</dt><dd>du {formatDate(entete.date_debut)} au {formatDate(entete.date_fin_incluse)} ({entete.duree_jours} jours)</dd></>
+            )}
+          </dl>
+        </section>
+      ) : entete.souscripteur ? (
         // Abonnement de présence (pharmacie, centre de santé, médecin).
         <section className="facture-consultation">
           <div className="facture-consultation-titre">Abonnement de présence — {entete.souscripteur}</div>
@@ -127,7 +139,7 @@ function FactureCorps({ facture, compact = false, className = '' }) {
               {/* Abonnements : sous-total après réduction, avant les frais d'agrégateur. */}
               {l.code === 'frais_agregateur' && facture.sous_total != null && (
                 <li className="facture-ligne facture-sous-total">
-                  <span className="facture-ligne-libelle">Sous-total après réduction</span>
+                  <span className="facture-ligne-libelle">{entete.emplacement ? "Montant initial" : "Sous-total après réduction"}</span>
                   <span className="facture-ligne-montant">{montantDevise(facture.sous_total, devise)}</span>
                 </li>
               )}

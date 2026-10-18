@@ -33,6 +33,7 @@ import {
   ajouterLigneForfait,
   modifierLigneForfait,
   supprimerLigneForfait,
+  listerPays,
 } from '../services/publiciteService';
 
 function extraireNomRole(objetUtilisateur) {
@@ -80,6 +81,10 @@ const FORM_VIDE = {
   libelle: '',
   prix: '',
   duree_jours: '',
+  rang: '1',
+  pays_id: '',
+  devise: 'xaf',
+  actif: true,
 };
 
 const LIGNE_VIDE = { libelle_avantage: '', description: '', ordre_affichage: 0 };
@@ -90,6 +95,9 @@ function formaterPrix(prix) {
   return `${n.toLocaleString('fr-FR')} `;
 }
 
+// Le rang 1 est la première publicité du slider : la plus chère.
+const libelleRang = (r) => (Number(r) === 1 ? '1re position' : `${r}e position`);
+
 export default function ForfaitPublicitaire() {
   const { user } = useAuth();
   const role = extraireNomRole(user);
@@ -97,6 +105,7 @@ export default function ForfaitPublicitaire() {
   const peutSupprimer = role === 'superadmin';
 
   const [emplacements, setEmplacements] = useState([]);
+  const [pays, setPays] = useState([]);
   const [forfaits, setForfaits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [erreurChargement, setErreurChargement] = useState(null);
@@ -123,6 +132,9 @@ export default function ForfaitPublicitaire() {
   }, [filtreEmplacement]);
 
   useEffect(() => { chargerEmplacements(); }, [chargerEmplacements]);
+  useEffect(() => { listerPays().then((p) => setPays(Array.isArray(p) ? p : p?.pays ?? [])).catch(() => setPays([])); }, []);
+  const nomPays = (id) => pays.find((p) => p.pays_id === id)?.nom;
+  const placesEmplacement = (id) => emplacements.find((e) => e.emplacement_publicitaire_id === id)?.nombre_places ?? 3;
   useEffect(() => { chargerForfaits(); }, [chargerForfaits]);
 
   function libelleEmplacement(id) {
@@ -165,6 +177,10 @@ export default function ForfaitPublicitaire() {
       libelle: f.libelle,
       prix: String(f.prix ?? ''),
       duree_jours: String(f.duree_jours ?? ''),
+      rang: String(f.rang ?? 1),
+      pays_id: f.pays_id ?? '',
+      devise: f.devise ?? 'xaf',
+      actif: f.actif ?? true,
     });
     setLignesForm(f.lignes || []);
     setLigneEnCours(LIGNE_VIDE);
@@ -181,6 +197,11 @@ export default function ForfaitPublicitaire() {
       setFormError('Emplacement, libellé, prix et durée (en jours) sont requis.');
       return;
     }
+    if (!form.pays_id) {
+      setFormError('Choisissez le pays : un forfait sans pays ne peut pas être réservé en ligne.');
+      return;
+    }
+    const options = { rang: Number(form.rang), pays_id: form.pays_id, devise: form.devise.trim().toLowerCase(), actif: form.actif };
     setSaving(true);
     try {
       if (modeEdition) {
@@ -189,6 +210,7 @@ export default function ForfaitPublicitaire() {
           libelle: form.libelle.trim(),
           prix: Number(form.prix),
           duree_jours: Number(form.duree_jours),
+          ...options,
         });
         setModalOpen(false);
       } else {
@@ -197,6 +219,7 @@ export default function ForfaitPublicitaire() {
           libelle: form.libelle.trim(),
           prix: Number(form.prix),
           duree_jours: Number(form.duree_jours),
+          ...options,
           // Les lignes ajoutées avant la création du forfait (pas
           // encore de ligne_id) partent dans la même transaction.
           lignes: lignesForm
@@ -317,7 +340,7 @@ export default function ForfaitPublicitaire() {
                 <div className="aps-kpi__icon is-primary"><i className="fa-solid fa-box-open"></i></div>
               </div>
               <div className="aps-kpi__label">Forfaits actifs</div>
-              <div className="aps-kpi__value">{forfaits.length.toLocaleString('fr-FR')}</div>
+              <div className="aps-kpi__value">{forfaits.filter((f) => f.actif !== false && f.pays_id).length.toLocaleString('fr-FR')}</div>
             </div>
           </div>
         </div>
@@ -386,8 +409,15 @@ export default function ForfaitPublicitaire() {
                         <i className="fa-solid fa-window-restore"></i> {libelleEmplacement(f.emplacement_publicitaire_id)}
                       </span>
                     </div>
+                    <div className="d-flex flex-wrap gap-1 mb-2">
+                      <span className="aps-badge is-primary">{libelleRang(f.rang ?? 1)}</span>
+                      <span className={`aps-badge ${f.pays_id ? 'is-neutral' : 'is-warning'}`}>
+                        {f.pays_id ? nomPays(f.pays_id) ?? f.pays?.nom ?? 'Pays' : 'Sans pays (non réservable)'}
+                      </span>
+                      {f.actif === false && <span className="aps-badge is-danger">Désactivé</span>}
+                    </div>
                     <p className="mb-2" style={{ fontSize: 20, fontWeight: 600 }}>
-                      {formaterPrix(f.prix)}
+                      {formaterPrix(f.prix)}{(f.devise ?? 'xaf').toUpperCase()}
                       <span className="aps-text-muted" style={{ fontSize: 13, fontWeight: 400 }}> / {f.duree_jours} j</span>
                     </p>
                     {f.lignes?.length > 0 && (
@@ -488,6 +518,51 @@ export default function ForfaitPublicitaire() {
               value={form.duree_jours}
               onChange={(e) => setForm((f) => ({ ...f, duree_jours: e.target.value }))}
             />
+          </div>
+          <div className="col-md-4">
+            <label className="form-label">Position dans le slider <span className="text-danger">*</span></label>
+            <select
+              className="form-select"
+              value={form.rang}
+              onChange={(e) => setForm((f) => ({ ...f, rang: e.target.value }))}
+            >
+              {Array.from({ length: placesEmplacement(form.emplacement_publicitaire_id) }, (_, i) => (
+                <option key={i + 1} value={i + 1}>{libelleRang(i + 1)}</option>
+              ))}
+            </select>
+            <small className="aps-text-muted">La 1re position s'affiche en premier : prix le plus élevé.</small>
+          </div>
+          <div className="col-md-4">
+            <label className="form-label">Pays <span className="text-danger">*</span></label>
+            <select
+              className="form-select"
+              value={form.pays_id}
+              onChange={(e) => setForm((f) => ({ ...f, pays_id: e.target.value }))}
+            >
+              <option value="" disabled>Choisir…</option>
+              {pays.map((p) => (
+                <option key={p.pays_id} value={p.pays_id}>{p.nom}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-md-2">
+            <label className="form-label">Devise</label>
+            <input
+              type="text" maxLength={3}
+              className="form-control"
+              value={form.devise}
+              onChange={(e) => setForm((f) => ({ ...f, devise: e.target.value }))}
+            />
+          </div>
+          <div className="col-md-2 d-flex align-items-end">
+            <div className="form-check mb-2">
+              <input
+                id="forfait-actif" type="checkbox" className="form-check-input"
+                checked={form.actif}
+                onChange={(e) => setForm((f) => ({ ...f, actif: e.target.checked }))}
+              />
+              <label className="form-check-label" htmlFor="forfait-actif">En vente</label>
+            </div>
           </div>
         </div>
 

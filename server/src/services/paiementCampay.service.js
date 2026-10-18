@@ -4,18 +4,21 @@ import { obtenirStatutTransaction, DEVISE_CAMPAY, CampayError } from "../lib/cam
 import { finaliserPaiement } from "./finalisationPaiement.service.js";
 import { finaliserAbonnementAssurance } from "./finalisationAbonnementAssurance.service.js";
 import { finaliserAbonnementPresence } from "./finalisationAbonnementPresence.service.js";
+import { finaliserPaiementPublicite } from "./finalisationPublicite.service.js";
 
 /** Objet payé par une transaction, pour les journaux (RDV, abonnement assurance ou de présence). */
 function decrireCible(t) {
   if (t.abonnement_assurance_id_cible) return `abonnement=${t.abonnement_assurance_id_cible}`;
   if (t.abonnement_presence_id_cible) return `abonnement_presence=${t.abonnement_presence_id_cible}`;
+  if (t.publicite_id_cible) return `publicite=${t.publicite_id_cible}`;
   return `rdv=${t.rdv_id_cible}`;
 }
 
-/** Filtre Prisma de l'objet payé : { rdv_id }, { abonnement_id } (assurance) ou { abonnement_presence_id }. */
-function filtreCible({ rdv_id, abonnement_id, abonnement_presence_id }) {
+/** Filtre Prisma de l'objet payé : { rdv_id }, { abonnement_id } (assurance), { abonnement_presence_id } ou { publicite_id }. */
+function filtreCible({ rdv_id, abonnement_id, abonnement_presence_id, publicite_id }) {
   if (abonnement_id) return { abonnement_assurance_id_cible: abonnement_id };
   if (abonnement_presence_id) return { abonnement_presence_id_cible: abonnement_presence_id };
+  if (publicite_id) return { publicite_id_cible: publicite_id };
   return { rdv_id_cible: rdv_id };
 }
 
@@ -110,6 +113,14 @@ export async function verifierEtFinaliserTransactionCampay(transaction, { force 
     // Abonnement de présence : même place (après le contrôle de montant).
     if (transaction.abonnement_presence_id_cible) {
       await finaliserAbonnementPresence({
+        transaction_id: transaction.transaction_id,
+        campay_reference: transaction.campay_reference,
+      });
+      return "SUCCESSFUL";
+    }
+    // Publicité : même place (après le contrôle de montant).
+    if (transaction.publicite_id_cible) {
+      await finaliserPaiementPublicite({
         transaction_id: transaction.transaction_id,
         campay_reference: transaction.campay_reference,
       });
@@ -268,7 +279,7 @@ export async function signalerCollectesIncertainesNonRattachees() {
       },
     },
     select: {
-      transaction_id: true, rdv_id_cible: true, abonnement_assurance_id_cible: true, abonnement_presence_id_cible: true,
+      transaction_id: true, rdv_id_cible: true, abonnement_assurance_id_cible: true, abonnement_presence_id_cible: true, publicite_id_cible: true,
       numero_payeur: true, montant: true, date_creation: true,
     },
     orderBy: { date_creation: "asc" },
