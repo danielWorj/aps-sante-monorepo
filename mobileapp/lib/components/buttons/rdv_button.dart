@@ -26,18 +26,17 @@ class RdvButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final button = ElevatedButton.icon(
       onPressed: onPressed,
-      icon: Icon(icon ?? Icons.event_available, size: 14, color: Colors.white),
-      label: Text(label, style: AppTextStyles.buttonLabel.copyWith(fontSize: 11.5)),
+      icon: Icon(icon ?? Icons.event_available_rounded, size: large ? 18 : 15, color: Colors.white),
+      label: Text(label, style: AppTextStyles.buttonLabel.copyWith(fontSize: large ? 15 : 12.5)),
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
-        padding: EdgeInsets.symmetric(
-          horizontal: large ? 16 : 12,
-          vertical: large ? 13 : 7,
-        ),
+        minimumSize: Size(0, large ? 54 : 40),
+        padding: EdgeInsets.symmetric(horizontal: large ? 18 : 14),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(9),
+          borderRadius: BorderRadius.circular(large ? 18 : 13),
         ),
       ),
     );

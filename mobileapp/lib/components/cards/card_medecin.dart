@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
+
 import '../style/colors.dart';
 import '../style/text_styles.dart';
-import '../buttons/rdv_button.dart';
-import '../buttons/outline_button.dart';
+import '../ui/aps_ui.dart';
 import 'badge_chip.dart';
 
-/// Carte « Médecin / professionnel de santé » — `.list-card` (annuaire médecins).
+/// Carte « Médecin » — carte de résultat de la refonte 2026 (écran 07).
 ///
-/// Affiche l'avatar, le nom, la spécialité + la ville, des badges de
-/// confiance (vérifié à l'Ordre, télé-consultation...), le tarif de
-/// consultation et les actions « Voir le profil » / « Prendre RDV ».
+/// Avatar à initiales (ou photo), nom + badge vérifié, spécialité et
+/// ville, pastilles (vidéo, disponible aujourd'hui), tarif, puis les
+/// actions « Voir le profil » / « Prendre RDV ».
 ///
 /// ```dart
 /// CardMedecin(
@@ -48,6 +48,7 @@ class CardMedecin extends StatelessWidget {
   final bool teleconsultation;
   final bool disponibleAujourdhui;
   final VoidCallback onVoirProfil;
+
   /// null = prise de RDV en ligne indisponible (bouton masqué).
   final VoidCallback? onPrendreRdv;
   final VoidCallback? onTap;
@@ -55,137 +56,117 @@ class CardMedecin extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CardSurface(
-      onTap: onTap,
-      child: Row(
+      onTap: onTap ?? onVoirProfil,
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Avatar(photoUrl: photoUrl, fallback: _initials(nom)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(nom, style: AppTextStyles.cardTitle),
-                const SizedBox(height: 2),
-                Row(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ApsAvatar(
+                name: nom,
+                photoUrl: photoUrl,
+                online: disponibleAujourdhui,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.location_on_outlined, size: 11, color: AppColors.inkFaint),
-                    const SizedBox(width: 3),
-                    Expanded(
-                      child: Text('$specialite · $ville',
-                          style: AppTextStyles.cardMeta, overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 5,
-                  runSpacing: 5,
-                  children: [
-                    if (verifieOrdre)
-                      const BadgeChip(
-                        label: "Vérifié à l'Ordre",
-                        style: BadgeChipStyle.green,
-                        icon: Icons.verified_outlined,
-                      ),
-                    if (teleconsultation)
-                      const BadgeChip(
-                        label: 'Télé',
-                        style: BadgeChipStyle.amber,
-                        icon: Icons.videocam_outlined,
-                      ),
-                    if (disponibleAujourdhui)
-                      const BadgeChip(
-                        label: "Disponible aujourd'hui",
-                        style: BadgeChipStyle.outline,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 9),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    if (prixFcfa != null)
-                      RichText(
-                        text: TextSpan(
-                          style: AppTextStyles.price,
-                          children: [
-                            TextSpan(text: '$prixFcfa'),
-                            const TextSpan(
-                              text: ' FCFA',
-                              style: TextStyle(
-                                fontFamily: AppTextStyles.fontDisplay,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.inkFaint,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      const SizedBox.shrink(),
                     Row(
                       children: [
-                        AppOutlineButton(label: 'Voir le profil', onPressed: onVoirProfil),
-                        if (onPrendreRdv != null) ...[
-                          const SizedBox(width: 6),
-                          RdvButton(onPressed: onPrendreRdv!),
+                        Flexible(
+                          child: Text(
+                            nom,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.strong,
+                          ),
+                        ),
+                        if (verifieOrdre) ...[
+                          const SizedBox(width: 4),
+                          const ApsVerified(),
                         ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      [specialite, ville].where((e) => e.isNotEmpty).join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.xs,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              if (teleconsultation)
+                                const ApsPill('Vidéo',
+                                    tone: ApsTone.sky,
+                                    icon: Icons.videocam_outlined),
+                              if (disponibleAujourdhui)
+                                const ApsPill("Aujourd'hui",
+                                    tone: ApsTone.green, dot: true),
+                              if (!teleconsultation && !disponibleAujourdhui)
+                                const ApsPill('Cabinet', tone: ApsTone.neutral),
+                            ],
+                          ),
+                        ),
+                        if (prixFcfa != null)
+                          Text(
+                            '${_fcfa(prixFcfa!)} F',
+                            style: AppTextStyles.strong.copyWith(fontSize: 12.5),
+                          ),
                       ],
                     ),
                   ],
                 ),
+              ),
+            ],
+          ),
+          const ApsDivider(),
+          Row(
+            children: [
+              Expanded(
+                child: ApsButton(
+                  label: 'Voir le profil',
+                  onPressed: onVoirProfil,
+                  variant: ApsButtonVariant.ghost,
+                  small: true,
+                ),
+              ),
+              if (onPrendreRdv != null) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 1,
+                  child: ApsButton(
+                    label: 'Prendre RDV',
+                    onPressed: onPrendreRdv,
+                    small: true,
+                  ),
+                ),
               ],
-            ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  static String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    final letters = parts.where((p) => p.isNotEmpty).map((p) => p[0]).take(2);
-    return letters.join().toUpperCase();
+  static String _fcfa(int v) {
+    final s = v.toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write(' ');
+      b.write(s[i]);
+    }
+    return b.toString();
   }
 }
 
-class _Avatar extends StatelessWidget {
-  const _Avatar({this.photoUrl, required this.fallback});
-
-  final String? photoUrl;
-  final String fallback;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        width: 56,
-        height: 56,
-        color: AppColors.green100,
-        alignment: Alignment.center,
-        child: photoUrl != null
-            ? Image.network(
-                photoUrl!,
-                fit: BoxFit.cover,
-                width: 56,
-                height: 56,
-                errorBuilder: (_, __, ___) => _initialsText(),
-              )
-            : _initialsText(),
-      ),
-    );
-  }
-
-  Widget _initialsText() => Text(
-        fallback,
-        style: const TextStyle(
-          fontFamily: AppTextStyles.fontDisplay,
-          fontWeight: FontWeight.w700,
-          fontSize: 16,
-          color: AppColors.green700,
-        ),
-      );
-}
+/// Couleur conservée pour les écrans qui affichaient l'ancien fond d'avatar.
+const Color cardMedecinAvatarBg = AppColors.b1;

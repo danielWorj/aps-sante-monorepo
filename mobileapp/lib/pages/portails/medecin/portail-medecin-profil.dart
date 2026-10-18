@@ -113,7 +113,7 @@ class _PortailMedecinProfilState extends ConsumerState<PortailMedecinProfil>
     // onglet du shell (MedecinHomeShell), qui fournit déjà le
     // Scaffold et la barre de navigation basse.
     return Container(
-      color: AppColors.paper,
+      color: AppColors.bg,
       child: _buildCorps(context, profilAsync),
     );
   }
@@ -228,43 +228,11 @@ class _PageHead extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(2, 10, 2, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'ESPACE MÉDECIN',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-              color: AppColors.primary,
-            ),
-          ),
-          SizedBox(height: 5),
-          Text(
-            'Mon profil',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.2,
-              color: AppColors.ink,
-            ),
-          ),
-        ],
-      ),
-    );
+    // La cloche du shell flotte en haut à droite : place réservée.
+    return const ApsPageTitle('Compte', trailing: SizedBox(width: 42));
   }
 }
 
-/// ------------------------------------------------------------
-/// En-tête du profil — équivalent de `.profile-hero`, alimenté par la
-/// fiche `Medecin` réelle (utilisateur, spécialité, ville/pays
-/// d'exercice, photo, statut de vérification).
-/// ------------------------------------------------------------
 class _ProfileHero extends StatelessWidget {
   final Medecin medecin;
   final StatistiquesAvisMedecin statistiques;
@@ -528,81 +496,18 @@ class _SegmentedTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(100),
-        boxShadow: AppColors.shadowCard,
-      ),
-      child: AnimatedBuilder(
-        animation: controller,
-        builder: (context, _) {
-          return Row(
-            children: List.generate(tabs.length, (index) {
-              final def = tabs[index];
-              final active = controller.index == index;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => controller.animateTo(index),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding:
-                    const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                    decoration: BoxDecoration(
-                      color: active ? AppColors.primary : Colors.transparent,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            def.label,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.fontDisplay,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: active ? Colors.white : AppColors.inkSoft,
-                            ),
-                          ),
-                        ),
-                        if (def.count != null) ...[
-                          const SizedBox(width: 5),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: active
-                                  ? Colors.white.withOpacity(0.22)
-                                  : AppColors.green100,
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                            child: Text(
-                              '${def.count}',
-                              style: TextStyle(
-                                fontFamily: AppTextStyles.fontDisplay,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w700,
-                                color:
-                                active ? Colors.white : AppColors.green700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-          );
-        },
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) => ApsSegmented<int>(
+        value: controller.index,
+        onChanged: controller.animateTo,
+        segments: [
+          for (var i = 0; i < tabs.length; i++)
+            ApsSegment(
+              i,
+              tabs[i].count != null ? '${tabs[i].label} · ${tabs[i].count}' : tabs[i].label,
+            ),
+        ],
       ),
     );
   }
@@ -684,7 +589,7 @@ class _EtatVide extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       decoration: BoxDecoration(
-        color: AppColors.paper,
+        color: AppColors.bg,
         border: Border.all(color: AppColors.line),
         borderRadius: BorderRadius.circular(10),
       ),

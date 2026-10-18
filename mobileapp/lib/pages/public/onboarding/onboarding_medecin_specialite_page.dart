@@ -188,7 +188,7 @@ class _SpecialiteChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: AppRadius.smRadius,
-            border: Border.all(color: AppColors.line),
+            boxShadow: AppColors.shadowCard,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,

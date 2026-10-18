@@ -126,32 +126,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final peutRevenir = Navigator.of(context).canPop();
     return Scaffold(
-      backgroundColor: AppColors.paper,
+      backgroundColor: AppColors.surface,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-            child: Form(
-              key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+          child: Form(
+            key: _formKey,
+            child: AutofillGroup(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 12),
-                  _buildLogo(),
-                  const SizedBox(height: 28),
-                  Text(
-                    'Bon retour',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.h3.copyWith(fontSize: 22),
+                  SizedBox(
+                    height: 42,
+                    child: Row(
+                      children: [
+                        if (peutRevenir) ApsIconButton.back(context, flat: true),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 14),
+                  const Align(alignment: Alignment.centerLeft, child: ApsLogo()),
+                  const SizedBox(height: 20),
+                  Text('Bon retour\nparmi nous.', style: AppTextStyles.xl),
+                  const SizedBox(height: 8),
                   Text(
-                    'Connectez-vous pour accéder à vos rendez-vous et à votre suivi santé.',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.body,
+                    'Connectez-vous pour retrouver vos rendez-vous et votre suivi santé.',
+                    style: AppTextStyles.small.copyWith(fontSize: 14),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
 
                   if (_errorMessage != null) ...[
                     AppAlert(
@@ -159,17 +163,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       message: _errorMessage!,
                       onClose: () => setState(() => _errorMessage = null),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                   ],
 
-                  _FieldLabel('Adresse e-mail'),
-                  const SizedBox(height: 6),
                   _AppTextField(
                     controller: _emailController,
+                    label: 'Adresse e-mail',
                     hint: 'vous@exemple.com',
                     icon: Icons.mail_outline_rounded,
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.email],
                     validator: (value) {
                       final v = value?.trim() ?? '';
                       if (v.isEmpty) return 'Merci de saisir votre e-mail.';
@@ -178,25 +182,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 16),
-
-                  _FieldLabel('Mot de passe'),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 10),
                   _AppTextField(
                     controller: _passwordController,
+                    label: 'Mot de passe',
                     hint: '••••••••',
                     icon: Icons.lock_outline_rounded,
                     obscureText: _obscurePassword,
                     textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.password],
                     onSubmitted: (_) => _handleLogin(),
                     suffixIcon: IconButton(
-                      splashRadius: 18,
+                      tooltip: _obscurePassword ? 'Afficher' : 'Masquer',
                       icon: Icon(
                         _obscurePassword
                             ? Icons.visibility_outlined
                             : Icons.visibility_off_outlined,
                         size: 19,
-                        color: AppColors.inkFaint,
+                        color: AppColors.ink3,
                       ),
                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
@@ -210,77 +213,81 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 10),
-
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: widget.onForgotPassword,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text(
-                        'Mot de passe oublié ?',
-                        style: AppTextStyles.buttonLabel.copyWith(
-                          fontSize: 12.5,
-                          color: AppColors.primary,
-                        ),
-                      ),
+                      child: const Text('Mot de passe oublié ?'),
                     ),
                   ),
-                  const SizedBox(height: 12),
-
-                  PrimaryButton(
+                  const SizedBox(height: 4),
+                  ApsButton(
                     label: 'Se connecter',
-                    icon: Icons.login_rounded,
                     loading: _loading,
                     onPressed: _handleLogin,
                   ),
-                  const SizedBox(height: 20),
 
-                  Row(
-                    children: [
-                      const Expanded(child: Divider(color: AppColors.line, thickness: 1)),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Text('ou', style: AppTextStyles.cardMeta),
-                      ),
-                      const Expanded(child: Divider(color: AppColors.line, thickness: 1)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  SecondaryButton(
+                  const SizedBox(height: 24),
+                  const _Separateur(),
+                  const SizedBox(height: 16),
+                  ApsButton(
                     label: 'Continuer avec Google',
                     icon: Icons.g_mobiledata_rounded,
+                    variant: ApsButtonVariant.ghost,
                     onPressed: () {
                       // Brancher ici l'authentification Google (ex: google_sign_in).
                     },
                   ),
-                  const SizedBox(height: 28),
+                  if (widget.onCreateAccount != null) ...[
+                    const SizedBox(height: 8),
+                    ApsButton(
+                      label: 'Créer un compte',
+                      icon: Icons.person_add_alt_rounded,
+                      variant: ApsButtonVariant.ghost,
+                      onPressed: widget.onCreateAccount,
+                    ),
+                  ],
 
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('Pas encore de compte ?', style: AppTextStyles.body),
-                      TextButton(
-                        onPressed: widget.onCreateAccount,
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          'Créer un compte',
-                          style: AppTextStyles.buttonLabel.copyWith(
-                            fontSize: 12.5,
-                            color: AppColors.primary,
+                  const SizedBox(height: 20),
+                  ApsCard(
+                    color: AppColors.b0,
+                    borderColor: AppColors.b1,
+                    child: Row(
+                      children: [
+                        const ApsIconTile(Icons.medical_services_outlined, tone: ApsTone.ink),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Professionnel de santé ?', style: AppTextStyles.strong),
+                              Text(
+                                'Médecin, pharmacie, structure, assurance : même connexion.',
+                                style: AppTextStyles.xs,
+                              ),
+                            ],
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text.rich(
+                    const TextSpan(children: [
+                      TextSpan(text: 'En continuant, vous acceptez les '),
+                      TextSpan(
+                        text: 'Conditions',
+                        style: TextStyle(color: AppColors.b6, fontWeight: FontWeight.w700),
                       ),
-                    ],
+                      TextSpan(text: ' et la '),
+                      TextSpan(
+                        text: 'Politique de confidentialité',
+                        style: TextStyle(color: AppColors.b6, fontWeight: FontWeight.w700),
+                      ),
+                      TextSpan(text: '.'),
+                    ]),
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.xs.copyWith(height: 1.5),
                   ),
                 ],
               ),
@@ -290,53 +297,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     );
   }
+}
 
-  Widget _buildLogo() {
-    return Column(
+class _Separateur extends StatelessWidget {
+  const _Separateur();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
       children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            color: AppColors.primaryLight,
-            borderRadius: AppRadius.mdRadius,
-          ),
-          child: const Icon(
-            Icons.local_hospital_rounded,
-            color: AppColors.primary,
-            size: 30,
-          ),
+        const Expanded(child: Divider(color: AppColors.lineStrong)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text('ou', style: AppTextStyles.xs.copyWith(fontSize: 12)),
         ),
-        const SizedBox(height: 12),
-        Text(
-          'APSA',
-          style: AppTextStyles.h3.copyWith(fontSize: 18, color: AppColors.primaryDark),
-        ),
+        const Expanded(child: Divider(color: AppColors.lineStrong)),
       ],
     );
   }
 }
 
-/// Libellé de champ de formulaire, cohérent avec `AppTextStyles.cardTitle`.
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: AppTextStyles.cardTitle.copyWith(fontSize: 12.5, color: AppColors.ink),
-    );
-  }
-}
-
-/// Champ de texte réutilisable, calqué sur les inputs de la maquette :
-/// fond blanc, bordure fine, coins arrondis (AppRadius.sm), icône à gauche.
+/// Champ de saisie de la maquette (`.field`) : libellé flottant, icône,
+/// bordure 1,5 px qui passe au vert au focus (via le thème global).
 class _AppTextField extends StatelessWidget {
   const _AppTextField({
     required this.controller,
+    required this.label,
     required this.hint,
     this.icon,
     this.suffixIcon,
@@ -345,9 +331,11 @@ class _AppTextField extends StatelessWidget {
     this.textInputAction,
     this.validator,
     this.onSubmitted,
+    this.autofillHints,
   });
 
   final TextEditingController controller;
+  final String label;
   final String hint;
   final IconData? icon;
   final Widget? suffixIcon;
@@ -356,6 +344,7 @@ class _AppTextField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final String? Function(String?)? validator;
   final void Function(String)? onSubmitted;
+  final Iterable<String>? autofillHints;
 
   @override
   Widget build(BuildContext context) {
@@ -366,39 +355,15 @@ class _AppTextField extends StatelessWidget {
       textInputAction: textInputAction,
       validator: validator,
       onFieldSubmitted: onSubmitted,
-      style: AppTextStyles.body.copyWith(fontSize: 13.5, color: AppColors.ink),
-      cursorColor: AppColors.primary,
+      autofillHints: autofillHints,
+      style: AppTextStyles.strong.copyWith(fontSize: 14.5),
+      cursorColor: AppColors.b6,
       decoration: InputDecoration(
+        labelText: label,
         hintText: hint,
-        hintStyle: AppTextStyles.body.copyWith(fontSize: 13.5, color: AppColors.inkFaint),
-        filled: true,
-        fillColor: AppColors.card,
-        prefixIcon: icon == null
-            ? null
-            : Icon(icon, size: 18, color: AppColors.inkSoft),
+        prefixIcon: icon == null ? null : Icon(icon, size: 19),
         suffixIcon: suffixIcon,
-        contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-        border: OutlineInputBorder(
-          borderRadius: AppRadius.smRadius,
-          borderSide: const BorderSide(color: AppColors.lineStrong),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: AppRadius.smRadius,
-          borderSide: const BorderSide(color: AppColors.lineStrong),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: AppRadius.smRadius,
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: AppRadius.smRadius,
-          borderSide: const BorderSide(color: AppColors.danger),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: AppRadius.smRadius,
-          borderSide: const BorderSide(color: AppColors.danger, width: 1.4),
-        ),
-        errorStyle: AppTextStyles.cardMeta.copyWith(color: AppColors.danger, fontSize: 11),
+        contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
       ),
     );
   }

@@ -2,29 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 
+import '../../../components/style/colors.dart';
+
 /// ============================================================
 /// PALETTE — reprise des variables CSS de ui-mobile.html
 /// ============================================================
 class ApsColors {
-  static const green900 = Color(0xFF0F3A2B);
-  static const green700 = Color(0xFF1E8A63);
-  static const green600 = Color(0xFF279A6E);
-  static const green500 = Color(0xFF2FAB7B);
-  static const green100 = Color(0xFFE4F3EC);
-  static const green50 = Color(0xFFF1F8F4);
+  static const green900 = AppColors.b9;
+  static const green700 = AppColors.b7;
+  static const green600 = AppColors.b6;
+  static const green500 = AppColors.b5;
+  static const green100 = AppColors.b1;
+  static const green50 = AppColors.b0;
 
-  static const coral500 = Color(0xFFE1604A);
-  static const coral600 = Color(0xFFC94E3A);
-  static const coral100 = Color(0xFFFBE7E2);
+  static const coral500 = AppColors.coral500;
+  static const coral600 = AppColors.coral600;
+  static const coral100 = AppColors.coral100;
 
-  static const ink = Color(0xFF16241F);
-  static const inkSoft = Color(0xFF5B6B64);
-  static const inkFaint = Color(0xFF93A39C);
+  static const ink = AppColors.ink;
+  static const inkSoft = AppColors.ink2;
+  static const inkFaint = AppColors.ink3;
 
-  static const paper = Color(0xFFF5F8F6);
-  static const card = Color(0xFFFFFFFF);
-  static const line = Color(0xFFE5ECE8);
-  static const lineStrong = Color(0xFFD3DFD9);
+  static const paper = AppColors.bg;
+  static const card = AppColors.surface;
+  static const line = AppColors.line;
+  static const lineStrong = AppColors.lineStrong;
 }
 
 /// Liste de pays simplifiée pour le sélecteur "Pays"

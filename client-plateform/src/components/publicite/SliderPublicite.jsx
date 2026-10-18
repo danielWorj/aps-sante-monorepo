@@ -57,9 +57,10 @@ export default function SliderPublicite({ code, variante = 'carte', intervalle =
 
   const clic = useCallback((p) => signalerEvenementPublicite('clic', [p.publicite_id]), []);
 
-  if (!donnees) return null;
+  // Le bouton « Réserver cet espace » reste visible pour tout visiteur, même
+  // sans emplacement configuré (404) ni forfait actif pour la page.
   const lienReservation = `/publicite/reserver?page=${encodeURIComponent(code)}`;
-  const placesLibres = donnees.emplacement.nombre_places - nb;
+  const placesLibres = (donnees?.emplacement?.nombre_places ?? 0) - nb;
 
   return (
     <div className={`pub-slider pub-slider--${variante}`}>
@@ -127,21 +128,19 @@ export default function SliderPublicite({ code, variante = 'carte', intervalle =
         </div>
       )}
 
-      {donnees.reservation_possible && (
-        <div className="ad-slot-empty pub-slider-reserver">
-          <i className="fa-solid fa-bullhorn" />
-          <p>
-            {nb === 0
-              ? "Cet emplacement est disponible pour les annonceurs partenaires d'ApSa."
-              : placesLibres > 0
-                ? `Encore ${placesLibres} position(s) libre(s) dans ce carrousel.`
-                : 'Réservez votre position pour les prochaines périodes.'}
-          </p>
-          <Link to={lienReservation} className="btn btn-primary btn-sm-aps btn-block-aps">
-            Réserver cet espace
-          </Link>
-        </div>
-      )}
+      <div className="ad-slot-empty pub-slider-reserver">
+        <i className="fa-solid fa-bullhorn" />
+        <p>
+          {nb === 0
+            ? "Cet emplacement est disponible pour les annonceurs partenaires d'ApSa."
+            : placesLibres > 0
+              ? `Encore ${placesLibres} position(s) libre(s) dans ce carrousel.`
+              : 'Réservez votre position pour les prochaines périodes.'}
+        </p>
+        <Link to={lienReservation} className="btn btn-primary btn-sm-aps btn-block-aps">
+          Réserver cet espace
+        </Link>
+      </div>
     </div>
   );
 }

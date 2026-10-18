@@ -91,19 +91,17 @@ class _PortailMedecinRdvState extends ConsumerState<PortailMedecinRdv>
         // onglet du shell (MedecinHomeShell), qui fournit déjà le
         // Scaffold et la barre de navigation basse.
         return Container(
-            color: AppColors.paper,
+            color: AppColors.bg,
             child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 120),
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                        const _PageHead(),
-                        // Afficher le bandeau du médecin connecté
+                        // Salutation : avatar, date du jour, nom du médecin.
                         _DoctorStrip(medecin: medecinProfile),
-                        const SizedBox(height: 2),
-                        // Statistiques (dynamiques basées sur les RDV récupérés)
+                        // Indicateurs du jour et de la semaine.
                         _StatLine(ref: ref),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 18),
                         _SegmentedTabs(controller: _tabController),
                         const SizedBox(height: 16),
                         SizedBox(
@@ -128,46 +126,6 @@ class _PortailMedecinRdvState extends ConsumerState<PortailMedecinRdv>
 }
 
 /// ════════════════════════════════════════════════════════════
-/// En-tête de page
-/// ════════════════════════════════════════════════════════════
-class _PageHead extends StatelessWidget {
-    const _PageHead();
-
-    @override
-    Widget build(BuildContext context) {
-        return const Padding(
-            padding: EdgeInsets.fromLTRB(2, 10, 2, 14),
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                    Text(
-                        'ESPACE MÉDECIN',
-                        style: TextStyle(
-                            fontFamily: AppTextStyles.fontDisplay,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.1,
-                            color: AppColors.primary,
-                        ),
-                    ),
-                    SizedBox(height: 5),
-                    Text(
-                        'Rendez-vous',
-                        style: TextStyle(
-                            fontFamily: AppTextStyles.fontDisplay,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.2,
-                            color: AppColors.ink,
-                        ),
-                    ),
-                ],
-            ),
-        );
-    }
-}
-
-/// ════════════════════════════════════════════════════════════
 /// Bandeau praticien (affiche le médecin connecté)
 /// ════════════════════════════════════════════════════════════
 class _DoctorStrip extends StatelessWidget {
@@ -177,84 +135,44 @@ class _DoctorStrip extends StatelessWidget {
 
     @override
     Widget build(BuildContext context) {
-        final nom = medecin?.prenom ?? 'Dr';
-        final initiales = _genererInitiales(medecin?.prenom, medecin?.nom);
+        final nom = [medecin?.prenom, medecin?.nom]
+            .whereType<String>()
+            .where((e) => e.isNotEmpty)
+            .join(' ');
+        const jours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+        const mois = [
+          'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+          'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+        ];
+        final d = DateTime.now();
 
-        return CardSurface(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-            child: Row(
-                children: [
-                    Container(
-                        width: 40,
-                        height: 40,
-                        alignment: Alignment.center,
-                        decoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                            initiales,
-                            style: const TextStyle(
-                                fontFamily: AppTextStyles.fontDisplay,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                                color: Colors.white,
-                            ),
-                        ),
+        // La cloche du shell flotte en haut à droite : place réservée.
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(0, 6, 54, 14),
+          child: Row(
+            children: [
+              ApsAvatar(name: nom.isEmpty ? 'Dr' : nom, size: 40),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${jours[d.weekday - 1]} ${d.day} ${mois[d.month - 1]}',
+                        style: AppTextStyles.xs),
+                    Text(
+                      nom.isEmpty ? 'Espace médecin' : 'Dr $nom',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.strong.copyWith(fontSize: 15),
                     ),
-                    const SizedBox(width: 11),
-                    Expanded(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                                Row(
-                                    children: [
-                                        Flexible(
-                                            child: Text(
-                                                'Dr $nom',
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                    fontFamily: AppTextStyles.fontDisplay,
-                                                    fontSize: 13.5,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: AppColors.ink,
-                                                ),
-                                            ),
-                                        ),
-                                        const SizedBox(width: 5),
-                                        const Icon(Icons.check_circle,
-                                            size: 14, color: AppColors.green600),
-                                    ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                    medecin?.email ?? 'Chargement...',
-                                    style: const TextStyle(
-                                        fontSize: 11.5,
-                                        color: AppColors.inkSoft,
-                                        overflow: TextOverflow.ellipsis,
-                                    ),
-                                ),
-                            ],
-                        ),
-                    ),
-                ],
-            ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         );
     }
 
-    /// Génère les initiales (ex: "EK" pour "Émile Kammogne")
-    String _genererInitiales(String? prenom, String? nom) {
-        String init = '';
-        if (prenom != null && prenom.isNotEmpty) {
-            init += prenom[0].toUpperCase();
-        }
-        if (nom != null && nom.isNotEmpty) {
-            init += nom[0].toUpperCase();
-        }
-        return init.isNotEmpty ? init : '?';
-    }
 }
 
 /// ════════════════════════════════════════════════════════════
@@ -291,21 +209,93 @@ class _StatLine extends ConsumerWidget {
                             !rdv.estAReprogrammer)
                         .length;
 
-                return Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 2, 4, 14),
-                    child: Row(
-                        children: [
-                            _stat('$aujourd_hui', "aujourd'hui"),
-                            const SizedBox(width: 14),
-                            _sep(),
-                            const SizedBox(width: 14),
-                            _stat('$cette_semaine', 'cette semaine'),
-                            const SizedBox(width: 14),
-                            _sep(),
-                            const SizedBox(width: 14),
-                            _stat('$en_visio', 'en visio'),
-                        ],
-                    ),
+                return IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: ApsCard(
+                          color: AppColors.ink,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("Aujourd'hui",
+                                  style: AppTextStyles.xs.copyWith(color: Colors.white60)),
+                              Text.rich(
+                                TextSpan(children: [
+                                  TextSpan(text: '$aujourd_hui '),
+                                  const TextSpan(
+                                    text: 'RDV',
+                                    style: TextStyle(fontSize: 13, color: Colors.white60),
+                                  ),
+                                ]),
+                                style: const TextStyle(
+                                  fontFamily: AppTextStyles.fontSans,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -1,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  for (var i = 0; i < (aujourd_hui == 0 ? 4 : aujourd_hui.clamp(1, 8)); i++) ...[
+                                    if (i > 0) const SizedBox(width: 3),
+                                    Expanded(
+                                      child: Container(
+                                        height: 5,
+                                        decoration: BoxDecoration(
+                                          color: aujourd_hui == 0
+                                              ? Colors.white24
+                                              : AppColors.mint,
+                                          borderRadius: BorderRadius.circular(5),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ApsCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('7 prochains jours', style: AppTextStyles.xs),
+                              Text.rich(
+                                TextSpan(children: [
+                                  TextSpan(text: '$cette_semaine '),
+                                  const TextSpan(
+                                    text: 'RDV',
+                                    style: TextStyle(fontSize: 13, color: AppColors.ink3),
+                                  ),
+                                ]),
+                                style: AppTextStyles.strong.copyWith(
+                                    fontSize: 22, letterSpacing: -0.9),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  const Icon(Icons.videocam_outlined,
+                                      size: 13, color: AppColors.b6),
+                                  const SizedBox(width: 4),
+                                  Text('$en_visio en vidéo',
+                                      style: AppTextStyles.xs.copyWith(
+                                          color: AppColors.b6,
+                                          fontWeight: FontWeight.w800)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 );
             },
         );
@@ -337,31 +327,6 @@ class _StatLine extends ConsumerWidget {
             .length;
     }
 
-    Widget _sep() => Container(
-        width: 1,
-        height: 16,
-        color: AppColors.line,
-    );
-
-    Widget _stat(String value, String label) => RichText(
-        text: TextSpan(
-            children: [
-                TextSpan(
-                    text: '$value ',
-                    style: const TextStyle(
-                        fontFamily: AppTextStyles.fontMono,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.ink,
-                        fontSize: 12,
-                    ),
-                ),
-                TextSpan(
-                    text: label,
-                    style: const TextStyle(color: AppColors.inkSoft, fontSize: 12),
-                ),
-            ],
-        ),
-    );
 }
 
 /// ════════════════════════════════════════════════════════════
@@ -421,85 +386,21 @@ class _SegmentedTabs extends ConsumerWidget {
             ],
         );
 
-        return Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-                color: AppColors.card,
-                border: Border.all(color: AppColors.line),
-                borderRadius: BorderRadius.circular(100),
-                boxShadow: AppColors.shadowCard,
-            ),
-            child: AnimatedBuilder(
-                animation: controller,
-                builder: (context, _) {
-                    return Row(
-                        children: List.generate(tabs.length, (index) {
-                            final def = tabs[index];
-                            final active = controller.index == index;
-                            return Expanded(
-                                child: GestureDetector(
-                                    onTap: () => controller.animateTo(index),
-                                    child: AnimatedContainer(
-                                        duration: const Duration(milliseconds: 180),
-                                        padding:
-                                        const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                        decoration: BoxDecoration(
-                                            color: active ? AppColors.primary : Colors.transparent,
-                                            borderRadius: BorderRadius.circular(100),
-                                        ),
-                                        child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                                Flexible(
-                                                    child: Text(
-                                                        def.label,
-                                                        overflow: TextOverflow.ellipsis,
-                                                        style: TextStyle(
-                                                            fontFamily: AppTextStyles.fontDisplay,
-                                                            fontSize: 11.5,
-                                                            fontWeight: FontWeight.w600,
-                                                            color: active
-                                                                ? Colors.white
-                                                                : AppColors.inkSoft,
-                                                        ),
-                                                    ),
-                                                ),
-                                                if (def.count != null && def.count! > 0) ...[
-                                                    const SizedBox(width: 5),
-                                                    Container(
-                                                        padding: const EdgeInsets.symmetric(
-                                                            horizontal: 6,
-                                                            vertical: 1,
-                                                        ),
-                                                        decoration: BoxDecoration(
-                                                            color: active
-                                                                ? Colors.white.withValues(alpha: 0.22)
-                                                                : AppColors.green100,
-                                                            borderRadius: BorderRadius.circular(100),
-                                                        ),
-                                                        child: Text(
-                                                            '${def.count}',
-                                                            style: TextStyle(
-                                                                fontFamily: AppTextStyles.fontDisplay,
-                                                                fontSize: 9.5,
-                                                                fontWeight: FontWeight.w700,
-                                                                color: active
-                                                                    ? Colors.white
-                                                                    : AppColors.green700,
-                                                            ),
-                                                        ),
-                                                    ),
-                                                ],
-                                            ],
-                                        ),
-                                    ),
-                                ),
-                            );
-                        }),
-                    );
-                },
-            ),
+        return AnimatedBuilder(
+          animation: controller,
+          builder: (context, _) => ApsSegmented<int>(
+            value: controller.index,
+            onChanged: controller.animateTo,
+            segments: [
+              for (var i = 0; i < tabs.length; i++)
+                ApsSegment(
+                  i,
+                  (tabs[i].count != null && tabs[i].count! > 0)
+                      ? '${tabs[i].label} · ${tabs[i].count}'
+                      : tabs[i].label,
+                ),
+            ],
+          ),
         );
     }
 }
@@ -537,15 +438,7 @@ class _SectionHead extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                    Text(
-                        title,
-                        style: const TextStyle(
-                            fontFamily: AppTextStyles.fontDisplay,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.ink,
-                        ),
-                    ),
+                    Text(title.toUpperCase(), style: AppTextStyles.over),
                     if (actionLabel != null && onAction != null) ...[
                         const Spacer(),
                         GestureDetector(
@@ -592,8 +485,9 @@ class _PanelConfirme extends ConsumerWidget {
                     .toList();
 
                 if (rdvConfirmes.isEmpty) {
-                    return const Center(
-                        child: Text('Aucun rendez-vous à venir'),
+                    return const Align(
+                      alignment: Alignment.topCenter,
+                      child: ApsEmptyState(icon: Icons.event_note_outlined, tone: ApsTone.neutral, title: 'Aucun rendez-vous à venir'),
                     );
                 }
 
@@ -807,8 +701,9 @@ class _PanelAttente extends ConsumerWidget {
                     rdvList.where((r) => r.estNonPaye).toList();
 
                 if (rdvAttente.isEmpty) {
-                    return const Center(
-                        child: Text('Aucun rendez-vous en attente de paiement'),
+                    return const Align(
+                      alignment: Alignment.topCenter,
+                      child: ApsEmptyState(icon: Icons.event_note_outlined, tone: ApsTone.neutral, title: 'Aucun rendez-vous en attente de paiement'),
                     );
                 }
 
@@ -1008,8 +903,9 @@ class _PanelTermines extends ConsumerWidget {
                     .toList();
 
                 if (rdvTermines.isEmpty) {
-                    return const Center(
-                        child: Text('Aucun rendez-vous terminé'),
+                    return const Align(
+                      alignment: Alignment.topCenter,
+                      child: ApsEmptyState(icon: Icons.event_note_outlined, tone: ApsTone.neutral, title: 'Aucun rendez-vous terminé'),
                     );
                 }
 
@@ -1086,8 +982,9 @@ class _PanelAnnules extends ConsumerWidget {
                 rdvList.where((r) => r.statut == StatutRendezVous.annule).toList();
 
                 if (rdvAnnules.isEmpty) {
-                    return const Center(
-                        child: Text('Aucun rendez-vous annulé'),
+                    return const Align(
+                      alignment: Alignment.topCenter,
+                      child: ApsEmptyState(icon: Icons.event_note_outlined, tone: ApsTone.neutral, title: 'Aucun rendez-vous annulé'),
                     );
                 }
 
@@ -1155,89 +1052,57 @@ class _AppointmentCard extends StatelessWidget {
 
     @override
     Widget build(BuildContext context) {
-        return CardSurface(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(12),
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        return ApsCard(
+          margin: const EdgeInsets.only(bottom: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
                 children: [
-                    Row(
-                        children: [
-                            Text(
-                                time,
-                                style: const TextStyle(
-                                    fontFamily: AppTextStyles.fontMono,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.ink,
-                                ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                                dateLabel,
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.inkSoft,
-                                ),
-                            ),
-                            const Spacer(),
-                            Container(
-                                width: 32,
-                                height: 32,
-                                alignment: Alignment.center,
-                                decoration: const BoxDecoration(
-                                    color: AppColors.primary,
-                                    shape: BoxShape.circle,
-                                ),
-                                child: Text(
-                                    initials,
-                                    style: const TextStyle(
-                                        fontFamily: AppTextStyles.fontDisplay,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 11,
-                                        color: Colors.white,
-                                    ),
-                                ),
-                            ),
-                        ],
+                  SizedBox(
+                    width: 50,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(time, style: AppTextStyles.mono.copyWith(fontSize: 13)),
+                        Text(dateLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.xs.copyWith(fontSize: 10)),
+                      ],
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                        name,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontFamily: AppTextStyles.fontDisplay,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.ink,
+                  ),
+                  ApsAvatar(name: name, size: 36),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.strong.copyWith(fontSize: 13.5)),
+                        Text(
+                          [subtitle, subtitle2].where((e) => e.isNotEmpty).join(' · '),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.xs,
                         ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                        subtitle,
-                        style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.inkSoft,
-                        ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                        subtitle2,
-                        style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.inkSoft,
-                        ),
-                    ),
-                    if (bottom != null) ...[
-                        const SizedBox(height: 12),
-                        bottom!,
-                    ],
-                        if (footer != null) ...[
-                          const SizedBox(height: 12),
-                          footer!,
-                        ],
+                  ),
                 ],
-            ),
+              ),
+              if (bottom != null) ...[
+                const ApsDivider(),
+                bottom!,
+              ],
+              if (footer != null) ...[
+                const SizedBox(height: 12),
+                footer!,
+              ],
+            ],
+          ),
         );
     }
 }

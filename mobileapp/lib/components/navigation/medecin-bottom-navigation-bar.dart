@@ -1,25 +1,26 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
+
+import '../style/colors.dart';
+import '../ui/aps_ui.dart';
 
 /// ============================================================
 /// medecin-bottom-navigation-bar.dart
 ///
-/// Barre de navigation basse flottante de l'espace médecin (APS).
-/// Reproduit fidèlement le composant `.bottomnav` / `.navitem`
-/// de la maquette HTML : items "Rendez-vous", "Agenda", "Profil",
-/// "Aide", avec pastille de notification sur le 1er item.
+/// Barre de navigation basse de l'espace médecin — barre flottante
+/// sombre de la refonte 2026 (`.tab` dans new-mobile-ui.html).
+/// Items : Rendez-vous, Demandes, Agenda, Compte, Aide.
 /// ============================================================
 
-/// Palette reprise des design tokens CSS (`:root`).
+/// Couleurs conservées pour compatibilité ; elles suivent la palette.
 class MedecinNavColors {
-  static const green900 = Color(0xFF0F3A2B);
-  static const green700 = Color(0xFF1E8A63);
-  static const green100 = Color(0xFFE4F3EC);
-  static const coral500 = Color(0xFFE1604A);
-  static const ink = Color(0xFF16241F);
-  static const inkFaint = Color(0xFF93A39C);
-  static const card = Color(0xFFFFFFFF);
-  static const line = Color(0xFFE5ECE8);
+  static const green900 = AppColors.b9;
+  static const green700 = AppColors.b7;
+  static const green100 = AppColors.b1;
+  static const coral500 = AppColors.coral500;
+  static const ink = AppColors.ink;
+  static const inkFaint = AppColors.ink3;
+  static const card = AppColors.surface;
+  static const line = AppColors.line;
 }
 
 /// Un item de la barre de navigation.
@@ -35,8 +36,6 @@ class MedecinNavItem {
   });
 }
 
-/// Barre de navigation basse flottante, façon "pill" arrondie,
-/// avec léger effet de flou (backdrop-filter blur dans le CSS).
 class MedecinBottomNavigationBar extends StatelessWidget {
   /// Index de l'onglet actif.
   final int currentIndex;
@@ -48,8 +47,8 @@ class MedecinBottomNavigationBar extends StatelessWidget {
   /// « Rendez-vous » (politique de fonds v2, phase 6). `0` = pas de pastille.
   final int notificationsNonLues;
 
-  /// Liste des items. Par défaut : Rendez-vous / Demandes / Agenda / Profil / Aide,
-  /// identique à la maquette ; la pastille de « Rendez-vous » suit
+  /// Liste des items. Par défaut : Rendez-vous / Demandes / Agenda /
+  /// Compte / Aide ; la pastille de « Rendez-vous » suit
   /// [notificationsNonLues].
   final List<MedecinNavItem>? items;
 
@@ -65,151 +64,25 @@ class MedecinBottomNavigationBar extends StatelessWidget {
       items ??
       [
         MedecinNavItem(
-          icon: Icons.event_note_outlined,
-          label: 'Rendez-vous',
+          icon: Icons.grid_view_rounded,
+          label: 'Tableau',
           badgeCount: notificationsNonLues > 0 ? notificationsNonLues : null,
         ),
-        const MedecinNavItem(
-          icon: Icons.campaign_outlined,
-          label: 'Demandes',
-        ),
-        const MedecinNavItem(
-          icon: Icons.schedule_outlined,
-          label: 'Agenda',
-        ),
-        const MedecinNavItem(
-          icon: Icons.person_outline,
-          label: 'Profil',
-        ),
-        const MedecinNavItem(
-          icon: Icons.help_outline,
-          label: 'Aide',
-        ),
+        const MedecinNavItem(icon: Icons.campaign_outlined, label: 'Demandes'),
+        const MedecinNavItem(icon: Icons.calendar_today_rounded, label: 'Agenda'),
+        const MedecinNavItem(icon: Icons.person_outline_rounded, label: 'Compte'),
+        const MedecinNavItem(icon: Icons.help_outline_rounded, label: 'Aide'),
       ];
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-          child: Container(
-            height: 66,
-            decoration: BoxDecoration(
-              color: MedecinNavColors.card.withOpacity(0.94),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: MedecinNavColors.line),
-              boxShadow: [
-                BoxShadow(
-                  color: MedecinNavColors.green900.withOpacity(0.28),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
-                  spreadRadius: -14,
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(_items.length, (index) {
-                final item = _items[index];
-                final active = index == currentIndex;
-                return _NavItemWidget(
-                  item: item,
-                  active: active,
-                  onTap: () => onTap(index),
-                );
-              }),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NavItemWidget extends StatelessWidget {
-  final MedecinNavItem item;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _NavItemWidget({
-    required this.item,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color =
-    active ? MedecinNavColors.green700 : MedecinNavColors.inkFaint;
-
-    return InkWell(
+    return ApsFloatingTabBar(
+      currentIndex: currentIndex,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: SizedBox(
-        width: 58,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: active
-                        ? MedecinNavColors.green100
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(item.icon, size: 20, color: color),
-                ),
-                if (item.badgeCount != null && item.badgeCount! > 0)
-                  Positioned(
-                    top: -2,
-                    right: 4,
-                    child: Container(
-                      constraints: const BoxConstraints(minWidth: 15),
-                      height: 15,
-                      padding: const EdgeInsets.symmetric(horizontal: 3),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: MedecinNavColors.coral500,
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                      child: Text(
-                        // « 9+ » au-delà de 9, comme la cloche (le serveur
-                        // peut en compter bien plus).
-                        item.badgeCount! > 9 ? '9+' : '${item.badgeCount}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w700,
-                          height: 1,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Text(
-              item.label,
-              style: TextStyle(
-                fontFamily: 'Sora',
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      ),
+      items: [
+        for (final i in _items)
+          ApsTabItem(label: i.label, icon: i.icon, badge: i.badgeCount ?? 0),
+      ],
     );
   }
 }

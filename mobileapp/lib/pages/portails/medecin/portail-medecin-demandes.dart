@@ -18,6 +18,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../components/cards/badge_chip.dart';
 import '../../../components/style/colors.dart';
 import '../../../components/style/text_styles.dart';
+import '../../../components/ui/aps_ui.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/offre_rdv_controller.dart';
 import '../../../models/offre_rdv_models.dart';
@@ -46,27 +47,28 @@ class _PortailMedecinDemandesState extends ConsumerState<PortailMedecinDemandes>
 
     // Onglet du shell (MedecinHomeShell) : pas de Scaffold ici.
     return Container(
-      color: AppColors.paper,
+      color: AppColors.bg,
       child: RefreshIndicator(
+        color: AppColors.violet,
         onRefresh: () => ref.refresh(offresRdvMedecinProvider(_mesReponses).future),
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 120),
           children: [
             const _PageHead(),
-            const Text(
-              'Des patients de votre ville cherchent un médecin de votre spécialité à une date précise. '
-              'Répondez si vous êtes disponible : le patient choisit parmi les médecins qui ont répondu.',
-              style: AppTextStyles.cardMeta,
+            ApsNote.text(
+              'Des patients de votre ville cherchent votre spécialité à une date précise. '
+              'Répondez au tarif de votre profil : le patient choisit parmi ceux qui ont répondu.',
+              icon: Icons.campaign_outlined,
+              tone: ApsTone.violet,
             ),
-            const SizedBox(height: 12),
-            SegmentedButton<bool>(
+            const SizedBox(height: 14),
+            ApsSegmented<bool>(
+              value: _mesReponses,
+              onChanged: (v) => setState(() => _mesReponses = v),
               segments: const [
-                ButtonSegment(value: false, label: Text('Ouvertes'), icon: Icon(Icons.campaign_outlined)),
-                ButtonSegment(value: true, label: Text('Mes réponses'), icon: Icon(Icons.send_outlined)),
+                ApsSegment(false, 'Ouvertes', icon: Icons.campaign_outlined),
+                ApsSegment(true, 'Mes réponses', icon: Icons.send_outlined),
               ],
-              selected: {_mesReponses},
-              showSelectedIcon: false,
-              onSelectionChanged: (s) => setState(() => _mesReponses = s.first),
             ),
             const SizedBox(height: 14),
             offresAsync.when(
@@ -74,34 +76,22 @@ class _PortailMedecinDemandesState extends ConsumerState<PortailMedecinDemandes>
                 padding: EdgeInsets.all(24),
                 child: Center(child: CircularProgressIndicator()),
               ),
-              error: (err, _) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Column(
-                  children: [
-                    Text('$err', textAlign: TextAlign.center, style: const TextStyle(color: AppColors.dangerDark)),
-                    TextButton(
-                      onPressed: () => ref.invalidate(offresRdvMedecinProvider(_mesReponses)),
-                      child: const Text('Réessayer'),
-                    ),
-                  ],
-                ),
+              error: (err, _) => ApsEmptyState(
+                icon: Icons.wifi_off_rounded,
+                tone: ApsTone.neutral,
+                title: 'Demandes indisponibles',
+                message: '$err',
+                actionLabel: 'Réessayer',
+                onAction: () => ref.invalidate(offresRdvMedecinProvider(_mesReponses)),
               ),
               data: (offres) => offres.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 28),
-                      child: Column(
-                        children: [
-                          const Icon(Icons.inbox_outlined, size: 30, color: AppColors.inkFaint),
-                          const SizedBox(height: 6),
-                          Text(
-                            _mesReponses
-                                ? "Vous n'avez répondu à aucune demande."
-                                : 'Aucune demande ouverte pour votre spécialité dans votre ville.',
-                            textAlign: TextAlign.center,
-                            style: AppTextStyles.cardMeta,
-                          ),
-                        ],
-                      ),
+                  ? ApsEmptyState(
+                      icon: Icons.inbox_outlined,
+                      tone: ApsTone.violet,
+                      title: _mesReponses ? 'Aucune réponse' : 'Aucune demande ouverte',
+                      message: _mesReponses
+                          ? "Vous n'avez répondu à aucune demande."
+                          : 'Aucune demande pour votre spécialité dans votre ville.',
                     )
                   : Column(
                       children: [
@@ -197,15 +187,14 @@ class _CarteDemandeState extends ConsumerState<_CarteDemande> {
     final peutRepondre = ouverte && (rep == null || rep.statut == StatutReponseOffre.retiree);
     final peutRetirer = ouverte && rep?.statut == StatutReponseOffre.proposee;
 
-    return CardSurface(
-      padding: const EdgeInsets.all(14),
+    return ApsCard(
+      margin: const EdgeInsets.only(bottom: 10),
+      color: ouverte && rep == null ? AppColors.violet100 : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: Text(_dateOffre(o.dateSouhaitee), style: AppTextStyles.cardTitle)),
               if (rep != null)
                 BadgeChip(
                   label: rep.statut.libelle,
@@ -216,28 +205,36 @@ class _CarteDemandeState extends ConsumerState<_CarteDemande> {
                           : BadgeChipStyle.amber,
                 )
               else if (!ouverte)
-                BadgeChip(label: o.statut.libelle),
+                BadgeChip(label: o.statut.libelle)
+              else
+                const ApsPill('Demande express', tone: ApsTone.violet, dot: true, background: Colors.white),
+              const Spacer(),
+              if (o.nombreReponses != null)
+                Text(
+                  o.nombreReponses == 0
+                      ? 'Aucune réponse'
+                      : '${o.nombreReponses} réponse${o.nombreReponses! > 1 ? 's' : ''}',
+                  style: AppTextStyles.xs,
+                ),
             ],
           ),
-          const SizedBox(height: 6),
-          _Meta(
-            o.typeRdv == TypeRdvOffre.teleconsultation ? Icons.videocam_outlined : Icons.medical_services_outlined,
-            o.typeRdv.libelle,
+          const SizedBox(height: 8),
+          Text('${o.specialite} · ${_dateOffre(o.dateSouhaitee)}', style: AppTextStyles.strong),
+          const SizedBox(height: 2),
+          Text(
+            [
+              o.ville,
+              o.typeRdv.libelle,
+              if (o.motif != null && o.motif!.isNotEmpty) '« ${o.motif} »',
+            ].join(' · '),
+            style: AppTextStyles.xs,
           ),
-          _Meta(Icons.location_on_outlined, '${o.ville} · ${o.specialite}'),
-          if (o.nombreReponses != null)
-            _Meta(
-              Icons.people_outline,
-              o.nombreReponses == 0
-                  ? 'Aucun médecin n\'a encore répondu'
-                  : '${o.nombreReponses} réponse${o.nombreReponses! > 1 ? 's' : ''}',
-            ),
-          if (o.motif != null && o.motif!.isNotEmpty) _Meta(Icons.notes_outlined, 'Motif : ${o.motif}'),
           if (widget.mesReponses && rep?.statut == StatutReponseOffre.retenue) ...[
-            const SizedBox(height: 8),
-            const Text(
-              'Le patient vous a choisi. Le rendez-vous apparaîtra dans vos rendez-vous dès qu\'il sera payé.',
-              style: AppTextStyles.cardMeta,
+            const SizedBox(height: 10),
+            ApsNote.text(
+              "Le rendez-vous apparaîtra dans vos rendez-vous dès qu'il sera payé.",
+              bold: 'Le patient vous a choisi.',
+              icon: Icons.check_circle_outline_rounded,
             ),
           ],
           if (widget.mesReponses &&
@@ -245,45 +242,31 @@ class _CarteDemandeState extends ConsumerState<_CarteDemande> {
               o.statut == StatutOffreRdv.attribuee &&
               !o.attribueeAMoi) ...[
             const SizedBox(height: 8),
-            const Text('Le patient a choisi un autre médecin.', style: AppTextStyles.cardMeta),
+            Text('Le patient a choisi un autre médecin.', style: AppTextStyles.xs),
           ],
           if (peutRepondre) ...[
             const SizedBox(height: 12),
             TextField(
               controller: _message,
               maxLength: 500,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Un mot au patient (facultatif)',
                 hintText: 'Ex. disponible, consultation au cabinet',
-                isDense: true,
-                filled: true,
-                fillColor: AppColors.paper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
-            const Text(
+            Text(
               'Votre tarif et votre profil seront présentés au patient. En répondant, '
               'vous vous engagez à être disponible à cette heure.',
-              style: TextStyle(fontSize: 11, color: AppColors.inkFaint),
+              style: AppTextStyles.xs,
             ),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
+            const SizedBox(height: 10),
+            ApsButton(
+              label: 'Je suis disponible',
+              icon: Icons.check_rounded,
+              variant: ApsButtonVariant.violet,
+              small: true,
+              loading: _enCours,
               onPressed: _enCours ? null : _repondre,
-              icon: _enCours
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.check, size: 18),
-              label: const Text('Je suis disponible'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
             ),
           ],
           if (peutRetirer) ...[
@@ -292,14 +275,14 @@ class _CarteDemandeState extends ConsumerState<_CarteDemande> {
               children: [
                 Expanded(
                   child: rep!.message != null && rep.message!.isNotEmpty
-                      ? Text('Votre mot : « ${rep.message} »', style: AppTextStyles.cardMeta)
+                      ? Text('Votre mot : « ${rep.message} »', style: AppTextStyles.xs)
                       : const SizedBox.shrink(),
                 ),
                 TextButton.icon(
                   onPressed: _enCours ? null : _retirer,
                   icon: const Icon(Icons.undo, size: 16),
                   label: const Text('Retirer ma réponse'),
-                  style: TextButton.styleFrom(foregroundColor: AppColors.inkSoft),
+                  style: TextButton.styleFrom(foregroundColor: AppColors.red),
                 ),
               ],
             ),
@@ -315,54 +298,7 @@ class _PageHead extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(2, 10, 56, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'ESPACE MÉDECIN',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-              color: AppColors.primary,
-            ),
-          ),
-          SizedBox(height: 5),
-          Text(
-            'Demandes patients',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.2,
-              color: AppColors.ink,
-            ),
-          ),
-        ],
-      ),
-    );
+    // La cloche du shell flotte en haut à droite : place réservée.
+    return const ApsPageTitle('Demandes express', trailing: SizedBox(width: 42));
   }
-}
-
-class _Meta extends StatelessWidget {
-  final IconData icone;
-  final String texte;
-
-  const _Meta(this.icone, this.texte);
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 3),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icone, size: 14, color: AppColors.inkFaint),
-            const SizedBox(width: 6),
-            Expanded(child: Text(texte, style: AppTextStyles.cardMeta)),
-          ],
-        ),
-      );
 }

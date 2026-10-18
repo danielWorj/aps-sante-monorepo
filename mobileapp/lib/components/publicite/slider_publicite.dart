@@ -88,9 +88,12 @@ class _SliderPubliciteState extends ConsumerState<SliderPublicite> {
   @override
   Widget build(BuildContext context) {
     final etat = ref.watch(sliderPageProvider(widget.code));
+    // La carte « Réserver cet espace » reste visible pour tout visiteur, même
+    // sans emplacement configuré ni forfait actif pour la page.
+    if (etat.isLoading && !etat.hasValue) return const SizedBox.shrink();
     final slider = etat.value;
-    if (slider == null) return const SizedBox.shrink();
-    final pubs = slider.publicites;
+    final pubs = slider?.publicites ?? const <PubliciteDiffusee>[];
+    final nombrePlaces = slider?.nombrePlaces ?? 0;
     _demarrer(pubs.length);
     if (pubs.isNotEmpty) _vue(pubs[_courant.clamp(0, pubs.length - 1)]);
 
@@ -151,13 +154,13 @@ class _SliderPubliciteState extends ConsumerState<SliderPublicite> {
               ],
             ),
           ),
-        if (slider.reservationPossible) ...[
-          const SizedBox(height: 10),
+        ...[
+          if (pubs.isNotEmpty) const SizedBox(height: 10),
           _CarteReserver(
             texte: pubs.isEmpty
                 ? "Cet emplacement est disponible pour les annonceurs partenaires d'ApSa."
-                : slider.nombrePlaces > pubs.length
-                    ? 'Encore ${slider.nombrePlaces - pubs.length} position(s) libre(s) dans ce carrousel.'
+                : nombrePlaces > pubs.length
+                    ? 'Encore ${nombrePlaces - pubs.length} position(s) libre(s) dans ce carrousel.'
                     : 'Réservez votre position pour les prochaines périodes.',
             onTap: _reserver,
           ),

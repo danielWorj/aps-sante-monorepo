@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
+
 import '../style/colors.dart';
 import '../style/text_styles.dart';
-import '../buttons/call_button.dart';
-import '../buttons/itinerary_button.dart';
+import '../ui/aps_ui.dart';
 import 'badge_chip.dart';
 
 /// Type de structure de santé, pilote la couleur de la vignette.
 enum StructureType { hopital, clinique, centreDeSante }
 
-/// Carte « Structure de santé » — `.list-card` (hôpitaux / cliniques / centres).
+/// Carte « Structure de santé » — hôpitaux, cliniques, centres.
 ///
 /// ```dart
 /// CardStructure(
@@ -51,23 +51,14 @@ class CardStructure extends StatelessWidget {
     }
   }
 
-  Color get _thumbBg {
+  ApsTone get _tone {
     switch (type) {
       case StructureType.hopital:
-        return AppColors.coral100;
+        return ApsTone.sky;
       case StructureType.clinique:
+        return ApsTone.violet;
       case StructureType.centreDeSante:
-        return AppColors.green100;
-    }
-  }
-
-  Color get _thumbFg {
-    switch (type) {
-      case StructureType.hopital:
-        return AppColors.coral500;
-      case StructureType.clinique:
-      case StructureType.centreDeSante:
-        return AppColors.green700;
+        return ApsTone.green;
     }
   }
 
@@ -76,59 +67,67 @@ class CardStructure extends StatelessWidget {
     return CardSurface(
       onTap: onTap,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: _thumbBg,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: Icon(Icons.local_hospital_outlined, color: _thumbFg, size: 24),
-          ),
+          ApsIconTile(Icons.local_hospital_outlined, tone: _tone, size: 58),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(nom, style: AppTextStyles.cardTitle),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(nom,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.strong),
+                    ),
+                    if (verifiee) ...[
+                      const SizedBox(width: 4),
+                      const ApsVerified(size: 13),
+                    ],
+                  ],
+                ),
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    const Icon(Icons.location_on_outlined, size: 11, color: AppColors.inkFaint),
+                    const Icon(Icons.location_on_outlined,
+                        size: 12, color: AppColors.ink3),
                     const SizedBox(width: 3),
                     Expanded(
-                      child: Text(ville, style: AppTextStyles.cardMeta, overflow: TextOverflow.ellipsis),
+                      child: Text(ville,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.xs),
                     ),
                   ],
                 ),
                 const SizedBox(height: 6),
-                Wrap(
-                  spacing: 5,
-                  runSpacing: 5,
-                  children: [
-                    BadgeChip(label: _typeLabel, style: BadgeChipStyle.outline),
-                    if (verifiee)
-                      const BadgeChip(
-                        label: 'Vérifiée',
-                        style: BadgeChipStyle.green,
-                        icon: Icons.verified_outlined,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 9),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    CallButton(onPressed: onAppeler),
-                    const SizedBox(width: 6),
-                    ItineraryButton(onPressed: onItineraire),
-                  ],
-                ),
+                BadgeChip(label: _typeLabel, style: BadgeChipStyle.outline),
               ],
             ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            children: [
+              ApsIconButton(
+                icon: Icons.call_outlined,
+                flat: true,
+                size: 38,
+                iconColor: AppColors.b6,
+                tooltip: 'Appeler',
+                onPressed: onAppeler,
+              ),
+              const SizedBox(height: 6),
+              ApsIconButton(
+                icon: Icons.near_me_outlined,
+                flat: true,
+                size: 38,
+                iconColor: AppColors.ink2,
+                tooltip: 'Itinéraire',
+                onPressed: onItineraire,
+              ),
+            ],
           ),
         ],
       ),

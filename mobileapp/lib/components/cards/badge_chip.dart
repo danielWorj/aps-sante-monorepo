@@ -37,21 +37,20 @@ class BadgeChip extends StatelessWidget {
         break;
       case BadgeChipStyle.amber:
         bg = AppColors.amber100;
-        fg = AppColors.amber500;
+        fg = AppColors.amber700;
         break;
       case BadgeChipStyle.coral:
         bg = AppColors.coral100;
-        fg = AppColors.coral500;
+        fg = AppColors.coral600;
         break;
       case BadgeChipStyle.outline:
-        bg = AppColors.paper;
-        fg = AppColors.inkSoft;
-        border = Border.all(color: AppColors.lineStrong);
+        bg = AppColors.bg;
+        fg = AppColors.ink2;
         break;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
         border: border,
@@ -61,14 +60,13 @@ class BadgeChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 11, color: fg),
+            Icon(icon, size: 12, color: fg),
             const SizedBox(width: 4),
           ],
           Text(
             label,
-            style: (mono ? AppTextStyles.price : AppTextStyles.badge).copyWith(
+            style: (mono ? AppTextStyles.mono : AppTextStyles.badge).copyWith(
               fontSize: mono ? 10 : 10.5,
-              fontWeight: FontWeight.w600,
               color: fg,
             ),
           ),
@@ -105,7 +103,7 @@ class CardSurface extends StatelessWidget {
   const CardSurface({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(12),
+    this.padding = const EdgeInsets.all(14),
     this.margin,
     this.onTap,
   });
@@ -117,23 +115,22 @@ class CardSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = Container(
+    final r = BorderRadius.circular(22);
+    return Container(
       margin: margin ?? const EdgeInsets.only(bottom: 12),
-      padding: padding,
       decoration: BoxDecoration(
         color: AppColors.card,
-        border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: r,
         boxShadow: AppColors.shadowCard,
       ),
-      child: child,
-    );
-
-    if (onTap == null) return content;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: content,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: r,
+          child: Padding(padding: padding, child: child),
+        ),
+      ),
     );
   }
 }

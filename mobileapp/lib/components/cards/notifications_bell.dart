@@ -17,6 +17,7 @@ import '../../models/rendez_vous_models.dart';
 import '../../utils/fonds.dart';
 import '../style/colors.dart';
 import '../style/text_styles.dart';
+import '../ui/aps_ui.dart';
 
 /// Icône associée à chaque type de notification (miroir de ICONES côté web).
 IconData iconeNotification(TypeNotification type) {
@@ -45,6 +46,25 @@ IconData iconeNotification(TypeNotification type) {
       return Icons.hourglass_top_outlined;
     case TypeNotification.inconnu:
       return Icons.notifications_none_outlined;
+  }
+}
+
+/// Teinte de la tuile d'icône selon le type (vert = RDV, violet = demande
+/// express, ambre = attente / échéance, bleu = assurance).
+ApsTone _teinteNotification(TypeNotification type) {
+  switch (type) {
+    case TypeNotification.offreRdvNouvelle:
+    case TypeNotification.offreRdvReponse:
+    case TypeNotification.miseEnRelationRecue:
+      return ApsTone.violet;
+    case TypeNotification.rdvAReprogrammer:
+    case TypeNotification.offreRdvExpiree:
+    case TypeNotification.abonnementAssuranceEcheance:
+      return ApsTone.amber;
+    case TypeNotification.abonnementAssuranceActive:
+      return ApsTone.sky;
+    default:
+      return ApsTone.green;
   }
 }
 
@@ -80,52 +100,44 @@ class NotificationsBell extends ConsumerWidget {
     return Semantics(
       button: true,
       label: nonLues > 0 ? 'Notifications ($nonLues non lues)' : 'Notifications',
-      child: Material(
-        color: AppColors.card,
-        shape: const CircleBorder(side: BorderSide(color: AppColors.line)),
-        elevation: 1,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: () => _ouvrirListe(context, ref),
-          child: SizedBox(
-            width: 40,
-            height: 40,
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                const Icon(
-                  Icons.notifications_none_outlined,
-                  size: 22,
-                  color: AppColors.ink,
-                ),
-                if (nonLues > 0)
-                  Positioned(
-                    top: -3,
-                    right: -3,
-                    child: Container(
-                      constraints:
-                          const BoxConstraints(minWidth: 17, minHeight: 17),
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.danger,
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                      child: Text(
-                        libelleCompteur(nonLues),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w700,
-                          height: 1,
-                        ),
+      child: SizedBox(
+        width: 42,
+        height: 42,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            ApsIconButton(
+              icon: Icons.notifications_none_rounded,
+              onPressed: () => _ouvrirListe(context, ref),
+            ),
+            if (nonLues > 0)
+              Positioned(
+                top: -4,
+                right: -4,
+                child: IgnorePointer(
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.coral500,
+                      borderRadius: BorderRadius.circular(99),
+                      border: Border.all(color: AppColors.bg, width: 2),
+                    ),
+                    child: Text(
+                      libelleCompteur(nonLues),
+                      style: const TextStyle(
+                        fontFamily: AppTextStyles.fontSans,
+                        color: Colors.white,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        height: 1,
                       ),
                     ),
                   ),
-              ],
-            ),
-          ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -135,9 +147,6 @@ class NotificationsBell extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.card,
-      // Coins carrés, comme les dialogues de l'application.
-      shape: const RoundedRectangleBorder(),
       builder: (feuille) => _FeuilleNotifications(
         onOuvrir: (notification) {
           Navigator.of(feuille).pop();
@@ -184,59 +193,49 @@ class _FeuilleNotifications extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Center(
+              child: Container(
+                width: 42,
+                height: 5,
+                margin: const EdgeInsets.only(top: 10, bottom: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.lineStrong,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+            ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 10, 8),
+              padding: const EdgeInsets.fromLTRB(18, 4, 10, 6),
               child: Row(
                 children: [
-                  const Expanded(
-                    child: Text(
-                      'Notifications',
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.fontDisplay,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                  ),
+                  Expanded(child: Text('Notifications', style: AppTextStyles.m)),
                   if (etat.nonLues > 0)
                     TextButton(
                       onPressed: () => ref
                           .read(notificationControllerProvider.notifier)
                           .marquerToutesLues(),
-                      child: const Text(
-                        'Tout marquer comme lu',
-                        style: TextStyle(
-                          fontFamily: AppTextStyles.fontDisplay,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primary,
-                        ),
-                      ),
+                      child: const Text('Tout lire'),
                     ),
                 ],
               ),
             ),
-            const Divider(height: 1, color: AppColors.line),
             if (etat.notifications.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 18, vertical: 28),
-                child: Text(
-                  'Aucune notification.',
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.fontBody,
-                    fontSize: 13,
-                    color: AppColors.inkSoft,
-                  ),
-                ),
+              const ApsEmptyState(
+                icon: Icons.notifications_none_rounded,
+                tone: ApsTone.neutral,
+                title: 'Aucune notification',
+                message: 'Vos rendez-vous, paiements et demandes apparaîtront ici.',
               )
             else
               Flexible(
                 child: ListView.separated(
                   shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(0, 4, 0, 12),
                   itemCount: etat.notifications.length,
-                  separatorBuilder: (_, __) =>
-                      const Divider(height: 1, color: AppColors.line),
+                  separatorBuilder: (_, _) => const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 18),
+                    child: Divider(height: 1, color: AppColors.line),
+                  ),
                   itemBuilder: (_, i) => _LigneNotification(
                     notification: etat.notifications[i],
                     onTap: () => onOuvrir(etat.notifications[i]),
@@ -262,19 +261,14 @@ class _LigneNotification extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      child: Container(
-        color: lue ? Colors.transparent : AppColors.primarySurface,
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Icon(
-                iconeNotification(notification.type),
-                size: 20,
-                color: lue ? AppColors.inkFaint : AppColors.primary,
-              ),
+            ApsIconTile(
+              iconeNotification(notification.type),
+              tone: lue ? ApsTone.neutral : _teinteNotification(notification.type),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -283,39 +277,32 @@ class _LigneNotification extends StatelessWidget {
                 children: [
                   Text(
                     notification.titre,
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontDisplay,
+                    style: AppTextStyles.strong.copyWith(
                       fontSize: 13,
-                      fontWeight: lue ? FontWeight.w500 : FontWeight.w700,
-                      color: AppColors.ink,
+                      fontWeight: lue ? FontWeight.w600 : FontWeight.w800,
                     ),
                   ),
                   if (notification.message.isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    Text(
-                      notification.message,
-                      style: const TextStyle(
-                        fontFamily: AppTextStyles.fontBody,
-                        fontSize: 12,
-                        height: 1.35,
-                        color: AppColors.inkSoft,
-                      ),
-                    ),
+                    Text(notification.message, style: AppTextStyles.small.copyWith(fontSize: 12)),
                   ],
                   if (notification.dateCreation != null) ...[
-                    const SizedBox(height: 3),
-                    Text(
-                      dateCourte(notification.dateCreation),
-                      style: const TextStyle(
-                        fontFamily: AppTextStyles.fontBody,
-                        fontSize: 11,
-                        color: AppColors.inkFaint,
-                      ),
-                    ),
+                    const SizedBox(height: 4),
+                    Text(dateCourte(notification.dateCreation), style: AppTextStyles.xs),
                   ],
                 ],
               ),
             ),
+            if (!lue)
+              Container(
+                width: 8,
+                height: 8,
+                margin: const EdgeInsets.only(top: 6, left: 8),
+                decoration: const BoxDecoration(
+                  color: AppColors.coral500,
+                  shape: BoxShape.circle,
+                ),
+              ),
           ],
         ),
       ),

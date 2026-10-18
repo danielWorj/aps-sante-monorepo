@@ -110,26 +110,21 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
     final servicesAsync = ref.watch(listeServicesAssuranceControllerProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.paper,
+      backgroundColor: AppColors.bg,
       extendBody: true,
-      appBar: AppBar(
-        backgroundColor: AppColors.paper,
-        elevation: 0,
-        foregroundColor: AppColors.ink,
-        title: const Text('Annuaire', style: AppTextStyles.h3),
-      ),
       body: Stack(
         children: [
           RefreshIndicator(
+            color: AppColors.b6,
             onRefresh: () => ref
                 .read(listeServicesAssuranceControllerProvider.notifier)
                 .rafraichir(),
             child: _buildContent(context, servicesAsync),
           ),
           Positioned(
-            left: 10,
-            right: 10,
-            bottom: 10,
+            left: 16,
+            right: 16,
+            bottom: 12 + MediaQuery.paddingOf(context).bottom,
             child: AppBottomNav(
               currentIndex: _navIndex,
               onTap: _onBottomNavTap,
@@ -147,85 +142,64 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
       BuildContext context,
       AsyncValue<List<ServiceAssurance>> servicesAsync,
       ) {
-    return ListView(
-      // padding bas augmenté pour ne pas passer sous la barre flottante
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 110),
+    return SafeArea(
+      bottom: false,
+      child: ListView(
+      padding: EdgeInsets.fromLTRB(
+          18, 6, 18, AppBottomNav.reservedHeight + MediaQuery.paddingOf(context).bottom),
       children: [
         // ---- En-tête ------------------------------------------------
-        Padding(
-          padding: const EdgeInsets.fromLTRB(2, 14, 2, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'ANNUAIRE PUBLIC',
-                style: AppTextStyles.badge.copyWith(
-                  fontSize: 10.5,
-                  letterSpacing: 1.2,
-                  color: AppColors.green700,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text('Assurances', style: AppTextStyles.h3),
-              const SizedBox(height: 4),
-              Text(
-                'Toutes les compagnies et courtiers santé référencés sur APS.',
-                style: AppTextStyles.body.copyWith(fontSize: 12.5),
-              ),
-            ],
-          ),
+        ApsPageTitle(
+          'Assurances',
+          subtitle: 'Compagnies et courtiers santé référencés',
+          trailing: Navigator.of(context).canPop()
+              ? ApsIconButton(
+                  icon: Icons.close_rounded,
+                  tooltip: 'Fermer',
+                  onPressed: () => Navigator.of(context).maybePop(),
+                )
+              : null,
         ),
 
         // ---- Recherche ------------------------------------------------
-        const SizedBox(height: 10),
         _SearchField(
           controller: _searchController,
-          hint: 'Rechercher une compagnie, une ville...',
+          hint: 'Compagnie, ville…',
           onChanged: (value) => setState(() => _query = value),
         ),
 
         // ---- Filtres ------------------------------------------------
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 34,
-          child: servicesAsync.when(
-            data: (services) => ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                for (final ville in _villesDisponibles(services))
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _FilterChip(
-                      label: ville,
-                      icon: ville == 'Toutes les villes'
-                          ? Icons.place_outlined
-                          : null,
-                      active: _villeSelectionnee == ville,
-                      onTap: () => setState(() => _villeSelectionnee = ville),
-                    ),
-                  ),
-                _FilterChip(
-                  label: 'Vérifiées APS',
-                  icon: Icons.verified_outlined,
-                  active: _verifieesUniquement,
-                  onTap: () =>
-                      setState(() => _verifieesUniquement = !_verifieesUniquement),
+        const SizedBox(height: 12),
+        servicesAsync.when(
+          data: (services) => ApsChipRow(
+            children: [
+              ApsChip(
+                'Vérifiées APS',
+                icon: Icons.verified_outlined,
+                soft: _verifieesUniquement,
+                onTap: () =>
+                    setState(() => _verifieesUniquement = !_verifieesUniquement),
+              ),
+              for (final ville in _villesDisponibles(services))
+                ApsChip(
+                  ville,
+                  icon: ville == 'Toutes les villes' ? null : Icons.location_on_outlined,
+                  selected: _villeSelectionnee == ville,
+                  onTap: () => setState(() => _villeSelectionnee = ville),
                 ),
-              ],
-            ),
-            // Filtres non disponibles tant que la liste n'a pas répondu au
-            // moins une fois — on évite un flash de puces vides.
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
+            ],
           ),
+          // Filtres non disponibles tant que la liste n'a pas répondu au
+          // moins une fois — on évite un flash de puces vides.
+          loading: () => const SizedBox.shrink(),
+          error: (_, _) => const SizedBox.shrink(),
         ),
         const SizedBox(height: 14),
 
-        // ---- Bandeau d'information ------------------------------------------------
-        const AppAlert(
-          type: AppAlertType.primary,
-          message:
-          'Présentation seulement : aucune souscription en ligne, aucune gestion de sinistre sur APS.',
+        ApsNote.text(
+          'aucune souscription en ligne ni gestion de sinistre sur APS.',
+          bold: 'Présentation seulement :',
+          icon: Icons.info_outline_rounded,
         ),
         const SizedBox(height: 16),
 
@@ -247,6 +221,7 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
           ),
         ),
       ],
+      ),
     );
   }
 
@@ -256,28 +231,11 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '${resultats.length} compagnie${resultats.length > 1 ? 's' : ''} référencée${resultats.length > 1 ? 's' : ''}',
-              style: AppTextStyles.cardTitle.copyWith(fontSize: 14),
-            ),
-            GestureDetector(
-              onTap: () {
-                // Brancher ici un tri (alphabétique, proximité, vérifiées d'abord...).
-              },
-              child: Text(
-                'Filtrer',
-                style: AppTextStyles.buttonLabel.copyWith(
-                  fontSize: 11.5,
-                  color: AppColors.green700,
-                ),
-              ),
-            ),
-          ],
+        ApsSectionTitle(
+          'Compagnies',
+          padding: const EdgeInsets.only(bottom: 12),
+          trailing: Text('${resultats.length} au total', style: AppTextStyles.xs),
         ),
-        const SizedBox(height: 12),
 
         if (resultats.isEmpty)
           _EmptyState(
@@ -365,12 +323,12 @@ class _PaletteCouleur {
 }
 
 const List<_PaletteCouleur> _paletteLogos = [
-  _PaletteCouleur(Color(0xFF0B2C9E), Color(0xFFEDF1FB)),
-  _PaletteCouleur(Color(0xFF6B2E8F), Color(0xFFF1E9F7)),
-  _PaletteCouleur(Color(0xFF1E8A63), Color(0xFFE4F3EC)),
-  _PaletteCouleur(Color(0xFFC94E3A), Color(0xFFFBE7E2)),
-  _PaletteCouleur(Color(0xFF9A6A1D), Color(0xFFF6ECDD)),
-  _PaletteCouleur(Color(0xFF1F6F8B), Color(0xFFE3F1F5)),
+  _PaletteCouleur(AppColors.sky, AppColors.sky100),
+  _PaletteCouleur(AppColors.violet700, AppColors.violet100),
+  _PaletteCouleur(AppColors.b7, AppColors.b1),
+  _PaletteCouleur(AppColors.coral600, AppColors.coral100),
+  _PaletteCouleur(AppColors.amber700, AppColors.amber100),
+  _PaletteCouleur(AppColors.ink2, AppColors.segment),
 ];
 
 /// Couleur déterministe (dérivée de l'id) tant que le backend ne fournit
@@ -378,7 +336,7 @@ const List<_PaletteCouleur> _paletteLogos = [
 _PaletteCouleur _couleursPour(String serviceAssuranceId) =>
     _paletteLogos[serviceAssuranceId.hashCode.abs() % _paletteLogos.length];
 
-/// Champ de recherche — `.search-field` / `.ins-search-field` de la maquette.
+/// Champ de recherche — `.search` de la maquette.
 class _SearchField extends StatelessWidget {
   const _SearchField({required this.controller, required this.hint, required this.onChanged});
 
@@ -387,81 +345,8 @@ class _SearchField extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.search, size: 18, color: AppColors.inkFaint),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              onChanged: onChanged,
-              style: AppTextStyles.body.copyWith(fontSize: 13, color: AppColors.ink),
-              decoration: InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                hintText: hint,
-                hintStyle: AppTextStyles.body.copyWith(fontSize: 13, color: AppColors.inkSoft),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Puce de filtre — `.filter-chips .chip` / `.chip.active` de la maquette.
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.active,
-    required this.onTap,
-    this.icon,
-  });
-
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? AppColors.primaryLight : AppColors.card,
-          border: Border.all(color: active ? AppColors.primary : AppColors.lineStrong),
-          borderRadius: BorderRadius.circular(100),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 13, color: active ? AppColors.primary : AppColors.inkFaint),
-              const SizedBox(width: 5),
-            ],
-            Text(
-              label,
-              style: AppTextStyles.badge.copyWith(
-                fontSize: 11,
-                color: active ? AppColors.green900 : AppColors.inkSoft,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      ApsSearchField(controller: controller, hint: hint, onChanged: onChanged);
 }
 
 /// Bandeau publicitaire — `.ad-mobile.ad-top` de la maquette.
@@ -503,27 +388,13 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
-      alignment: Alignment.center,
-      child: Column(
-        children: [
-          const Icon(Icons.search_off_rounded, size: 30, color: AppColors.inkFaint),
-          const SizedBox(height: 10),
-          Text(
-            'Aucune compagnie trouvée',
-            style: AppTextStyles.cardTitle.copyWith(fontSize: 13.5),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Essayez une autre ville ou réinitialisez les filtres.',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.body.copyWith(fontSize: 11.5),
-          ),
-          const SizedBox(height: 12),
-          AppOutlineButton(label: 'Réinitialiser', onPressed: onReset, icon: Icons.refresh),
-        ],
-      ),
+    return ApsEmptyState(
+      icon: Icons.search_off_rounded,
+      tone: ApsTone.neutral,
+      title: 'Aucune compagnie trouvée',
+      message: 'Essayez une autre ville ou réinitialisez les filtres.',
+      actionLabel: 'Réinitialiser',
+      onAction: onReset,
     );
   }
 }
@@ -538,22 +409,13 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
-      alignment: Alignment.center,
-      child: Column(
-        children: [
-          const Icon(Icons.wifi_off_rounded, size: 30, color: AppColors.inkFaint),
-          const SizedBox(height: 10),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.cardTitle.copyWith(fontSize: 13.5),
-          ),
-          const SizedBox(height: 12),
-          AppOutlineButton(label: 'Réessayer', onPressed: onRetry, icon: Icons.refresh),
-        ],
-      ),
+    return ApsEmptyState(
+      icon: Icons.wifi_off_rounded,
+      tone: ApsTone.neutral,
+      title: 'Annuaire indisponible',
+      message: message,
+      actionLabel: 'Réessayer',
+      onAction: onRetry,
     );
   }
 }

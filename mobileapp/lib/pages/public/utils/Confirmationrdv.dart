@@ -172,12 +172,6 @@ class _ConfirmationRdvPageState extends State<ConfirmationRdvPage> {
         '${widget.heure}.';
   }
 
-  static String _initiales(String nom) {
-    final parties = nom.trim().split(RegExp(r'\s+'));
-    final lettres = parties.where((p) => p.isNotEmpty).map((p) => p[0]).take(2);
-    return lettres.join().toUpperCase();
-  }
-
   void _copierCode(BuildContext context) {
     final code = widget.codeUnique;
     if (code == null) return;
@@ -219,75 +213,176 @@ class _ConfirmationRdvPageState extends State<ConfirmationRdvPage> {
 
   @override
   Widget build(BuildContext context) {
+    final attente = _paiementAttendu;
     return Scaffold(
-      backgroundColor: AppColors.paper,
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 32, 20, 24),
-          children: [
-            Center(child: _SuccessBadge(enAttentePaiement: _paiementAttendu)),
-            const SizedBox(height: 22),
-            Text(
-              _titre,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: AppTextStyles.fontDisplay,
-                fontSize: 19,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.2,
-                height: 1.25,
-                color: AppColors.ink,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: const [0, 0.46],
+            colors: [attente ? AppColors.amber100 : AppColors.b1, AppColors.bg],
+          ),
+        ),
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 6, 18, 24),
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: ApsIconButton(
+                  icon: Icons.close_rounded,
+                  tooltip: "Retour à l'accueil",
+                  onPressed: () => _retourAccueil(context),
+                ),
               ),
-            ),
-            const SizedBox(height: 9),
-            Text(
-              _sousTitre,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.body.copyWith(fontSize: 12.5, height: 1.6),
-            ),
-            const SizedBox(height: 24),
-            _RecapCard(
-              medecinNom: widget.medecinNom,
-              medecinSpecialite: widget.medecinSpecialite,
-              medecinVille: widget.medecinVille,
-              dateLabel: '$_dateFormatee à ${widget.heure}',
-              typeRdvLabel: widget.typeRdvLabel,
-              tarifFcfa: widget.tarifFcfa,
-              codeUnique: widget.codeUnique,
-              initiales: _initiales(widget.medecinNom),
-              onCopierCode: () => _copierCode(context),
-            ),
-            const SizedBox(height: 20),
-            _NextStepsList(
-              codeConnu: widget.codeUnique != null,
-              compteVientDetreCree: widget.compteVientDetreCree,
-            ),
-            const SizedBox(height: 26),
-            if (_paiementAttendu) ...[
-              widget.paiementBuilder!(context, _marquerPaye),
-              const SizedBox(height: 8),
-              Text(
-                'Vous pourrez aussi régler plus tard depuis « Mes '
-                'rendez-vous », onglet « À payer ».',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.body.copyWith(fontSize: 11.5, height: 1.5),
+              Center(child: _SuccessBadge(enAttentePaiement: attente)),
+              const SizedBox(height: 14),
+              Text(_titre, textAlign: TextAlign.center, style: AppTextStyles.l),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(_sousTitre, textAlign: TextAlign.center, style: AppTextStyles.small),
               ),
               const SizedBox(height: 18),
-              SecondaryButton(
-                label: 'Voir mes rendez-vous',
-                icon: Icons.calendar_month_outlined,
-                onPressed: () => _voirMesRendezVous(context),
+              _RecapCard(
+                medecinNom: widget.medecinNom,
+                medecinSpecialite: widget.medecinSpecialite,
+                medecinVille: widget.medecinVille,
+                dateLabel: _dateFormatee,
+                heure: widget.heure,
+                typeRdvLabel: widget.typeRdvLabel,
+                tarifFcfa: widget.tarifFcfa,
+                codeUnique: widget.codeUnique,
+                enAttentePaiement: attente,
+                onCopierCode: () => _copierCode(context),
               ),
-            ] else
-              PrimaryButton(
-                label: 'Voir mes rendez-vous',
-                icon: Icons.calendar_month_outlined,
-                onPressed: () => _voirMesRendezVous(context),
+              const SizedBox(height: 18),
+              _NextStepsList(
+                codeConnu: widget.codeUnique != null,
+                compteVientDetreCree: widget.compteVientDetreCree,
               ),
-            const SizedBox(height: 10),
-            SecondaryButton(
-              label: "Retour à l'accueil",
-              onPressed: () => _retourAccueil(context),
+              const SizedBox(height: 22),
+              if (attente) ...[
+                widget.paiementBuilder!(context, _marquerPaye),
+                const SizedBox(height: 8),
+                Text(
+                  'Vous pourrez aussi régler plus tard depuis « Mes rendez-vous ».',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.xs,
+                ),
+                const SizedBox(height: 14),
+                ApsButton(
+                  label: 'Mes rendez-vous',
+                  variant: ApsButtonVariant.ghost,
+                  onPressed: () => _voirMesRendezVous(context),
+                ),
+              ] else
+                ApsButton(
+                  label: 'Mes rendez-vous',
+                  icon: Icons.calendar_today_rounded,
+                  variant: ApsButtonVariant.dark,
+                  onPressed: () => _voirMesRendezVous(context),
+                ),
+              const SizedBox(height: 4),
+              Center(
+                child: TextButton(
+                  onPressed: () => _retourAccueil(context),
+                  style: TextButton.styleFrom(foregroundColor: AppColors.ink2),
+                  child: const Text("Retour à l'accueil"),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pastille de succès : disque vert en dégradé entouré d'anneaux qui
+/// s'élargissent (`.ring` de la maquette). Ambre si le paiement est attendu.
+class _SuccessBadge extends StatefulWidget {
+  const _SuccessBadge({this.enAttentePaiement = false});
+
+  final bool enAttentePaiement;
+
+  @override
+  State<_SuccessBadge> createState() => _SuccessBadgeState();
+}
+
+class _SuccessBadgeState extends State<_SuccessBadge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    final reduire = WidgetsBinding
+        .instance.platformDispatcher.accessibilityFeatures.disableAnimations;
+    if (!reduire) _ctrl.repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final couleur = widget.enAttentePaiement ? AppColors.amber500 : AppColors.b5;
+    final gradient = widget.enAttentePaiement
+        ? const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFFC66B), Color(0xFFC9790C)],
+          )
+        : AppColors.gradientLogo;
+    return SizedBox(
+      width: 110,
+      height: 110,
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (context, _) => Stack(
+          alignment: Alignment.center,
+          children: [
+            for (final decalage in [0.0, 0.5])
+              Builder(builder: (_) {
+                final t = (_ctrl.value + decalage) % 1.0;
+                return Transform.scale(
+                  scale: 0.7 + t,
+                  child: Container(
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: couleur.withValues(alpha: 0.7 * (1 - t)),
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: gradient,
+                boxShadow: AppColors.shadowGlow(couleur),
+              ),
+              child: Icon(
+                widget.enAttentePaiement
+                    ? Icons.credit_card_rounded
+                    : Icons.check_rounded,
+                size: 40,
+                color: Colors.white,
+              ),
             ),
           ],
         ),
@@ -296,102 +391,19 @@ class _ConfirmationRdvPageState extends State<ConfirmationRdvPage> {
   }
 }
 
-/// Insigne de succès — reprend `.success-badge` de la maquette : cercle vert
-/// clair avec une icône de validation, cerné d'un anneau pointillé.
-class _SuccessBadge extends StatelessWidget {
-  const _SuccessBadge({this.enAttentePaiement = false});
-
-  /// Rendez-vous réservé mais pas encore payé : icône « carte » au lieu
-  /// de la coche de validation.
-  final bool enAttentePaiement;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 100,
-      height: 100,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CustomPaint(
-            size: const Size(100, 100),
-            painter: _DashedCirclePainter(
-              color: AppColors.green500.withOpacity(0.35),
-            ),
-          ),
-          Container(
-            width: 82,
-            height: 82,
-            decoration: const BoxDecoration(
-              color: AppColors.green100,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              enAttentePaiement
-                  ? Icons.credit_card_rounded
-                  : Icons.check_rounded,
-              size: 36,
-              color: AppColors.green700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DashedCirclePainter extends CustomPainter {
-  _DashedCirclePainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..addOval(Rect.fromLTWH(0, 0, size.width, size.height));
-    final dashPath = Path();
-    const dashWidth = 5.0;
-    const dashSpace = 4.0;
-
-    for (final metric in path.computeMetrics()) {
-      double distance = 0;
-      while (distance < metric.length) {
-        dashPath.addPath(
-          metric.extractPath(distance, distance + dashWidth),
-          Offset.zero,
-        );
-        distance += dashWidth + dashSpace;
-      }
-    }
-
-    canvas.drawPath(
-      dashPath,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedCirclePainter oldDelegate) =>
-      oldDelegate.color != color;
-}
-
-/// Carte récapitulative du rendez-vous — reprend `.success-card` /
-/// `.ins-kv` de la maquette : avatar + nom + spécialité, puis une série de
-/// lignes clé/valeur (date, type, tarif, code unique copiable).
+/// Billet récapitulatif du rendez-vous : en-tête médecin, grille
+/// date / heure / type / frais, découpe pointillée, code de consultation.
 class _RecapCard extends StatelessWidget {
   const _RecapCard({
     required this.medecinNom,
     required this.medecinSpecialite,
     required this.medecinVille,
     required this.dateLabel,
+    required this.heure,
     required this.typeRdvLabel,
     required this.tarifFcfa,
     required this.codeUnique,
-    required this.initiales,
+    required this.enAttentePaiement,
     required this.onCopierCode,
   });
 
@@ -399,154 +411,177 @@ class _RecapCard extends StatelessWidget {
   final String medecinSpecialite;
   final String? medecinVille;
   final String dateLabel;
+  final String heure;
   final String typeRdvLabel;
   final int? tarifFcfa;
   final String? codeUnique;
-  final String initiales;
+  final bool enAttentePaiement;
   final VoidCallback onCopierCode;
 
   @override
   Widget build(BuildContext context) {
-    return CardSurface(
-      margin: EdgeInsets.zero,
-      padding: const EdgeInsets.all(15),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: AppColors.shadowSoft,
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.green100,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  initiales,
-                  style: const TextStyle(
-                    fontFamily: AppTextStyles.fontDisplay,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: AppColors.green700,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
                   children: [
-                    Text(
-                      medecinNom,
-                      style: AppTextStyles.cardTitle.copyWith(fontSize: 13.5),
-                      overflow: TextOverflow.ellipsis,
+                    ApsAvatar(name: medecinNom, size: 40),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(medecinNom,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.strong),
+                          Text(
+                            medecinVille != null
+                                ? '$medecinSpecialite · $medecinVille'
+                                : medecinSpecialite,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.xs,
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      medecinVille != null
-                          ? '$medecinSpecialite · $medecinVille'
-                          : medecinSpecialite,
-                      style: AppTextStyles.cardMeta,
-                      overflow: TextOverflow.ellipsis,
+                    enAttentePaiement
+                        ? const ApsPill('À payer', tone: ApsTone.amber, dot: true)
+                        : const ApsPill('Confirmé', dot: true),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(child: ApsInfoCell('Date', dateLabel)),
+                    Expanded(child: ApsInfoCell('Heure', heure)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: ApsInfoCell('Type', typeRdvLabel)),
+                    Expanded(
+                      child: ApsInfoCell(
+                        enAttentePaiement ? 'À régler' : 'Frais',
+                        tarifFcfa != null ? '$tarifFcfa F' : '—',
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 13),
-            child: Divider(height: 1, color: AppColors.line),
+          const _Decoupe(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Row(
+              children: [
+                const ApsIconTile(Icons.qr_code_2_rounded, tone: ApsTone.amber, small: true),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Code de consultation',
+                          style: AppTextStyles.strong.copyWith(fontSize: 12.5)),
+                      Text(
+                        codeUnique != null
+                            ? 'À donner au médecin en fin de consultation'
+                            : 'Disponible dans quelques instants',
+                        style: AppTextStyles.xs,
+                      ),
+                    ],
+                  ),
+                ),
+                if (codeUnique != null)
+                  InkWell(
+                    onTap: onCopierCode,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(codeUnique!,
+                              style: AppTextStyles.mono.copyWith(
+                                  fontSize: 13, color: AppColors.b7, letterSpacing: 0.6)),
+                          const SizedBox(width: 5),
+                          const Icon(Icons.copy_rounded, size: 14, color: AppColors.b7),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-          _kv('Date & heure', dateLabel),
-          const SizedBox(height: 9),
-          _kv('Type de rendez-vous', typeRdvLabel),
-          if (tarifFcfa != null) ...[
-            const SizedBox(height: 9),
-            _kv('Frais de prise de RDV', '$tarifFcfa FCFA'),
-          ],
-          if (codeUnique != null) ...[
-            const SizedBox(height: 9),
-            _kvCode(),
-          ],
         ],
       ),
     );
   }
+}
 
-  Widget _kv(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: AppTextStyles.body.copyWith(fontSize: 11.5)),
-        const SizedBox(width: 10),
-        Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: const TextStyle(
-              fontFamily: AppTextStyles.fontMono,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              color: AppColors.ink,
-            ),
+/// Découpe pointillée avec deux encoches, façon billet.
+class _Decoupe extends StatelessWidget {
+  const _Decoupe();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 24,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: ApsDivider(space: 0, dashed: true),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _kvCode() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text('Code de consultation',
-            style: AppTextStyles.body.copyWith(fontSize: 11.5)),
-        InkWell(
-          onTap: onCopierCode,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  codeUnique!,
-                  style: const TextStyle(
-                    fontFamily: AppTextStyles.fontMono,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: .5,
-                    color: AppColors.green700,
-                  ),
+          for (final gauche in [true, false])
+            Positioned(
+              left: gauche ? -12 : null,
+              right: gauche ? null : -12,
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEEF5F1),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 5),
-                const Icon(Icons.copy_rounded, size: 13, color: AppColors.green700),
-              ],
+              ),
             ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-/// Ligne d'une étape « et maintenant ? » — `.sn-item` de la maquette.
+/// Ligne d'une étape « et maintenant ? ».
 class _NextStepData {
   const _NextStepData({
     required this.icon,
     required this.titre,
     required this.description,
+    this.tone = ApsTone.green,
   });
 
   final IconData icon;
   final String titre;
   final String description;
+  final ApsTone tone;
 }
 
-/// Liste « et maintenant ? » — reprend `.success-next` de la maquette.
+/// Liste « et maintenant ? » présentée en menu.
 class _NextStepsList extends StatelessWidget {
   const _NextStepsList({
     required this.codeConnu,
@@ -560,85 +595,36 @@ class _NextStepsList extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = <_NextStepData>[
       const _NextStepData(
-        icon: Icons.shield_outlined,
+        icon: Icons.verified_user_outlined,
         titre: 'Paiement sous séquestre',
-        description: 'Vos fonds restent bloqués et ne seront versés au '
-            'praticien qu\'après la consultation.',
+        description: "Versé au praticien seulement après la consultation.",
       ),
       _NextStepData(
-        icon: Icons.qr_code_2_rounded,
-        titre: codeConnu
-            ? 'Code de consultation généré'
-            : 'Code de consultation en préparation',
+        icon: Icons.location_on_outlined,
+        tone: ApsTone.amber,
+        titre: 'Lieu exact à venir',
         description: codeConnu
-            ? 'Ne communiquez ce code au médecin qu\'à la fin de la '
-            'consultation : il lui sert à la clôturer. Vous le retrouverez '
-            'dans « Mes rendez-vous ».'
-            : 'Votre code de consultation vous sera communiqué dans '
-            'quelques instants.',
-      ),
-      const _NextStepData(
-        icon: Icons.event_available_outlined,
-        titre: 'Ajouté à vos rendez-vous',
-        description:
-        'Retrouvez-le à tout moment dans « Mes rendez-vous ».',
+            ? "Le médecin vous l'enverra par notification."
+            : 'Vous serez notifié dès que le médecin accepte.',
       ),
       if (compteVientDetreCree)
         const _NextStepData(
           icon: Icons.mark_email_read_outlined,
+          tone: ApsTone.sky,
           titre: 'Compte patient créé',
-          description: 'Vous êtes maintenant connecté(e) ; un e-mail de '
-              'bienvenue vous a été envoyé.',
+          description: 'Vous êtes connecté(e) ; un e-mail de bienvenue vous a été envoyé.',
         ),
     ];
 
-    return Column(
-      children: [
-        for (var i = 0; i < items.length; i++)
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              border: i != items.length - 1
-                  ? const Border(bottom: BorderSide(color: AppColors.line))
-                  : null,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 26,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    color: AppColors.green100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(items[i].icon, size: 13, color: AppColors.green700),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        items[i].titre,
-                        style: AppTextStyles.cardTitle.copyWith(fontSize: 11.5),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        items[i].description,
-                        style: AppTextStyles.body.copyWith(
-                          fontSize: 11,
-                          height: 1.45,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
+    return ApsMenu(children: [
+      for (final i in items)
+        ApsMenuItem(
+          icon: i.icon,
+          tone: i.tone,
+          title: i.titre,
+          subtitle: i.description,
+          showChevron: false,
+        ),
+    ]);
   }
 }

@@ -5,6 +5,7 @@ import 'package:mobileapp/pages/portails/patient/portail-patient-profil.dart';
 import '../../../components/cards/notifications_bell.dart';
 import '../../../components/navigation/patient-bottom-navigation.dart';
 import '../../../controllers/notification_controller.dart';
+import 'portail-patient-accueil.dart';
 import 'portail-patient-demandes.dart';
 import 'portail-patient-rdv.dart';
 
@@ -13,10 +14,8 @@ import 'portail-patient-rdv.dart';
 ///
 /// "Rendez-vous" pointe vers le vrai écran (`PortailPatientRdv`), qui
 /// ne gère plus lui-même de barre de navigation : c'est ce shell qui
-/// en est l'unique responsable. "Accueil" et "Profil" restent des
-/// placeholders : la page profil patient n'existe pas encore
-/// (contrairement à son équivalent médecin, `PortailMedecinProfil`) —
-/// à remplacer dès qu'elle sera écrite.
+/// en est l'unique responsable. « Accueil » ([PortailPatientAccueil])
+/// montre le prochain rendez-vous et les raccourcis.
 ///
 /// Notifications in-app (politique de fonds v2, phase 6) : il n'y a pas
 /// d'AppBar, la cloche flotte donc en haut à droite, au-dessus de
@@ -38,11 +37,14 @@ class _PatientHomeShellState extends ConsumerState<PatientHomeShell> {
   /// Index de l'onglet « Demande » (RDV aléatoire) dans [_pages].
   static const int _indexDemandes = 2;
 
-  static const _pages = <Widget>[
-    Center(child: Text('Accueil patient')), // TODO: écran réel "Accueil"
-    PortailPatientRdv(),
-    PortailPatientDemandes(),
-    PortailPatientProfil(), // TODO: créer PortailPatientProfil
+  late final List<Widget> _pages = <Widget>[
+    PortailPatientAccueil(
+      onOuvrirRendezVous: () => setState(() => _index = _indexRendezVous),
+      onOuvrirDemandes: () => setState(() => _index = _indexDemandes),
+    ),
+    const PortailPatientRdv(),
+    const PortailPatientDemandes(),
+    const PortailPatientProfil(),
   ];
 
   @override
@@ -59,8 +61,8 @@ class _PatientHomeShellState extends ConsumerState<PatientHomeShell> {
           children: [
             IndexedStack(index: _index, children: _pages),
             Positioned(
-              top: 6,
-              right: 14,
+              top: 12,
+              right: 18,
               child: NotificationsBell(
                 onOuvrirRendezVous: () =>
                     setState(() => _index = _indexRendezVous),

@@ -200,15 +200,15 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
     final gardesAsync = ref.watch(listeGardesPharmacieControllerProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.paper,
+      backgroundColor: AppColors.bg,
       extendBody: true,
       body: Stack(
         children: [
           _buildContent(pharmaciesAsync, gardesAsync),
           Positioned(
-            left: 10,
-            right: 10,
-            bottom: 10,
+            left: 16,
+            right: 16,
+            bottom: 12 + MediaQuery.paddingOf(context).bottom,
             child: AppBottomNav(
               items: _navItems,
               currentIndex: _navIndex,
@@ -237,33 +237,68 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
     final gardesIndisponibles =
         gardesAsync.hasError && !gardesAsync.hasValue && _deGardeUniquement;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+    final nbGardes = deGardeIds.length;
+    return SafeArea(
+      bottom: false,
+      child: ListView(
+      padding: EdgeInsets.fromLTRB(
+          18, 6, 18, AppBottomNav.reservedHeight + MediaQuery.paddingOf(context).bottom),
       children: [
-        // ---------- En-tête ----------
-        Text(
-          'ANNUAIRE',
-          style: AppTextStyles.badge.copyWith(
-            fontSize: 10.5,
-            letterSpacing: 1.2,
-            color: AppColors.primary,
-          ),
+        // ---------- En-tête : retour + De garde / Toutes ----------
+        Row(
+          children: [
+            if (Navigator.of(context).canPop()) ...[
+              ApsIconButton.back(context),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: ApsSegmented<bool>(
+                value: _deGardeUniquement,
+                onChanged: (v) => setState(() => _deGardeUniquement = v),
+                segments: const [
+                  ApsSegment(true, 'De garde', icon: Icons.nightlight_outlined),
+                  ApsSegment(false, 'Toutes'),
+                ],
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 6),
-        const Text('Trouver une pharmacie', style: AppTextStyles.h3),
-        const SizedBox(height: 4),
-        const Text(
-          'Pharmacies vérifiées et pharmacies de garde près de chez vous, '
-              'avec appel direct et itinéraire.',
-          style: AppTextStyles.body,
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _deGardeUniquement
+                        ? (nbGardes > 1
+                            ? '$nbGardes pharmacies de garde'
+                            : '$nbGardes pharmacie de garde')
+                        : 'Pharmacies',
+                    style: AppTextStyles.l.copyWith(fontSize: 20),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _villeSelectionnee == 'Toutes les villes'
+                        ? 'Fiches vérifiées · appel direct et itinéraire'
+                        : _villeSelectionnee,
+                    style: AppTextStyles.xs,
+                  ),
+                ],
+              ),
+            ),
+            if (_deGardeUniquement && !gardesAsync.hasError)
+              const ApsPill('En direct', dot: true),
+          ],
         ),
         const SizedBox(height: 14),
 
         // ---------- Recherche ----------
         _SearchField(controller: _searchCtrl, onChanged: _onSearchChanged),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
 
-        // ---------- Filtres ----------
+        // ---------- Villes ----------
         pharmaciesAsync.maybeWhen(
           data: (liste) => _FilterChipsRow(
             deGardeUniquement: _deGardeUniquement,
@@ -273,28 +308,12 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
                 setState(() => _deGardeUniquement = !_deGardeUniquement),
             onPickVille: (v) => setState(() => _villeSelectionnee = v),
           ),
-          orElse: () => _FilterChipsRow(
-            deGardeUniquement: _deGardeUniquement,
-            ville: _villeSelectionnee,
-            villes: const ['Toutes les villes'],
-            onToggleGarde: () =>
-                setState(() => _deGardeUniquement = !_deGardeUniquement),
-            onPickVille: (v) => setState(() => _villeSelectionnee = v),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // ---------- Alerte info (réutilise AppAlert existant) ----------
-        const AppAlert(
-          type: AppAlertType.primary,
-          message:
-          'Fiches vérifiées à l’Ordre des pharmaciens. Aucune vente en '
-              'ligne : APS oriente uniquement vers l’officine la plus proche.',
+          orElse: () => const SizedBox.shrink(),
         ),
         if (gardesIndisponibles) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           AppAlert(
-            type: AppAlertType.primary,
+            type: AppAlertType.warning,
             message: 'Impossible de vérifier les pharmacies de garde pour '
                 'le moment (${_messageErreur(gardesAsync.error!)}).',
           ),
@@ -323,12 +342,19 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
         ),
 
         const SizedBox(height: 4),
-        SecondaryButton(
-          label: 'Voir toutes les pharmacies vérifiées',
-          icon: Icons.list_alt_outlined,
+        ApsNote.text(
+          "APS oriente uniquement vers l'officine la plus proche : aucune vente en ligne.",
+          bold: "Fiches vérifiées à l'Ordre.",
+          icon: Icons.verified_user_outlined,
+        ),
+        const SizedBox(height: 12),
+        ApsButton(
+          label: 'Toutes les pharmacies vérifiées',
+          variant: ApsButtonVariant.ghost,
           onPressed: _voirTouteVerifiees,
         ),
       ],
+      ),
     );
   }
 
@@ -343,12 +369,9 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
           resultats.isEmpty
               ? 'Aucune pharmacie trouvée'
               : resultats.length == 1
-              ? '1 pharmacie trouvée'
-              : '${resultats.length} pharmacies trouvées',
-          style: AppTextStyles.cardMeta.copyWith(
-            fontWeight: FontWeight.w600,
-            color: AppColors.inkSoft,
-          ),
+              ? '1 pharmacie'
+              : '${resultats.length} pharmacies',
+          style: AppTextStyles.xs.copyWith(fontSize: 12),
         ),
         const SizedBox(height: 10),
 
@@ -366,7 +389,7 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
               // TODO: remplacer par une vraie distance (Haversine) une fois
               // la position de l'utilisateur disponible (ex: Geolocator),
               // combinée à p.geolocalisation quand elle est renseignée.
-              distanceKm: 0.0,
+              distanceKm: null,
               onAppeler: () => _appeler(p),
               onItineraire: () => _itineraire(p),
             ),
@@ -377,8 +400,6 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
 }
 
 /// ---------------- Champ de recherche ----------------
-/// N'existe pas encore dans la librairie de composants : reproduit ici en
-/// respectant `CardSurface`/`AppColors`/`AppTextStyles` pour rester cohérent.
 class _SearchField extends StatelessWidget {
   const _SearchField({required this.controller, required this.onChanged});
 
@@ -387,40 +408,15 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CardSurface(
-      margin: EdgeInsets.zero,
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 2),
-      child: Row(
-        children: [
-          const Icon(Icons.search, size: 18, color: AppColors.inkFaint),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              onChanged: onChanged,
-              style: AppTextStyles.body.copyWith(
-                fontSize: 13,
-                color: AppColors.ink,
-                fontWeight: FontWeight.w500,
-                height: 1,
-              ),
-              decoration: InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                hintText: 'Nom de pharmacie, quartier, ville…',
-                hintStyle: AppTextStyles.body.copyWith(fontSize: 13, height: 1),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return ApsSearchField(
+      controller: controller,
+      onChanged: onChanged,
+      hint: 'Pharmacie, quartier, ville…',
     );
   }
 }
 
-/// ---------------- Puces de filtre (garde / ville) ----------------
-/// Utilise `GuardDot` (déjà fourni par `badge_chip.dart`) pour l'indicateur
-/// « de garde », et les mêmes couleurs que `BadgeChip` pour l'état actif.
+/// ---------------- Puces de ville ----------------
 class _FilterChipsRow extends StatelessWidget {
   const _FilterChipsRow({
     required this.deGardeUniquement,
@@ -438,74 +434,16 @@ class _FilterChipsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 38,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: [
-          _FilterChip(
-            label: 'De garde uniquement',
-            active: deGardeUniquement,
-            leading: GuardDot(active: deGardeUniquement),
-            onTap: onToggleGarde,
+    return ApsChipRow(
+      children: [
+        for (final v in villes)
+          ApsChip(
+            v,
+            selected: ville == v,
+            icon: v == 'Toutes les villes' ? null : Icons.location_on_outlined,
+            onTap: () => onPickVille(v),
           ),
-          const SizedBox(width: 8),
-          ...villes.map(
-                (v) => Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: _FilterChip(
-                label: v,
-                active: ville == v,
-                onTap: () => onPickVille(v),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.active,
-    required this.onTap,
-    this.leading,
-  });
-
-  final String label;
-  final bool active;
-  final Widget? leading;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? AppColors.primary : AppColors.card,
-          border: Border.all(
-            color: active ? AppColors.primary : AppColors.lineStrong,
-          ),
-          borderRadius: BorderRadius.circular(100),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (leading != null) ...[leading!, const SizedBox(width: 2)],
-            Text(
-              label,
-              style: AppTextStyles.buttonLabel.copyWith(
-                fontSize: 12,
-                color: active ? Colors.white : AppColors.inkSoft,
-              ),
-            ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 }
@@ -516,20 +454,11 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Column(
-        children: [
-          const Icon(Icons.search_off, size: 32, color: AppColors.inkFaint),
-          const SizedBox(height: 10),
-          Text(
-            'Aucune pharmacie ne correspond à vos filtres.\n'
-                'Essayez une autre ville ou désactivez « De garde uniquement ».',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.body,
-          ),
-        ],
-      ),
+    return const ApsEmptyState(
+      icon: Icons.search_off_rounded,
+      tone: ApsTone.neutral,
+      title: 'Aucune pharmacie',
+      message: 'Essayez une autre ville ou affichez toutes les pharmacies.',
     );
   }
 }
@@ -542,9 +471,7 @@ class _LoadingState extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: 40),
-      child: Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
-      ),
+      child: Center(child: CircularProgressIndicator()),
     );
   }
 }
@@ -558,25 +485,13 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Column(
-        children: [
-          const Icon(Icons.wifi_off_rounded, size: 32, color: AppColors.inkFaint),
-          const SizedBox(height: 10),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.body,
-          ),
-          const SizedBox(height: 12),
-          SecondaryButton(
-            label: 'Réessayer',
-            icon: Icons.refresh_rounded,
-            onPressed: onRetry,
-          ),
-        ],
-      ),
+    return ApsEmptyState(
+      icon: Icons.wifi_off_rounded,
+      tone: ApsTone.neutral,
+      title: 'Liste indisponible',
+      message: message,
+      actionLabel: 'Réessayer',
+      onAction: onRetry,
     );
   }
 }

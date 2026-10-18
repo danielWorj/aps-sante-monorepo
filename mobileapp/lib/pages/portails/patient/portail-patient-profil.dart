@@ -118,7 +118,7 @@ class _PortailPatientProfilState extends ConsumerState<PortailPatientProfil>
     // onglet du shell (PatientHomeShell), qui fournit déjà le
     // Scaffold et la barre de navigation basse.
     return Container(
-      color: AppColors.paper,
+      color: AppColors.bg,
       child: _buildCorps(context, profilAsync),
     );
   }
@@ -152,13 +152,13 @@ class _PortailPatientProfilState extends ConsumerState<PortailPatientProfil>
       onRefresh: _chargerProfil,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 120),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const _PageHead(),
             _ProfileHero(patient: patient, statistiques: statistiques),
-            const SizedBox(height: 2),
+            const SizedBox(height: 14),
             _SegmentedTabs(controller: _tabController, tabs: tabs),
             const SizedBox(height: 16),
             // Hauteur fixe simple : sur un vrai écran, préférer un
@@ -190,26 +190,13 @@ class _PortailPatientProfilState extends ConsumerState<PortailPatientProfil>
         ? erreur.message
         : 'Impossible de charger le profil pour le moment.';
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, size: 32, color: AppColors.inkFaint),
-            const SizedBox(height: 10),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12.5, color: AppColors.inkSoft),
-            ),
-            const SizedBox(height: 14),
-            AppOutlineButton(
-              label: 'Réessayer',
-              icon: Icons.refresh_rounded,
-              onPressed: _chargerProfil,
-            ),
-          ],
-        ),
+      child: ApsEmptyState(
+        icon: Icons.error_outline_rounded,
+        tone: ApsTone.neutral,
+        title: 'Profil indisponible',
+        message: message,
+        actionLabel: 'Réessayer',
+        onAction: _chargerProfil,
       ),
     );
   }
@@ -229,35 +216,8 @@ class _PageHead extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(2, 10, 2, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'ESPACE PATIENT',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-              color: AppColors.primary,
-            ),
-          ),
-          SizedBox(height: 5),
-          Text(
-            'Mon profil',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.2,
-              color: AppColors.ink,
-            ),
-          ),
-        ],
-      ),
-    );
+    // La cloche du shell flotte en haut à droite : place réservée.
+    return const ApsPageTitle('Compte', trailing: SizedBox(width: 42));
   }
 }
 
@@ -278,156 +238,161 @@ class _ProfileHero extends StatelessWidget {
     return u.nomComplet.trim();
   }
 
-  String get _initiales {
-    final u = patient.utilisateur;
-    var init = '';
-    if (u.prenom.isNotEmpty) init += u.prenom[0].toUpperCase();
-    if (u.nom.isNotEmpty) init += u.nom[0].toUpperCase();
-    return init.isNotEmpty ? init : '?';
-  }
-
   String get _sousTitre => '${patient.age} ans';
 
   @override
   Widget build(BuildContext context) {
     final utilisateur = patient.utilisateur;
     final compteSuspendu = utilisateur.statutCompte == 'suspendu';
+    final prochain = statistiques.prochainRendezVous;
 
-    return CardSurface(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-      child: Column(
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            alignment: Alignment.center,
+    Widget tuile(String libelle, String valeur) => Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: AppColors.green100,
-              borderRadius: BorderRadius.circular(20),
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: Text(
-              _initiales,
-              style: const TextStyle(
-                fontFamily: AppTextStyles.fontDisplay,
-                fontWeight: FontWeight.w700,
-                fontSize: 22,
-                color: AppColors.green700,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            _nomAffiche,
-            style: const TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: AppColors.ink,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            _sousTitre,
-            style: const TextStyle(fontSize: 12.5, color: AppColors.inkSoft),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              if (compteSuspendu)
-                const BadgeChip(
-                  label: 'Compte suspendu',
-                  icon: Icons.block_outlined,
-                  style: BadgeChipStyle.amber,
-                )
-              else
-                const BadgeChip(
-                  label: 'Compte actif',
-                  icon: Icons.verified_outlined,
-                  style: BadgeChipStyle.green,
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _StatRow(statistiques: statistiques),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: AppOutlineButton(
-              label: 'Modifier le profil',
-              icon: Icons.edit_outlined,
-              onPressed: () {
-                // TODO: brancher l'écran d'édition du profil patient
-                // une fois un PatientRepository.modifierPatient (ou
-                // équivalent) exposé côté backend/client — aucune
-                // route d'écriture n'existe encore dans ce périmètre
-                // (voir en-tête de patient_repository.dart).
-              },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(libelle,
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.fontSans,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white.withValues(alpha: 0.65),
+                    )),
+                Text(valeur,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: AppTextStyles.fontSans,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    )),
+              ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
+        );
 
-/// Ligne de statistiques du profil — équivalent de `.stat-row`,
-/// alimentée par les statistiques d'activité réelles du patient.
-class _StatRow extends StatelessWidget {
-  final StatistiquesPatient statistiques;
-
-  const _StatRow({required this.statistiques});
-
-  Widget _stat(String value, String label) => Expanded(
-    child: Column(
+    return Column(
       children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontFamily: AppTextStyles.fontMono,
-            fontWeight: FontWeight.w600,
-            fontSize: 15,
-            color: AppColors.ink,
+        Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            gradient: AppColors.gradientForest,
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: AppColors.shadowSoft,
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: AppTextStyles.fontDisplay,
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: AppColors.inkFaint,
-            letterSpacing: 0.3,
+          child: Stack(
+            children: [
+              Positioned(
+                right: -60,
+                top: -60,
+                child: Container(
+                  width: 220,
+                  height: 180,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [Color(0x597FE0B5), Color(0x007FE0B5)],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 16,
+                bottom: 10,
+                child: Icon(Icons.add_rounded,
+                    size: 80, color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text('CARTE SANTÉ APS',
+                            style: AppTextStyles.over.copyWith(
+                                color: Colors.white.withValues(alpha: 0.7))),
+                        const Spacer(),
+                        ApsPill(
+                          compteSuspendu ? 'Compte suspendu' : 'Compte actif',
+                          tone: ApsTone.white,
+                          dot: true,
+                          foreground: compteSuspendu
+                              ? const Color(0xFFFFC66B)
+                              : AppColors.mint,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        ApsAvatar(
+                          name: _nomAffiche,
+                          size: 54,
+                          round: true,
+                          variant: 2,
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.4), width: 2),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(_nomAffiche,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontFamily: AppTextStyles.fontSans,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.3,
+                                    color: Colors.white,
+                                  )),
+                              Text(
+                                [_sousTitre, if (utilisateur.email?.isNotEmpty ?? false) utilisateur.email!]
+                                    .join(' · '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontFamily: AppTextStyles.fontSans,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        tuile('Rendez-vous', '${statistiques.totalRendezVous}'),
+                        const SizedBox(width: 8),
+                        tuile('Ordonnances', '${statistiques.totalOrdonnances}'),
+                        const SizedBox(width: 8),
+                        tuile('Prochain',
+                            prochain != null ? _formaterDateCourte(prochain.dateCreneau) : '—'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ],
-    ),
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    final prochain = statistiques.prochainRendezVous;
-    return Container(
-      padding: const EdgeInsets.only(top: 14),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: AppColors.line)),
-      ),
-      child: Row(
-        children: [
-          _stat('${statistiques.totalRendezVous}', 'RENDEZ-VOUS'),
-          _stat('${statistiques.totalOrdonnances}', 'ORDONNANCES'),
-          _stat(
-            prochain != null ? _formaterDateCourte(prochain.dateCreneau) : '—',
-            'PROCHAIN RDV',
-          ),
-        ],
-      ),
     );
   }
+
 }
 
 /// ------------------------------------------------------------
@@ -442,81 +407,18 @@ class _SegmentedTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(100),
-        boxShadow: AppColors.shadowCard,
-      ),
-      child: AnimatedBuilder(
-        animation: controller,
-        builder: (context, _) {
-          return Row(
-            children: List.generate(tabs.length, (index) {
-              final def = tabs[index];
-              final active = controller.index == index;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => controller.animateTo(index),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding:
-                    const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                    decoration: BoxDecoration(
-                      color: active ? AppColors.primary : Colors.transparent,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            def.label,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.fontDisplay,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: active ? Colors.white : AppColors.inkSoft,
-                            ),
-                          ),
-                        ),
-                        if (def.count != null) ...[
-                          const SizedBox(width: 5),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: active
-                                  ? Colors.white.withOpacity(0.22)
-                                  : AppColors.green100,
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                            child: Text(
-                              '${def.count}',
-                              style: TextStyle(
-                                fontFamily: AppTextStyles.fontDisplay,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w700,
-                                color:
-                                active ? Colors.white : AppColors.green700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-          );
-        },
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) => ApsSegmented<int>(
+        value: controller.index,
+        onChanged: controller.animateTo,
+        segments: [
+          for (var i = 0; i < tabs.length; i++)
+            ApsSegment(
+              i,
+              tabs[i].count != null ? '${tabs[i].label} · ${tabs[i].count}' : tabs[i].label,
+            ),
+        ],
       ),
     );
   }

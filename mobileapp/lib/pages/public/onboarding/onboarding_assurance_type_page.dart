@@ -142,17 +142,17 @@ class _TypeActeurChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? AppColors.primary : AppColors.card,
-      borderRadius: AppRadius.smRadius,
+      color: selected ? AppColors.ink : AppColors.card,
+      borderRadius: BorderRadius.circular(99),
       child: InkWell(
-        borderRadius: AppRadius.smRadius,
+        borderRadius: BorderRadius.circular(99),
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            borderRadius: AppRadius.smRadius,
+            borderRadius: BorderRadius.circular(99),
             border: Border.all(
-              color: selected ? AppColors.primary : AppColors.line,
+              color: selected ? AppColors.ink : AppColors.line,
             ),
           ),
           child: Row(
@@ -161,7 +161,7 @@ class _TypeActeurChip extends StatelessWidget {
               Icon(
                 icon,
                 size: 16,
-                color: selected ? Colors.white : AppColors.primary,
+                color: selected ? Colors.white : AppColors.b6,
               ),
               const SizedBox(width: 8),
               Text(

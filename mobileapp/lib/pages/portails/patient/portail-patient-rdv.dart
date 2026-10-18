@@ -11,7 +11,6 @@ import '../../../components/factures/facture_recapitulative.dart';
 import '../../../components/panels/panneau_reprogrammation.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
-import '../../../models/authentification_models.dart';
 import '../../../models/rendez_vous_models.dart';
 import '../../../repositories/paiement_repository.dart';
 import '../../../utils/fonds.dart';
@@ -89,26 +88,17 @@ class _PortailPatientRdvState extends ConsumerState<PortailPatientRdv>
 
   @override
   Widget build(BuildContext context) {
-    // Observer l'état du patient connecté
-    final patientProfile = ref.watch(authUtilisateurProvider);
-
     // Pas de Scaffold/SafeArea/AppBottomNav ici : ce widget est un
     // onglet du shell (PatientHomeShell), qui fournit déjà le
     // Scaffold et la barre de navigation basse.
     return Container(
-      color: AppColors.paper,
+      color: AppColors.bg,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 120),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const _PageHead(),
-            // Afficher le bandeau du patient connecté
-            _PatientStrip(patient: patientProfile),
-            const SizedBox(height: 2),
-            // Statistiques (dynamiques basées sur les RDV récupérés)
-            _StatLine(ref: ref),
-            const SizedBox(height: 2),
             _SegmentedTabs(controller: _tabController),
             const SizedBox(height: 16),
             SizedBox(
@@ -139,195 +129,9 @@ class _PageHead extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(2, 10, 2, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'ESPACE PATIENT',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-              color: AppColors.primary,
-            ),
-          ),
-          SizedBox(height: 5),
-          Text(
-            'Mes rendez-vous',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.2,
-              color: AppColors.ink,
-            ),
-          ),
-        ],
-      ),
-    );
+    // La cloche du shell flotte en haut à droite : place réservée.
+    return const ApsPageTitle('Rendez-vous', trailing: SizedBox(width: 42));
   }
-}
-
-/// ════════════════════════════════════════════════════════════
-/// Bandeau patient (affiche le patient connecté)
-/// ════════════════════════════════════════════════════════════
-class _PatientStrip extends StatelessWidget {
-  final Utilisateur? patient;
-
-  const _PatientStrip({this.patient});
-
-  @override
-  Widget build(BuildContext context) {
-    final nom = patient?.prenom ?? 'Patient';
-    final initiales = _genererInitiales(patient?.prenom, patient?.nom);
-
-    return CardSurface(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              color: AppColors.primary,
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              initiales,
-              style: const TextStyle(
-                fontFamily: AppTextStyles.fontDisplay,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        nom,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontFamily: AppTextStyles.fontDisplay,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.ink,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    const Icon(Icons.check_circle,
-                        size: 14, color: AppColors.green600),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  patient?.email ?? 'Chargement...',
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: AppColors.inkSoft,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// ════════════════════════════════════════════════════════════
-/// Ligne de statistiques (dynamique basée sur les RDV)
-/// ════════════════════════════════════════════════════════════
-class _StatLine extends ConsumerWidget {
-  final WidgetRef ref;
-
-  const _StatLine({required this.ref});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final rdvAsync = ref.watch(listeRendezVousControllerProvider);
-
-    return rdvAsync.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 10),
-        child: Center(child: CircularProgressIndicator()),
-      ),
-      error: (err, stack) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Text('Erreur: $err', style: const TextStyle(color: Colors.red)),
-      ),
-      data: (rdvList) {
-        final confirmes = rdvList
-            .where((rdv) => rdv.statut == StatutRendezVous.confirme)
-            .length;
-        final enAttente =
-            rdvList.where((rdv) => rdv.statut == StatutRendezVous.cree).length;
-        final enVisio =
-            rdvList
-            .where((rdv) =>
-                rdv.typeRdv == TypeRdv.teleconsultation &&
-                !rdv.estAReprogrammer)
-            .length;
-
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(4, 2, 4, 14),
-          child: Row(
-            children: [
-              _stat('$confirmes', 'confirmés'),
-              const SizedBox(width: 14),
-              _sep(),
-              const SizedBox(width: 14),
-              _stat('$enAttente', 'en attente'),
-              const SizedBox(width: 14),
-              _sep(),
-              const SizedBox(width: 14),
-              _stat('$enVisio', 'en visio'),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _sep() => Container(
-    width: 1,
-    height: 16,
-    color: AppColors.line,
-  );
-
-  Widget _stat(String value, String label) => RichText(
-    text: TextSpan(
-      children: [
-        TextSpan(
-          text: '$value ',
-          style: const TextStyle(
-            fontFamily: AppTextStyles.fontMono,
-            fontWeight: FontWeight.w600,
-            color: AppColors.ink,
-            fontSize: 12,
-          ),
-        ),
-        TextSpan(
-          text: label,
-          style: const TextStyle(color: AppColors.inkSoft, fontSize: 12),
-        ),
-      ],
-    ),
-  );
 }
 
 /// ════════════════════════════════════════════════════════════
@@ -387,84 +191,20 @@ class _SegmentedTabs extends ConsumerWidget {
       ],
     );
 
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(100),
-        boxShadow: AppColors.shadowCard,
-      ),
-      child: AnimatedBuilder(
-        animation: controller,
-        builder: (context, _) {
-          return Row(
-            children: List.generate(tabs.length, (index) {
-              final def = tabs[index];
-              final active = controller.index == index;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => controller.animateTo(index),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding:
-                    const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                    decoration: BoxDecoration(
-                      color: active ? AppColors.primary : Colors.transparent,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            def.label,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.fontDisplay,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: active
-                                  ? Colors.white
-                                  : AppColors.inkSoft,
-                            ),
-                          ),
-                        ),
-                        if (def.count != null && def.count! > 0) ...[
-                          const SizedBox(width: 5),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: active
-                                  ? Colors.white.withOpacity(0.22)
-                                  : AppColors.green100,
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                            child: Text(
-                              '${def.count}',
-                              style: TextStyle(
-                                fontFamily: AppTextStyles.fontDisplay,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w700,
-                                color: active
-                                    ? Colors.white
-                                    : AppColors.green700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-          );
-        },
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) => ApsSegmented<int>(
+        value: controller.index,
+        onChanged: controller.animateTo,
+        segments: [
+          for (var i = 0; i < tabs.length; i++)
+            ApsSegment(
+              i,
+              (tabs[i].count != null && tabs[i].count! > 0)
+                  ? '${tabs[i].label} · ${tabs[i].count}'
+                  : tabs[i].label,
+            ),
+        ],
       ),
     );
   }
@@ -503,15 +243,7 @@ class _SectionHead extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.baseline,
         textBaseline: TextBaseline.alphabetic,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w700,
-              color: AppColors.ink,
-            ),
-          ),
+          Text(title.toUpperCase(), style: AppTextStyles.over),
           if (actionLabel != null && onAction != null) ...[
             const Spacer(),
             GestureDetector(
@@ -558,8 +290,9 @@ class _PanelConfirme extends ConsumerWidget {
             .toList();
 
         if (rdvConfirmes.isEmpty) {
-          return const Center(
-            child: Text('Aucun rendez-vous à venir'),
+          return const Align(
+            alignment: Alignment.topCenter,
+            child: ApsEmptyState(icon: Icons.event_available_outlined, tone: ApsTone.neutral, title: 'Aucun rendez-vous à venir'),
           );
         }
 
@@ -596,6 +329,7 @@ class _PanelConfirme extends ConsumerWidget {
                       return _AppointmentCard(
                         time: _formatTime(rdv.dateCreneau),
                         dateLabel: _formatDateLabel(rdv.dateCreneau),
+                  date: rdv.dateCreneau,
                         initials: _genererInitiales(
                           rdv.medecin?.utilisateur?.prenom,
                           rdv.medecin?.utilisateur?.nom,
@@ -740,8 +474,9 @@ class _PanelAttente extends ConsumerWidget {
         rdvList.where((r) => r.statut == StatutRendezVous.cree).toList();
 
         if (rdvAttente.isEmpty) {
-          return const Center(
-            child: Text('Aucun rendez-vous à payer'),
+          return const Align(
+            alignment: Alignment.topCenter,
+            child: ApsEmptyState(icon: Icons.credit_card_outlined, tone: ApsTone.neutral, title: 'Aucun rendez-vous à payer'),
           );
         }
 
@@ -761,6 +496,8 @@ class _PanelAttente extends ConsumerWidget {
                 return _AppointmentCard(
                   time: _formatTime(rdv.dateCreneau),
                   dateLabel: _formatDateLabel(rdv.dateCreneau),
+                  date: rdv.dateCreneau,
+                  tone: ApsTone.amber,
                   initials: _genererInitiales(
                     rdv.medecin?.utilisateur?.prenom,
                     rdv.medecin?.utilisateur?.nom,
@@ -837,8 +574,9 @@ class _PanelTermines extends ConsumerWidget {
             .toList();
 
         if (rdvTermines.isEmpty) {
-          return const Center(
-            child: Text('Aucun rendez-vous terminé'),
+          return const Align(
+            alignment: Alignment.topCenter,
+            child: ApsEmptyState(icon: Icons.history_rounded, tone: ApsTone.neutral, title: 'Aucun rendez-vous terminé'),
           );
         }
 
@@ -855,6 +593,8 @@ class _PanelTermines extends ConsumerWidget {
                 return _AppointmentCard(
                   time: _formatTime(rdv.dateCreneau),
                   dateLabel: _formatDateLabel(rdv.dateCreneau),
+                  date: rdv.dateCreneau,
+                  tone: ApsTone.neutral,
                   initials: _genererInitiales(
                     rdv.medecin?.utilisateur?.prenom,
                     rdv.medecin?.utilisateur?.nom,
@@ -962,8 +702,9 @@ class _PanelAnnules extends ConsumerWidget {
         rdvList.where((r) => r.statut == StatutRendezVous.annule).toList();
 
         if (rdvAnnules.isEmpty) {
-          return const Center(
-            child: Text('Aucun rendez-vous annulé'),
+          return const Align(
+            alignment: Alignment.topCenter,
+            child: ApsEmptyState(icon: Icons.event_busy_outlined, tone: ApsTone.neutral, title: 'Aucun rendez-vous annulé'),
           );
         }
 
@@ -976,6 +717,8 @@ class _PanelAnnules extends ConsumerWidget {
                 return _AppointmentCard(
                   time: _formatTime(rdv.dateCreneau),
                   dateLabel: _formatDateLabel(rdv.dateCreneau),
+                  date: rdv.dateCreneau,
+                  tone: ApsTone.neutral,
                   initials: _genererInitiales(
                     rdv.medecin?.utilisateur?.prenom,
                     rdv.medecin?.utilisateur?.nom,
@@ -1010,10 +753,12 @@ class _PanelAnnules extends ConsumerWidget {
 class _AppointmentCard extends StatelessWidget {
   final String time;
   final String dateLabel;
+  final DateTime? date;
   final String initials;
   final String name;
   final String subtitle;
   final String subtitle2;
+  final ApsTone tone;
   final Widget? bottom;
   /// Contenu additionnel sous la ligne du bas (panneau de reprogrammation).
   final Widget? footer;
@@ -1021,97 +766,96 @@ class _AppointmentCard extends StatelessWidget {
   const _AppointmentCard({
     required this.time,
     required this.dateLabel,
+    this.date,
     required this.initials,
     required this.name,
     required this.subtitle,
     required this.subtitle2,
+    this.tone = ApsTone.green,
     this.bottom,
     this.footer,
   });
 
+  static const _jours = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
+  static const _mois = [
+    'JAN', 'FÉV', 'MAR', 'AVR', 'MAI', 'JUIN',
+    'JUIL', 'AOÛT', 'SEP', 'OCT', 'NOV', 'DÉC',
+  ];
+
   @override
   Widget build(BuildContext context) {
-    return CardSurface(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
+    final d = date?.toLocal();
+    return ApsCard(
+      margin: const EdgeInsets.only(bottom: 10),
+      color: tone == ApsTone.amber ? const Color(0xFFFFFBF2) : null,
+      borderColor: tone == ApsTone.amber ? const Color(0xFFF3D9A8) : null,
+      borderWidth: 1.5,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Text(
-                time,
-                style: const TextStyle(
-                  fontFamily: AppTextStyles.fontMono,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.ink,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                dateLabel,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.inkSoft,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  initials,
-                  style: const TextStyle(
-                    fontFamily: AppTextStyles.fontDisplay,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11,
-                    color: Colors.white,
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (d != null)
+                  ApsDateBlock(
+                    weekday: _jours[d.weekday - 1],
+                    day: '${d.day}',
+                    month: _mois[d.month - 1],
+                    tone: tone,
+                  ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.strong,
+                            ),
+                          ),
+                          Text(time, style: AppTextStyles.mono.copyWith(fontSize: 12)),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.xs),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on_outlined,
+                              size: 13, color: AppColors.ink3),
+                          const SizedBox(width: 3),
+                          Expanded(
+                            child: Text(subtitle2,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.xs),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            name,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppColors.ink,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              fontSize: 11,
-              color: AppColors.inkSoft,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle2,
-            style: const TextStyle(
-              fontSize: 11,
-              color: AppColors.inkSoft,
+              ],
             ),
           ),
           if (bottom != null) ...[
-            const SizedBox(height: 12),
+            const ApsDivider(),
             bottom!,
           ],
-            if (footer != null) ...[
-              const SizedBox(height: 12),
-              footer!,
-            ],
+          if (footer != null) ...[
+            const SizedBox(height: 12),
+            footer!,
+          ],
         ],
       ),
     );
@@ -1143,9 +887,9 @@ class _CarteCodeConsultation extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.green50,
-        border: Border.all(color: AppColors.green100),
-        borderRadius: BorderRadius.circular(10),
+        color: AppColors.b0,
+        border: Border.all(color: AppColors.b1),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1257,24 +1001,13 @@ class _DangerOutlineButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.coral600),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: GestureDetector(
-        onTap: onPressed,
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontFamily: AppTextStyles.fontDisplay,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
-            color: AppColors.coral600,
-          ),
-        ),
-      ),
+    return ApsButton(
+      label: label,
+      onPressed: onPressed,
+      variant: ApsButtonVariant.ghost,
+      foreground: AppColors.red,
+      small: true,
+      expand: false,
     );
   }
 }

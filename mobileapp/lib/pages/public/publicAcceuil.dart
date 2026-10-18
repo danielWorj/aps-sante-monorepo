@@ -18,6 +18,7 @@ import 'Medecinpage.dart';
 import 'Pharmaciepage.dart';
 import 'Centresantepage.dart';
 import 'Assurancepage.dart';
+import 'urgence.dart';
 
 /// Écran d'accueil public de l'application APS Santé.
 ///
@@ -225,59 +226,65 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
 
   /// Feuille de choix rapide ouverte depuis le champ de recherche : la
   /// maquette ne propose pas d'écran de recherche globale dédié, donc on
-  /// oriente directement vers l'un des 3 vrais annuaires.
+  /// oriente directement vers l'un des vrais annuaires.
   void _ouvrirRecherche() {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (sheetContext) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 14),
-                    decoration: BoxDecoration(
-                      color: AppColors.lineStrong,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
+                ApsSheetHeader(
+                  title: 'Que recherchez-vous ?',
+                  onClose: () => Navigator.pop(sheetContext),
+                ),
+                const SizedBox(height: 14),
+                ApsMenu(children: [
+                  _SearchChoiceTile(
+                    icon: Icons.medical_services_outlined,
+                    label: 'Un médecin',
+                    meta: 'Généralistes et spécialistes',
+                    tone: ApsTone.green,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _ouvrirMedecins();
+                    },
                   ),
-                ),
-                const Text('Que recherchez-vous ?', style: AppTextStyles.cardTitle),
-                const SizedBox(height: 12),
-                _SearchChoiceTile(
-                  icon: Icons.medical_services_outlined,
-                  label: 'Un médecin',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _ouvrirMedecins();
-                  },
-                ),
-                _SearchChoiceTile(
-                  icon: Icons.medication_outlined,
-                  label: 'Une pharmacie',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _ouvrirPharmacies();
-                  },
-                ),
-                _SearchChoiceTile(
-                  icon: Icons.local_hospital_outlined,
-                  label: 'Une structure de santé',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _ouvrirStructures();
-                  },
-                ),
+                  _SearchChoiceTile(
+                    icon: Icons.local_pharmacy_outlined,
+                    label: 'Une pharmacie',
+                    meta: 'De garde ou horaires classiques',
+                    tone: ApsTone.amber,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _ouvrirPharmacies();
+                    },
+                  ),
+                  _SearchChoiceTile(
+                    icon: Icons.local_hospital_outlined,
+                    label: 'Une structure de santé',
+                    meta: 'Hôpitaux, cliniques, centres',
+                    tone: ApsTone.sky,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _ouvrirStructures();
+                    },
+                  ),
+                  _SearchChoiceTile(
+                    icon: Icons.shield_outlined,
+                    label: 'Une assurance',
+                    meta: 'Compagnies et courtiers',
+                    tone: ApsTone.violet,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _ouvrirAssurances();
+                    },
+                  ),
+                ]),
               ],
             ),
           ),
@@ -286,26 +293,13 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
     );
   }
 
-  /// Ouvre la feuille « Urgence » avec les vrais numéros officiels du
-  /// Cameroun (SAMU, Police secours) + la pharmacie de garde la plus
-  /// proche, chacun avec un bouton d'appel réel (`tel:` via `url_launcher`).
-  /// Conforme à l'écran 6 de la maquette (§12 : aucun contenu commercial).
+  /// Ouvre l'écran « Urgence » (numéros officiels, appel direct,
+  /// pharmacie et hôpital les plus proches).
   void _ouvrirUrgence() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => _UrgenceSheet(
-        pharmacieDeGarde: _pharmacies.isNotEmpty ? _pharmacies.first : null,
-        onAppelerPharmacie: _appelerPharmacie,
-      ),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const UrgencePage()));
   }
 
-  /// Compose un numéro d'urgence officiel (SAMU: 1515, Police: 117...).
+  /// Compose un numéro (pharmacie de la liste).
   Future<void> _appelerNumero(String numero) async {
     final uri = Uri(scheme: 'tel', path: numero);
     if (await canLaunchUrl(uri)) {
@@ -373,7 +367,7 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.paper,
+      backgroundColor: AppColors.bg,
       extendBody: true,
       body: SafeArea(
         bottom: false,
@@ -381,9 +375,9 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
           children: [
             _buildContent(context),
             Positioned(
-              left: 10,
-              right: 10,
-              bottom: 10,
+              left: 16,
+              right: 16,
+              bottom: 12 + MediaQuery.paddingOf(context).bottom,
               child: AppBottomNav(
                 currentIndex: _navIndex,
                 onTap: _onBottomNavTap,
@@ -401,9 +395,10 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
     // ce widget se reconstruit automatiquement dès que l'API renvoie les
     // publicités (fin de chargement, rafraîchissement, invalidation...).
     final ads = _resoudreAds();
+    final nbGardes = _pharmacies.where((p) => p.deGarde).length;
 
     return RefreshIndicator(
-      color: AppColors.green700,
+      color: AppColors.b6,
       onRefresh: () async {
         // Ne rafraîchit l'appel API que si on affiche bien les vraies
         // publicités (pas une liste `ads` imposée explicitement au widget).
@@ -420,54 +415,49 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
       },
       child: ListView(
         // Padding bas généreux pour ne pas passer sous la barre flottante.
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
+        padding: EdgeInsets.fromLTRB(
+            18, 6, 18, AppBottomNav.reservedHeight + MediaQuery.paddingOf(context).bottom),
         children: [
-          _HomeHero(prenom: widget.prenomUtilisateur, localisation: widget.localisation),
-          const SizedBox(height: 6),
+          _HomeHeader(
+            prenom: widget.prenomUtilisateur,
+            localisation: widget.localisation,
+            onCompte: _ouvrirMonEspace,
+          ),
           _SearchField(onTap: widget.onSearchTap ?? _ouvrirRecherche),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
+          _HeroCard(onTap: widget.onMedecinsTap ?? _ouvrirMedecins),
+          const SizedBox(height: 12),
           _QuickActionsGrid(
             onMedecinsTap: widget.onMedecinsTap ?? _ouvrirMedecins,
             onPharmaciesTap: widget.onPharmaciesTap ?? _ouvrirPharmacies,
             onStructuresTap: widget.onStructuresTap ?? _ouvrirStructures,
+            onAssurancesTap: _ouvrirAssurances,
             onUrgenceTap: widget.onUrgenceTap ?? _ouvrirUrgence,
+            nbGardes: nbGardes,
           ),
           // Carrousel réel de PAGE_ACCUEIL (positions payées + « Réserver cet
           // espace ») ; l'ancien carrousel ne sert plus que si `ads` est imposé.
           if (widget.ads.isEmpty) ...[
-            const Text('Offres & actualités partenaires', style: AppTextStyles.cardTitle),
-            const SizedBox(height: 10),
+            const ApsSectionTitle('Offres partenaires'),
             const SliderPublicite(code: PagesPublicite.accueil),
-            const SizedBox(height: 8),
           ] else ...[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              const Text('Offres & actualités partenaires', style: AppTextStyles.cardTitle),
-              Text(
-                '${ads.length} · Publicité',
-                style: AppTextStyles.cardMeta.copyWith(fontSize: 10.5),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _PartnerAdsCarousel(
-            controller: _adController,
-            ads: ads,
-            onPageChanged: (i) => setState(() => _adIndex = i),
-            onAdTap: widget.onAdTap,
-          ),
-          const SizedBox(height: 10),
-          _CarouselDots(count: ads.length, activeIndex: _adIndex),
-          const SizedBox(height: 4),
-          const _SwipeHint(),
-          const SizedBox(height: 8),
+            ApsSectionTitle(
+              'Offres partenaires',
+              trailing: Text('${ads.length} · Publicité', style: AppTextStyles.xs),
+            ),
+            _PartnerAdsCarousel(
+              controller: _adController,
+              ads: ads,
+              onPageChanged: (i) => setState(() => _adIndex = i),
+              onAdTap: widget.onAdTap,
+            ),
+            const SizedBox(height: 12),
+            _CarouselDots(count: ads.length, activeIndex: _adIndex),
           ],
-          _SectionTitle(
-            title: 'Pharmacies de garde',
-            onVoirTout: widget.onVoirToutesPharmacies ?? _ouvrirPharmacies,
+          ApsSectionTitle(
+            'Pharmacies de garde',
+            action: 'Tout voir',
+            onAction: widget.onVoirToutesPharmacies ?? _ouvrirPharmacies,
           ),
           for (final pharmacie in _pharmacies)
             CardPharmacie(
@@ -496,8 +486,8 @@ class HomeAdItem {
     required this.titre,
     required this.description,
     this.imageUrl,
-    this.couleurFond = AppColors.green100,
-    this.couleurIcone = AppColors.green700,
+    this.couleurFond = AppColors.b1,
+    this.couleurIcone = AppColors.b7,
     this.icone = Icons.campaign_outlined,
   });
 
@@ -553,36 +543,36 @@ const List<HomeAdItem> _demoAds = [
   HomeAdItem(
     titre: 'Tourisme médical',
     description: "Soins à l'étranger, voyage inclus.",
-    couleurFond: AppColors.green100,
-    couleurIcone: AppColors.green700,
+    couleurFond: AppColors.b1,
+    couleurIcone: AppColors.b7,
     icone: Icons.flight_takeoff_outlined,
   ),
   HomeAdItem(
     titre: 'AXA Assurances',
     description: 'Professionnalisme, proximité, expertise.',
-    couleurFond: Color(0xFFEDF1FB),
-    couleurIcone: Color(0xFF0B2C9E),
+    couleurFond: AppColors.sky100,
+    couleurIcone: AppColors.sky,
     icone: Icons.shield_outlined,
   ),
   HomeAdItem(
     titre: 'Journée des infirmières',
     description: '12 mai — Croix-Rouge du Wouri.',
     couleurFond: AppColors.coral100,
-    couleurIcone: AppColors.coral500,
+    couleurIcone: AppColors.coral600,
     icone: Icons.favorite_outline,
   ),
   HomeAdItem(
     titre: 'Nourishka Greenlife',
     description: 'Le collagène peau, cheveux, articulations.',
     couleurFond: AppColors.amber100,
-    couleurIcone: AppColors.amber500,
+    couleurIcone: AppColors.amber700,
     icone: Icons.eco_outlined,
   ),
   HomeAdItem(
     titre: 'MTN — Bonus imbattables',
     description: "Plus de data, plus d'appels dès 237 FCFA.",
-    couleurFond: Color(0xFFFDF0E0),
-    couleurIcone: Color(0xFFC97A0E),
+    couleurFond: AppColors.amber100,
+    couleurIcone: AppColors.amber700,
     icone: Icons.sim_card_outlined,
   ),
 ];
@@ -603,46 +593,62 @@ const List<HomePharmacieItem> _demoPharmacies = [
 // WIDGETS PRIVÉS
 // ===========================================================
 
-/// Bandeau de bienvenue — `.home-hero` (dégradé vert).
-class _HomeHero extends StatelessWidget {
-  const _HomeHero({required this.prenom, required this.localisation});
+/// En-tête : avatar, salutation, localisation, accès au compte.
+class _HomeHeader extends StatelessWidget {
+  const _HomeHeader({
+    required this.prenom,
+    required this.localisation,
+    required this.onCompte,
+  });
 
   final String prenom;
   final String localisation;
+  final VoidCallback onCompte;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.green700, AppColors.green900],
-        ),
-        borderRadius: AppRadius.mdRadius,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 6, 0, 14),
+      child: Row(
         children: [
-          Text(
-            'Bonjour, $prenom 👋',
-            style: const TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
-              color: Colors.white,
+          ApsAvatar(name: prenom, size: 40, round: true, variant: 2),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Bonjour 👋', style: AppTextStyles.xs),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        prenom,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.strong.copyWith(fontSize: 15),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.location_on_outlined, size: 13, color: AppColors.ink3),
+                    const SizedBox(width: 2),
+                    Flexible(
+                      child: Text(
+                        localisation,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.xs,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 3),
-          Text(
-            '$localisation · que recherchez-vous aujourd\'hui ?',
-            style: const TextStyle(
-              fontFamily: AppTextStyles.fontBody,
-              fontSize: 11.5,
-              color: Color(0xC7FFFFFF),
-            ),
+          const SizedBox(width: 10),
+          ApsIconButton(
+            icon: Icons.notifications_none_rounded,
+            tooltip: 'Mon espace',
+            onPressed: onCompte,
           ),
         ],
       ),
@@ -650,8 +656,7 @@ class _HomeHero extends StatelessWidget {
   }
 }
 
-/// Champ de recherche — `.search-field`. Ouvre par défaut la feuille de
-/// choix rapide (voir `_ouvrirRecherche` sur l'écran parent).
+/// Champ de recherche — `.search` (56 px, bouton sombre à droite).
 class _SearchField extends StatelessWidget {
   const _SearchField({this.onTap});
 
@@ -659,145 +664,355 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.smRadius,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          border: Border.all(color: AppColors.line),
-          borderRadius: AppRadius.smRadius,
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.search, size: 18, color: AppColors.inkFaint),
-            const SizedBox(width: 10),
-            Text(
-              'Médecin, pharmacie, structure…',
-              style: AppTextStyles.body.copyWith(fontSize: 13, color: AppColors.inkSoft),
+    final r = BorderRadius.circular(18);
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: r,
+        boxShadow: AppColors.shadowCard,
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: r,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
+            child: Row(
+              children: [
+                const Icon(Icons.search_rounded, size: 20, color: AppColors.ink3),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Médecin, pharmacie, structure…',
+                    style: AppTextStyles.small.copyWith(fontSize: 14, color: AppColors.ink3),
+                  ),
+                ),
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.ink,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.tune_rounded, size: 18, color: Colors.white),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Grille de raccourcis rapides — `.quick-grid` / `.quick-tile`.
-class _QuickActionsGrid extends StatelessWidget {
-  const _QuickActionsGrid({
-    this.onMedecinsTap,
-    this.onPharmaciesTap,
-    this.onStructuresTap,
-    this.onUrgenceTap,
-  });
+/// Carte d'accroche vert profond — reprend le style de la carte
+/// « prochain RDV » de la maquette pour mettre en avant la réservation.
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({required this.onTap});
 
-  final VoidCallback? onMedecinsTap;
-  final VoidCallback? onPharmaciesTap;
-  final VoidCallback? onStructuresTap;
-  final VoidCallback? onUrgenceTap;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final tiles = [
-      _QuickTile(
-        icon: Icons.medical_services_outlined,
-        label: 'Médecins',
-        onTap: onMedecinsTap,
+    final r = BorderRadius.circular(24);
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(gradient: AppColors.gradientForest, borderRadius: r),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          child: Stack(
+            children: [
+              Positioned(
+                right: -40,
+                top: -40,
+                child: Container(
+                  width: 160,
+                  height: 160,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const ApsPill('Disponible aujourd\'hui',
+                            tone: ApsTone.white, dot: true, foreground: AppColors.mint),
+                        const Spacer(),
+                        Icon(Icons.chevron_right_rounded,
+                            size: 20, color: Colors.white.withValues(alpha: 0.6)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Un médecin, sans attendre.',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontSans,
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Choisissez un créneau, payez en Mobile Money : les fonds sont protégés jusqu\'à la consultation.',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.fontSans,
+                        color: Colors.white.withValues(alpha: 0.72),
+                        fontSize: 12.5,
+                        height: 1.45,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        const _HeroTag(icon: Icons.verified_user_outlined, label: 'Vérifiés'),
+                        const SizedBox(width: 6),
+                        const _HeroTag(icon: Icons.lock_outline_rounded, label: 'Séquestre'),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text('Réserver',
+                              style: AppTextStyles.strong.copyWith(fontSize: 12)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      _QuickTile(
-        icon: Icons.medication_outlined,
-        label: 'Pharmacie',
-        onTap: onPharmaciesTap,
-      ),
-      _QuickTile(
-        icon: Icons.local_hospital_outlined,
-        label: 'Structures',
-        onTap: onStructuresTap,
-      ),
-      _QuickTile(
-        icon: Icons.call,
-        label: 'Urgence',
-        coral: true,
-        onTap: onUrgenceTap,
-      ),
-    ];
+    );
+  }
+}
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20, top: 2),
-      child: Row(
-        children: [
-          for (final tile in tiles) ...[
-            Expanded(child: tile),
-            if (tile != tiles.last) const SizedBox(width: 8),
+class _HeroTag extends StatelessWidget {
+  const _HeroTag({required this.icon, required this.label});
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: Colors.white),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                fontFamily: AppTextStyles.fontSans,
+                color: Colors.white,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
+        ),
+    );
+  }
+}
+
+/// Grille de raccourcis en mosaïque : grande tuile « Prendre
+/// rendez-vous » à gauche, quatre petites tuiles à droite et dessous.
+class _QuickActionsGrid extends StatelessWidget {
+  const _QuickActionsGrid({
+    required this.onMedecinsTap,
+    required this.onPharmaciesTap,
+    required this.onStructuresTap,
+    required this.onAssurancesTap,
+    required this.onUrgenceTap,
+    required this.nbGardes,
+  });
+
+  final VoidCallback onMedecinsTap;
+  final VoidCallback onPharmaciesTap;
+  final VoidCallback onStructuresTap;
+  final VoidCallback onAssurancesTap;
+  final VoidCallback onUrgenceTap;
+  final int nbGardes;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                flex: 115,
+                child: _BigTile(onTap: onMedecinsTap),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 100,
+                child: Column(
+                  children: [
+                    _SmallTile(
+                      icon: Icons.local_pharmacy_outlined,
+                      label: 'Pharmacies',
+                      meta: nbGardes > 0 ? '$nbGardes de garde' : 'De garde',
+                      metaColor: AppColors.b6,
+                      tone: ApsTone.green,
+                      onTap: onPharmaciesTap,
+                    ),
+                    const SizedBox(height: 8),
+                    _SmallTile(
+                      icon: Icons.local_hospital_outlined,
+                      label: 'Structures',
+                      meta: 'Hôpitaux, cliniques',
+                      tone: ApsTone.sky,
+                      onTap: onStructuresTap,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _SmallTile(
+                icon: Icons.shield_outlined,
+                label: 'Assurances',
+                meta: 'Formules santé',
+                metaColor: AppColors.violet700,
+                tone: ApsTone.violet,
+                filled: AppColors.violet100,
+                onTap: onAssurancesTap,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _SmallTile(
+                icon: Icons.emergency_outlined,
+                label: 'Urgence',
+                meta: 'SAMU, police',
+                metaColor: AppColors.red,
+                tone: ApsTone.red,
+                filled: AppColors.red100,
+                onTap: onUrgenceTap,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _BigTile extends StatelessWidget {
+  const _BigTile({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ApsCard(
+      color: AppColors.b1,
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const ApsIconTile(Icons.medical_services_outlined, background: Colors.white),
+          const SizedBox(height: 18),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Prendre\nrendez-vous',
+                  style: AppTextStyles.strong.copyWith(fontSize: 15, letterSpacing: -0.3)),
+              const SizedBox(height: 4),
+              Text('Médecins et spécialistes',
+                  style: AppTextStyles.xs.copyWith(color: AppColors.b7)),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-class _QuickTile extends StatelessWidget {
-  const _QuickTile({
+class _SmallTile extends StatelessWidget {
+  const _SmallTile({
     required this.icon,
     required this.label,
-    this.coral = false,
-    this.onTap,
+    required this.meta,
+    required this.tone,
+    required this.onTap,
+    this.metaColor,
+    this.filled,
   });
 
   final IconData icon;
   final String label;
-  final bool coral;
-  final VoidCallback? onTap;
+  final String meta;
+  final ApsTone tone;
+  final VoidCallback onTap;
+  final Color? metaColor;
+
+  /// Fond teinté ; sinon carte blanche bordée.
+  final Color? filled;
 
   @override
   Widget build(BuildContext context) {
-    final bg = coral ? AppColors.coral100 : AppColors.green100;
-    final fg = coral ? AppColors.coral500 : AppColors.green700;
-
-    return InkWell(
+    return ApsCard(
+      flat: filled == null,
+      color: filled,
+      padding: const EdgeInsets.all(11),
       onTap: onTap,
-      borderRadius: AppRadius.smRadius,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          border: Border.all(color: AppColors.line),
-          borderRadius: AppRadius.smRadius,
-          boxShadow: AppColors.shadowCard,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
-              alignment: Alignment.center,
-              child: Icon(icon, size: 17, color: fg),
+      child: Row(
+        children: [
+          ApsIconTile(icon,
+              tone: tone, small: true, background: filled != null ? Colors.white : null),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.strong.copyWith(fontSize: 12.5)),
+                Text(meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.xs.copyWith(color: metaColor)),
+              ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: AppTextStyles.fontDisplay,
-                fontSize: 9.5,
-                fontWeight: FontWeight.w600,
-                color: AppColors.ink,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Carrousel horizontal de publicités / actualités partenaires — `.ad-carousel`.
+/// Carrousel horizontal de publicités / actualités partenaires.
 class _PartnerAdsCarousel extends StatelessWidget {
   const _PartnerAdsCarousel({
     required this.controller,
@@ -815,7 +1030,7 @@ class _PartnerAdsCarousel extends StatelessWidget {
   Widget build(BuildContext context) {
     if (ads.isEmpty) return const SizedBox.shrink();
     return SizedBox(
-      height: 190,
+      height: 196,
       child: PageView.builder(
         controller: controller,
         onPageChanged: onPageChanged,
@@ -824,7 +1039,7 @@ class _PartnerAdsCarousel extends StatelessWidget {
         itemBuilder: (context, index) {
           final ad = ads[index];
           return Padding(
-            padding: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.only(right: 10, bottom: 6),
             child: _AdSlide(ad: ad, onTap: onAdTap == null ? null : () => onAdTap!(ad)),
           );
         },
@@ -841,80 +1056,55 @@ class _AdSlide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return ApsCard(
       onTap: onTap,
-      borderRadius: AppRadius.mdRadius,
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          border: Border.all(color: AppColors.line),
-          borderRadius: AppRadius.mdRadius,
-          boxShadow: AppColors.shadowCard,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: SizedBox(
+              height: 100,
+              width: double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  const Icon(Icons.info_outline, size: 11, color: AppColors.inkFaint),
-                  const SizedBox(width: 5),
-                  Text(
-                    'PUBLICITÉ',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontDisplay,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.1,
-                      color: AppColors.inkFaint,
-                    ),
+                  ad.imageUrl != null
+                      ? Image.network(
+                          ad.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => _AdPlaceholder(ad: ad),
+                        )
+                      : _AdPlaceholder(ad: ad),
+                  const Positioned(
+                    left: 8,
+                    top: 8,
+                    child: ApsPill('Publicité', tone: ApsTone.ink),
                   ),
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: SizedBox(
-                  height: 88,
-                  width: double.infinity,
-                  child: ad.imageUrl != null
-                      ? Image.network(
-                    ad.imageUrl!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _AdPlaceholder(ad: ad),
-                  )
-                      : _AdPlaceholder(ad: ad),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    ad.titre,
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(ad.titre,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.cardTitle.copyWith(fontSize: 12),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    ad.description,
+                    style: AppTextStyles.strong.copyWith(fontSize: 13)),
+                const SizedBox(height: 2),
+                Text(ad.description,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.body.copyWith(fontSize: 10, height: 1.45),
-                  ),
-                ],
-              ),
+                    style: AppTextStyles.xs.copyWith(height: 1.4)),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -935,7 +1125,7 @@ class _AdPlaceholder extends StatelessWidget {
   }
 }
 
-/// Puces de pagination du carrousel — `.carousel-dots`.
+/// Puces de pagination du carrousel.
 class _CarouselDots extends StatelessWidget {
   const _CarouselDots({required this.count, required this.activeIndex});
 
@@ -951,70 +1141,16 @@ class _CarouselDots extends StatelessWidget {
         for (var i = 0; i < count; i++) ...[
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            width: i == activeIndex ? 14 : 5,
-            height: 5,
+            width: i == activeIndex ? 22 : 6,
+            height: 6,
             decoration: BoxDecoration(
-              color: i == activeIndex ? AppColors.green600 : AppColors.lineStrong,
-              borderRadius: BorderRadius.circular(100),
+              color: i == activeIndex ? AppColors.ink : AppColors.lineStrong,
+              borderRadius: BorderRadius.circular(6),
             ),
           ),
-          if (i != count - 1) const SizedBox(width: 5),
+          if (i != count - 1) const SizedBox(width: 6),
         ],
       ],
-    );
-  }
-}
-
-/// Indice de glissement sous le carrousel — `.swipe-hint`.
-class _SwipeHint extends StatelessWidget {
-  const _SwipeHint();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(Icons.arrow_forward, size: 12, color: AppColors.inkFaint),
-        const SizedBox(width: 5),
-        Text(
-          "Glissez vers la gauche pour voir plus d'offres",
-          style: AppTextStyles.cardMeta.copyWith(fontSize: 9.5, color: AppColors.inkFaint),
-        ),
-      ],
-    );
-  }
-}
-
-/// En-tête de section avec lien « Voir tout » — `.section-title`.
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, this.onVoirTout});
-
-  final String title;
-  final VoidCallback? onVoirTout;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12, top: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(title, style: AppTextStyles.cardTitle.copyWith(fontSize: 14)),
-          if (onVoirTout != null)
-            GestureDetector(
-              onTap: onVoirTout,
-              child: Text(
-                'Voir tout',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.fontDisplay,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.green700,
-                ),
-              ),
-            ),
-        ],
-      ),
     );
   }
 }
@@ -1024,180 +1160,25 @@ class _SearchChoiceTile extends StatelessWidget {
   const _SearchChoiceTile({
     required this.icon,
     required this.label,
+    required this.meta,
+    required this.tone,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
+  final String meta;
+  final ApsTone tone;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return ApsMenuItem(
+      icon: icon,
+      tone: tone,
+      title: label,
+      subtitle: meta,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: AppColors.green100,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, size: 18, color: AppColors.green700),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(label, style: AppTextStyles.body.copyWith(fontSize: 13.5)),
-            ),
-            const Icon(Icons.chevron_right, size: 18, color: AppColors.inkFaint),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Feuille modale « Urgence » — numéros officiels réels (Cameroun) +
-/// pharmacie de garde la plus proche, chacun avec un bouton d'appel réel.
-/// Conforme à l'écran 6 de la maquette : aucun contenu commercial ici
-/// (§12 — primauté de la santé publique).
-class _UrgenceSheet extends StatelessWidget {
-  const _UrgenceSheet({
-    required this.pharmacieDeGarde,
-    required this.onAppelerPharmacie,
-  });
-
-  final HomePharmacieItem? pharmacieDeGarde;
-  final ValueChanged<HomePharmacieItem> onAppelerPharmacie;
-
-  Future<void> _appeler(BuildContext context, String numero) async {
-    final uri = Uri(scheme: 'tel', path: numero);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Impossible de lancer l'appel.")));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.lineStrong,
-                  borderRadius: BorderRadius.circular(100),
-                ),
-              ),
-            ),
-            Row(
-              children: [
-                const Icon(Icons.call, color: AppColors.coral500, size: 18),
-                const SizedBox(width: 8),
-                const Text('Besoin d\'aide maintenant ?', style: AppTextStyles.cardTitle),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Services officiels — Cameroun',
-              style: AppTextStyles.cardMeta.copyWith(color: AppColors.inkFaint),
-            ),
-            const SizedBox(height: 12),
-            _UrgenceRow(
-              titre: 'SAMU',
-              soustitre: 'Urgences médicales nationales',
-              numero: '1515',
-              onAppeler: () => _appeler(context, '1515'),
-            ),
-            _UrgenceRow(
-              titre: 'Police secours',
-              soustitre: 'Intervention rapide',
-              numero: '117',
-              onAppeler: () => _appeler(context, '117'),
-            ),
-            if (pharmacieDeGarde != null)
-              _UrgenceRow(
-                titre: pharmacieDeGarde!.nom,
-                soustitre: 'De garde — ${pharmacieDeGarde!.quartier}',
-                numero: null,
-                onAppeler: () => onAppelerPharmacie(pharmacieDeGarde!),
-              ),
-            const SizedBox(height: 4),
-            AppAlert(
-              type: AppAlertType.secondary,
-              message: 'Les numéros d\'urgence restent accessibles même hors connexion.',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _UrgenceRow extends StatelessWidget {
-  const _UrgenceRow({
-    required this.titre,
-    required this.soustitre,
-    required this.numero,
-    required this.onAppeler,
-  });
-
-  final String titre;
-  final String soustitre;
-  final String? numero;
-  final VoidCallback onAppeler;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: AppColors.coral100,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            alignment: Alignment.center,
-            child: const Icon(Icons.local_hospital_outlined, size: 17, color: AppColors.coral500),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(titre, style: AppTextStyles.cardTitle.copyWith(fontSize: 12.5)),
-                Text(soustitre, style: AppTextStyles.cardMeta),
-              ],
-            ),
-          ),
-          if (numero != null) ...[
-            Text(
-              numero!,
-              style: AppTextStyles.price.copyWith(fontSize: 13, color: AppColors.ink),
-            ),
-            const SizedBox(width: 8),
-          ],
-          CallButton(onPressed: onAppeler),
-        ],
-      ),
     );
   }
 }
