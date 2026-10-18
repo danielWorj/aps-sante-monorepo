@@ -1168,6 +1168,11 @@ enum TypeNotification {
   offreRdvNouvelle('offre_rdv_nouvelle'),
   offreRdvReponse('offre_rdv_reponse'),
   offreRdvExpiree('offre_rdv_expiree'),
+  // Portail assurance : nouvelle demande de mise en relation (agents de la
+  // fiche), activation et échéance de l'abonnement de la fiche.
+  miseEnRelationRecue('mise_en_relation_recue'),
+  abonnementAssuranceActive('abonnement_assurance_active'),
+  abonnementAssuranceEcheance('abonnement_assurance_echeance'),
   inconnu('');
 
   const TypeNotification(this.valeurApi);

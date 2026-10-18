@@ -53,15 +53,39 @@
 }
 
 /* ────────────────────────── Mot de passe temporaire (agent créé) ────────────────────────── */
-/* Affiché une seule fois après la création d'un service : mis en
-   valeur en police monospace sur fond sombre, pour bien le distinguer
-   du reste du texte de la modale et inviter à le copier tout de
-   suite. */
+/* Affiché une seule fois après la création d'un service. Même
+   présentation que la modale "Fiche médecin créée" (medecin.css,
+   .aps-fiche-info-*) pour rester cohérent dans le back-office. */
+.assur-info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.assur-info-item > i {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--aps-primary-100, #EAF4FD);
+  color: var(--aps-primary, #1C8FE0);
+  font-size: 13px;
+  margin-top: 1px;
+}
+.assur-info-label {
+  font-size: 11.5px;
+  color: var(--aps-text-500, #6B7280);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.assur-info-valeur {
+  font-size: 14px;
+  font-weight: 500;
+  word-break: break-all;
+}
 .assur-mot-de-passe {
-  background-color: #111827;
-  color: #f9fafb;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 0.95rem;
-  letter-spacing: 0.03em;
+  font-family: monospace;
+  font-size: 16px;
 }

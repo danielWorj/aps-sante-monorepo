@@ -25,6 +25,10 @@ const ICONES = {
   offre_rdv_nouvelle: 'fa-bullhorn',
   offre_rdv_reponse: 'fa-user-doctor',
   offre_rdv_expiree: 'fa-hourglass-end',
+  // Portail assurance : nouvelle demande de mise en relation, abonnement de la fiche.
+  mise_en_relation_recue: 'fa-inbox',
+  abonnement_assurance_active: 'fa-id-card',
+  abonnement_assurance_echeance: 'fa-hourglass-half',
 };
 // Date du créneau (ISO dans `donnees`), affichée dans le fuseau du navigateur.
 const dateRdv = (iso) => new Date(iso).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });

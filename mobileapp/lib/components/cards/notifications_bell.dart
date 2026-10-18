@@ -37,12 +37,19 @@ IconData iconeNotification(TypeNotification type) {
       return Icons.person_search_outlined;
     case TypeNotification.offreRdvExpiree:
       return Icons.hourglass_bottom_outlined;
+    case TypeNotification.miseEnRelationRecue:
+      return Icons.inbox_outlined;
+    case TypeNotification.abonnementAssuranceActive:
+      return Icons.verified_outlined;
+    case TypeNotification.abonnementAssuranceEcheance:
+      return Icons.hourglass_top_outlined;
     case TypeNotification.inconnu:
       return Icons.notifications_none_outlined;
   }
 }
 
 bool _estNotificationDemande(TypeNotification type) =>
+    type == TypeNotification.miseEnRelationRecue ||
     type == TypeNotification.offreRdvNouvelle ||
     type == TypeNotification.offreRdvReponse ||
     type == TypeNotification.offreRdvExpiree;

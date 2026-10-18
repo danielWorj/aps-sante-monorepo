@@ -1,0 +1,100 @@
+/* ============================================================
+APS — Portail assurance (portail-assurance.css)
+À charger APRÈS portail-medecin.css (réutilise sa grille, sa sidebar,
+ses cartes de stats et ses listes). Uniquement les tokens du thème.
+============================================================ */
+
+/* ---------- Sidebar : logo de la compagnie ---------- */
+.sidebar-avatar.assurance-logo{ border-radius:var(--radius-lg); overflow:hidden; background:var(--surface); }
+.sidebar-avatar.assurance-logo img{ width:100%; height:100%; object-fit:contain; }
+.assurance-logo-apercu{
+  width:72px; height:72px; object-fit:contain; border:1px solid var(--line);
+  border-radius:var(--radius-md); background:var(--surface);
+}
+
+/* ---------- Utilitaires ---------- */
+.flex-none{ flex:none; }
+.min-w-0{ min-width:0; }
+.aps-tabs.aps-tabs-compact{ margin-bottom:0; border-bottom:none; }
+.aps-tabs.aps-tabs-compact button{ padding:.45rem .8rem; }
+
+/* ---------- Jauge de quota / complétude ---------- */
+.quota-jauge{
+  height:6px; border-radius:var(--radius-pill); background:var(--surface-sunk);
+  overflow:hidden; margin-top:.3rem; min-width:80px;
+}
+.quota-jauge > span{ display:block; height:100%; background:var(--primary); border-radius:var(--radius-pill); }
+
+/* ---------- Histogramme quotidien (une série) ---------- */
+.barres-quotidiennes{ margin:0; }
+.barres-quotidiennes figcaption{ font-size:.88rem; margin-bottom:.5rem; }
+.bq-zone{ position:relative; height:120px; padding-top:1rem; }
+.bq-max{ position:absolute; top:0; left:0; font-size:.68rem; }
+.bq-barres{
+  display:flex; align-items:flex-end; gap:2px; height:100%;
+  border-bottom:1px solid var(--line);
+}
+.bq-colonne{
+  flex:1 1 0; min-width:0; height:100%; padding:0; border:none; background:transparent;
+  display:flex; align-items:flex-end; cursor:default;
+}
+.bq-colonne:focus-visible{ outline:2px solid var(--primary); outline-offset:1px; }
+.bq-barre{
+  display:block; width:100%; max-width:18px; margin:0 auto;
+  background:var(--primary); border-radius:4px 4px 0 0; transition:opacity .12s ease;
+}
+.bq-barres:hover .bq-barre{ opacity:.55; }
+.bq-colonne.is-actif .bq-barre{ opacity:1; }
+.bq-bulle{
+  position:absolute; top:-.4rem; transform:translateX(-50%); pointer-events:none; z-index:2;
+  display:flex; flex-direction:column; align-items:center; white-space:nowrap;
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm);
+  box-shadow:var(--shadow-sm); padding:.3rem .55rem; font-size:.74rem; color:var(--ink);
+}
+.bq-axe{ display:flex; justify-content:space-between; font-size:.7rem; margin-top:.25rem; }
+
+/* ---------- Médiathèque ---------- */
+.media-grille{ display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:.9rem; }
+.media-carte{
+  border:1px solid var(--line); border-radius:var(--radius-md); overflow:hidden;
+  background:var(--surface); display:flex; flex-direction:column;
+}
+.media-carte.is-masque .media-apercu img,
+.media-carte.is-masque .media-apercu video{ opacity:.45; }
+.media-apercu{ position:relative; aspect-ratio:4 / 3; background:var(--surface-sunk); }
+.media-apercu img, .media-apercu video{ width:100%; height:100%; object-fit:cover; display:block; }
+.media-badge{
+  position:absolute; top:.4rem; left:.4rem; font-size:.7rem; font-weight:700;
+  background:var(--surface); color:var(--ink-soft); border-radius:var(--radius-pill);
+  padding:.15rem .5rem; box-shadow:var(--shadow-sm);
+}
+.media-pied{ padding:.55rem .65rem; }
+
+/* ---------- Demandes ---------- */
+.demande-item{ flex-direction:column; align-items:stretch; cursor:default; gap:0; }
+.demande-item:hover{ transform:none; }
+.demande-item.is-nouvelle{ border-left:3px solid var(--orange, var(--gold)); }
+.demande-entete{
+  display:flex; align-items:center; gap:1rem; width:100%; text-align:left;
+  background:transparent; border:none; padding:0; color:inherit; cursor:pointer;
+}
+.demande-entete:focus-visible{ outline:2px solid var(--primary); outline-offset:4px; border-radius:var(--radius-sm); }
+.demande-detail{ border-top:1px solid var(--line); margin-top:1rem; padding-top:1rem; }
+.demande-message{
+  white-space:pre-wrap; background:var(--surface-alt); border-left:3px solid var(--primary-tint-strong);
+  border-radius:var(--radius-sm); padding:.8rem 1rem; font-size:.9rem; margin-bottom:1rem;
+}
+
+/* ---------- Galerie de la fiche publique ---------- */
+.galerie-assurance{ display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:.7rem; }
+.galerie-assurance figure{ margin:0; }
+.galerie-assurance img, .galerie-assurance video{
+  width:100%; aspect-ratio:4 / 3; object-fit:cover; border-radius:var(--radius-md); display:block;
+  background:var(--surface-sunk);
+}
+.galerie-assurance figcaption{ font-size:.78rem; color:var(--ink-soft); margin-top:.3rem; }
+
+@media (max-width:640px){
+  .media-grille{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .bq-zone{ height:96px; }
+}

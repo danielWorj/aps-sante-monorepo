@@ -129,9 +129,12 @@ class OnboardingProChoixPage extends StatelessWidget {
   /// [destination] pour que le professionnel ne perde pas son intention.
   /// Évite qu'un visiteur remplisse toutes les étapes avant d'apprendre
   /// à l'envoi que la route exige une connexion.
-  void _ouvrirAvecSession(BuildContext context, WidgetBuilder destination) {
+  Future<void> _ouvrirAvecSession(BuildContext context, WidgetBuilder destination) async {
     final container = ProviderScope.containerOf(context, listen: false);
-    if (container.read(sessionControllerProvider).value != null) {
+    // Attendre la restauration du démarrage (jeton persisté).
+    final session = await attendreSession(container);
+    if (!context.mounted) return;
+    if (session != null) {
       Navigator.of(context).push(MaterialPageRoute(builder: destination));
       return;
     }

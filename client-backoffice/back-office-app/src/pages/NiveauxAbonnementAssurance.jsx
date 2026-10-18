@@ -41,7 +41,7 @@ const VIDE = {
 
 const QUOTAS = [
   ['max_agences', 'Agences', false],
-  ['max_photos', 'Photos', true],
+  ['max_photos', 'Photos (médiathèque)', false],
   ['max_gestionnaires', 'Gestionnaires', true],
 ];
 

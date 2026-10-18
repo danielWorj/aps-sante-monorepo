@@ -35,10 +35,8 @@ import '../style/text_styles.dart';
 
 /// Signature du téléchargement, injectable pour les tests (par défaut :
 /// [FacturePdfService.partager]).
-typedef TelechargerFacture = Future<void> Function(
-  Facture facture,
-  Rect? origine,
-);
+typedef TelechargerFacture =
+    Future<void> Function(Facture facture, Rect? origine);
 
 Future<void> _telechargerParDefaut(Facture facture, Rect? origine) =>
     FacturePdfService.partager(facture, origine: origine);
@@ -135,6 +133,20 @@ class _FactureRecapitulativeState extends State<FactureRecapitulative> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  Container(
+                    width: compact ? 36 : 44,
+                    height: compact ? 36 : 44,
+                    margin: const EdgeInsets.only(right: 10),
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Image.asset(
+                      'assets/img/logoapsa.jpeg',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

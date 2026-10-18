@@ -2153,38 +2153,48 @@ export default function Assurances() {
       {/* ===================== COMPTE AGENT CRÉÉ ===================== */}
       <Modal
         id="modalAgentCreeAssurance"
-        title="Compte agent créé"
+        title={
+          <>
+            <i className="fa-solid fa-circle-check text-success me-2"></i>
+            Service d'assurance créé
+          </>
+        }
         isOpen={!!agentCree}
         onClose={() => setAgentCree(null)}
         footer={
-          <button className="btn btn-primary" onClick={() => setAgentCree(null)}>
-            J'ai noté le mot de passe
-          </button>
+          <>
+            <button type="button" className="btn btn-light" onClick={copierMotDePasse}>
+              <i className={`fa-solid ${motDePasseCopie ? 'fa-check' : 'fa-copy'} me-1`}></i>
+              {motDePasseCopie ? 'Copié' : 'Copier'}
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => setAgentCree(null)}>
+              J'ai communiqué ce mot de passe
+            </button>
+          </>
         }
       >
         {agentCree && (
           <>
-            <div className="aps-notice is-warning mb-3">
-              <i className="fa-solid fa-triangle-exclamation"></i>
-              <div>Ce mot de passe temporaire ne sera plus jamais affiché. Communiquez-le à l'agent dès maintenant.</div>
+            <p>
+              Le compte utilisateur de{' '}
+              <strong>
+                {agentCree.utilisateur?.prenom} {agentCree.utilisateur?.nom}
+              </strong>
+              {agentCree.fonction ? <> ({agentCree.fonction})</> : null} a été créé avec le mot de passe
+              temporaire ci-dessous. Communiquez-le-lui dès maintenant : il ne sera plus jamais affiché ensuite.
+            </p>
+            <div className="assur-info-item mb-2">
+              <i className="fa-solid fa-envelope"></i>
+              <div>
+                <div className="assur-info-label">Email</div>
+                <div className="assur-info-valeur">{agentCree.utilisateur?.email}</div>
+              </div>
             </div>
-            <div className="aps-card">
-              <div className="aps-card__body">
-                <p className="mb-1">
-                  <strong>
-                    {agentCree.utilisateur?.prenom} {agentCree.utilisateur?.nom}
-                  </strong>{' '}
-                  — {agentCree.fonction}
-                </p>
-                <p className="aps-text-muted mb-3" style={{ fontSize: 13 }}>
-                  {agentCree.utilisateur?.email}
-                </p>
-                <div className="d-flex align-items-center gap-2">
-                  <code className="assur-mot-de-passe">{agentCree.mot_de_passe_temporaire}</code>
-                  <button type="button" className="btn btn-sm btn-light" onClick={copierMotDePasse}>
-                    {motDePasseCopie ? 'Copié !' : 'Copier'}
-                  </button>
-                </div>
+            <div className="assur-info-item">
+              <i className="fa-solid fa-key"></i>
+              <div>
+                <div className="assur-info-label">Mot de passe temporaire</div>
+                <div className="assur-info-valeur assur-mot-de-passe">{agentCree.mot_de_passe_temporaire}</div>
               </div>
             </div>
           </>

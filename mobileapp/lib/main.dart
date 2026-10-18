@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'controllers/authentification_controller.dart';
 import 'pages/public/onboarding/onboarding_accueil_page.dart';
 import 'utils/identifiant_installation.dart';
 
@@ -20,8 +21,38 @@ Future<void> main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
+
+  @override
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+/// Session : restaurée DÈS le démarrage (les providers Riverpod sont
+/// paresseux — sans cette lecture, la restauration ne commençait qu'au
+/// premier accès à « Mon espace », qui voyait alors une session encore
+/// vide et renvoyait vers la connexion). Au retour au premier plan,
+/// l'access token est renouvelé s'il a expiré pendant la mise en veille.
+class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    ref.read(sessionControllerProvider);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState etat) {
+    if (etat == AppLifecycleState.resumed) {
+      ref.read(sessionControllerProvider.notifier).verifierFraicheur();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

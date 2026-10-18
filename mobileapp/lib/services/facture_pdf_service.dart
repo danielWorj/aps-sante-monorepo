@@ -22,6 +22,7 @@
 import 'dart:typed_data';
 import 'dart:ui' show Rect;
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -52,6 +53,7 @@ class FacturePdfService {
 
   /// Génère le PDF (octets) de [facture].
   static Future<Uint8List> generer(Facture facture) async {
+    final logo = await _chargerLogo();
     final doc = pw.Document(
       title: texteSurPdf(
         facture.numero != null
@@ -66,7 +68,7 @@ class FacturePdfService {
       pw.Page(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
-        build: (_) => _contenu(facture),
+        build: (_) => _contenu(facture, logo),
       ),
     );
     return doc.save();
@@ -86,9 +88,20 @@ class FacturePdfService {
     );
   }
 
+  /// Logo APSA (asset de l'app) ; null si le chargement échoue, la facture
+  /// est alors générée sans logo plutôt que de bloquer le téléchargement.
+  static Future<pw.ImageProvider?> _chargerLogo() async {
+    try {
+      final donnees = await rootBundle.load('assets/img/logoapsa.jpeg');
+      return pw.MemoryImage(donnees.buffer.asUint8List());
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ─── Mise en page ────────────────────────────────────────────────
 
-  static pw.Widget _contenu(Facture f) {
+  static pw.Widget _contenu(Facture f, pw.ImageProvider? logo) {
     final devise = f.devise;
     final date = dateLongueFacture(f.date);
     final e = f.entete;
@@ -97,8 +110,7 @@ class FacturePdfService {
       if (e.specialite != null) ('Spécialité', e.specialite!),
       if (e.pays != null) ('Pays', e.pays!),
       if (e.ville != null) ('Ville', e.ville!),
-      if (e.dateCreneau != null)
-        ('Rendez-vous', dateHeure(e.dateCreneau)),
+      if (e.dateCreneau != null) ('Rendez-vous', dateHeure(e.dateCreneau)),
     ];
 
     return pw.Column(
@@ -112,24 +124,41 @@ class FacturePdfService {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
+              pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: [
-                  pw.Text(
-                    texteSurPdf('APS Santé'),
-                    style: pw.TextStyle(
-                      color: PdfColors.white,
-                      fontSize: 20,
-                      fontWeight: pw.FontWeight.bold,
+                  if (logo != null)
+                    pw.Container(
+                      width: 52,
+                      height: 52,
+                      margin: const pw.EdgeInsets.only(right: 12),
+                      padding: const pw.EdgeInsets.all(4),
+                      decoration: pw.BoxDecoration(
+                        color: PdfColors.white,
+                        borderRadius: pw.BorderRadius.circular(6),
+                      ),
+                      child: pw.Image(logo, fit: pw.BoxFit.contain),
                     ),
-                  ),
-                  pw.SizedBox(height: 2),
-                  pw.Text(
-                    texteSurPdf(titreFacture(f)),
-                    style: const pw.TextStyle(
-                      color: PdfColors.white,
-                      fontSize: 11,
-                    ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        texteSurPdf('APS Santé'),
+                        style: pw.TextStyle(
+                          color: PdfColors.white,
+                          fontSize: 20,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        texteSurPdf(titreFacture(f)),
+                        style: const pw.TextStyle(
+                          color: PdfColors.white,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -189,7 +218,10 @@ class FacturePdfService {
                   width: 90,
                   child: pw.Text(
                     texteSurPdf(libelle),
-                    style: const pw.TextStyle(color: _encreDouce, fontSize: 10.5),
+                    style: const pw.TextStyle(
+                      color: _encreDouce,
+                      fontSize: 10.5,
+                    ),
                   ),
                 ),
                 pw.Expanded(
@@ -264,7 +296,7 @@ class FacturePdfService {
           texteSurPdf(
             f.estDevis
                 ? 'Aperçu non contractuel : la facture définitive est émise '
-                    'après confirmation du paiement.'
+                      'après confirmation du paiement.'
                 : 'Document généré par l\'application APS Santé.',
           ),
           textAlign: pw.TextAlign.center,

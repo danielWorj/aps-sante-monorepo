@@ -17,6 +17,11 @@
 // évite de devoir mémoriser un second champ "type de ressource" en
 // base — cohérent avec la règle "seul le nom est stocké".
 //
+// Exception : les VIDÉOS (médiathèque du portail assurance) exigent le
+// resource_type "video". L'appelant mémorise alors le type à côté du nom
+// (MediaAssurance.type) et passe `{ resourceType: "video" }` aux
+// fonctions ci-dessous.
+//
 // Variables d'environnement requises (.env) :
 //   CLOUDINARY_CLOUD_NAME
 //   CLOUDINARY_API_KEY
@@ -40,14 +45,15 @@ const DOSSIER_RACINE = "aps/structures-sante";
  *
  * @param {Buffer} buffer - contenu binaire du fichier
  * @param {string} sousDossier - ex. "images", "pieces-identite", "agrements"
+ * @param {{ resourceType?: "image"|"video" }} [options]
  * @returns {Promise<{nom: string, url: string}>} `nom` = public_id à stocker en base
  */
-export function televerserFichier(buffer, sousDossier) {
+export function televerserFichier(buffer, sousDossier, { resourceType = RESOURCE_TYPE } = {}) {
   return new Promise((resolve, reject) => {
     const flux = cloudinary.uploader.upload_stream(
       {
         folder: `${DOSSIER_RACINE}/${sousDossier}`,
-        resource_type: RESOURCE_TYPE,
+        resource_type: resourceType,
       },
       (erreur, resultat) => {
         if (erreur) return reject(erreur);
@@ -99,11 +105,11 @@ function decomposerNom(nom) {
  * doit jamais faire échouer l'opération métier (update/delete en DB)
  * qui l'a déclenché — on logge et on continue.
  */
-export async function supprimerFichier(nom) {
+export async function supprimerFichier(nom, { resourceType = RESOURCE_TYPE } = {}) {
   if (!nom) return;
   const { publicId } = decomposerNom(nom);
   try {
-    await cloudinary.uploader.destroy(publicId, { resource_type: RESOURCE_TYPE });
+    await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
   } catch (erreur) {
     console.error(`[cloudinaryService] Échec de suppression de "${nom}" :`, erreur.message);
   }
@@ -115,9 +121,24 @@ export async function supprimerFichier(nom) {
  * le frontend n'a pas besoin de connaître cloud_name ni la logique
  * Cloudinary, seulement l'URL finale.
  */
-export function construireUrl(nom) {
+export function construireUrl(nom, { resourceType = RESOURCE_TYPE } = {}) {
   if (!nom) return null;
-  return cloudinary.url(nom, { resource_type: RESOURCE_TYPE, secure: true });
+  return cloudinary.url(nom, { resource_type: resourceType, secure: true });
 }
 
-export default { televerserFichier, supprimerFichier, construireUrl };
+/**
+ * Vignette JPG d'une vidéo stockée sous `nom` ("dossier/identifiant.mp4") :
+ * Cloudinary la génère à la volée quand on demande l'extension .jpg sur
+ * la ressource vidéo (image prise à 1 s).
+ */
+export function construireVignetteVideo(nom) {
+  if (!nom) return null;
+  const { publicId } = decomposerNom(nom);
+  return cloudinary.url(`${publicId}.jpg`, {
+    resource_type: "video",
+    secure: true,
+    transformation: [{ start_offset: 1 }],
+  });
+}
+
+export default { televerserFichier, supprimerFichier, construireUrl, construireVignetteVideo };

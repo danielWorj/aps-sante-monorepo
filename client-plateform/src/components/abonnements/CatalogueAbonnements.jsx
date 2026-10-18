@@ -22,6 +22,9 @@ function avantagesLisibles(type, avantages) {
     if (avantages.afficher_agences) {
       liste.push(avantages.max_agences === null ? 'Agences illimitées' : `Jusqu'à ${avantages.max_agences} agence(s)`);
     }
+    if (avantages.max_photos !== 0 && avantages.max_photos !== undefined) {
+      liste.push(avantages.max_photos === null ? 'Photos illimitées' : `Jusqu'à ${avantages.max_photos} photo(s)`);
+    }
     return liste;
   }
   return Object.entries(avantages).filter(([, actif]) => actif).map(([cle]) => LIBELLES_AVANTAGES[cle] ?? cle);

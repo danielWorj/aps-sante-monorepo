@@ -118,6 +118,12 @@ function OffreCard({ offre, onChoisir, estCourant }) {
             {offre.avantages.max_agences === null ? 'Agences illimitées' : `Jusqu'à ${offre.avantages.max_agences} agence(s)`}
           </li>
         )}
+        {offre.avantages.max_photos !== 0 && offre.avantages.max_photos !== undefined && (
+          <li>
+            <i className="fa-solid fa-check" />{' '}
+            {offre.avantages.max_photos === null ? 'Photos illimitées' : `Jusqu'à ${offre.avantages.max_photos} photo(s)`}
+          </li>
+        )}
       </ul>
 
       <button

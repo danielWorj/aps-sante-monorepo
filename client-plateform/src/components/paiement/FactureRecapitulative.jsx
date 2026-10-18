@@ -22,6 +22,7 @@ import { useEffect, useState, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { obtenirFacture } from '../../services/paiementService';
 import { dateHeure, montantDevise } from '../../utils/fonds';
+import logoApsa from '../../assets/img/logoapsa.jpeg';
 import './FactureRecapitulative.css';
 
 const formatPourcent = (taux) =>
@@ -64,9 +65,12 @@ function FactureCorps({ facture, compact = false, className = '' }) {
       aria-label={estDevis ? 'Aperçu de la facture' : 'Facture'}
     >
       <header className="facture-head">
-        <div>
-          <div className="facture-marque">APSA</div>
-          <div className="facture-sous-titre">{estDevis ? 'Aperçu de la facture' : 'Facture'}</div>
+        <div className="facture-identite">
+          <img className="facture-logo" src={logoApsa} alt="Logo APSA" />
+          <div>
+            <div className="facture-marque">APSA</div>
+            <div className="facture-sous-titre">{estDevis ? 'Aperçu de la facture' : 'Facture'}</div>
+          </div>
         </div>
         <div className="facture-meta">
           {estDevis ? (
