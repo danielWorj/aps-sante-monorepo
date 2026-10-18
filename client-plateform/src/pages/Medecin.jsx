@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import med1 from '../assets/img/med1.jpg';
-import pub4 from '../assets/img/ads/pub4.jpg';
+import SliderPublicite from '../components/publicite/SliderPublicite';
+import { PAGES_PUBLICITE } from '../services/publiciteService';
 import {
   listerMedecins,
   listerSpecialites,
@@ -482,10 +483,7 @@ export default function Medecin() {
             {/* Colonne flyer publicitaire */}
             <div className="col-md-3">
               <div className="ad-flyer">
-                <a href="#" className="ad-slot">
-                  <span className="ad-tag">Publicité</span>
-                  <img src={pub4} alt="Publicité — Journée internationale des infirmières, Croix-Rouge" />
-                </a>
+                <SliderPublicite code={PAGES_PUBLICITE.medecin} />
               </div>
             </div>
           </div>

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import pharmaPlaceholder from "../assets/img/pharma1.jpg";
-import pub5 from "../assets/img/ads/pub5.jpg";
+import SliderPublicite from '../components/publicite/SliderPublicite';
+import { PAGES_PUBLICITE } from '../services/publiciteService';
 
 import { listerPharmacies, listerGardesPharmacie } from "../services/pharmacieService";
 import { listerPays, listerVilles } from "../services/geoService";
@@ -423,39 +424,7 @@ export default function Pharmacie() {
             {/* Colonne publicité */}
             <div className="col-md-3">
               <div className="ad-col">
-                <div className="ad-card">
-                  <div className="ad-label">
-                    <span>Publicité</span>
-                    <i className="fa-solid fa-circle-info" title="Emplacement commercial ApSa" />
-                  </div>
-                  <a href="#" aria-label="Nourishka Greenlife — Collagène">
-                    <img src={pub5} alt="Nourishka Greenlife — Collagène" />
-                  </a>
-                  <div className="ad-card-body">
-                    <h4>Nourishka Greenlife</h4>
-                    <p>
-                      Collagène : peau, cheveux, os, articulations. Disponible
-                      chez Nourishka Greenlife, Akwa Carrefour Paris Dancing.
-                    </p>
-                    <a
-                      href="https://wa.me/237699007730"
-                      className="btn btn-outline-primary btn-sm-aps btn-block-aps"
-                    >
-                      <i className="fa-brands fa-whatsapp" /> Contacter
-                    </a>
-                  </div>
-                </div>
-
-                <div className="ad-slot-empty">
-                  <i className="fa-solid fa-bullhorn" />
-                  <p>
-                    Cet emplacement est disponible pour les annonceurs
-                    partenaires d'ApSa.
-                  </p>
-                  <a href="#" className="btn btn-primary btn-sm-aps btn-block-aps">
-                    Réserver cet espace
-                  </a>
-                </div>
+                <SliderPublicite code={PAGES_PUBLICITE.pharmacie} />
               </div>
             </div>
           </div>

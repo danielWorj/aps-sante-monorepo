@@ -332,6 +332,64 @@ export function listerPays() {
   return listerPaysReferentiel().then((pays) => pays ?? []);
 }
 
+/* ===================================================================
+ * v9 — Réservations d'espace : modération, statistiques, paiements tardifs
+ * =================================================================== */
+
+// Cycle d'une réservation (voir server/src/services/publicite.service.js).
+export const STATUTS_PUBLICITE = {
+  en_moderation: { libelle: 'À modérer', badge: 'is-warning' },
+  en_attente_paiement: { libelle: 'Acceptée, à payer', badge: 'is-info' },
+  payee: { libelle: 'Payée', badge: 'is-success' },
+  expiree: { libelle: 'Non payée à temps', badge: 'is-neutral' },
+  rejetee: { libelle: 'Rejetée', badge: 'is-danger' },
+  annulee: { libelle: 'Annulée', badge: 'is-neutral' },
+};
+
+/**
+ * GET /api/publicites (vue admin) -> { publicites, compteurs }
+ * @param {Object} filtres - { statut?, emplacement_publicitaire_id?, pays_id?, recherche? }
+ */
+export function listerReservationsPublicitaires(filtres = {}) {
+  return apiFetch(`/publicites${construireParametres(filtres)}`).then((d) => ({
+    publicites: d.publicites ?? [],
+    compteurs: d.compteurs ?? {},
+  }));
+}
+
+/** POST /api/publicites/:id/accepter { date_debut? } — l'annonceur reçoit le lien de paiement par WhatsApp. */
+export function accepterPublicite(id, date_debut) {
+  return apiFetch(`/publicites/${id}/accepter`, { method: 'POST', body: date_debut ? { date_debut } : {} });
+}
+
+/** POST /api/publicites/:id/rejeter { motif } — le motif part par WhatsApp. */
+export function rejeterPublicite(id, motif) {
+  return apiFetch(`/publicites/${id}/rejeter`, { method: 'POST', body: { motif } });
+}
+
+/** GET /api/publicites/:id/statistiques -> { impressions, clics, taux_clic, serie } */
+export function obtenirStatistiquesPublicite(id) {
+  return apiFetch(`/publicites/${id}/statistiques`);
+}
+
+/** GET /api/publicites/:id/facture -> { facture } */
+export function obtenirFacturePublicite(id) {
+  return apiFetch(`/publicites/${id}/facture`).then((d) => d.facture);
+}
+
+/** GET /api/admin/publicites/paiements-tardifs?statut= -> { remboursements } */
+export function listerPaiementsTardifsPublicite(statut = 'a_traiter') {
+  return apiFetch(`/admin/publicites/paiements-tardifs?statut=${statut}`).then((d) => d.remboursements ?? []);
+}
+
+/** POST /api/admin/publicites/paiements-tardifs/:id/traiter { frais_reels? } */
+export function traiterPaiementTardifPublicite(id, frais_reels) {
+  return apiFetch(`/admin/publicites/paiements-tardifs/${id}/traiter`, {
+    method: 'POST',
+    body: frais_reels === undefined ? {} : { frais_reels },
+  });
+}
+
 const PubliciteService = {
   STATUTS_MODERATION_PUBLICITE,
   listerEmplacementsPublicitaires,

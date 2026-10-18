@@ -1,3 +1,5 @@
+import '../../components/publicite/slider_publicite.dart';
+import '../../models/annonceur_publicite_models.dart' show PagesPublicite;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -430,6 +432,14 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
             onStructuresTap: widget.onStructuresTap ?? _ouvrirStructures,
             onUrgenceTap: widget.onUrgenceTap ?? _ouvrirUrgence,
           ),
+          // Carrousel réel de PAGE_ACCUEIL (positions payées + « Réserver cet
+          // espace ») ; l'ancien carrousel ne sert plus que si `ads` est imposé.
+          if (widget.ads.isEmpty) ...[
+            const Text('Offres & actualités partenaires', style: AppTextStyles.cardTitle),
+            const SizedBox(height: 10),
+            const SliderPublicite(code: PagesPublicite.accueil),
+            const SizedBox(height: 8),
+          ] else ...[
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -454,6 +464,7 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
           const SizedBox(height: 4),
           const _SwipeHint(),
           const SizedBox(height: 8),
+          ],
           _SectionTitle(
             title: 'Pharmacies de garde',
             onVoirTout: widget.onVoirToutesPharmacies ?? _ouvrirPharmacies,

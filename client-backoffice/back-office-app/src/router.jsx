@@ -58,6 +58,8 @@ import StructureSante from './pages/StructureSante';
 //APK 
 
 import GestionApk from './pages/GestionApk';
+// WHATSAPP
+import WhatsApp from './pages/WhatsApp';
 // import Medecin from './pages/Medecin';
 // import StructureSante from './pages/StructureSante';
 // import Pharmacie from './pages/Pharmacie';
@@ -136,6 +138,8 @@ export const router = createBrowserRouter([
           { path: '/offres-rdv', element: <OffresRdv /> },
           // APK
           { path: '/apk', element: <GestionApk /> },
+          // WHATSAPP : numéro expéditeur, test, journal des envois
+          { path: '/whatsapp', element: <WhatsApp /> },
           
           //   { path: '/pharmacie', element: <Pharmacie /> },
           //   { path: '/structure-sante', element: <StructureSante /> },

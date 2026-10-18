@@ -30,73 +30,100 @@
 // ─── Lignes d'avantages (ligne_forfait_publicitaire) ─────────────
 // Même autorisation que le forfait parent : admin/superadmin.
 //
-// ─── Publicités ───────────────────────────────────────────────────
-// Même patron de modération que avis_pharmacie (voir
-// avis.controller.js) :
-// Lecture : PUBLIQUE, mais un visiteur non authentifié (ou tout
-// utilisateur qui n'est ni l'auteur ni admin/superadmin) ne voit que
-// les publicités au statut "validee".
-// Création : tout utilisateur authentifié, quel que soit son rôle.
-// Toujours créée "en_attente", quelle que soit la valeur envoyée
-// (aucun rôle ne peut publier directement sa propre publicité).
-// L'utilisateur fournit DIRECTEMENT emplacement_publicitaire_id (plus
-// d'enum zone_affichage — emplacement_publicitaire est une table pure
-// de référence, voir schema.prisma), en plus de forfait_publicitaire_id
-// (qui fixe prix/durée) : les deux doivent correspondre au même
-// emplacement, vérifié à la création.
-// Le visuel n'est plus un champ texte libre : il est envoyé en
-// multipart/form-data (champ "visuel") et téléversé sur
-// Cloudinary (voir lib/cloudinaryService.js, même patron que
-// pharmacie.controller.js) ; le "nom" (public_id) renvoyé par
-// Cloudinary est stocké dans visuel_url.
-// Modification : l'auteur peut corriger titre/visuel (nouveau
-// fichier)/dates tant que la publicité n'a pas encore
-// été modérée (statut "en_attente" seulement). Un admin/superadmin
-// peut à tout moment changer statut_moderation.
-// Suppression : l'auteur (quel que soit le statut) ou admin/superadmin.
+// ─── Publicités (v9 : réservation d'espace) ───────────────────────
+// Règles du cycle dans services/publicite.service.js. En bref :
+// Réservation (POST) : tout utilisateur authentifié. Emplacement, pays,
+// rang et prix viennent du forfait choisi, jamais du client. Toujours
+// créée « en_moderation » ; le visuel arrive en multipart (« visuel »)
+// et est téléversé sur Cloudinary (visuel_url = public_id).
+// Modération : POST /accepter (bloque la place jusqu'au paiement) ou
+// /rejeter (motif obligatoire) — message WhatsApp à l'annonceur.
+// Lecture publique : uniquement les publicités payées en cours de
+// diffusion, sans les informations de l'annonceur.
+// Annonceur : ses demandes, statistiques et factures (portail).
 
 import prisma from "../lib/prisma.js";
-import { televerserFichier, supprimerFichier, construireUrl } from "../lib/cloudinaryService.js";
+import { televerserFichier, supprimerFichier } from "../lib/cloudinaryService.js";
+import {
+  ErreurPublicite,
+  repondreSiErreurPublicite,
+  avecUrlVisuel,
+  vuePublique,
+  jourUtc,
+  versJourIso,
+  trouverEmplacementDePage,
+  publicitesDiffusees,
+  disponibiliteForfait,
+  preparerSoumission,
+  validerChampsReservation,
+  accepterPublicite,
+  rejeterPublicite,
+  annulerPublicite,
+  lienPaiementPublicite,
+} from "../services/publicite.service.js";
+import {
+  empreinteVisiteur,
+  enregistrerEvenements,
+  serieStatistiques,
+  totauxParPublicite,
+} from "../services/statistiquesPublicite.service.js";
 
-const STATUTS_MODERATION_PUBLICITE = ["en_attente", "validee", "rejetee"];
-
-/**
- * Convertit le "nom" Cloudinary (public_id, ex.
- * "aps/structures-sante/publicites/xxx.jpg") stocké tel quel dans la
- * colonne `visuel_url` en une véritable URL publique
- * (https://res.cloudinary.com/…) exploitable directement par le
- * frontend (`<img src={publicite.visuel_url}>`).
- *
- * Même principe que `avecUrlsFichiers()` dans pharmacie.controller.js
- * (et le même besoin existe pour centre_sante) : le frontend ne doit
- * jamais avoir à connaître la logique Cloudinary, seulement consommer
- * une URL prête à l'emploi. Sans cette étape, l'API renvoyait le
- * public_id brut, pas une URL — d'où le visuel jamais affiché
- * (icône d'image brisée) malgré un téléversement Cloudinary réussi.
- *
- * À appliquer uniquement juste avant de sérialiser une publicité en
- * JSON pour la réponse HTTP : en interne (suppression de l'ancien
- * fichier, etc.) on continue de manipuler le "nom" brut tel que lu en
- * base.
- */
-function avecUrlVisuel(publicite) {
-  return { ...publicite, visuel_url: construireUrl(publicite.visuel_url) };
-}
+const STATUTS_PUBLICITE = ["en_moderation", "rejetee", "en_attente_paiement", "expiree", "payee", "annulee"];
+// Statuts où l'annonceur n'a encore rien payé : suppression possible.
+const STATUTS_SUPPRIMABLES = ["en_moderation", "rejetee", "annulee", "expiree"];
+const FORMAT_CODE_PAGE = /^[A-Za-z0-9_-]{1,50}$/;
+const FORMAT_DEVISE = /^[a-z]{3}$/;
 
 function estAdmin(utilisateur) {
   return utilisateur?.role === "admin" || utilisateur?.role === "superadmin";
 }
 
-/**
- * Un visiteur public (ou un utilisateur authentifié qui n'est ni
- * l'auteur ni admin/superadmin) ne doit jamais voir une publicité non
- * encore validée.
- */
-function filtrerSelonVisibilite(publicite, utilisateurCourant) {
-  if (publicite.statut_moderation === "validee") return true;
-  if (!utilisateurCourant) return false;
-  if (estAdmin(utilisateurCourant)) return true;
-  return publicite.utilisateur_id === utilisateurCourant.utilisateur_id;
+/** pages, nombre_places, actif d'un emplacement (seuls les champs présents). */
+function lireOptionsEmplacement(corps) {
+  const data = {};
+  if (corps.pages !== undefined) {
+    const pages = Array.isArray(corps.pages) ? corps.pages : String(corps.pages ?? "").split(",");
+    const nettoyees = [...new Set(pages.map((p) => String(p).trim()).filter(Boolean))];
+    if (nettoyees.some((p) => !FORMAT_CODE_PAGE.test(p))) {
+      return { erreur: "pages : codes de page invalides (lettres, chiffres, « _ » ou « - »)." };
+    }
+    data.pages = nettoyees;
+  }
+  if (corps.nombre_places !== undefined) {
+    const n = Number(corps.nombre_places);
+    if (!Number.isInteger(n) || n < 1 || n > 10) return { erreur: "nombre_places : entier de 1 à 10." };
+    data.nombre_places = n;
+  }
+  if (corps.actif !== undefined) data.actif = corps.actif === true || corps.actif === "true";
+  return { data };
+}
+
+/** rang, pays_id, devise, actif d'un forfait (seuls les champs présents). */
+async function lireOptionsForfait(corps, emplacement, existant = null) {
+  const data = {};
+  if (corps.rang !== undefined) {
+    const r = Number(corps.rang);
+    if (!Number.isInteger(r) || r < 1) return { erreur: "rang : entier >= 1." };
+    data.rang = r;
+  }
+  const rang = data.rang ?? existant?.rang ?? 1;
+  if (rang > emplacement.nombre_places) {
+    return { erreur: `rang ${rang} hors du slider de cet emplacement (${emplacement.nombre_places} place(s)).` };
+  }
+  if (corps.pays_id !== undefined) {
+    if (corps.pays_id) {
+      const pays = await prisma.pays.findUnique({ where: { pays_id: corps.pays_id } });
+      if (!pays) return { erreur: "pays_id introuvable." };
+    }
+    data.pays_id = corps.pays_id || null;
+  }
+  if (corps.devise !== undefined) {
+    const devise = String(corps.devise).trim().toLowerCase();
+    if (!FORMAT_DEVISE.test(devise)) return { erreur: "devise : code ISO à 3 lettres (ex. xaf)." };
+    data.devise = devise;
+  }
+  if (corps.actif !== undefined) data.actif = corps.actif === true || corps.actif === "true";
+  return { data };
 }
 
 /* ===================================================================
@@ -146,6 +173,8 @@ export async function creerEmplacementPublicitaire(req, res, next) {
         message: "Champs requis manquants : code, libelle.",
       });
     }
+    const options = lireOptionsEmplacement(req.body);
+    if (options.erreur) return res.status(400).json({ message: options.erreur });
 
     const existant = await prisma.emplacementPublicitaire.findUnique({
       where: { code: code.trim() },
@@ -159,6 +188,7 @@ export async function creerEmplacementPublicitaire(req, res, next) {
         code: code.trim(),
         libelle: libelle.trim(),
         description: description?.trim() || null,
+        ...options.data,
       },
     });
 
@@ -190,6 +220,23 @@ export async function modifierEmplacementPublicitaire(req, res, next) {
         return res.status(409).json({ message: "Un emplacement avec ce code existe déjà." });
       }
     }
+    const options = lireOptionsEmplacement(req.body);
+    if (options.erreur) return res.status(400).json({ message: options.erreur });
+    // Réduire le slider ne doit pas orpheliner des forfaits ou publicités déjà vendus.
+    if (options.data.nombre_places !== undefined && options.data.nombre_places < existant.nombre_places) {
+      const horsSlider = await prisma.publicite.count({
+        where: {
+          emplacement_publicitaire_id: existant.emplacement_publicitaire_id,
+          rang: { gt: options.data.nombre_places },
+          statut: { in: ["en_moderation", "en_attente_paiement", "payee"] },
+        },
+      });
+      if (horsSlider) {
+        return res.status(409).json({
+          message: `Impossible de réduire le nombre de places : ${horsSlider} publicité(s) en cours occupent un rang supérieur.`,
+        });
+      }
+    }
 
     const emplacement = await prisma.emplacementPublicitaire.update({
       where: { emplacement_publicitaire_id: req.params.id },
@@ -197,6 +244,7 @@ export async function modifierEmplacementPublicitaire(req, res, next) {
         ...(code && { code: code.trim() }),
         ...(libelle && { libelle: libelle.trim() }),
         ...(description !== undefined && { description: description?.trim() || null }),
+        ...options.data,
       },
     });
 
@@ -245,15 +293,30 @@ export async function supprimerEmplacementPublicitaire(req, res, next) {
  */
 export async function listerForfaitsPublicitaires(req, res, next) {
   try {
-    const { emplacement_publicitaire_id } = req.query;
+    const { emplacement_publicitaire_id, pays_id, code_page } = req.query;
 
     const where = {};
     if (emplacement_publicitaire_id) where.emplacement_publicitaire_id = emplacement_publicitaire_id;
+    if (pays_id) where.pays_id = pays_id;
+    // Formulaire de réservation : forfaits vendables de l'emplacement d'une page.
+    if (code_page) {
+      const emplacement = await trouverEmplacementDePage(prisma, code_page);
+      if (!emplacement) return res.status(200).json({ forfaits: [], emplacement: null });
+      where.emplacement_publicitaire_id = emplacement.emplacement_publicitaire_id;
+    }
+    // Hors administration : seuls les forfaits vendables sont listés.
+    if (!estAdmin(req.utilisateur)) {
+      Object.assign(where, { actif: true, pays_id: pays_id ?? { not: null }, emplacement_publicitaire: { actif: true } });
+    }
 
     const forfaits = await prisma.forfaitPublicitaire.findMany({
       where,
-      include: { lignes: { orderBy: { ordre_affichage: "asc" } } },
-      orderBy: { libelle: "asc" },
+      include: {
+        lignes: { orderBy: { ordre_affichage: "asc" } },
+        emplacement_publicitaire: { select: { code: true, libelle: true, nombre_places: true, pages: true, actif: true } },
+        pays: { select: { pays_id: true, nom: true, code_iso2: true } },
+      },
+      orderBy: [{ rang: "asc" }, { duree_jours: "asc" }, { libelle: "asc" }],
     });
 
     return res.status(200).json({ forfaits });
@@ -307,6 +370,11 @@ export async function creerForfaitPublicitaire(req, res, next) {
     if (!emplacement) {
       return res.status(400).json({ message: "emplacement_publicitaire_id introuvable." });
     }
+    const options = await lireOptionsForfait(req.body, emplacement);
+    if (options.erreur) return res.status(400).json({ message: options.erreur });
+    if (!(Number(prix) >= 0) || !(Number(duree_jours) >= 1)) {
+      return res.status(400).json({ message: "prix (>= 0) et duree_jours (>= 1) invalides." });
+    }
 
     if (lignes !== undefined && !Array.isArray(lignes)) {
       return res.status(400).json({ message: "lignes doit être un tableau." });
@@ -324,6 +392,7 @@ export async function creerForfaitPublicitaire(req, res, next) {
           libelle,
           prix,
           duree_jours: Number(duree_jours),
+          ...options.data,
         },
       });
 
@@ -364,13 +433,27 @@ export async function modifierForfaitPublicitaire(req, res, next) {
       return res.status(404).json({ message: "Forfait publicitaire introuvable." });
     }
 
-    if (emplacement_publicitaire_id) {
-      const emplacement = await prisma.emplacementPublicitaire.findUnique({
-        where: { emplacement_publicitaire_id },
+    const emplacement = await prisma.emplacementPublicitaire.findUnique({
+      where: { emplacement_publicitaire_id: emplacement_publicitaire_id || existant.emplacement_publicitaire_id },
+    });
+    if (!emplacement) {
+      return res.status(400).json({ message: "emplacement_publicitaire_id introuvable." });
+    }
+    const options = await lireOptionsForfait(req.body, emplacement, existant);
+    if (options.erreur) return res.status(400).json({ message: options.erreur });
+    if ((prix !== undefined && !(Number(prix) >= 0)) || (duree_jours !== undefined && !(Number(duree_jours) >= 1))) {
+      return res.status(400).json({ message: "prix (>= 0) et duree_jours (>= 1) invalides." });
+    }
+    // Les réservations déjà faites gardent leur prix, rang et période figés :
+    // seuls les forfaits sans réservation changent d'emplacement, de rang ou de pays.
+    const change = (c, v) => v !== undefined && String(v ?? "") !== String(existant[c] ?? "");
+    const structurel =
+      change("emplacement_publicitaire_id", emplacement_publicitaire_id || undefined) ||
+      ["rang", "pays_id", "devise"].some((c) => change(c, options.data[c]));
+    if (structurel && (await prisma.publicite.count({ where: { forfait_publicitaire_id: existant.forfait_publicitaire_id } }))) {
+      return res.status(409).json({
+        message: "Ce forfait a déjà des réservations : créez un nouveau forfait (et désactivez celui-ci) pour changer emplacement, rang, pays ou devise.",
       });
-      if (!emplacement) {
-        return res.status(400).json({ message: "emplacement_publicitaire_id introuvable." });
-      }
     }
 
     const forfait = await prisma.forfaitPublicitaire.update({
@@ -380,6 +463,7 @@ export async function modifierForfaitPublicitaire(req, res, next) {
         ...(libelle && { libelle }),
         ...(prix !== undefined && { prix }),
         ...(duree_jours !== undefined && { duree_jours: Number(duree_jours) }),
+        ...options.data,
       },
       include: { lignes: { orderBy: { ordre_affichage: "asc" } } },
     });
@@ -511,300 +595,402 @@ export async function supprimerLigneForfait(req, res, next) {
 }
 
 /* ===================================================================
- * Publicités
+ * Publicités (v9 : réservation d'espace)
  * =================================================================== */
+
+const INCLUDE_DETAIL = {
+  emplacement_publicitaire: { select: { code: true, libelle: true, nombre_places: true } },
+  forfait_publicitaire: { select: { libelle: true, duree_jours: true, rang: true } },
+  pays: { select: { pays_id: true, nom: true, code_iso2: true } },
+  facture: { select: { facture_id: true, numero: true, date_emission: true } },
+};
+
+/** Vue complète (annonceur ou administration). */
+function vueDetail(p, totaux) {
+  return {
+    ...avecUrlVisuel(p),
+    date_debut: versJourIso(p.date_debut),
+    date_fin: versJourIso(p.date_fin),
+    statistiques: totaux ?? { impressions: 0, clics: 0 },
+    lien_paiement: p.statut === "en_attente_paiement" ? lienPaiementPublicite(p.publicite_id) : null,
+    en_diffusion: estDiffusee(p),
+  };
+}
+
+function estDiffusee(p, maintenant = new Date()) {
+  const j = jourUtc(maintenant);
+  return p.statut === "payee" && jourUtc(p.date_debut) <= j && jourUtc(p.date_fin) > j;
+}
+
+/** Publicité lisible par l'utilisateur connecté (annonceur ou admin), sinon ErreurPublicite. */
+async function chargerPubliciteAutorisee(req, include = INCLUDE_DETAIL) {
+  const pub = await prisma.publicite.findUnique({ where: { publicite_id: req.params.id }, include });
+  if (!pub) throw new ErreurPublicite(404, "PUBLICITE_INTROUVABLE", "Publicité introuvable.");
+  if (!estAdmin(req.utilisateur) && pub.utilisateur_id !== req.utilisateur?.utilisateur_id) {
+    throw new ErreurPublicite(403, "ACCES_REFUSE", "Cette publicité ne vous appartient pas.");
+  }
+  return pub;
+}
+
+function repondreErreur(err, res, next) {
+  if (repondreSiErreurPublicite(err, res)) return;
+  next(err);
+}
 
 /**
  * GET /api/publicites
- * Filtres optionnels : ?forfait_publicitaire_id=...&emplacement_publicitaire_id=...&pays_id=...&statut_moderation=...
- * statut_moderation n'est pris en compte que pour un admin/superadmin
- * authentifié — un visiteur public reçoit toujours uniquement les
- * publicités "validee", quel que soit le filtre envoyé.
+ * Administration : toutes les réservations, filtres ?statut= &emplacement_publicitaire_id=
+ * &pays_id= &forfait_publicitaire_id= &recherche= (titre, annonceur), avec compteurs par statut.
+ * Public : uniquement les publicités en cours de diffusion (vue publique).
  */
 export async function listerPublicites(req, res, next) {
   try {
-    const { forfait_publicitaire_id, emplacement_publicitaire_id, pays_id, statut_moderation } = req.query;
-
-    if (statut_moderation && !STATUTS_MODERATION_PUBLICITE.includes(statut_moderation)) {
-      return res.status(400).json({
-        message: `statut_moderation invalide. Valeurs acceptées : ${STATUTS_MODERATION_PUBLICITE.join(", ")}.`,
-      });
-    }
-
+    const { forfait_publicitaire_id, emplacement_publicitaire_id, pays_id, statut, recherche } = req.query;
     const where = {};
     if (forfait_publicitaire_id) where.forfait_publicitaire_id = forfait_publicitaire_id;
     if (emplacement_publicitaire_id) where.emplacement_publicitaire_id = emplacement_publicitaire_id;
     if (pays_id) where.pays_id = pays_id;
 
-    if (estAdmin(req.utilisateur)) {
-      if (statut_moderation) where.statut_moderation = statut_moderation;
-    } else {
-      where.statut_moderation = "validee";
+    if (!estAdmin(req.utilisateur)) {
+      const j = jourUtc();
+      const publicites = await prisma.publicite.findMany({
+        where: { ...where, statut: "payee", date_debut: { lte: j }, date_fin: { gt: j } },
+        orderBy: [{ rang: "asc" }, { date_debut: "asc" }],
+      });
+      return res.status(200).json({ publicites: publicites.map(vuePublique) });
     }
 
-    const publicites = await prisma.publicite.findMany({
-      where,
-      orderBy: { date_debut: "desc" },
-    });
+    if (statut) {
+      if (!STATUTS_PUBLICITE.includes(statut)) {
+        return res.status(400).json({ message: `statut invalide. Valeurs acceptées : ${STATUTS_PUBLICITE.join(", ")}.` });
+      }
+      where.statut = statut;
+    }
+    if (recherche) {
+      const r = String(recherche).trim();
+      where.OR = [
+        { titre: { contains: r, mode: "insensitive" } },
+        { annonceur_nom: { contains: r, mode: "insensitive" } },
+        { annonceur_entreprise: { contains: r, mode: "insensitive" } },
+      ];
+    }
 
-    return res.status(200).json({ publicites: publicites.map(avecUrlVisuel) });
+    const [publicites, groupes] = await Promise.all([
+      prisma.publicite.findMany({
+        where,
+        include: { ...INCLUDE_DETAIL, utilisateur: { select: { utilisateur_id: true, nom: true, prenom: true, email: true, telephone: true } } },
+        orderBy: { date_soumission: "desc" },
+        take: 500,
+      }),
+      prisma.publicite.groupBy({ by: ["statut"], _count: { _all: true } }),
+    ]);
+    const totaux = await totauxParPublicite(publicites.map((p) => p.publicite_id));
+    return res.status(200).json({
+      publicites: publicites.map((p) => vueDetail(p, totaux.get(p.publicite_id))),
+      compteurs: Object.fromEntries(groupes.map((g) => [g.statut, g._count._all])),
+    });
   } catch (err) {
     next(err);
   }
 }
 
-/**
- * GET /api/publicites/:id
- */
+/** GET /api/publicites/:id — annonceur/admin : détail complet ; public : publicité diffusée. */
 export async function obtenirPublicite(req, res, next) {
   try {
-    const publicite = await prisma.publicite.findUnique({
-      where: { publicite_id: req.params.id },
-    });
-    if (!publicite || !filtrerSelonVisibilite(publicite, req.utilisateur)) {
-      return res.status(404).json({ message: "Publicité introuvable." });
+    const pub = await prisma.publicite.findUnique({ where: { publicite_id: req.params.id }, include: INCLUDE_DETAIL });
+    if (!pub) return res.status(404).json({ message: "Publicité introuvable." });
+    if (estAdmin(req.utilisateur) || pub.utilisateur_id === req.utilisateur?.utilisateur_id) {
+      const totaux = await totauxParPublicite([pub.publicite_id]);
+      return res.status(200).json({ publicite: vueDetail(pub, totaux.get(pub.publicite_id)) });
     }
-
-    return res.status(200).json({ publicite: avecUrlVisuel(publicite) });
+    if (!estDiffusee(pub)) return res.status(404).json({ message: "Publicité introuvable." });
+    return res.status(200).json({ publicite: vuePublique(pub) });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * GET /api/publicites/par-page/:code
- * Recherche les publicités d'un emplacement (une "page"), identifié
- * par son code (ex. "accueil_bandeau"), plutôt que par son UUID
- * technique emplacement_publicitaire_id — pratique pour un frontend
- * qui connaît le code de la page où afficher l'encart mais pas l'ID
- * interne.
- * Filtre optionnel : ?pays_id=...
- * Même filtrage de visibilité que listerPublicites : un visiteur
- * public (ou un utilisateur authentifié qui n'est pas admin/superadmin)
- * ne reçoit que les publicités "validee" ; un admin/superadmin voit
- * tout.
+ * GET /api/publicites/par-page/:code?pays_id=
+ * Slider d'une page : publicités diffusées aujourd'hui, par rang (1 = la
+ * plus chère, affichée en premier), et si l'espace peut être réservé.
+ * Le code peut être celui de l'emplacement ou une page de son groupe.
  */
 export async function rechercherPublicitesParCodePage(req, res, next) {
   try {
-    const { code } = req.params;
-    const { pays_id } = req.query;
-
-    const emplacement = await prisma.emplacementPublicitaire.findUnique({
-      where: { code },
-    });
-    if (!emplacement) {
+    const resultat = await publicitesDiffusees({ code: req.params.code, pays_id: req.query.pays_id || null });
+    if (!resultat) {
       return res.status(404).json({ message: "Aucun emplacement publicitaire ne correspond à ce code." });
     }
-
-    const where = { emplacement_publicitaire_id: emplacement.emplacement_publicitaire_id };
-    if (pays_id) where.pays_id = pays_id;
-    if (!estAdmin(req.utilisateur)) {
-      where.statut_moderation = "validee";
-    }
-
-    const publicites = await prisma.publicite.findMany({
-      where,
-      orderBy: { date_debut: "desc" },
-    });
-
-    return res.status(200).json({ emplacement, publicites: publicites.map(avecUrlVisuel) });
+    return res.status(200).json(resultat);
   } catch (err) {
     next(err);
   }
 }
 
+/** GET /api/publicites/disponibilites?forfait_publicitaire_id= — périodes prises et prochaine date libre. */
+export async function obtenirDisponibilites(req, res, next) {
+  try {
+    if (!req.query.forfait_publicitaire_id) {
+      return res.status(400).json({ message: "Paramètre requis : forfait_publicitaire_id." });
+    }
+    return res.status(200).json(await disponibiliteForfait(req.query.forfait_publicitaire_id));
+  } catch (err) {
+    repondreErreur(err, res, next);
+  }
+}
+
 /**
- * POST /api/publicites
- * multipart/form-data — champ fichier "visuel" obligatoire
- * (voir publicite.routes.js, middleware gererTeleversementPublicite),
- * en plus des champs texte habituels. Réservé aux utilisateurs
- * authentifiés, quel que soit leur rôle. statut_moderation est
- * toujours forcé à "en_attente" à la création, quel que soit le rôle —
- * aucun utilisateur ne peut publier directement sa propre publicité
- * (même patron que avis.controller.js).
+ * GET /api/publicites/profil-annonceur — pré-remplissage du formulaire :
+ * informations de la dernière réservation, sinon celles du compte.
+ */
+export async function obtenirProfilAnnonceur(req, res, next) {
+  try {
+    const [derniere, compte] = await Promise.all([
+      prisma.publicite.findFirst({
+        where: { utilisateur_id: req.utilisateur.utilisateur_id, annonceur_nom: { not: null } },
+        orderBy: { date_soumission: "desc" },
+        select: { annonceur_nom: true, annonceur_entreprise: true, annonceur_telephone: true, annonceur_email: true },
+      }),
+      prisma.utilisateur.findUnique({
+        where: { utilisateur_id: req.utilisateur.utilisateur_id },
+        select: { nom: true, prenom: true, email: true, telephone: true, pays_id: true },
+      }),
+    ]);
+    return res.status(200).json({
+      annonceur: derniere ?? {
+        annonceur_nom: [compte?.prenom, compte?.nom].filter(Boolean).join(" ") || null,
+        annonceur_entreprise: null,
+        annonceur_telephone: compte?.telephone ?? null,
+        annonceur_email: compte?.email ?? null,
+      },
+      pays_id: compte?.pays_id ?? null,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+const MAX_EN_MODERATION_PAR_UTILISATEUR = 5;
+
+/**
+ * POST /api/publicites — réservation d'un espace (multipart/form-data).
+ * Champs : forfait_publicitaire_id, date_debut (AAAA-MM-JJ), titre,
+ * description, telephone_contact, email_contact?, localisation?,
+ * annonceur_nom, annonceur_entreprise?, annonceur_telephone, annonceur_email?,
+ * fichier « visuel » (flyer/image). Emplacement, pays, rang et prix sont
+ * déduits du forfait (jamais fournis par le client). Toujours créée
+ * « en_moderation » : rien n'est payé ni bloqué avant l'acceptation.
  */
 export async function creerPublicite(req, res, next) {
   try {
-    const {
-      forfait_publicitaire_id,
-      emplacement_publicitaire_id,
-      pays_id,
-      titre,
-      date_debut,
-      date_fin,
-    } = req.body;
-
-    if (
-      !forfait_publicitaire_id || !emplacement_publicitaire_id || !pays_id || !titre ||
-      !date_debut || !date_fin
-    ) {
-      return res.status(400).json({
-        message:
-          "Champs requis manquants : forfait_publicitaire_id, emplacement_publicitaire_id, pays_id, titre, date_debut, date_fin.",
-      });
-    }
-
-    // Le visuel est obligatoire et arrive en multipart/form-data —
-    // jamais en texte libre depuis le client (voir en-tête de fichier).
+    const champs = validerChampsReservation(req.body);
     const fichierVisuel = req.files?.visuel?.[0];
     if (!fichierVisuel) {
-      return res.status(400).json({
-        message: "Fichier requis manquant : visuel (image de la publicité).",
+      return res.status(400).json({ code: "VISUEL_REQUIS", message: "Fichier requis manquant : visuel (flyer ou image)." });
+    }
+    const enCours = await prisma.publicite.count({
+      where: { utilisateur_id: req.utilisateur.utilisateur_id, statut: "en_moderation" },
+    });
+    if (enCours >= MAX_EN_MODERATION_PAR_UTILISATEUR) {
+      return res.status(429).json({
+        code: "TROP_DE_DEMANDES",
+        message: `Vous avez déjà ${enCours} demandes en cours d'examen : attendez leur traitement.`,
       });
     }
 
-    const [forfait, emplacement, pays] = await Promise.all([
-      prisma.forfaitPublicitaire.findUnique({ where: { forfait_publicitaire_id } }),
-      prisma.emplacementPublicitaire.findUnique({ where: { emplacement_publicitaire_id } }),
-      prisma.pays.findUnique({ where: { pays_id } }),
-    ]);
-    if (!forfait) {
-      return res.status(400).json({ message: "forfait_publicitaire_id introuvable." });
-    }
-    if (!emplacement) {
-      return res.status(400).json({ message: "emplacement_publicitaire_id introuvable." });
-    }
-    if (!pays) {
-      return res.status(400).json({ message: "pays_id introuvable." });
-    }
-    // Cohérence : le forfait choisi packages déjà un emplacement précis
-    // (voir forfait_publicitaire.emplacement_publicitaire_id) — on
-    // refuse qu'un client fasse diverger les deux.
-    if (forfait.emplacement_publicitaire_id !== emplacement_publicitaire_id) {
-      return res.status(400).json({
-        message: "emplacement_publicitaire_id ne correspond pas à l'emplacement du forfait choisi.",
-      });
-    }
+    const { forfait, debut, fin } = await preparerSoumission({
+      forfait_publicitaire_id: req.body.forfait_publicitaire_id,
+      date_debut: req.body.date_debut,
+    });
 
-    // Téléversement Cloudinary — après les validations métier, pour ne
-    // pas envoyer inutilement le fichier si la requête est invalide
-    // (même patron que pharmacie.controller.js).
-    const uploadVisuel = await televerserFichier(fichierVisuel.buffer, "publicites");
+    // Téléversement après les validations métier (même patron que pharmacie.controller.js).
+    const upload = await televerserFichier(fichierVisuel.buffer, "publicites");
 
     const publicite = await prisma.publicite.create({
       data: {
-        forfait_publicitaire_id,
-        emplacement_publicitaire_id,
+        ...champs,
+        forfait_publicitaire_id: forfait.forfait_publicitaire_id,
+        emplacement_publicitaire_id: forfait.emplacement_publicitaire_id,
+        pays_id: forfait.pays_id,
+        rang: forfait.rang,
         utilisateur_id: req.utilisateur.utilisateur_id,
-        pays_id,
-        titre: titre.trim(),
-        visuel_url: uploadVisuel.nom,
-        date_debut: new Date(date_debut),
-        date_fin: new Date(date_fin),
+        visuel_url: upload.nom,
+        date_debut: debut,
+        date_fin: fin,
+        montant: forfait.prix,
+        devise: forfait.devise,
+        statut: "en_moderation",
         statut_moderation: "en_attente",
       },
+      include: INCLUDE_DETAIL,
     });
 
     return res.status(201).json({
-      message: "Publicité créée avec succès. Elle sera diffusée après validation.",
-      publicite: avecUrlVisuel(publicite),
+      message: "Demande envoyée. Vous recevrez la décision par WhatsApp.",
+      publicite: vueDetail(publicite),
     });
   } catch (err) {
-    next(err);
+    repondreErreur(err, res, next);
   }
 }
 
 /**
- * PUT /api/publicites/:id
- * multipart/form-data — champ fichier "visuel" optionnel
- * pour remplacer le visuel existant.
- *   - L'auteur peut modifier titre/visuel/dates,
- *     uniquement tant que la publicité est encore "en_attente" (une
- *     publicité déjà modérée ne peut plus être réécrite après coup
- *     par son auteur). emplacement_publicitaire_id et
- *     forfait_publicitaire_id ne sont pas modifiables après création
- *     (mêmes garde-fous que l'ensemble du dépôt : on ne réécrit pas
- *     silencieusement le forfait souscrit).
- *   - Un admin/superadmin peut à tout moment modifier
- *     statut_moderation (modération à proprement parler), et
- *     seulement ce champ.
+ * PUT /api/publicites/:id (multipart, « visuel » facultatif)
+ *   - annonceur : contenu, contacts, date de début et visuel, tant que la
+ *     demande est « en_moderation » ;
+ *   - administration : correction du contenu affiché (titre, description,
+ *     contacts) à tout moment. La décision passe par /accepter et /rejeter.
  */
 export async function modifierPublicite(req, res, next) {
   try {
-    const publicite = await prisma.publicite.findUnique({ where: { publicite_id: req.params.id } });
-    if (!publicite) {
-      return res.status(404).json({ message: "Publicité introuvable." });
+    if (req.body.statut_moderation !== undefined || req.body.statut !== undefined) {
+      return res.status(400).json({
+        code: "MODERATION_DEDIEE",
+        message: "La modération se fait par POST /publicites/:id/accepter ou /rejeter.",
+      });
+    }
+    const pub = await chargerPubliciteAutorisee(req);
+    const admin = estAdmin(req.utilisateur);
+    const auteur = pub.utilisateur_id === req.utilisateur.utilisateur_id;
+    if (!admin && pub.statut !== "en_moderation") {
+      return res.status(409).json({ message: "Cette demande a déjà été traitée : son contenu ne peut plus être modifié." });
     }
 
-    const estAuteur = req.utilisateur?.utilisateur_id === publicite.utilisateur_id;
-    if (!estAuteur && !estAdmin(req.utilisateur)) {
-      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
+    const permis = admin && !auteur
+      ? ["titre", "description", "telephone_contact", "email_contact", "localisation"]
+      : ["titre", "description", "telephone_contact", "email_contact", "localisation",
+         "annonceur_nom", "annonceur_entreprise", "annonceur_telephone", "annonceur_email"];
+    const fournis = Object.fromEntries(permis.filter((c) => req.body[c] !== undefined).map((c) => [c, req.body[c]]));
+    const donnees = validerChampsReservation(fournis, { partiel: true });
+
+    if (req.body.date_debut && pub.statut === "en_moderation" && (auteur || admin)) {
+      const { debut, fin } = await preparerSoumission({ forfait_publicitaire_id: pub.forfait_publicitaire_id, date_debut: req.body.date_debut });
+      Object.assign(donnees, { date_debut: debut, date_fin: fin });
     }
 
-    const donnees = {};
-
-    if (estAdmin(req.utilisateur) && req.body.statut_moderation !== undefined) {
-      if (!STATUTS_MODERATION_PUBLICITE.includes(req.body.statut_moderation)) {
-        return res.status(400).json({
-          message: `statut_moderation invalide. Valeurs acceptées : ${STATUTS_MODERATION_PUBLICITE.join(", ")}.`,
-        });
-      }
-      donnees.statut_moderation = req.body.statut_moderation;
+    const fichierVisuel = req.files?.visuel?.[0];
+    if (fichierVisuel) {
+      const upload = await televerserFichier(fichierVisuel.buffer, "publicites");
+      await supprimerFichier(pub.visuel_url);
+      donnees.visuel_url = upload.nom;
     }
+    if (!Object.keys(donnees).length) return res.status(400).json({ message: "Aucune donnée valide à mettre à jour." });
 
-    if (estAuteur) {
-      if (publicite.statut_moderation !== "en_attente") {
-        return res.status(409).json({
-          message: "Cette publicité a déjà été modérée : son contenu ne peut plus être modifié.",
-        });
-      }
-      if (req.body.titre !== undefined) donnees.titre = req.body.titre.trim();
-      if (req.body.date_debut) donnees.date_debut = new Date(req.body.date_debut);
-      if (req.body.date_fin) donnees.date_fin = new Date(req.body.date_fin);
+    const maj = await prisma.publicite.update({ where: { publicite_id: pub.publicite_id }, data: donnees, include: INCLUDE_DETAIL });
+    return res.status(200).json({ message: "Publicité mise à jour.", publicite: vueDetail(maj) });
+  } catch (err) {
+    repondreErreur(err, res, next);
+  }
+}
 
-      // Remplacement optionnel du visuel : upload du nouveau fichier
-      // AVANT suppression de l'ancien sur Cloudinary (même patron que
-      // pharmacie.controller.js) pour ne jamais laisser la publicité
-      // sans visuel valide en cas d'échec d'upload.
-      const fichierVisuel = req.files?.visuel?.[0];
-      if (fichierVisuel) {
-        const upload = await televerserFichier(fichierVisuel.buffer, "publicites");
-        await supprimerFichier(publicite.visuel_url);
-        donnees.visuel_url = upload.nom;
-      }
+/**
+ * DELETE /api/publicites/:id — demande jamais payée uniquement (en
+ * modération, rejetée, annulée ou expirée, sans transaction). Une
+ * publicité payée est conservée (facture) : elle s'arrête à sa date de fin.
+ */
+export async function supprimerPublicite(req, res, next) {
+  try {
+    const pub = await chargerPubliciteAutorisee(req);
+    if (!STATUTS_SUPPRIMABLES.includes(pub.statut)) {
+      return res.status(409).json({ message: `Une publicité au statut « ${pub.statut} » ne peut pas être supprimée.` });
     }
-
-    if (Object.keys(donnees).length === 0) {
-      return res.status(400).json({ message: "Aucune donnée valide à mettre à jour." });
+    const transactions = await prisma.transactionPaiement.count({ where: { publicite_id_cible: pub.publicite_id } });
+    if (transactions) {
+      return res.status(409).json({ message: "Cette publicité a un historique de paiement : elle est conservée." });
     }
+    await prisma.publicite.delete({ where: { publicite_id: pub.publicite_id } });
+    await supprimerFichier(pub.visuel_url);
+    return res.status(200).json({ message: "Publicité supprimée." });
+  } catch (err) {
+    repondreErreur(err, res, next);
+  }
+}
 
-    const publiciteMiseAJour = await prisma.publicite.update({
-      where: { publicite_id: req.params.id },
-      data: donnees,
+/** POST /api/publicites/:id/accepter   body: { date_debut? } (admin) */
+export async function accepterPubliciteCtrl(req, res, next) {
+  try {
+    await accepterPublicite({ publicite_id: req.params.id, admin_id: req.utilisateur.utilisateur_id, date_debut: req.body?.date_debut });
+    const pub = await prisma.publicite.findUnique({ where: { publicite_id: req.params.id }, include: INCLUDE_DETAIL });
+    return res.status(200).json({ message: "Publicité acceptée : l'annonceur a été notifié par WhatsApp.", publicite: vueDetail(pub) });
+  } catch (err) {
+    repondreErreur(err, res, next);
+  }
+}
+
+/** POST /api/publicites/:id/rejeter   body: { motif } (admin) */
+export async function rejeterPubliciteCtrl(req, res, next) {
+  try {
+    await rejeterPublicite({ publicite_id: req.params.id, admin_id: req.utilisateur.utilisateur_id, motif: req.body?.motif });
+    const pub = await prisma.publicite.findUnique({ where: { publicite_id: req.params.id }, include: INCLUDE_DETAIL });
+    return res.status(200).json({ message: "Publicité rejetée : le motif a été envoyé par WhatsApp.", publicite: vueDetail(pub) });
+  } catch (err) {
+    repondreErreur(err, res, next);
+  }
+}
+
+/** POST /api/publicites/:id/annuler — l'annonceur retire sa demande avant paiement. */
+export async function annulerPubliciteCtrl(req, res, next) {
+  try {
+    await annulerPublicite({ publicite_id: req.params.id, utilisateur_id: req.utilisateur.utilisateur_id });
+    return res.status(200).json({ message: "Demande annulée." });
+  } catch (err) {
+    repondreErreur(err, res, next);
+  }
+}
+
+/* ===================================================================
+ * Portail annonceur et statistiques
+ * =================================================================== */
+
+/** GET /api/publicites/mes-publicites — réservations de l'utilisateur connecté, avec totaux. */
+export async function listerMesPublicites(req, res, next) {
+  try {
+    const publicites = await prisma.publicite.findMany({
+      where: { utilisateur_id: req.utilisateur.utilisateur_id },
+      include: INCLUDE_DETAIL,
+      orderBy: { date_soumission: "desc" },
     });
-
-    return res.status(200).json({ message: "Publicité mise à jour.", publicite: avecUrlVisuel(publiciteMiseAJour) });
+    const totaux = await totauxParPublicite(publicites.map((p) => p.publicite_id));
+    const vues = publicites.map((p) => vueDetail(p, totaux.get(p.publicite_id)));
+    return res.status(200).json({
+      publicites: vues,
+      resume: {
+        total: vues.length,
+        en_diffusion: vues.filter((p) => p.en_diffusion).length,
+        a_payer: vues.filter((p) => p.statut === "en_attente_paiement").length,
+        impressions: vues.reduce((s, p) => s + p.statistiques.impressions, 0),
+        clics: vues.reduce((s, p) => s + p.statistiques.clics, 0),
+      },
+    });
   } catch (err) {
     next(err);
   }
 }
 
-/**
- * DELETE /api/publicites/:id
- * Réservé à l'auteur de la publicité ou à un admin/superadmin.
- */
-export async function supprimerPublicite(req, res, next) {
+/** GET /api/publicites/:id/statistiques — série jour par jour (annonceur ou admin). */
+export async function obtenirStatistiquesPublicite(req, res, next) {
   try {
-    const publicite = await prisma.publicite.findUnique({ where: { publicite_id: req.params.id } });
-    if (!publicite) {
-      return res.status(404).json({ message: "Publicité introuvable." });
-    }
-
-    const estAuteur = req.utilisateur?.utilisateur_id === publicite.utilisateur_id;
-    if (!estAuteur && !estAdmin(req.utilisateur)) {
-      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
-    }
-
-    await prisma.publicite.delete({ where: { publicite_id: req.params.id } });
-
-    // Nettoyage Cloudinary après suppression réussie en base (best
-    // effort — voir supprimerFichier, même patron que
-    // pharmacie.controller.js). On ne bloque jamais la suppression DB
-    // pour un souci Cloudinary.
-    await supprimerFichier(publicite.visuel_url);
-
-    return res.status(200).json({ message: "Publicité supprimée." });
+    const pub = await chargerPubliciteAutorisee(req);
+    return res.status(200).json({ publicite_id: pub.publicite_id, ...(await serieStatistiques(pub)) });
   } catch (err) {
-    next(err);
+    repondreErreur(err, res, next);
   }
+}
+
+/**
+ * POST /api/publicites/evenements   body: { type: "impression"|"clic", publicite_ids: [...] }
+ * Public, sans réponse utile (204) : un suivi ne doit jamais gêner l'affichage.
+ */
+export async function enregistrerEvenementsPublicite(req, res) {
+  try {
+    await enregistrerEvenements({
+      type: req.body?.type,
+      publicite_ids: req.body?.publicite_ids,
+      empreinte: empreinteVisiteur(req.ip, req.get("user-agent")),
+    });
+  } catch (err) {
+    console.error("[publicite] Enregistrement d'événements impossible :", err.message);
+  }
+  return res.status(204).end();
 }

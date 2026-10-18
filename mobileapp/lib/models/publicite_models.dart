@@ -355,12 +355,13 @@ class Publicite {
   factory Publicite.fromJson(Map<String, dynamic> json) {
     return Publicite(
       publiciteId: json['publicite_id'] as String,
-      forfaitPublicitaireId: json['forfait_publicitaire_id'] as String,
-      emplacementPublicitaireId: json['emplacement_publicitaire_id'] as String,
-      utilisateurId: json['utilisateur_id'] as String,
-      paysId: json['pays_id'] as String,
-      titre: json['titre'] as String,
-      visuelUrl: json['visuel_url'] as String,
+      // v9 : la vue publique ne porte plus les champs internes.
+      forfaitPublicitaireId: (json['forfait_publicitaire_id'] as String?) ?? '',
+      emplacementPublicitaireId: (json['emplacement_publicitaire_id'] as String?) ?? '',
+      utilisateurId: (json['utilisateur_id'] as String?) ?? '',
+      paysId: (json['pays_id'] as String?) ?? '',
+      titre: (json['titre'] as String?) ?? '',
+      visuelUrl: (json['visuel_url'] as String?) ?? '',
       dateDebut: _lireDate(json, 'date_debut') ?? DateTime.now(),
       dateFin: _lireDate(json, 'date_fin') ?? DateTime.now(),
       statutModeration:

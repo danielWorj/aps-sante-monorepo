@@ -3,7 +3,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import pub3 from "../assets/img/ads/pub3.jpg";
+import SliderPublicite from '../components/publicite/SliderPublicite';
+import { PAGES_PUBLICITE } from '../services/publiciteService';
 import { listerServicesAssurance } from "../services/assuranceService";
 import { useGeolocation } from "../hooks/useGeolocation";
 
@@ -256,10 +257,9 @@ export default function Assurance() {
       {/* ============================ PUBLICITÉ ============================ */}
       <section style={{ paddingTop: "1.5rem", paddingBottom: 0 }}>
         <div className="container-aps">
-          <a href="#" className="ad-slot ad-banner-top">
-            <span className="ad-tag">Publicité</span>
-            <img src={pub3} alt="Publicité — AXA Assurance" />
-          </a>
+          <div className="ad-banner-top">
+            <SliderPublicite code={PAGES_PUBLICITE.assurances} variante="banniere" />
+          </div>
         </div>
       </section>
 

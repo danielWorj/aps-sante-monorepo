@@ -48,15 +48,13 @@
 // ne soit accidentellement capturée par la route générique du
 // forfait).
 //
-// ─── Publicités ───────────────────────────────────────────────────
-// Lecture (GET) : PUBLIQUE, filtrée selon qui consulte — voir
-// authentifierOptionnel et publicite.controller.js (même patron que
-// avis.routes.js).
-// Création (POST) : tout utilisateur authentifié, quel que soit son
-// rôle.
-// Modification (PUT) : l'auteur (tant que "en_attente") ou
-// admin/superadmin (statut_moderation à tout moment).
-// Suppression (DELETE) : l'auteur ou admin/superadmin.
+// ─── Publicités (v9 : réservation d'espace) ───────────────────────
+// Lecture publique : publicités diffusées seulement (slider par page).
+// Réservation, portail annonceur, paiement : utilisateur authentifié,
+// propriétaire de la publicité (ou admin).
+// Modération (accepter / rejeter) et paiements tardifs : admin/superadmin.
+// Les routes nommées (par-page, disponibilites, mes-publicites…) sont
+// déclarées AVANT "/publicites/:id".
 import { Router } from "express";
 import {
   listerEmplacementsPublicitaires,
@@ -78,13 +76,37 @@ import {
   creerPublicite,
   modifierPublicite,
   supprimerPublicite,
+  obtenirDisponibilites,
+  obtenirProfilAnnonceur,
+  accepterPubliciteCtrl,
+  rejeterPubliciteCtrl,
+  annulerPubliciteCtrl,
+  listerMesPublicites,
+  obtenirStatistiquesPublicite,
+  enregistrerEvenementsPublicite,
 } from "../controllers/publicite.controller.js";
+import {
+  obtenirDevisPublicite,
+  creerPaiementStripePublicite,
+  creerPaiementCampayPublicite,
+  obtenirStatutPaiementPublicite,
+  annulerPaiementPublicite,
+  obtenirFacturePublicite,
+  listerPaiementsTardifsPublicite,
+  traiterPaiementTardifPublicite,
+} from "../controllers/paiementPublicite.controller.js";
+import { limiteurCampay } from "../middlewares/limiteurCampay.js";
+import rateLimit from "express-rate-limit";
 import { authentifier } from "../middlewares/auth.middleware.js";
 import { authentifierOptionnel } from "../middlewares/authOptionnel.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
 import { gererTeleversementPublicite } from "../middlewares/upload.middleware.js";
 
 const router = Router();
+const admin = [authentifier, autoriser("admin", "superadmin")];
+
+// Suivi des impressions/clics : public, donc borné par IP.
+const limiteurEvenements = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: true, legacyHeaders: false });
 
 // ─── Emplacements publicitaires ─────────────────────────────────
 router.get("/emplacements-publicitaires", listerEmplacementsPublicitaires);
@@ -94,7 +116,7 @@ router.put("/emplacements-publicitaires/:id", authentifier, autoriser("admin", "
 router.delete("/emplacements-publicitaires/:id", authentifier, autoriser("superadmin"), supprimerEmplacementPublicitaire);
 
 // ─── Forfaits publicitaires ──────────────────────────────────────
-router.get("/forfaits-publicitaires", listerForfaitsPublicitaires);
+router.get("/forfaits-publicitaires", authentifierOptionnel, listerForfaitsPublicitaires);
 router.get("/forfaits-publicitaires/:id", obtenirForfaitPublicitaire);
 router.post("/forfaits-publicitaires", authentifier, autoriser("admin", "superadmin"), creerForfaitPublicitaire);
 router.post("/forfaits-publicitaires/:id/lignes", authentifier, autoriser("admin", "superadmin"), ajouterLigneForfait);
@@ -107,14 +129,34 @@ router.delete("/lignes-forfait-publicitaire/:ligneId", authentifier, autoriser("
 
 // ─── Publicités ───────────────────────────────────────────────────
 router.get("/publicites", authentifierOptionnel, listerPublicites);
-// Route dédiée par code d'emplacement (code de la page), déclarée AVANT
-// "/publicites/:id" pour éviter que "par-page" ne soit capturé comme
-// un :id.
 router.get("/publicites/par-page/:code", authentifierOptionnel, rechercherPublicitesParCodePage);
+router.get("/publicites/disponibilites", authentifier, obtenirDisponibilites);
+router.get("/publicites/profil-annonceur", authentifier, obtenirProfilAnnonceur);
+router.get("/publicites/mes-publicites", authentifier, listerMesPublicites);
+router.post("/publicites/evenements", limiteurEvenements, enregistrerEvenementsPublicite);
 router.get("/publicites/:id", authentifierOptionnel, obtenirPublicite);
 
 router.post("/publicites", authentifier, gererTeleversementPublicite, creerPublicite);
 router.put("/publicites/:id", authentifier, gererTeleversementPublicite, modifierPublicite);
 router.delete("/publicites/:id", authentifier, supprimerPublicite);
+
+// Modération (WhatsApp à l'annonceur) et retrait par l'annonceur.
+router.post("/publicites/:id/accepter", ...admin, accepterPubliciteCtrl);
+router.post("/publicites/:id/rejeter", ...admin, rejeterPubliciteCtrl);
+router.post("/publicites/:id/annuler", authentifier, annulerPubliciteCtrl);
+
+// Portail annonceur : statistiques de diffusion.
+router.get("/publicites/:id/statistiques", authentifier, obtenirStatistiquesPublicite);
+
+// Paiement (lien WhatsApp -> page de paiement), facture.
+router.get("/publicites/:id/devis", authentifier, obtenirDevisPublicite);
+router.post("/publicites/:id/paiement", authentifier, creerPaiementStripePublicite);
+router.post("/publicites/:id/paiement-campay", authentifier, limiteurCampay, creerPaiementCampayPublicite);
+router.get("/publicites/:id/paiement", authentifier, obtenirStatutPaiementPublicite);
+router.post("/publicites/:id/paiement/annuler", authentifier, annulerPaiementPublicite);
+router.get("/publicites/:id/facture", authentifier, obtenirFacturePublicite);
+
+router.get("/admin/publicites/paiements-tardifs", ...admin, listerPaiementsTardifsPublicite);
+router.post("/admin/publicites/paiements-tardifs/:id/traiter", ...admin, traiterPaiementTardifPublicite);
 
 export default router;

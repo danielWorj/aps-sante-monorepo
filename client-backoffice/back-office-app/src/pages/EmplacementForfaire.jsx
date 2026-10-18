@@ -77,7 +77,10 @@ function Modal({ id, title, isOpen, onClose, children, footer }) {
   );
 }
 
-const FORM_VIDE = { emplacement_publicitaire_id: '', code: '', libelle: '', description: '' };
+const FORM_VIDE = { emplacement_publicitaire_id: '', code: '', libelle: '', description: '', pages: '', nombre_places: 3, actif: true };
+
+// Codes de page utilisés par le site et l'application mobile (slider de chaque page).
+const PAGES_CONNUES = ['PAGE_ACCUEIL', 'PAGE_MEDECIN', 'PAGE_PHARMACIE', 'PAGE_STRUCTURE_SANTE', 'PAGE_ASSURANCES'];
 
 export default function EmplacementForfaire() {
   const { user } = useAuth();
@@ -132,6 +135,9 @@ export default function EmplacementForfaire() {
       code: e.code,
       libelle: e.libelle,
       description: e.description || '',
+      pages: (e.pages || []).join(', '),
+      nombre_places: e.nombre_places ?? 3,
+      actif: e.actif ?? true,
     });
     setFormError(null);
     setModalOpen(true);
@@ -145,7 +151,14 @@ export default function EmplacementForfaire() {
     }
     setSaving(true);
     try {
-      const donnees = { code: form.code.trim(), libelle: form.libelle.trim(), description: form.description.trim() || '' };
+      const donnees = {
+        code: form.code.trim(),
+        libelle: form.libelle.trim(),
+        description: form.description.trim() || '',
+        pages: form.pages.split(',').map((p) => p.trim()).filter(Boolean),
+        nombre_places: Number(form.nombre_places),
+        actif: form.actif,
+      };
       if (form.emplacement_publicitaire_id) {
         await modifierEmplacementPublicitaire(form.emplacement_publicitaire_id, donnees);
       } else {
@@ -249,14 +262,16 @@ export default function EmplacementForfaire() {
                   <tr>
                     <th>Code</th>
                     <th>Libellé</th>
-                    <th>Description</th>
+                    <th>Pages couvertes</th>
+                    <th>Places (slider)</th>
+                    <th>État</th>
                     <th className="text-end">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={4}>
+                      <td colSpan={6}>
                         <div className="aps-empty-mini py-4 text-center">
                           <i className="fa-solid fa-spinner fa-spin d-block mb-2"></i>
                           Chargement…
@@ -265,7 +280,7 @@ export default function EmplacementForfaire() {
                     </tr>
                   ) : lignes.length === 0 ? (
                     <tr>
-                      <td colSpan={4}>
+                      <td colSpan={6}>
                         <div className="aps-empty-mini py-4 text-center">Aucun emplacement trouvé.</div>
                       </td>
                     </tr>
@@ -274,7 +289,15 @@ export default function EmplacementForfaire() {
                       <tr key={e.emplacement_publicitaire_id}>
                         <td><code>{e.code}</code></td>
                         <td className="cell-title">{e.libelle}</td>
-                        <td className="aps-text-muted">{e.description || '—'}</td>
+                        <td className="aps-text-muted">
+                          {[e.code, ...(e.pages || [])].map((p) => <code key={p} className="me-1">{p}</code>)}
+                        </td>
+                        <td>{e.nombre_places ?? 3}</td>
+                        <td>
+                          {e.actif === false
+                            ? <span className="aps-badge is-neutral">Inactif</span>
+                            : <span className="aps-badge is-success">Actif</span>}
+                        </td>
                         <td className="text-end">
                           <div className="aps-row-actions">
                             {peutEcrire && (
@@ -333,7 +356,7 @@ export default function EmplacementForfaire() {
           <input
             type="text"
             className="form-control"
-            placeholder="Ex. accueil, fiche_pharmacie…"
+            placeholder="Ex. PAGE_ACCUEIL, PAGE_MEDECIN…"
             value={form.code}
             onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
           />
@@ -347,6 +370,46 @@ export default function EmplacementForfaire() {
             value={form.libelle}
             onChange={(e) => setForm((f) => ({ ...f, libelle: e.target.value }))}
           />
+        </div>
+        <div className="mb-3">
+          <label className="form-label">Autres pages du groupe</label>
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Ex. PAGE_PHARMACIE, PAGE_STRUCTURE_SANTE"
+            value={form.pages}
+            onChange={(e) => setForm((f) => ({ ...f, pages: e.target.value }))}
+          />
+          <small className="aps-text-muted">
+            Codes séparés par des virgules : le même slider (et les mêmes forfaits) s'affiche sur ces pages.
+            Codes connus : {PAGES_CONNUES.join(', ')}.
+          </small>
+        </div>
+        <div className="row g-3 mb-3">
+          <div className="col-6">
+            <label className="form-label">Nombre de places du slider</label>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              className="form-control"
+              value={form.nombre_places}
+              onChange={(e) => setForm((f) => ({ ...f, nombre_places: e.target.value }))}
+            />
+            <small className="aps-text-muted">Une publicité par place (rang 1 = première affichée).</small>
+          </div>
+          <div className="col-6 d-flex align-items-end">
+            <div className="form-check mb-2">
+              <input
+                id="emp-actif"
+                type="checkbox"
+                className="form-check-input"
+                checked={form.actif}
+                onChange={(e) => setForm((f) => ({ ...f, actif: e.target.checked }))}
+              />
+              <label className="form-check-label" htmlFor="emp-actif">Réservations ouvertes</label>
+            </div>
+          </div>
         </div>
         <div className="mb-1">
           <label className="form-label">Description</label>

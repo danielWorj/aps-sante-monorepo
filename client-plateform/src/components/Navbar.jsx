@@ -126,6 +126,13 @@ export default function Navbar() {
                 </NavLink>
               </li>
             )}
+            {user && (
+              <li>
+                <NavLink to="/portail/annonceur" className={navLinkClass} onClick={closeAll}>
+                  <i className="fa-solid fa-bullhorn" /> Mes publicités
+                </NavLink>
+              </li>
+            )}
             <li>
               <NavLink to="/login" className={navLinkClass} onClick={closeAll}>
                 <i className="fa-solid fa-sign-in-alt" /> Login

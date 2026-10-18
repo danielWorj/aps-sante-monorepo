@@ -18,6 +18,7 @@ import { decimalesPourMontant, arrondir } from "../utils/montants.js";
 import { finaliserPaiement } from "../services/finalisationPaiement.service.js";
 import { finaliserAbonnementAssurance } from "../services/finalisationAbonnementAssurance.service.js";
 import { finaliserAbonnementPresence } from "../services/finalisationAbonnementPresence.service.js";
+import { finaliserPaiementPublicite } from "../services/finalisationPublicite.service.js";
 import { synchroniserCampayPourRdv, derniereTentativeCampay, verifierEtFinaliserTransactionCampay } from "../services/paiementCampay.service.js";
 
 const DEVISE_PAR_DEFAUT = process.env.STRIPE_DEVISE_PAR_DEFAUT || "xaf";
@@ -620,6 +621,19 @@ async function traiterPaiementReussi(session) {
       return;
     }
     await finaliserAbonnementPresence({
+      transaction_id: session.metadata.transaction_id,
+      payment_intent_id: session.payment_intent,
+    });
+    return;
+  }
+  // Publicité (réservation d'espace) : même règle.
+  if (session.metadata?.objet === "publicite") {
+    if (!session.metadata.transaction_id) return;
+    if (session.payment_status !== "paid") {
+      console.warn(`[paiement] session ${session.id} (publicité) non payée (${session.payment_status}) — ignorée.`);
+      return;
+    }
+    await finaliserPaiementPublicite({
       transaction_id: session.metadata.transaction_id,
       payment_intent_id: session.payment_intent,
     });
