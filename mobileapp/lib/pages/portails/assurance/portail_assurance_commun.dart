@@ -81,30 +81,13 @@ class EnTetePortail extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       // Marge droite : la cloche flotte en haut à droite (shell).
-      padding: const EdgeInsets.fromLTRB(2, 10, 56, 10),
+      padding: const EdgeInsets.fromLTRB(0, 10, 56, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'ESPACE ASSURANCE',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-              color: AppColors.primary,
-            ),
-          ),
-          const SizedBox(height: 5),
           Text(
             titre,
-            style: const TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.2,
-              color: AppColors.ink,
-            ),
+            style: AppTextStyles.l,
           ),
           if (description != null) ...[
             const SizedBox(height: 4),
@@ -169,7 +152,7 @@ class BandeauPortail extends StatelessWidget {
     required this.icone,
     required this.texte,
     this.fond = AppColors.warningLight,
-    this.couleur = const Color(0xFF8A6115),
+    this.couleur = AppColors.amber700,
     this.action,
   });
 
@@ -259,7 +242,7 @@ class PuceStatutDemande extends StatelessWidget {
   Widget build(BuildContext context) {
     final (Color fond, Color texte) = switch (statut) {
       'nouvelle' => (AppColors.dangerLight, AppColors.dangerDark),
-      'en_cours' => (AppColors.warningLight, const Color(0xFF8A6115)),
+      'en_cours' => (AppColors.warningLight, AppColors.amber700),
       'traitee' => (AppColors.successLight, AppColors.primary),
       _ => (AppColors.paper, AppColors.inkSoft),
     };

@@ -8,6 +8,10 @@ library components;
 // Style
 export 'style/colors.dart';
 export 'style/text_styles.dart';
+export 'style/app_theme.dart';
+
+// Primitives de la refonte 2026
+export 'ui/aps_ui.dart';
 
 // Cards
 export 'cards/badge_chip.dart';

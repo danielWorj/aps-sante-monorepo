@@ -63,8 +63,8 @@ class _AssuranceHomeShellState extends ConsumerState<AssuranceHomeShell> {
             children: [
               IndexedStack(index: _index, children: pages),
               Positioned(
-                top: 6,
-                right: 14,
+                top: 12,
+                right: 18,
                 child: NotificationsBell(
                   onOuvrirRendezVous: () => _ouvrir(_indexDemandes),
                   onOuvrirDemandes: () => _ouvrir(_indexDemandes),

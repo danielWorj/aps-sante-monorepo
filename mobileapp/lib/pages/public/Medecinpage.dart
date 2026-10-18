@@ -291,14 +291,17 @@ class _MedecinPageState extends State<MedecinPage> {
 
   @override
   Widget build(BuildContext context) {
+    final basBarre =
+        AppBottomNav.reservedHeight + MediaQuery.paddingOf(context).bottom;
     return Scaffold(
-      backgroundColor: AppColors.paper,
+      backgroundColor: AppColors.bg,
       extendBody: true,
       body: Stack(
         children: [
           SafeArea(
             bottom: false,
             child: RefreshIndicator(
+              color: AppColors.b6,
               onRefresh: _rafraichir,
               child: _medecinsState.when(
                 loading: () => const _ChargementAnnuaire(),
@@ -315,53 +318,28 @@ class _MedecinPageState extends State<MedecinPage> {
                   }
 
                   return ListView(
-                    // Padding bas augmenté pour ne pas passer sous la
-                    // barre flottante.
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
+                    padding: EdgeInsets.fromLTRB(18, 6, 18, basBarre),
                     children: [
                       _buildHeader(),
-                      const SizedBox(height: 2),
                       _SearchField(
                         controller: _searchController,
-                        hint: 'Rechercher un médecin, une spécialité…',
+                        hint: 'Médecin, spécialité…',
                         onChanged: _onSearchChanged,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 12),
                       _buildFilterChips(villes),
-                      const SizedBox(height: 14),
-
-                      // ---- Publicité (même emplacement/format que sur
-                      // l'annuaire des assurances) — contenu réel de
-                      // l'emplacement PAGE_MEDECIN, voir
-                      // [_publicitesState] / [publicitesParCodePageProvider].
-                      _buildPublicites(),
-
                       _buildResultHeader(resultats.length),
                       if (resultats.isEmpty)
                         _buildEmptyState()
                       else
-                        ...resultats.map(
-                              (m) => CardMedecin(
-                            nom: '${m.utilisateur?.prenom ?? ''} '
-                                '${m.utilisateur?.nom ?? ''}'
-                                .trim(),
-                            specialite: m.specialite?.nom ?? '',
-                            ville: m.villeExercice?.nom ?? '',
-                            photoUrl: m.photoUrl,
-                            prixFcfa: m.tarifIndicatif.round(),
-                            verifieOrdre: m.estPublie,
-                            teleconsultation: m.teleconsultationActivee,
-                            // TODO(agenda): brancher la disponibilité du
-                            // jour dès que le module Agenda/Créneau est
-                            // exposé côté API — non disponible sur la
-                            // fiche Medecin elle-même.
-                            disponibleAujourdhui: false,
-                            onVoirProfil: () => _voirProfil(m),
-                            // Abonnement de présence : RDV en ligne fermé
-                            // par le serveur => pas de bouton.
-                            onPrendreRdv: m.priseRdvEnLigne ? () => _prendreRendezVous(m) : null,
-                          ),
-                        ),
+                        for (var i = 0; i < resultats.length; i++) ...[
+                          // Publicité de PAGE_MEDECIN glissée après les
+                          // deux premiers résultats.
+                          if (i == 2) _buildPublicites(),
+                          _carte(resultats[i]),
+                        ],
+                      if (resultats.isNotEmpty && resultats.length <= 2)
+                        _buildPublicites(),
                     ],
                   );
                 },
@@ -369,15 +347,16 @@ class _MedecinPageState extends State<MedecinPage> {
             ),
           ),
           Positioned(
-            left: 10,
-            right: 10,
-            bottom: 10,
+            left: 16,
+            right: 16,
+            bottom: 12 + MediaQuery.paddingOf(context).bottom,
             child: AppBottomNav(
               currentIndex: _navIndex,
               onTap: _onBottomNavTap,
               onRdvPressed: () {
-                // TODO(nav): brancher la navigation vers la prise de
-                // rendez-vous générale (sans médecin présélectionné).
+                // Déjà sur l'annuaire : on remonte en haut de la liste
+                // pour choisir un médecin.
+                FocusScope.of(context).unfocus();
               },
             ),
           ),
@@ -386,19 +365,28 @@ class _MedecinPageState extends State<MedecinPage> {
     );
   }
 
-  /// Construit le bandeau publicitaire de la page à partir de
-  /// [_publicitesState] (GET /publicites/par-page/PAGE_MEDECIN).
-  ///
-  /// - Chargement : bandeau silencieux (aucun flash de contenu
-  ///   illustratif) — l'annuaire ne doit pas attendre la pub.
-  /// - Erreur ou aucune publicité active : rien n'est affiché (une pub
-  ///   manquante ne doit jamais bloquer/casser l'écran).
-  /// - Données : une [_MedecinAdBanner] par publicité renvoyée (en
-  ///   pratique le backend n'en retourne généralement qu'une par page,
-  ///   mais rien n'empêche plusieurs campagnes actives simultanément).
+  Widget _carte(Medecin m) {
+    return CardMedecin(
+      nom: 'Dr ${m.utilisateur?.prenom ?? ''} ${m.utilisateur?.nom ?? ''}'.trim(),
+      specialite: m.specialite?.nom ?? '',
+      ville: m.villeExercice?.nom ?? '',
+      photoUrl: m.photoUrl,
+      prixFcfa: m.tarifIndicatif.round(),
+      verifieOrdre: m.estPublie,
+      teleconsultation: m.teleconsultationActivee,
+      // TODO(agenda): brancher la disponibilité du jour dès que le module
+      // Agenda/Créneau est exposé sur la fiche Medecin.
+      disponibleAujourdhui: false,
+      onVoirProfil: () => _voirProfil(m),
+      // Abonnement de présence : RDV en ligne fermé par le serveur => pas
+      // de bouton.
+      onPrendreRdv: m.priseRdvEnLigne ? () => _prendreRendezVous(m) : null,
+    );
+  }
+
+  /// Carrousel des positions payées de PAGE_MEDECIN + carte « Réserver
+  /// cet espace » (voir slider_publicite.dart).
   Widget _buildPublicites() {
-    // v9 : carrousel des positions payées de PAGE_MEDECIN + carte
-    // « Réserver cet espace » (voir slider_publicite.dart).
     return const Padding(
       padding: EdgeInsets.only(bottom: 12),
       child: SliderPublicite(code: PagesPublicite.medecin),
@@ -406,135 +394,82 @@ class _MedecinPageState extends State<MedecinPage> {
   }
 
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 14, 2, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'ANNUAIRE',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.fontDisplay,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
-                  color: AppColors.green700,
-                ),
-              ),
-              if (widget.onDevenirMedecin != null)
-                GestureDetector(
-                  onTap: widget.onDevenirMedecin,
-                  child: const Text(
-                    'Devenir médecin partenaire →',
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontDisplay,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.green700,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          const Text('Médecins & professionnels', style: AppTextStyles.h3),
-          const SizedBox(height: 4),
-          const Text(
-            "Douala, Yaoundé et au-delà — filtrez par spécialité et disponibilité.",
-            style: AppTextStyles.body,
-          ),
-        ],
-      ),
+    final peutRevenir = Navigator.of(context).canPop();
+    return ApsTopBar(
+      showBack: peutRevenir,
+      leading: peutRevenir ? null : const SizedBox.shrink(),
+      title: 'Médecins',
+      overline: _selectedVille == 'Toutes les villes' ? 'Toutes les villes' : _selectedVille,
+      trailing: widget.onDevenirMedecin != null
+          ? ApsIconButton(
+              icon: Icons.person_add_alt_rounded,
+              tooltip: 'Devenir médecin partenaire',
+              onPressed: widget.onDevenirMedecin,
+            )
+          : const SizedBox(width: 42),
     );
   }
 
   Widget _buildFilterChips(List<String> villes) {
-    return SizedBox(
-      height: 34,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: [
-          for (final ville in villes) ...[
-            _FilterChip(
-              label: ville,
-              icon: Icons.location_on_outlined,
-              active: _selectedVille == ville,
-              onTap: () => setState(() => _selectedVille = ville),
-            ),
-            const SizedBox(width: 8),
-          ],
-          _FilterChip(
-            label: 'Vérifiés ONMC',
-            icon: Icons.verified_outlined,
-            active: _filtreVerifie,
-            onTap: () => setState(() => _filtreVerifie = !_filtreVerifie),
+    final nbFiltres = (_filtreVerifie ? 1 : 0) +
+        (_filtreTele ? 1 : 0) +
+        (_selectedVille != 'Toutes les villes' ? 1 : 0);
+    return ApsChipRow(
+      children: [
+        ApsChip(
+          'Filtres',
+          icon: Icons.tune_rounded,
+          selected: nbFiltres > 0,
+          count: nbFiltres,
+          onTap: nbFiltres > 0 ? _reinitialiserFiltres : null,
+        ),
+        ApsChip(
+          'Vérifiés',
+          icon: Icons.verified_outlined,
+          soft: _filtreVerifie,
+          onTap: () => setState(() => _filtreVerifie = !_filtreVerifie),
+        ),
+        ApsChip(
+          'Vidéo',
+          icon: Icons.videocam_outlined,
+          soft: _filtreTele,
+          onTap: () => setState(() => _filtreTele = !_filtreTele),
+        ),
+        for (final ville in villes.skip(1))
+          ApsChip(
+            ville,
+            icon: Icons.location_on_outlined,
+            soft: _selectedVille == ville,
+            onTap: () => setState(() => _selectedVille =
+                _selectedVille == ville ? 'Toutes les villes' : ville),
           ),
-          const SizedBox(width: 8),
-          _FilterChip(
-            label: 'Téléconsultation',
-            icon: Icons.videocam_outlined,
-            active: _filtreTele,
-            onTap: () => setState(() => _filtreTele = !_filtreTele),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
   Widget _buildResultHeader(int count) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12, top: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            count > 1
-                ? '$count professionnels trouvés'
-                : '$count professionnel trouvé',
-            style: AppTextStyles.cardMeta
-                .copyWith(fontWeight: FontWeight.w600, color: AppColors.inkSoft),
+      padding: const EdgeInsets.only(bottom: 12, top: 14),
+      child: Text.rich(
+        TextSpan(children: [
+          TextSpan(
+            text: count > 1 ? '$count médecins' : '$count médecin',
+            style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w800),
           ),
-          GestureDetector(
-            onTap: () {
-              // TODO(ui): ouvrir un panneau de tri (ex: bottom sheet "Trier par...").
-            },
-            child: const Text(
-              'Trier ▾',
-              style: TextStyle(
-                fontFamily: AppTextStyles.fontDisplay,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: AppColors.green700,
-              ),
-            ),
-          ),
-        ],
+          TextSpan(text: count > 1 ? ' trouvés' : ' trouvé'),
+        ]),
+        style: AppTextStyles.xs.copyWith(fontSize: 12),
       ),
     );
   }
 
   Widget _buildEmptyState() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 40),
-      child: Column(
-        children: [
-          const Icon(Icons.search_off_rounded, size: 34, color: AppColors.inkFaint),
-          const SizedBox(height: 10),
-          const Text(
-            'Aucun médecin ne correspond à votre recherche.',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.body,
-          ),
-          const SizedBox(height: 14),
-          AppOutlineButton(
-            label: 'Réinitialiser les filtres',
-            onPressed: _reinitialiserFiltres,
-          ),
-        ],
-      ),
+    return ApsEmptyState(
+      icon: Icons.search_off_rounded,
+      title: 'Aucun résultat',
+      message: 'Aucun médecin ne correspond à votre recherche.',
+      actionLabel: 'Réinitialiser les filtres',
+      onAction: _reinitialiserFiltres,
     );
   }
 }
@@ -549,7 +484,7 @@ class _ChargementAnnuaire extends StatelessWidget {
     return const Center(
       child: Padding(
         padding: EdgeInsets.only(top: 120),
-        child: CircularProgressIndicator(color: AppColors.green700),
+        child: CircularProgressIndicator(),
       ),
     );
   }
@@ -566,34 +501,22 @@ class _ErreurAnnuaire extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 120),
+      padding: const EdgeInsets.only(top: 80),
       children: [
-        const Icon(Icons.wifi_off_rounded, size: 34, color: AppColors.inkFaint),
-        const SizedBox(height: 10),
-        const Text(
-          "Impossible de charger l'annuaire des médecins pour le moment.",
-          textAlign: TextAlign.center,
-          style: AppTextStyles.body,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          erreur.toString(),
-          textAlign: TextAlign.center,
-          style: AppTextStyles.cardMeta.copyWith(color: AppColors.inkFaint),
-        ),
-        const SizedBox(height: 14),
-        Center(
-          child: AppOutlineButton(
-            label: 'Réessayer',
-            onPressed: onReessayer,
-          ),
+        ApsEmptyState(
+          icon: Icons.wifi_off_rounded,
+          tone: ApsTone.neutral,
+          title: 'Annuaire indisponible',
+          message: "Impossible de charger les médecins pour le moment.\n$erreur",
+          actionLabel: 'Réessayer',
+          onAction: onReessayer,
         ),
       ],
     );
   }
 }
 
-/// Fiche détaillée d'un médecin — **Voir médecin** (GET /medecins/:id).
+/// Fiche praticien — **Voir médecin** (GET /medecins/:id), écran 10.
 ///
 /// Poussée depuis [MedecinPage] au tap sur « Voir le profil ». S'abonne
 /// manuellement à [medecinParIdProvider] via le même [ProviderContainer]
@@ -619,7 +542,7 @@ class _MedecinDetailPage extends StatefulWidget {
 
 class _MedecinDetailPageState extends State<_MedecinDetailPage> {
   late final _provider =
-  medecinParIdProvider((id: widget.medecinId, token: widget.token));
+      medecinParIdProvider((id: widget.medecinId, token: widget.token));
   late ProviderSubscription<AsyncValue<Medecin>> _sub;
   AsyncValue<Medecin> _state = const AsyncLoading();
 
@@ -628,7 +551,7 @@ class _MedecinDetailPageState extends State<_MedecinDetailPage> {
     super.initState();
     _sub = widget.container.listen<AsyncValue<Medecin>>(
       _provider,
-          (previous, next) => setState(() => _state = next),
+      (previous, next) => setState(() => _state = next),
       fireImmediately: true,
     );
   }
@@ -656,139 +579,292 @@ class _MedecinDetailPageState extends State<_MedecinDetailPage> {
     );
   }
 
+  static String _fcfa(num v) {
+    final s = v.round().toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write(' ');
+      b.write(s[i]);
+    }
+    return b.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final medecin = _state.value;
     return Scaffold(
-      backgroundColor: AppColors.paper,
-      appBar: AppBar(
-        backgroundColor: AppColors.paper,
-        elevation: 0,
-        foregroundColor: AppColors.ink,
-        title: const Text('Profil du médecin'),
-      ),
-      body: _state.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: AppColors.green700),
-        ),
-        error: (erreur, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline_rounded,
-                    size: 34, color: AppColors.inkFaint),
-                const SizedBox(height: 10),
-                Text(
-                  "Impossible de charger ce profil.\n$erreur",
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.body,
-                ),
-                const SizedBox(height: 14),
-                AppOutlineButton(label: 'Réessayer', onPressed: _reessayer),
-              ],
+      backgroundColor: AppColors.bg,
+      extendBodyBehindAppBar: true,
+      bottomNavigationBar: medecin == null
+          ? null
+          : ApsCtaBar(
+              priceLabel: 'Tarif indicatif',
+              priceValue: '${_fcfa(medecin.tarifIndicatif)} F',
+              child: medecin.priseRdvEnLigne
+                  ? ApsButton(
+                      label: 'Prendre rendez-vous',
+                      onPressed: () => _prendreRendezVous(medecin),
+                    )
+                  : (medecin.contactTelephone?.isNotEmpty ?? false)
+                      ? ApsButton(
+                          label: 'Appeler le cabinet',
+                          icon: Icons.call_rounded,
+                          variant: ApsButtonVariant.dark,
+                          onPressed: () => launchUrl(
+                              Uri.parse('tel:${medecin.contactTelephone}')),
+                        )
+                      : const ApsButton(
+                          label: 'RDV en ligne indisponible',
+                          onPressed: null,
+                          variant: ApsButtonVariant.ghost,
+                        ),
             ),
+      body: _state.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (erreur, _) => SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: ApsTopBar(title: 'Profil du médecin'),
+              ),
+              Expanded(
+                child: Center(
+                  child: ApsEmptyState(
+                    icon: Icons.error_outline_rounded,
+                    tone: ApsTone.neutral,
+                    title: 'Profil indisponible',
+                    message: '$erreur',
+                    actionLabel: 'Réessayer',
+                    onAction: _reessayer,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        data: (medecin) => ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-          children: [
-            Text(
-              '${medecin.utilisateur?.prenom ?? ''} ${medecin.utilisateur?.nom ?? ''}'
-                  .trim(),
-              style: AppTextStyles.h3,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              medecin.specialite?.nom ?? '',
-              style: AppTextStyles.body.copyWith(color: AppColors.green700),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (medecin.estPublie)
-                  const _Badge(label: 'Vérifié ONMC', icon: Icons.verified_outlined),
-                if (medecin.teleconsultationActivee)
-                  const _Badge(
-                      label: 'Téléconsultation', icon: Icons.videocam_outlined),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '${medecin.villeExercice?.nom ?? ''}'
-                  '${medecin.paysExercice?.nom != null ? ', ${medecin.paysExercice!.nom}' : ''}',
-              style: AppTextStyles.body,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${medecin.tarifIndicatif.round()} FCFA (tarif indicatif)',
-              style: AppTextStyles.body,
-            ),
-            const SizedBox(height: 16),
-            if (medecin.biographie.isNotEmpty) ...[
-              const Text('À propos', style: AppTextStyles.h3),
-              const SizedBox(height: 6),
-              Text(medecin.biographie, style: AppTextStyles.body),
-              const SizedBox(height: 20),
-            ],
-            if (medecin.contactTelephone != null &&
-                medecin.contactTelephone!.isNotEmpty) ...[
-              CallButton(
-                label: 'Appeler',
-                onPressed: () =>
-                    launchUrl(Uri.parse('tel:${medecin.contactTelephone}')),
-              ),
-              const SizedBox(height: 10),
-            ],
-            if (medecin.priseRdvEnLigne)
-              AppOutlineButton(
-                label: 'Prendre rendez-vous',
-                onPressed: () => _prendreRendezVous(medecin),
-              )
-            else
-              Text(
-                'Ce médecin ne propose pas la prise de rendez-vous en ligne pour le moment.',
-                style: AppTextStyles.body.copyWith(color: AppColors.inkFaint),
-              ),
-          ],
-        ),
+        data: (medecin) => _ProfilMedecin(medecin: medecin),
       ),
     );
   }
 }
 
-class _Badge extends StatelessWidget {
-  const _Badge({required this.label, required this.icon});
-
-  final String label;
-  final IconData icon;
+class _ProfilMedecin extends StatelessWidget {
+  const _ProfilMedecin({required this.medecin});
+  final Medecin medecin;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.green700,
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: Colors.white),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: AppTextStyles.badge.copyWith(fontSize: 12, color: Colors.white),
+    final nom =
+        'Dr ${medecin.utilisateur?.prenom ?? ''} ${medecin.utilisateur?.nom ?? ''}'.trim();
+    final lieu = [medecin.villeExercice?.nom, medecin.paysExercice?.nom]
+        .whereType<String>()
+        .join(', ');
+    final haut = MediaQuery.paddingOf(context).top;
+
+    return Stack(
+      children: [
+        // Bandeau vert profond (230 px) derrière la carte de profil.
+        Container(
+          height: 230 + haut,
+          decoration: const BoxDecoration(gradient: AppColors.gradientForest),
+          child: Align(
+            alignment: Alignment.topRight,
+            child: Container(
+              width: 300,
+              height: 200,
+              decoration: const BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment.topRight,
+                  radius: 1,
+                  colors: [Color(0x992CC286), Color(0x002CC286)],
+                ),
+              ),
+            ),
           ),
+        ),
+        ListView(
+          padding: EdgeInsets.fromLTRB(18, haut + 6, 18, 24),
+          children: [
+            ApsTopBar(
+              glass: true,
+              trailing: (medecin.contactTelephone?.isNotEmpty ?? false)
+                  ? ApsIconButton(
+                      icon: Icons.call_outlined,
+                      glass: true,
+                      tooltip: 'Appeler',
+                      onPressed: () =>
+                          launchUrl(Uri.parse('tel:${medecin.contactTelephone}')),
+                    )
+                  : null,
+            ),
+            const SizedBox(height: 28),
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(26),
+                boxShadow: AppColors.shadowSoft,
+              ),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Transform.translate(
+                        offset: const Offset(0, -46),
+                        child: ApsAvatar(
+                          name: nom,
+                          photoUrl: medecin.photoUrl,
+                          size: 84,
+                          border: Border.all(color: Colors.white, width: 4),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            if (medecin.priseRdvEnLigne)
+                              const ApsPill('RDV en ligne', dot: true),
+                            if (medecin.teleconsultationActivee)
+                              const ApsPill('Vidéo',
+                                  tone: ApsTone.sky, icon: Icons.videocam_outlined),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  Transform.translate(
+                    offset: const Offset(0, -30),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(child: Text(nom, style: AppTextStyles.m)),
+                            if (medecin.estPublie) ...[
+                              const SizedBox(width: 5),
+                              const ApsVerified(size: 16),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          [
+                            medecin.specialite?.nom,
+                            if (medecin.numeroOrdre.isNotEmpty)
+                              'Ordre n° ${medecin.numeroOrdre}',
+                          ].whereType<String>().join(' · '),
+                          style: AppTextStyles.small,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Transform.translate(
+                    offset: const Offset(0, -16),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        children: [
+                          _Stat(
+                            valeur: medecin.estPublie ? 'Vérifié' : '—',
+                            libelle: 'Ordre',
+                          ),
+                          const VerticalDivider(color: AppColors.line, width: 1),
+                          _Stat(
+                            valeur: medecin.villeExercice?.nom ?? '—',
+                            libelle: 'Ville',
+                          ),
+                          const VerticalDivider(color: AppColors.line, width: 1),
+                          _Stat(
+                            valeur: medecin.teleconsultationActivee
+                                ? 'Cabinet · Vidéo'
+                                : 'Cabinet',
+                            libelle: 'Consultation',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (lieu.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              ApsCard(
+                child: Row(
+                  children: [
+                    const ApsIconTile(Icons.location_on_outlined, small: true),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Lieu d'exercice",
+                              style: AppTextStyles.strong.copyWith(fontSize: 13)),
+                          Text(lieu, style: AppTextStyles.xs),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (!medecin.priseRdvEnLigne) ...[
+              const SizedBox(height: 12),
+              ApsNote.text(
+                "Ce médecin ne propose pas encore la prise de rendez-vous en ligne.",
+                icon: Icons.info_outline_rounded,
+                tone: ApsTone.amber,
+              ),
+            ] else ...[
+              const SizedBox(height: 12),
+              ApsNote.text(
+                "APS conserve les fonds jusqu'à la consultation. Remboursement intégral si le médecin annule.",
+                bold: 'Paiement protégé.',
+                icon: Icons.verified_user_outlined,
+              ),
+            ],
+            if (medecin.biographie.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              Text('À propos', style: AppTextStyles.strong.copyWith(fontSize: 13.5)),
+              const SizedBox(height: 6),
+              Text(medecin.biographie, style: AppTextStyles.small),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  const _Stat({required this.valeur, required this.libelle});
+  final String valeur;
+  final String libelle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            valeur,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.strong.copyWith(fontSize: 14),
+          ),
+          Text(libelle, style: AppTextStyles.xs),
         ],
       ),
     );
   }
 }
 
-/// Champ de recherche — `.search-field` de la maquette.
+/// Champ de recherche — `.search` de la maquette (56 px).
 class _SearchField extends StatelessWidget {
   const _SearchField({
     required this.controller,
@@ -803,86 +879,49 @@ class _SearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13),
+      height: 56,
+      padding: const EdgeInsets.only(left: 16, right: 6),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border.all(color: AppColors.line),
-        borderRadius: AppRadius.smRadius,
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: AppColors.shadowCard,
       ),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, size: 18, color: AppColors.inkFaint),
+          const Icon(Icons.search_rounded, size: 20, color: AppColors.ink3),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: controller,
               onChanged: onChanged,
-              style: AppTextStyles.body.copyWith(
-                fontSize: 13,
-                color: AppColors.ink,
-                height: 1,
-              ),
+              textInputAction: TextInputAction.search,
+              style: AppTextStyles.strong.copyWith(fontSize: 14),
               decoration: InputDecoration(
                 hintText: hint,
-                hintStyle: AppTextStyles.body.copyWith(fontSize: 13),
+                filled: false,
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
+          ),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, v, _) => v.text.isEmpty
+                ? const SizedBox(width: 10)
+                : IconButton(
+                    tooltip: 'Effacer',
+                    icon: const Icon(Icons.cancel_rounded, size: 20, color: AppColors.ink4),
+                    onPressed: () {
+                      controller.clear();
+                      onChanged('');
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
 }
-
-/// Puce de filtre — `.chip` / `.chip.active` de la maquette.
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.active,
-    required this.onTap,
-    this.icon,
-  });
-
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(100),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? AppColors.green700 : AppColors.card,
-          border: Border.all(
-            color: active ? AppColors.green700 : AppColors.lineStrong,
-          ),
-          borderRadius: BorderRadius.circular(100),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 13, color: active ? Colors.white : AppColors.inkSoft),
-              const SizedBox(width: 6),
-            ],
-            Text(
-              label,
-              style: AppTextStyles.badge.copyWith(
-                fontSize: 12,
-                color: active ? Colors.white : AppColors.inkSoft,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-

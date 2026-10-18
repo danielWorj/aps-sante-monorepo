@@ -212,25 +212,16 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.paper,
+      backgroundColor: AppColors.bg,
       extendBody: widget.showBottomNav,
-      appBar: widget.showAppBar
-          ? AppBar(
-        backgroundColor: AppColors.paper,
-        elevation: 0,
-        foregroundColor: AppColors.ink,
-        centerTitle: false,
-        titleSpacing: 0,
-      )
-          : null,
       body: Stack(
         children: [
           _buildBody(context),
           if (widget.showBottomNav)
             Positioned(
-              left: 10,
-              right: 10,
-              bottom: 10,
+              left: 16,
+              right: 16,
+              bottom: 12 + MediaQuery.paddingOf(context).bottom,
               child: AppBottomNav(
                 currentIndex: widget.bottomNavIndex,
                 onTap: widget.onBottomNavTap ?? _defaultOnBottomNavTap,
@@ -262,6 +253,7 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
 
     final centres = centresAsync.value ?? const <CentreSante>[];
     return RefreshIndicator(
+      color: AppColors.b6,
       onRefresh: () =>
           ref.read(listeCentresSanteControllerProvider.notifier).rafraichir(),
       child: _buildContent(
@@ -273,26 +265,23 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
   }
 
   Widget _buildErreurPleinEcran(Object erreur) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-      children: [
-        _buildPageTitle(),
-        const SizedBox(height: 20),
-        AppAlert(
-          type: AppAlertType.secondary,
-          title: "Impossible de charger l'annuaire",
-          message: _messageErreur(erreur),
-        ),
-        const SizedBox(height: 12),
-        AppOutlineButton(
-          label: 'Réessayer',
-          icon: Icons.refresh,
-          expanded: true,
-          onPressed: () => ref
-              .read(listeCentresSanteControllerProvider.notifier)
-              .rafraichir(),
-        ),
-      ],
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 6, 18, 24),
+        children: [
+          _buildPageTitle(),
+          ApsEmptyState(
+            icon: Icons.wifi_off_rounded,
+            tone: ApsTone.neutral,
+            title: "Annuaire indisponible",
+            message: _messageErreur(erreur),
+            actionLabel: 'Réessayer',
+            onAction: () => ref
+                .read(listeCentresSanteControllerProvider.notifier)
+                .rafraichir(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -312,14 +301,20 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
       }) {
     final resultats = _filtrer(centresBruts);
 
-    return ListView(
+    return SafeArea(
+      bottom: false,
+      child: ListView(
       padding: EdgeInsets.fromLTRB(
-          16, widget.showAppBar ? 0 : 16, 16, widget.showBottomNav ? 110 : 24),
+          18,
+          6,
+          18,
+          widget.showBottomNav
+              ? AppBottomNav.reservedHeight + MediaQuery.paddingOf(context).bottom
+              : 24),
       children: [
         _buildPageTitle(),
-        const SizedBox(height: 14),
         _buildSearchField(),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         _buildFilterChips(centresBruts),
         if (widget.adBanner != null) ...[
           const SizedBox(height: 16),
@@ -330,9 +325,8 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
           children: [
             Expanded(
               child: Text(
-                '${resultats.length} structure${resultats.length > 1 ? 's' : ''} trouvée${resultats.length > 1 ? 's' : ''}',
-                style: AppTextStyles.cardMeta
-                    .copyWith(fontWeight: FontWeight.w600, color: AppColors.inkSoft),
+                '${resultats.length} structure${resultats.length > 1 ? 's' : ''}',
+                style: AppTextStyles.xs.copyWith(fontSize: 12),
               ),
             ),
             if (rafraichissement)
@@ -346,112 +340,61 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
         const SizedBox(height: 10),
         if (resultats.isEmpty) _buildEmptyState() else ..._buildList(resultats),
       ],
+      ),
     );
   }
 
   Widget _buildPageTitle() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 14, bottom: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'ANNUAIRE',
-            style: AppTextStyles.badge.copyWith(
-              fontSize: 10.5,
-              letterSpacing: 1.2,
-              color: AppColors.green700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text('Trouver une structure de santé', style: AppTextStyles.h3),
-          const SizedBox(height: 4),
-          Text(
-            'Hôpitaux, cliniques et centres de santé avec coordonnées, appel direct et itinéraire.',
-            style: AppTextStyles.body,
-          ),
-        ],
-      ),
+    final peutRevenir = widget.showAppBar && Navigator.of(context).canPop();
+    return ApsTopBar(
+      showBack: peutRevenir,
+      leading: peutRevenir ? null : const SizedBox.shrink(),
+      overline: 'Hôpitaux, cliniques, centres',
+      title: 'Structures de santé',
+      trailing: const SizedBox(width: 42),
     );
   }
 
   Widget _buildSearchField() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border.all(color: AppColors.lineStrong),
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.search, size: 18, color: AppColors.inkFaint),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: _searchController,
-              onChanged: (v) => setState(() => _query = v),
-              textInputAction: TextInputAction.search,
-              style: AppTextStyles.body.copyWith(color: AppColors.ink, fontSize: 13),
-              decoration: const InputDecoration(
-                isCollapsed: true,
-                border: InputBorder.none,
-                hintText: 'Nom, ville, quartier…',
-                hintStyle: TextStyle(color: AppColors.inkFaint),
-              ),
-            ),
-          ),
-          if (_query.isNotEmpty)
-            GestureDetector(
-              onTap: () => setState(() {
-                _query = '';
-                _searchController.clear();
-              }),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 2),
-                child: Icon(Icons.close, size: 16, color: AppColors.inkFaint),
-              ),
-            ),
-        ],
-      ),
+    return ApsSearchField(
+      controller: _searchController,
+      hint: 'Nom, ville, quartier…',
+      onChanged: (v) => setState(() => _query = v),
     );
   }
 
   Widget _buildFilterChips(List<CentreSante> centresBruts) {
     final villesDisponibles = _villesDisponibles(centresBruts);
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          _FilterChip(
-            label: _typeLabel,
-            active: true,
-            icon: Icons.local_hospital_outlined,
-            onTap: _pickType,
-          ),
-          const SizedBox(width: 8),
-          _FilterChip(
-            label: _selectedVilleId == null
-                ? 'Toutes les villes'
-                : (villesDisponibles[_selectedVilleId!] ?? 'Toutes les villes'),
-            active: _selectedVilleId != null,
-            icon: Icons.location_on_outlined,
-            onTap: () => _pickVille(centresBruts),
-          ),
-          if (_selectedType != null || _selectedVilleId != null) ...[
-            const SizedBox(width: 8),
-            _FilterChip(
-              label: 'Réinitialiser',
-              active: false,
-              icon: Icons.refresh,
-              onTap: () => setState(() {
-                _selectedType = null;
-                _selectedVilleId = null;
-              }),
-            ),
-          ],
-        ],
-      ),
+    final filtres = (_selectedType != null ? 1 : 0) + (_selectedVilleId != null ? 1 : 0);
+    return ApsChipRow(
+      children: [
+        ApsChip(
+          'Filtres',
+          icon: Icons.tune_rounded,
+          selected: filtres > 0,
+          count: filtres,
+          onTap: filtres > 0
+              ? () => setState(() {
+                    _selectedType = null;
+                    _selectedVilleId = null;
+                  })
+              : null,
+        ),
+        ApsChip(
+          _typeLabel,
+          icon: Icons.local_hospital_outlined,
+          soft: _selectedType != null,
+          onTap: _pickType,
+        ),
+        ApsChip(
+          _selectedVilleId == null
+              ? 'Toutes les villes'
+              : (villesDisponibles[_selectedVilleId!] ?? 'Toutes les villes'),
+          icon: Icons.location_on_outlined,
+          soft: _selectedVilleId != null,
+          onTap: () => _pickVille(centresBruts),
+        ),
+      ],
     );
   }
 
@@ -506,27 +449,18 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
   }
 
   Widget _buildEmptyState() {
-    return Column(
-      children: [
-        const AppAlert(
-          type: AppAlertType.secondary,
-          title: 'Aucun résultat',
-          message:
-          'Aucune structure ne correspond à votre recherche. Essayez un autre type ou une autre ville.',
-        ),
-        const SizedBox(height: 12),
-        AppOutlineButton(
-          label: 'Réinitialiser les filtres',
-          icon: Icons.refresh,
-          expanded: true,
-          onPressed: () => setState(() {
-            _selectedType = null;
-            _selectedVilleId = null;
-            _query = '';
-            _searchController.clear();
-          }),
-        ),
-      ],
+    return ApsEmptyState(
+      icon: Icons.search_off_rounded,
+      tone: ApsTone.neutral,
+      title: 'Aucun résultat',
+      message: 'Aucune structure ne correspond à votre recherche.',
+      actionLabel: 'Réinitialiser les filtres',
+      onAction: () => setState(() {
+        _selectedType = null;
+        _selectedVilleId = null;
+        _query = '';
+        _searchController.clear();
+      }),
     );
   }
 
@@ -543,10 +477,6 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
 
     final selected = await showModalBottomSheet<_Sentinel<TypeStructure?>>(
       context: context,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (ctx) => SafeArea(
         child: ListView.builder(
           shrinkWrap: true,
@@ -554,10 +484,9 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
           itemBuilder: (ctx, i) {
             final value = options[i];
             return ListTile(
-              title: Text(labels[i],
-                  style: AppTextStyles.body.copyWith(color: AppColors.ink, fontSize: 13.5)),
+              title: Text(labels[i]),
               trailing:
-              _selectedType == value ? const Icon(Icons.check, color: AppColors.primary) : null,
+              _selectedType == value ? const Icon(Icons.check_rounded, color: AppColors.b6) : null,
               onTap: () => Navigator.pop(ctx, _Sentinel(value)),
             );
           },
@@ -579,10 +508,6 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
 
     final selected = await showModalBottomSheet<_Sentinel<String?>>(
       context: context,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (ctx) => SafeArea(
         child: ListView.builder(
           shrinkWrap: true,
@@ -590,10 +515,9 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
           itemBuilder: (ctx, i) {
             final value = ids[i];
             return ListTile(
-              title: Text(labels[i],
-                  style: AppTextStyles.body.copyWith(color: AppColors.ink, fontSize: 13.5)),
+              title: Text(labels[i]),
               trailing: _selectedVilleId == value
-                  ? const Icon(Icons.check, color: AppColors.primary)
+                  ? const Icon(Icons.check_rounded, color: AppColors.b6)
                   : null,
               onTap: () => Navigator.pop(ctx, _Sentinel(value)),
             );
@@ -658,51 +582,3 @@ class _Sentinel<T> {
   final T value;
 }
 
-/// Puce de filtre — `.chip` / `.chip.active` de la maquette.
-///
-/// Distincte de [BadgeChip] (qui sert d'étiquette statique sur les cartes) :
-/// celle-ci est un contrôle tappable ouvrant un sélecteur (type, ville…).
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.active,
-    required this.onTap,
-    this.icon,
-  });
-
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = active ? Colors.white : AppColors.inkSoft;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(100),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? AppColors.primary : AppColors.card,
-          border: Border.all(color: active ? AppColors.primary : AppColors.lineStrong),
-          borderRadius: BorderRadius.circular(100),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 13, color: fg),
-              const SizedBox(width: 6),
-            ],
-            Text(
-              label,
-              style: AppTextStyles.buttonLabel.copyWith(fontSize: 12, color: fg),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

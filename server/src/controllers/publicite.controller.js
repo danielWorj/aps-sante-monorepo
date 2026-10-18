@@ -857,10 +857,8 @@ export async function modifierPublicite(req, res, next) {
       return res.status(409).json({ message: "Cette demande a déjà été traitée : son contenu ne peut plus être modifié." });
     }
 
-    const permis = admin && !auteur
-      ? ["titre", "description", "telephone_contact", "email_contact", "localisation"]
-      : ["titre", "description", "telephone_contact", "email_contact", "localisation",
-         "annonceur_nom", "annonceur_entreprise", "annonceur_telephone", "annonceur_email"];
+    const permis = ["titre", "description", "telephone_contact", "email_contact", "localisation",
+      "annonceur_nom", "annonceur_entreprise", "annonceur_telephone", "annonceur_email"];
     const fournis = Object.fromEntries(permis.filter((c) => req.body[c] !== undefined).map((c) => [c, req.body[c]]));
     const donnees = validerChampsReservation(fournis, { partiel: true });
 
@@ -885,19 +883,42 @@ export async function modifierPublicite(req, res, next) {
 }
 
 /**
- * DELETE /api/publicites/:id — demande jamais payée uniquement (en
- * modération, rejetée, annulée ou expirée, sans transaction). Une
- * publicité payée est conservée (facture) : elle s'arrête à sa date de fin.
+ * DELETE /api/publicites/:id
+ *   - annonceur : demande jamais payée uniquement (en modération, rejetée,
+ *     annulée ou expirée, sans transaction).
+ *   - admin/superadmin : toute publicité. Sans historique de paiement, elle
+ *     est effacée ; sinon (payée, ou paiement engagé) elle est retirée de la
+ *     diffusion (statut « annulee ») et conservée avec sa facture.
  */
 export async function supprimerPublicite(req, res, next) {
   try {
     const pub = await chargerPubliciteAutorisee(req);
-    if (!STATUTS_SUPPRIMABLES.includes(pub.statut)) {
+    const admin = estAdmin(req.utilisateur);
+    if (!admin && !STATUTS_SUPPRIMABLES.includes(pub.statut)) {
       return res.status(409).json({ message: `Une publicité au statut « ${pub.statut} » ne peut pas être supprimée.` });
     }
     const transactions = await prisma.transactionPaiement.count({ where: { publicite_id_cible: pub.publicite_id } });
-    if (transactions) {
-      return res.status(409).json({ message: "Cette publicité a un historique de paiement : elle est conservée." });
+    if (transactions || pub.facture) {
+      if (!admin) {
+        return res.status(409).json({ message: "Cette publicité a un historique de paiement : elle est conservée." });
+      }
+      if (pub.statut === "annulee") {
+        return res.status(409).json({ message: "Publicité déjà retirée : son historique de paiement est conservé." });
+      }
+      await prisma.publicite.update({
+        where: { publicite_id: pub.publicite_id },
+        data: {
+          statut: "annulee",
+          date_limite_paiement: null,
+          motif_rejet: pub.motif_rejet ?? "Retirée par l'administration.",
+          moderateur_id: req.utilisateur.utilisateur_id,
+          date_moderation: new Date(),
+        },
+      });
+      return res.status(200).json({
+        retiree: true,
+        message: "Publicité retirée de la diffusion. Elle a un historique de paiement : elle est conservée (onglet Annulée) avec sa facture.",
+      });
     }
     await prisma.publicite.delete({ where: { publicite_id: pub.publicite_id } });
     await supprimerFichier(pub.visuel_url);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../style/colors.dart';
 import '../style/text_styles.dart';
+import '../ui/aps_ui.dart';
 import 'badge_chip.dart';
 
 /// Carte « Assurance » — `.insurer-card` (annuaire des compagnies/courtiers).
@@ -59,9 +60,9 @@ class CardAssurance extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(color: fondLogo, borderRadius: BorderRadius.circular(12)),
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(color: fondLogo, borderRadius: BorderRadius.circular(15)),
                 alignment: Alignment.center,
                 child: Text(
                   sigle,
@@ -73,54 +74,61 @@ class CardAssurance extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 11),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(nom, style: AppTextStyles.cardTitle.copyWith(fontSize: 13.5)),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(nom,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.strong),
+                        ),
+                        if (verifieeAps) ...[
+                          const SizedBox(width: 4),
+                          const ApsVerified(size: 13),
+                        ],
+                      ],
+                    ),
                     const SizedBox(height: 2),
                     Text('$typeStructure · $ville',
-                        style: AppTextStyles.cardMeta.copyWith(fontSize: 10.5)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.xs),
                   ],
                 ),
               ),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 20, color: AppColors.ink4),
             ],
           ),
-          const SizedBox(height: 10),
+          if (numeroAgrement != null) const SizedBox(height: 10),
           Wrap(
             spacing: 5,
             runSpacing: 5,
             children: [
-              if (verifieeAps)
-                const BadgeChip(
-                  label: 'Vérifiée APS',
-                  style: BadgeChipStyle.green,
-                  icon: Icons.verified_outlined,
-                ),
               if (numeroAgrement != null)
                 BadgeChip(label: numeroAgrement!, style: BadgeChipStyle.outline, mono: true),
             ],
           ),
           // Description absente en présence minimale (fiche sans abonnement).
           if (description.isNotEmpty) ...[
-            const SizedBox(height: 9),
-            Text(description, style: AppTextStyles.body.copyWith(fontSize: 11)),
+            const SizedBox(height: 10),
+            Text(description,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.small),
           ],
           const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: ElevatedButton(
-              onPressed: onVoirFiche,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-              ),
-              child: Text('Voir la fiche', style: AppTextStyles.buttonLabel.copyWith(fontSize: 11.5)),
-            ),
+          ApsButton(
+            label: 'Voir la fiche',
+            onPressed: onVoirFiche,
+            variant: ApsButtonVariant.soft,
+            small: true,
+            trailingIcon: Icons.arrow_forward_rounded,
           ),
         ],
       ),

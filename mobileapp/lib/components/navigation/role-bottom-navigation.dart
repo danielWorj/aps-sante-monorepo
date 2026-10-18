@@ -1,5 +1,7 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
+
+import '../style/colors.dart';
+import '../ui/aps_ui.dart';
 
 import '../../models/authentification_models.dart' show RoleUtilisateur;
 
@@ -22,14 +24,14 @@ import '../../models/authentification_models.dart' show RoleUtilisateur;
 /// ============================================================
 
 class RoleNavColors {
-  static const green900 = Color(0xFF0F3A2B);
-  static const green700 = Color(0xFF1E8A63);
-  static const green100 = Color(0xFFE4F3EC);
-  static const coral500 = Color(0xFFE1604A);
-  static const ink = Color(0xFF16241F);
-  static const inkFaint = Color(0xFF93A39C);
-  static const card = Color(0xFFFFFFFF);
-  static const line = Color(0xFFE5ECE8);
+  static const green900 = AppColors.b9;
+  static const green700 = AppColors.b7;
+  static const green100 = AppColors.b1;
+  static const coral500 = AppColors.coral500;
+  static const ink = AppColors.ink;
+  static const inkFaint = AppColors.ink3;
+  static const card = AppColors.surface;
+  static const line = AppColors.line;
 }
 
 /// Un item de la barre de navigation.
@@ -84,7 +86,7 @@ class RoleBottomNavigationBar extends StatelessWidget {
       case RoleUtilisateur.admin:
       case RoleUtilisateur.superadmin:
         return const [
-          RoleNavItem(icon: Icons.dashboard_outlined, label: 'Tableau de bord'),
+          RoleNavItem(icon: Icons.dashboard_outlined, label: 'Tableau'),
           RoleNavItem(icon: Icons.people_alt_outlined, label: 'Comptes'),
           RoleNavItem(icon: Icons.person_outline, label: 'Profil'),
         ];
@@ -133,123 +135,13 @@ class RoleBottomNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-          child: Container(
-            height: 66,
-            decoration: BoxDecoration(
-              color: RoleNavColors.card.withOpacity(0.94),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: RoleNavColors.line),
-              boxShadow: [
-                BoxShadow(
-                  color: RoleNavColors.green900.withOpacity(0.28),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
-                  spreadRadius: -14,
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(items.length, (index) {
-                final item = items[index];
-                final active = index == currentIndex;
-                return _RoleNavItemWidget(
-                  item: item,
-                  active: active,
-                  onTap: () => onTap(index),
-                );
-              }),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RoleNavItemWidget extends StatelessWidget {
-  final RoleNavItem item;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _RoleNavItemWidget({
-    required this.item,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = active ? RoleNavColors.green700 : RoleNavColors.inkFaint;
-
-    return InkWell(
+    return ApsFloatingTabBar(
+      currentIndex: currentIndex,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: SizedBox(
-        width: 64,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: active ? RoleNavColors.green100 : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(item.icon, size: 20, color: color),
-                ),
-                if (item.badgeCount != null)
-                  Positioned(
-                    top: -2,
-                    right: 4,
-                    child: Container(
-                      constraints: const BoxConstraints(minWidth: 15),
-                      height: 15,
-                      padding: const EdgeInsets.symmetric(horizontal: 3),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: RoleNavColors.coral500,
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                      child: Text(
-                        '${item.badgeCount}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w700,
-                          height: 1,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Text(
-              item.label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Sora',
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      ),
+      items: [
+        for (final i in items)
+          ApsTabItem(label: i.label, icon: i.icon, badge: i.badgeCount ?? 0),
+      ],
     );
   }
 }

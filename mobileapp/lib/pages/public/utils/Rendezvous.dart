@@ -152,9 +152,6 @@ const List<String> _moisFr = [
 String _formaterDate(DateTime date) =>
     '${date.day} ${_moisFr[date.month - 1]}';
 
-/// Onglets affichés en haut de l'écran, cohérents avec [DetailMedecinPage].
-enum _RdvTab { profil, disponibilites, avis }
-
 /// Page publique — **Réserver un créneau**.
 ///
 /// Reproduit l'écran « Réserver un créneau » de la maquette `ui-mobile.html`
@@ -816,40 +813,41 @@ class _RendezVousPageState extends State<RendezVousPage> {
 
   @override
   Widget build(BuildContext context) {
+    final besoinCompte =
+        widget.onConfirmerReservation == null && _tokenEffectif == null;
+    // Étapes : 1 créneau, 2 consultation (motif), 3 compte/paiement.
+    final etape = _creneauChoisi == null
+        ? 1
+        : (_motifController.text.trim().isEmpty && !besoinCompte ? 2 : 3);
     return Scaffold(
-      backgroundColor: AppColors.paper,
+      backgroundColor: AppColors.bg,
       body: SafeArea(
         child: Column(
           children: [
-            _buildTopBar(context),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Column(
+                children: [
+                  ApsTopBar(
+                    overline: 'Étape $etape sur 3',
+                    title: _creneauChoisi == null
+                        ? 'Choisir un créneau'
+                        : 'Votre consultation',
+                    trailing: ApsIconButton(
+                      icon: Icons.close_rounded,
+                      tooltip: 'Fermer',
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
+                  ),
+                  ApsSteps(total: 3, current: etape),
+                ],
+              ),
+            ),
             Expanded(child: _buildBody()),
           ],
         ),
       ),
-      bottomNavigationBar: _etat == _Etat.pret
-          ? SafeArea(top: false, child: _buildStickyCta())
-          : null,
-    );
-  }
-
-  // ---------------------------------------------------------------------
-  // Barre de retour
-  // ---------------------------------------------------------------------
-
-  Widget _buildTopBar(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 16, 0),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-            color: AppColors.ink,
-            splashRadius: 22,
-          ),
-          const Spacer(),
-        ],
-      ),
+      bottomNavigationBar: _etat == _Etat.pret ? _buildStickyCta() : null,
     );
   }
 
@@ -860,68 +858,51 @@ class _RendezVousPageState extends State<RendezVousPage> {
   Widget _buildBody() {
     switch (_etat) {
       case _Etat.chargement:
-        return const Center(
-          child: CircularProgressIndicator(color: AppColors.green700),
-        );
+        return const Center(child: CircularProgressIndicator());
       case _Etat.erreur:
         return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline_rounded,
-                    size: 34, color: AppColors.inkFaint),
-                const SizedBox(height: 10),
-                Text(
-                  "Impossible de charger les créneaux.\n$_erreur",
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.body,
-                ),
-                const SizedBox(height: 14),
-                AppOutlineButton(label: 'Réessayer', onPressed: _charger),
-              ],
-            ),
+          child: ApsEmptyState(
+            icon: Icons.error_outline_rounded,
+            tone: ApsTone.neutral,
+            title: 'Créneaux indisponibles',
+            message: "Impossible de charger les créneaux.\n$_erreur",
+            actionLabel: 'Réessayer',
+            onAction: _charger,
           ),
         );
       case _Etat.pret:
         if (_jours.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.event_busy_outlined,
-                      size: 34, color: AppColors.inkFaint),
-                  const SizedBox(height: 10),
-                  const Text(
-                    "Aucun créneau disponible pour l'instant.",
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.body,
-                  ),
-                ],
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
+            children: [
+              _buildHeader(),
+              const ApsEmptyState(
+                icon: Icons.event_busy_outlined,
+                tone: ApsTone.amber,
+                title: 'Aucun créneau libre',
+                message:
+                    "Ce médecin n'a pas de créneau disponible pour l'instant. Réessayez plus tard ou publiez une demande express.",
               ),
-            ),
+            ],
           );
         }
         return ListView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
           children: [
             _buildHeader(),
-            _buildTabRow(),
-            _buildDateStrip(),
-            const SizedBox(height: 14),
-            _buildSlotGrid(_jours[_indexJour]),
             if (widget.teleconsultationDisponible) ...[
               const SizedBox(height: 14),
               _buildTypeRdvSelector(),
             ],
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
+            _buildDateStrip(),
+            const SizedBox(height: 4),
+            _buildSlotGrid(_jours[_indexJour]),
+            const SizedBox(height: 22),
             _buildMotifField(),
             if (widget.onConfirmerReservation == null &&
                 _tokenEffectif == null) ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: 18),
               _buildCompteSection(),
             ],
             const SizedBox(height: 14),
@@ -932,156 +913,170 @@ class _RendezVousPageState extends State<RendezVousPage> {
   }
 
   // ---------------------------------------------------------------------
-  // En-tête — `.page-title`
+  // Médecin choisi
   // ---------------------------------------------------------------------
 
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 12, 2, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${widget.medecinNom} · ${widget.medecinSpecialite}',
-            style: const TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: .3,
-              color: AppColors.green700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text('Choisir un créneau', style: AppTextStyles.h3),
-          const SizedBox(height: 4),
-          Text(
-            'Sélectionnez une date puis un horaire libre'
-                '${widget.medecinVille != null ? ' au cabinet de ${widget.medecinVille}.' : '.'}',
-            style: AppTextStyles.body,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------
-  // Onglets — `.tab-row` (Disponibilités actif sur cet écran)
-  // ---------------------------------------------------------------------
-
-  Widget _buildTabRow() {
-    return Container(
-      margin: const EdgeInsets.only(top: 14, bottom: 14),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.line)),
-      ),
+    return ApsCard(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: [
-          _RdvTabItem(
-            label: 'Profil',
-            active: false,
-            onTap: widget.onVoirProfil ?? () => Navigator.of(context).maybePop(),
+          ApsAvatar(name: widget.medecinNom, size: 40),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.medecinNom.toLowerCase().startsWith('dr')
+                      ? widget.medecinNom
+                      : 'Dr ${widget.medecinNom}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.strong.copyWith(fontSize: 13),
+                ),
+                Text(
+                  [widget.medecinSpecialite, widget.medecinVille]
+                      .whereType<String>()
+                      .where((e) => e.isNotEmpty)
+                      .join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.xs,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(width: 22),
-          const _RdvTabItem(
-            label: 'Disponibilités',
-            active: true,
-            onTap: null,
-          ),
-          const SizedBox(width: 22),
-          _RdvTabItem(
-            label: 'Avis',
-            active: false,
-            onTap: widget.onVoirAvis ?? () => Navigator.of(context).maybePop(),
-          ),
+          if (widget.onVoirProfil != null)
+            TextButton(onPressed: widget.onVoirProfil, child: const Text('Profil')),
         ],
       ),
     );
   }
 
   // ---------------------------------------------------------------------
-  // Sélecteur de dates — `.date-strip` / `.date-pill`
+  // Sélecteur de dates — tuiles jour + pastille de disponibilité
   // ---------------------------------------------------------------------
 
   Widget _buildDateStrip() {
-    return SizedBox(
-      height: 58,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _jours.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final jour = _jours[i];
-          return _DatePill(
-            jourAbrege: jour.jourAbrege,
-            numeroJour: jour.numeroJour,
-            active: i == _indexJour,
-            attenue: !jour.aDesCreneauxLibres,
-            onTap: () => _choisirJour(i),
-          );
-        },
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------
-  // Grille de créneaux — `.slot-grid` / `.slot`
-  // ---------------------------------------------------------------------
-
-  Widget _buildSlotGrid(CreneauJour jour) {
-    if (jour.creneaux.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(
-          child: Text(
-            "Aucun horaire disponible ce jour-là.",
-            style: AppTextStyles.body,
+    final jour = _jours[_indexJour];
+    final mois = _moisFr[jour.date.month - 1];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${mois[0].toUpperCase()}${mois.substring(1)} ${jour.date.year}',
+          style: AppTextStyles.strong.copyWith(fontSize: 15),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 66,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _jours.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 6),
+            itemBuilder: (_, i) {
+              final j = _jours[i];
+              final libres = j.creneaux.where((c) => c.disponible).length;
+              return SizedBox(
+                width: 54,
+                child: ApsDayTile(
+                  weekday: j.jourAbrege,
+                  day: '${j.numeroJour}',
+                  selected: i == _indexJour,
+                  disabled: !j.aDesCreneauxLibres,
+                  dotColor: libres == 0
+                      ? null
+                      : (libres <= 2 ? AppColors.amber500 : AppColors.b5),
+                  onTap: () => _choisirJour(i),
+                ),
+              );
+            },
           ),
         ),
-      );
-    }
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final creneau in jour.creneaux)
-          _SlotChip(
-            creneau: creneau,
-            active: identical(creneau, _creneauChoisi) ||
-                (_creneauChoisi != null &&
-                    _creneauChoisi!.heure == creneau.heure &&
-                    creneau.disponible),
-            onTap: () => _choisirCreneau(creneau),
-          ),
       ],
     );
   }
 
   // ---------------------------------------------------------------------
-  // Type de rendez-vous — Physique / Téléconsultation
+  // Grille de créneaux, rangés par matin / après-midi
+  // ---------------------------------------------------------------------
+
+  Widget _buildSlotGrid(CreneauJour jour) {
+    if (jour.creneaux.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Center(
+          child: Text("Aucun horaire disponible ce jour-là.", style: AppTextStyles.small),
+        ),
+      );
+    }
+    bool matin(CreneauHoraire c) {
+      final h = c.debut?.hour ?? int.tryParse(c.heure.split(':').first) ?? 0;
+      return h < 12;
+    }
+
+    final matins = jour.creneaux.where(matin).toList();
+    final apresMidi = jour.creneaux.where((c) => !matin(c)).toList();
+
+    Widget groupe(String titre, IconData icone, Color couleur, List<CreneauHoraire> liste) {
+      final libres = liste.where((c) => c.disponible).length;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Icon(icone, size: 16, color: couleur),
+              const SizedBox(width: 6),
+              Text(titre, style: AppTextStyles.strong.copyWith(fontSize: 13)),
+              Text(' · $libres créneau${libres > 1 ? 'x' : ''}', style: AppTextStyles.xs),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ApsSlotGrid(children: [
+            for (final c in liste)
+              ApsSlot(
+                c.heure,
+                state: !c.disponible
+                    ? ApsSlotState.off
+                    : ((identical(c, _creneauChoisi) ||
+                            (_creneauChoisi != null &&
+                                _creneauChoisi!.heure == c.heure))
+                        ? ApsSlotState.selected
+                        : ApsSlotState.free),
+                onTap: () => _choisirCreneau(c),
+              ),
+          ]),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (matins.isNotEmpty)
+          groupe('Matin', Icons.wb_sunny_outlined, AppColors.amber500, matins),
+        if (apresMidi.isNotEmpty)
+          groupe('Après-midi', Icons.schedule_rounded, AppColors.coral500, apresMidi),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // Type de rendez-vous — Au cabinet / En vidéo
   // ---------------------------------------------------------------------
   // N'apparaît que si le médecin a activé la téléconsultation (voir
   // Medecin.teleconsultationActivee) : POST /rendez-vous refuse sinon une
   // demande de type "teleconsultation" pour ce médecin.
 
   Widget _buildTypeRdvSelector() {
-    return Row(
-      children: [
-        Expanded(
-          child: _TypeRdvChip(
-            label: 'Au cabinet',
-            active: _typeChoisi == TypeRdv.physique,
-            onTap: () => setState(() => _typeChoisi = TypeRdv.physique),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _TypeRdvChip(
-            label: 'Téléconsultation',
-            active: _typeChoisi == TypeRdv.teleconsultation,
-            onTap: () =>
-                setState(() => _typeChoisi = TypeRdv.teleconsultation),
-          ),
-        ),
+    return ApsSegmented<TypeRdv>(
+      value: _typeChoisi,
+      onChanged: (t) => setState(() => _typeChoisi = t),
+      segments: const [
+        ApsSegment(TypeRdv.physique, 'Au cabinet', icon: Icons.local_hospital_outlined),
+        ApsSegment(TypeRdv.teleconsultation, 'En vidéo', icon: Icons.videocam_outlined),
       ],
     );
   }
@@ -1090,32 +1085,47 @@ class _RendezVousPageState extends State<RendezVousPage> {
   // Motif (optionnel) — envoyé tel quel dans CreerRendezVousPayload.motif
   // ---------------------------------------------------------------------
 
+  static const List<String> _motifsFrequents = [
+    'Première consultation',
+    'Suivi',
+    "Résultats d'examens",
+    'Renouvellement',
+  ];
+
   Widget _buildMotifField() {
-    return TextField(
-      controller: _motifController,
-      minLines: 1,
-      maxLines: 3,
-      style: AppTextStyles.body,
-      decoration: InputDecoration(
-        hintText: 'Motif de la consultation (facultatif)',
-        hintStyle: AppTextStyles.body.copyWith(color: AppColors.inkFaint),
-        filled: true,
-        fillColor: AppColors.card,
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        border: OutlineInputBorder(
-          borderRadius: AppRadius.smRadius,
-          borderSide: const BorderSide(color: AppColors.line),
+    final actuel = _motifController.text.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Motif', style: AppTextStyles.strong),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final m in _motifsFrequents)
+              ApsChip(
+                m,
+                selected: actuel == m,
+                icon: actuel == m ? Icons.check_rounded : null,
+                onTap: () => setState(() {
+                  _motifController.text = actuel == m ? '' : m;
+                }),
+              ),
+          ],
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: AppRadius.smRadius,
-          borderSide: const BorderSide(color: AppColors.line),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _motifController,
+          minLines: 3,
+          maxLines: 5,
+          onChanged: (_) => setState(() {}),
+          style: AppTextStyles.small.copyWith(fontSize: 13.5, color: AppColors.ink),
+          decoration: const InputDecoration(
+            hintText: 'Précisez si besoin (facultatif)…',
+          ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: AppRadius.smRadius,
-          borderSide: const BorderSide(color: AppColors.green700),
-        ),
-      ),
+      ],
     );
   }
 
@@ -1128,13 +1138,8 @@ class _RendezVousPageState extends State<RendezVousPage> {
   // ---------------------------------------------------------------------
 
   Widget _buildCompteSection() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border.all(color: AppColors.line),
-        borderRadius: AppRadius.lgRadius,
-      ),
+    return ApsCard(
+      padding: const EdgeInsets.all(16),
       child: Form(
         key: _formCompteKey,
         child: Column(
@@ -1142,19 +1147,15 @@ class _RendezVousPageState extends State<RendezVousPage> {
           children: [
             Row(
               children: [
-                const Icon(
-                  Icons.person_add_alt_1_outlined,
-                  size: 16,
-                  color: AppColors.green700,
-                ),
-                const SizedBox(width: 6),
-                const Expanded(
-                  child:
-                  Text('Pas encore de compte ?', style: AppTextStyles.h3),
+                const ApsIconTile(Icons.person_add_alt_1_outlined, small: true),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('Pour qui est ce rendez-vous ?',
+                      style: AppTextStyles.strong),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text(
               "Créez votre compte patient pour finaliser cette réservation "
                   "— ça prend moins d'une minute et vous serez connecté(e) "
@@ -1354,15 +1355,15 @@ class _RendezVousPageState extends State<RendezVousPage> {
                       margin: const EdgeInsets.only(top: 2),
                       decoration: BoxDecoration(
                         color: _accepteConditions
-                            ? AppColors.green700
+                            ? AppColors.b6
                             : Colors.transparent,
                         border: Border.all(
                           color: _accepteConditions
-                              ? AppColors.green700
+                              ? AppColors.b6
                               : AppColors.lineStrong,
-                          width: 1.3,
+                          width: 1.5,
                         ),
-                        borderRadius: BorderRadius.circular(5),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: _accepteConditions
                           ? const Icon(Icons.check,
@@ -1412,15 +1413,7 @@ class _RendezVousPageState extends State<RendezVousPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: AppColors.ink,
-            ),
-          ),
+          Text(label, style: AppTextStyles.xs.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 5),
           enfant,
         ],
@@ -1455,35 +1448,12 @@ class _RendezVousPageState extends State<RendezVousPage> {
   }
 
   InputDecoration _decorationChamp({String? hint}) {
+    // Bordures, couleurs et rayons viennent du thème global (AppTheme).
     return InputDecoration(
       hintText: hint,
-      hintStyle: AppTextStyles.body
-          .copyWith(color: AppColors.inkFaint, fontSize: 13),
-      filled: true,
-      fillColor: AppColors.paper,
+      fillColor: AppColors.bg,
       isDense: true,
-      contentPadding:
-      const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      border: OutlineInputBorder(
-        borderRadius: AppRadius.smRadius,
-        borderSide: const BorderSide(color: AppColors.line),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: AppRadius.smRadius,
-        borderSide: const BorderSide(color: AppColors.line),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: AppRadius.smRadius,
-        borderSide: const BorderSide(color: AppColors.green700, width: 1.3),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: AppRadius.smRadius,
-        borderSide: const BorderSide(color: Colors.redAccent),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: AppRadius.smRadius,
-        borderSide: const BorderSide(color: Colors.redAccent, width: 1.3),
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     );
   }
 
@@ -1519,61 +1489,35 @@ class _RendezVousPageState extends State<RendezVousPage> {
   }
 
   // ---------------------------------------------------------------------
-  // Barre d'action fixe — `.sticky-cta`
+  // Barre d'action fixe — `.cta.solid` : récapitulatif + bouton principal
   // ---------------------------------------------------------------------
 
   Widget _buildStickyCta() {
     final jour = _jours.isNotEmpty ? _jours[_indexJour] : null;
     final besoinDeCreerUnCompte =
         widget.onConfirmerReservation == null && _tokenEffectif == null;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      decoration: const BoxDecoration(
-        color: AppColors.paper,
-        border: Border(top: BorderSide(color: AppColors.line)),
-      ),
-      child: Row(
-        children: [
-          if (widget.tarifFcfa != null) ...[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Frais de prise de RDV : ${widget.tarifFcfa} FCFA',
-                    style: AppTextStyles.price.copyWith(fontSize: 16),
-                  ),
-                  Text(
-                    _creneauChoisi != null && jour != null
-                        ? 'Créneau du ${_formaterDate(jour.date)}'
-                        : 'Sélectionnez un créneau',
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontDisplay,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.inkFaint,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-          ],
-          Expanded(
-            flex: widget.tarifFcfa != null ? 1 : 2,
-            child: PrimaryButton(
-              label: _reservationEnCours
-                  ? (besoinDeCreerUnCompte
-                  ? 'Création du compte…'
-                  : 'Réservation…')
-                  : (besoinDeCreerUnCompte
-                  ? 'Créer mon compte et réserver'
-                  : 'Réserver ce créneau'),
-              onPressed: _reservationEnCours ? () {} : _confirmer,
-            ),
-          ),
-        ],
+    final choisi = _creneauChoisi != null && jour != null;
+    final jourCourt =
+        jour == null ? '' : '${jour.jourAbrege[0]}${jour.jourAbrege.substring(1).toLowerCase()}. ${_formaterDate(jour.date)}';
+    return ApsCtaBar(
+      priceLabel: choisi
+          ? jourCourt
+          : (widget.tarifFcfa != null ? 'Frais de RDV' : 'Créneau'),
+      priceValue: choisi
+          ? _creneauChoisi!.heure
+          : (widget.tarifFcfa != null ? '${widget.tarifFcfa} F' : '—'),
+      footer: widget.tarifFcfa != null && choisi
+          ? Text(
+              'Frais de prise de RDV : ${widget.tarifFcfa} FCFA · paiement protégé',
+              style: AppTextStyles.xs,
+            )
+          : null,
+      child: ApsButton(
+        label: _reservationEnCours
+            ? (besoinDeCreerUnCompte ? 'Création du compte…' : 'Réservation…')
+            : (besoinDeCreerUnCompte ? 'Créer mon compte et réserver' : 'Réserver'),
+        loading: _reservationEnCours,
+        onPressed: _confirmer,
       ),
     );
   }
@@ -1583,230 +1527,17 @@ class _RendezVousPageState extends State<RendezVousPage> {
 // Widgets internes
 // ===========================================================================
 
-/// Un onglet de la barre `.tab-row`. `onTap == null` → onglet inactif au
-/// sein de cet écran (Disponibilités, déjà affiché).
-class _RdvTabItem extends StatelessWidget {
-  const _RdvTabItem({required this.label, required this.active, this.onTap});
-
-  final String label;
-  final bool active;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = active ? AppColors.green700 : AppColors.inkFaint;
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: active ? AppColors.green700 : Colors.transparent,
-              width: 2,
-            ),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: AppTextStyles.fontDisplay,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-            color: color,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Une puce de date — `.date-pill` / `.date-pill.active`.
-class _DatePill extends StatelessWidget {
-  const _DatePill({
-    required this.jourAbrege,
-    required this.numeroJour,
-    required this.active,
-    required this.onTap,
-    this.attenue = false,
-  });
-
-  final String jourAbrege;
-  final int numeroJour;
-  final bool active;
-  final bool attenue;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = active
-        ? Colors.white
-        : (attenue ? AppColors.inkFaint : AppColors.inkSoft);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.smRadius,
-      child: Container(
-        width: 52,
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: active ? AppColors.green700 : AppColors.card,
-          border: Border.all(
-            color: active ? AppColors.green700 : AppColors.line,
-          ),
-          borderRadius: AppRadius.smRadius,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              jourAbrege,
-              style: TextStyle(
-                fontFamily: AppTextStyles.fontDisplay,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: .4,
-                color: fg,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '$numeroJour',
-              style: TextStyle(
-                fontFamily: AppTextStyles.fontMono,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: fg,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Une puce d'horaire — `.slot` / `.slot.active` / `.slot.taken`.
-class _SlotChip extends StatelessWidget {
-  const _SlotChip({
-    required this.creneau,
-    required this.active,
-    required this.onTap,
-  });
-
-  final CreneauHoraire creneau;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final indisponible = !creneau.disponible;
-    final bg = indisponible
-        ? AppColors.paper
-        : (active ? AppColors.green700 : AppColors.card);
-    final border = indisponible
-        ? AppColors.line
-        : (active ? AppColors.green700 : AppColors.lineStrong);
-    final fg = indisponible
-        ? AppColors.inkFaint
-        : (active ? Colors.white : AppColors.inkSoft);
-
-    return Opacity(
-      opacity: indisponible ? 0.5 : 1,
-      child: InkWell(
-        onTap: indisponible ? null : onTap,
-        borderRadius: BorderRadius.circular(100),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: bg,
-            border: Border.all(color: border),
-            borderRadius: BorderRadius.circular(100),
-          ),
-          child: Text(
-            creneau.heure,
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontMono,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              decoration:
-              indisponible ? TextDecoration.lineThrough : null,
-              color: fg,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Puce de sélection Physique / Téléconsultation.
-class _TypeRdvChip extends StatelessWidget {
-  const _TypeRdvChip({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.smRadius,
-      child: Container(
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: active ? AppColors.green700 : AppColors.card,
-          border: Border.all(
-            color: active ? AppColors.green700 : AppColors.line,
-          ),
-          borderRadius: AppRadius.smRadius,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: AppTextStyles.fontDisplay,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
-            color: active ? Colors.white : AppColors.inkSoft,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Encart d'information sur le paiement sous séquestre — `.info-note`.
+/// Encart d'information sur le paiement sous séquestre — `.note`.
 class _InfoNote extends StatelessWidget {
   const _InfoNote();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.green100,
-        borderRadius: AppRadius.smRadius,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.shield_outlined, size: 16, color: AppColors.green700),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              "Paiement sous séquestre : les fonds restent bloqués jusqu'à la "
-                  'réalisation de la consultation. Vous recevrez un code unique '
-                  'et un QR code à présenter au cabinet.',
-              style: AppTextStyles.body.copyWith(fontSize: 11.5),
-            ),
-          ),
-        ],
-      ),
+    return ApsNote.text(
+      "APS conserve les fonds jusqu'à la consultation. Vous recevrez un code "
+      'unique et un QR code à présenter au cabinet.',
+      bold: 'Paiement protégé.',
+      icon: Icons.verified_user_outlined,
     );
   }
 }

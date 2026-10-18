@@ -39,20 +39,13 @@ class OnboardingHeader extends StatelessWidget {
       children: [
         Text(
           eyebrow.toUpperCase(),
-          style: AppTextStyles.cardMeta.copyWith(
-            color: AppColors.primary,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
-          ),
+          style: AppTextStyles.over.copyWith(color: AppColors.b6),
         ),
-        const SizedBox(height: 8),
-        Text(title, style: AppTextStyles.h3.copyWith(fontSize: 20)),
+        const SizedBox(height: 6),
+        Text(title, style: AppTextStyles.l),
         if (subtitle != null) ...[
           const SizedBox(height: 6),
-          Text(
-            subtitle!,
-            style: AppTextStyles.body.copyWith(color: AppColors.inkSoft),
-          ),
+          Text(subtitle!, style: AppTextStyles.small),
         ],
       ],
     );

@@ -149,9 +149,9 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
         children: [
           _buildContent(context, detailAsync),
           Positioned(
-            left: 10,
-            right: 10,
-            bottom: 10,
+            left: 16,
+            right: 16,
+            bottom: 12 + MediaQuery.paddingOf(context).bottom,
             child: AppBottomNav(
               currentIndex: _navIndex,
               onTap: _onBottomNavTap,
@@ -834,12 +834,12 @@ class _PaletteCouleur {
 }
 
 const List<_PaletteCouleur> _paletteLogos = [
-  _PaletteCouleur(Color(0xFF0B2C9E), Color(0xFFEDF1FB)),
-  _PaletteCouleur(Color(0xFF6B2E8F), Color(0xFFF1E9F7)),
-  _PaletteCouleur(Color(0xFF1E8A63), Color(0xFFE4F3EC)),
-  _PaletteCouleur(Color(0xFFC94E3A), Color(0xFFFBE7E2)),
-  _PaletteCouleur(Color(0xFF9A6A1D), Color(0xFFF6ECDD)),
-  _PaletteCouleur(Color(0xFF1F6F8B), Color(0xFFE3F1F5)),
+  _PaletteCouleur(AppColors.sky, AppColors.sky100),
+  _PaletteCouleur(AppColors.violet700, AppColors.violet100),
+  _PaletteCouleur(AppColors.b7, AppColors.b1),
+  _PaletteCouleur(AppColors.coral600, AppColors.coral100),
+  _PaletteCouleur(AppColors.amber700, AppColors.amber100),
+  _PaletteCouleur(AppColors.ink2, AppColors.segment),
 ];
 
 /// Rangée d'onglets — `.ins-tab-row` / `.ins-tab` / `.ins-tab.active`.

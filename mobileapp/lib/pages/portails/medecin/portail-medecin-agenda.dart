@@ -191,13 +191,13 @@ class _PortailMedecinAgendaState extends ConsumerState<PortailMedecinAgenda> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.paper,
+      color: AppColors.bg,
       child: RefreshIndicator(
-        color: AppColors.primary,
+        color: AppColors.b6,
         onRefresh: _charger,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 120),
           children: [
             const _PageHead(),
             if (_chargement)
@@ -206,14 +206,13 @@ class _PortailMedecinAgendaState extends ConsumerState<PortailMedecinAgenda> {
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (_erreur != null)
-              _Bloc(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_erreur!, style: const TextStyle(fontSize: 13, color: AppColors.dangerDark)),
-                    TextButton(onPressed: _charger, child: const Text('Réessayer')),
-                  ],
-                ),
+              ApsEmptyState(
+                icon: Icons.event_busy_outlined,
+                tone: ApsTone.neutral,
+                title: 'Agenda indisponible',
+                message: _erreur!,
+                actionLabel: 'Réessayer',
+                onAction: _charger,
               )
             else ...[
               _buildHoraires(),
@@ -238,40 +237,22 @@ class _PortailMedecinAgendaState extends ConsumerState<PortailMedecinAgenda> {
             'Choisissez un jour puis touchez les horaires où vous recevez. Après '
             'enregistrement, ces horaires sont publiés sur les semaines à venir : '
             'ce sont eux que les patients peuvent réserver.',
-            style: TextStyle(fontSize: 12, color: AppColors.inkSoft, height: 1.4),
+            style: AppTextStyles.small,
           ),
           const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (final j in joursSemaineAgenda)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: ChoiceChip(
-                      label: Text(
-                        j.court,
-                        style: TextStyle(
-                          fontFamily: AppTextStyles.fontDisplay,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: j.valeur == _jourEdite ? Colors.white : AppColors.ink,
-                        ),
-                      ),
-                      avatar: _gabarit.any((cle) => cle.startsWith('${j.valeur}|'))
-                          ? Icon(Icons.circle,
-                              size: 8, color: j.valeur == _jourEdite ? Colors.white : AppColors.primary)
-                          : null,
-                      selected: j.valeur == _jourEdite,
-                      showCheckmark: false,
-                      selectedColor: AppColors.primary,
-                      backgroundColor: AppColors.card,
-                      side: const BorderSide(color: AppColors.lineStrong),
-                      onSelected: (_) => setState(() => _jourEdite = j.valeur),
-                    ),
-                  ),
-              ],
-            ),
+          ApsChipRow(
+            children: [
+              for (final j in joursSemaineAgenda)
+                ApsChip(
+                  j.court,
+                  selected: j.valeur == _jourEdite,
+                  icon: _gabarit.any((cle) => cle.startsWith('${j.valeur}|'))
+                      ? Icons.circle
+                      : null,
+                  iconColor: j.valeur == _jourEdite ? AppColors.mint : AppColors.b5,
+                  onTap: () => setState(() => _jourEdite = j.valeur),
+                ),
+            ],
           ),
           const SizedBox(height: 10),
           Row(
@@ -279,7 +260,7 @@ class _PortailMedecinAgendaState extends ConsumerState<PortailMedecinAgenda> {
               Expanded(
                 child: Text(
                   actifs == 0 ? 'Fermé ce jour-là' : '$actifs créneau(x) de 30 min',
-                  style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
+                  style: AppTextStyles.xs.copyWith(fontSize: 12),
                 ),
               ),
               if (actifs > 0)
@@ -291,48 +272,26 @@ class _PortailMedecinAgendaState extends ConsumerState<PortailMedecinAgenda> {
             ],
           ),
           if (_horaires.isEmpty)
-            const Text('Référentiel horaire indisponible.', style: TextStyle(fontSize: 12, color: AppColors.inkSoft))
+            Text('Référentiel horaire indisponible.', style: AppTextStyles.xs)
           else
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
+            ApsSlotGrid(
               children: [
                 for (final h in _horaires)
-                  FilterChip(
-                    label: Text(
-                      h.libelleDebut,
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.fontMono,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: _gabarit.contains(_cle(_jourEdite, h.horaireId)) ? Colors.white : AppColors.ink,
-                      ),
-                    ),
-                    selected: _gabarit.contains(_cle(_jourEdite, h.horaireId)),
-                    showCheckmark: false,
-                    selectedColor: AppColors.primary,
-                    backgroundColor: AppColors.card,
-                    side: const BorderSide(color: AppColors.lineStrong),
-                    onSelected: _enregistrement ? null : (_) => _basculer(h.horaireId),
+                  ApsSlot(
+                    h.libelleDebut,
+                    state: _gabarit.contains(_cle(_jourEdite, h.horaireId))
+                        ? ApsSlotState.selected
+                        : ApsSlotState.more,
+                    onTap: _enregistrement ? null : () => _basculer(h.horaireId),
                   ),
               ],
             ),
           const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: (_modifie && !_enregistrement) ? _enregistrer : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: _enregistrement
-                  ? const SizedBox(
-                      width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : Text(_modifie ? 'Enregistrer mes horaires' : 'Horaires à jour'),
-            ),
+          ApsButton(
+            label: _modifie ? 'Enregistrer mes horaires' : 'Horaires à jour',
+            icon: _modifie ? Icons.check_rounded : null,
+            loading: _enregistrement,
+            onPressed: (_modifie && !_enregistrement) ? _enregistrer : null,
           ),
         ],
       ),
@@ -355,30 +314,22 @@ class _PortailMedecinAgendaState extends ConsumerState<PortailMedecinAgenda> {
             'fermé pour le rouvrir. Un créneau réservé est masqué aux autres '
             'patients ; il redevient libre si le rendez-vous est annulé ou si '
             "la demande n'est pas payée à temps.",
-            style: TextStyle(fontSize: 12, color: AppColors.inkSoft, height: 1.4),
+            style: AppTextStyles.small,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           const _Legende(),
           if (parJour.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 12),
               child: Text(
                 'Aucun créneau sur les 7 prochains jours. Définissez vos horaires de la semaine ci-dessus.',
-                style: TextStyle(fontSize: 12, color: AppColors.inkSoft),
+                style: AppTextStyles.small,
               ),
             ),
           for (final liste in parJour.values) ...[
             Padding(
-              padding: const EdgeInsets.only(top: 12, bottom: 6),
-              child: Text(
-                liste.first.libelleJour,
-                style: const TextStyle(
-                  fontFamily: AppTextStyles.fontDisplay,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.ink,
-                ),
-              ),
+              padding: const EdgeInsets.only(top: 16, bottom: 8),
+              child: Text(liste.first.libelleJour.toUpperCase(), style: AppTextStyles.over),
             ),
             Wrap(
               spacing: 6,
@@ -401,35 +352,8 @@ class _PageHead extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(2, 10, 2, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'ESPACE MÉDECIN',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-              color: AppColors.primary,
-            ),
-          ),
-          SizedBox(height: 5),
-          Text(
-            'Agenda',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.2,
-              color: AppColors.ink,
-            ),
-          ),
-        ],
-      ),
-    );
+    // La cloche du shell flotte en haut à droite : place réservée.
+    return const ApsPageTitle('Agenda', trailing: SizedBox(width: 42));
   }
 }
 
@@ -442,14 +366,8 @@ class _Bloc extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.line),
-      ),
+    return ApsCard(
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -457,23 +375,13 @@ class _Bloc extends StatelessWidget {
             Row(
               children: [
                 if (icone != null) ...[
-                  Icon(icone, size: 18, color: AppColors.primary),
-                  const SizedBox(width: 8),
+                  ApsIconTile(icone!, small: true),
+                  const SizedBox(width: 10),
                 ],
-                Expanded(
-                  child: Text(
-                    titre!,
-                    style: const TextStyle(
-                      fontFamily: AppTextStyles.fontDisplay,
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                ),
+                Expanded(child: Text(titre!, style: AppTextStyles.section)),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
           ],
           child,
         ],
@@ -485,9 +393,9 @@ class _Bloc extends StatelessWidget {
 /// Couleurs d'un créneau selon son statut : libre (vert), réservé (ambre,
 /// lecture seule), fermé (gris barré).
 ({Color fond, Color texte, Color bord}) _couleursCreneau(CreneauAgenda c) {
-  if (c.estReserve) return (fond: AppColors.warningLight, texte: AppColors.ink, bord: AppColors.warning);
-  if (c.estBloque) return (fond: AppColors.paper, texte: AppColors.inkFaint, bord: AppColors.lineStrong);
-  return (fond: AppColors.successLight, texte: AppColors.primaryDark, bord: AppColors.success);
+  if (c.estReserve) return (fond: AppColors.amber100, texte: AppColors.amber700, bord: AppColors.amber100);
+  if (c.estBloque) return (fond: AppColors.slotOff, texte: AppColors.ink4, bord: AppColors.slotOff);
+  return (fond: AppColors.b1, texte: AppColors.b7, bord: AppColors.b1);
 }
 
 class _PuceCreneau extends StatelessWidget {
@@ -503,14 +411,14 @@ class _PuceCreneau extends StatelessWidget {
     return Material(
       color: couleurs.fond,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: couleurs.bord),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         onTap: enCours ? null : onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -522,14 +430,14 @@ class _PuceCreneau extends StatelessWidget {
               else if (creneau.estReserve)
                 const Padding(
                   padding: EdgeInsets.only(right: 4),
-                  child: Icon(Icons.lock_outline, size: 13, color: AppColors.ink),
+                  child: Icon(Icons.lock_outline, size: 13, color: AppColors.amber700),
                 ),
               Text(
                 creneau.libelleHeure,
                 style: TextStyle(
-                  fontFamily: AppTextStyles.fontMono,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                  fontFamily: AppTextStyles.fontSans,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
                   color: couleurs.texte,
                   decoration: creneau.estBloque ? TextDecoration.lineThrough : null,
                 ),
@@ -560,16 +468,17 @@ class _Legende extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 5),
-            Text(libelle, style: const TextStyle(fontSize: 11, color: AppColors.inkSoft)),
+            Text(libelle,
+                style: AppTextStyles.xs.copyWith(color: AppColors.ink2, fontSize: 10.5, fontWeight: FontWeight.w700)),
           ],
         );
     return Wrap(
       spacing: 12,
       runSpacing: 6,
       children: [
-        cle('Libre', AppColors.successLight, AppColors.success),
-        cle('Réservé', AppColors.warningLight, AppColors.warning),
-        cle('Fermé', AppColors.paper, AppColors.lineStrong),
+        cle('Libre', AppColors.b6, AppColors.b6),
+        cle('Réservé', AppColors.amber500, AppColors.amber500),
+        cle('Fermé', AppColors.slotOff, AppColors.ink3),
       ],
     );
   }

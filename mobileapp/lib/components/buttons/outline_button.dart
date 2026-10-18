@@ -26,20 +26,22 @@ class AppOutlineButton extends StatelessWidget {
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         backgroundColor: AppColors.card,
-        side: const BorderSide(color: AppColors.lineStrong),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        side: const BorderSide(color: AppColors.lineStrong, width: 1.5),
+        minimumSize: const Size(0, 40),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(9),
+          borderRadius: BorderRadius.circular(13),
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 13, color: AppColors.ink),
+            Icon(icon, size: 15, color: AppColors.ink),
             const SizedBox(width: 5),
           ],
-          Text(label, style: AppTextStyles.buttonLabel.copyWith(fontSize: 11.5, color: AppColors.ink)),
+          Text(label, style: AppTextStyles.buttonLabel.copyWith(fontSize: 12.5, color: AppColors.ink)),
         ],
       ),
     );

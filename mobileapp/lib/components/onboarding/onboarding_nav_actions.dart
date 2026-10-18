@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../buttons/app_buttons.dart';
-import '../style/colors.dart';
+import '../ui/aps_ui.dart';
 
 /// Barre d'actions "Précédent / Suivant" partagée par les écrans
 /// d'onboarding. [onBack] est toujours actif (retour simple :
@@ -27,18 +27,11 @@ class OnboardingNavActions extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Material(
-          color: AppColors.card,
-          shape: const CircleBorder(side: BorderSide(color: AppColors.line)),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onBack,
-            child: const SizedBox(
-              width: 46,
-              height: 46,
-              child: Icon(Icons.arrow_back_rounded, color: AppColors.ink, size: 20),
-            ),
-          ),
+        ApsIconButton(
+          icon: Icons.chevron_left_rounded,
+          size: 54,
+          tooltip: 'Précédent',
+          onPressed: onBack,
         ),
         const SizedBox(width: 12),
         Expanded(

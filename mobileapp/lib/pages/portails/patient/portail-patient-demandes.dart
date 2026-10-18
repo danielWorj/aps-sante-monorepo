@@ -16,11 +16,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../components/buttons/app_buttons.dart';
+import '../../../components/alert/app_alert.dart';
 import '../../../components/buttons/bouton_payer_rdv.dart';
 import '../../../components/cards/badge_chip.dart';
 import '../../../components/style/colors.dart';
 import '../../../components/style/text_styles.dart';
+import '../../../components/ui/aps_ui.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/medecin_controller.dart';
 import '../../../controllers/offre_rdv_controller.dart';
@@ -64,15 +65,15 @@ class PortailPatientDemandes extends ConsumerWidget {
 
     // Onglet du shell (PatientHomeShell) : pas de Scaffold ici.
     return Container(
-      color: AppColors.paper,
+      color: AppColors.bg,
       child: RefreshIndicator(
+        color: AppColors.violet,
         onRefresh: () => ref.refresh(mesOffresRdvProvider.future),
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 120),
           children: [
             const _PageHead(),
             const _FormulaireDemande(),
-            const SizedBox(height: 18),
             const _Titre('Mes demandes en cours'),
             offresAsync.when(
               loading: () => const Padding(
@@ -100,7 +101,7 @@ class PortailPatientDemandes extends ConsumerWidget {
                           tilePadding: EdgeInsets.zero,
                           title: Text(
                             'Demandes terminées (${terminees.length})',
-                            style: AppTextStyles.cardTitle,
+                            style: AppTextStyles.strong,
                           ),
                           children: terminees.map((o) => _CarteOffre(offre: o)).toList(),
                         ),
@@ -221,29 +222,18 @@ class _FormulaireDemandeState extends ConsumerState<_FormulaireDemande> {
     final List<Ville> villes =
         paysId == null ? const [] : (ref.watch(villesParPaysProvider(paysId)).value ?? const []);
 
-    return CardSurface(
-      padding: const EdgeInsets.all(14),
-      margin: EdgeInsets.zero,
-      child: Column(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _BandeauExpress(),
+        const SizedBox(height: 14),
+        Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Row(
-            children: [
-              Icon(Icons.campaign_outlined, size: 18, color: AppColors.primary),
-              SizedBox(width: 6),
-              Text('Nouvelle demande', style: AppTextStyles.cardTitle),
-            ],
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Indiquez votre besoin : les médecins disponibles vous répondent, vous choisissez celui qui vous convient.',
-            style: AppTextStyles.cardMeta,
-          ),
-          const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: _specialiteId,
             isExpanded: true,
-            decoration: _deco('Spécialité'),
+            decoration: _deco('Spécialité', Icons.medical_services_outlined),
             items: [
               for (final s in specialites)
                 DropdownMenuItem(value: s.specialiteId, child: Text(s.nom, overflow: TextOverflow.ellipsis)),
@@ -254,7 +244,7 @@ class _FormulaireDemandeState extends ConsumerState<_FormulaireDemande> {
           DropdownButtonFormField<String>(
             initialValue: _villeId,
             isExpanded: true,
-            decoration: _deco('Ville'),
+            decoration: _deco('Ville', Icons.location_on_outlined),
             items: [
               for (final v in villes)
                 DropdownMenuItem(value: v.villeId, child: Text(v.nom)),
@@ -267,7 +257,8 @@ class _FormulaireDemandeState extends ConsumerState<_FormulaireDemande> {
               Expanded(
                 child: _ChampChoix(
                   icone: Icons.calendar_today_outlined,
-                  libelle: _jour == null ? 'Jour' : jourLongLocal(_jour!),
+                  titre: 'Jour',
+                  libelle: _jour == null ? null : jourLongLocal(_jour!),
                   onTap: _choisirJour,
                 ),
               ),
@@ -275,22 +266,25 @@ class _FormulaireDemandeState extends ConsumerState<_FormulaireDemande> {
               Expanded(
                 child: _ChampChoix(
                   icone: Icons.schedule_outlined,
-                  libelle: _heure == null ? 'Heure' : _heure!.format(context),
+                  titre: 'Heure',
+                  libelle: _heure == null ? null : _heure!.format(context),
                   onTap: _choisirHeure,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            children: [
+          ApsSegmented<TypeRdvOffre>(
+            value: _type,
+            onChanged: (t) => setState(() => _type = t),
+            segments: [
               for (final t in TypeRdvOffre.values)
-                ChoiceChip(
-                  label: Text(t.libelle),
-                  selected: _type == t,
-                  selectedColor: AppColors.primaryLight,
-                  onSelected: (_) => setState(() => _type = t),
+                ApsSegment(
+                  t,
+                  t == TypeRdvOffre.teleconsultation ? 'En vidéo' : 'Au cabinet',
+                  icon: t == TypeRdvOffre.teleconsultation
+                      ? Icons.videocam_outlined
+                      : Icons.local_hospital_outlined,
                 ),
             ],
           ),
@@ -298,70 +292,177 @@ class _FormulaireDemandeState extends ConsumerState<_FormulaireDemande> {
           TextField(
             controller: _motif,
             maxLength: 1000,
-            minLines: 1,
-            maxLines: 3,
-            decoration: _deco('Motif (facultatif)').copyWith(
+            minLines: 2,
+            maxLines: 4,
+            decoration: _deco('Motif (facultatif)', null).copyWith(
               helperText: 'Visible par les médecins de la spécialité, sans votre nom.',
             ),
           ),
           if (_erreur != null) ...[
             const SizedBox(height: 6),
-            Text(_erreur!, style: const TextStyle(color: AppColors.dangerDark, fontSize: 12.5)),
+            AppAlert(type: AppAlertType.danger, message: _erreur!),
           ],
-          const SizedBox(height: 10),
-          PrimaryButton(
+          const SizedBox(height: 12),
+          ApsButton(
             label: 'Publier ma demande',
             icon: Icons.send_outlined,
+            variant: ApsButtonVariant.violet,
             loading: _envoi,
             onPressed: _publier,
           ),
         ],
+        ),
+      ],
+    );
+  }
+}
+
+InputDecoration _deco(String libelle, IconData? icone) => InputDecoration(
+      labelText: libelle,
+      prefixIcon: icone == null ? null : Icon(icone, size: 18, color: AppColors.violet700),
+    );
+
+/// Champ « Jour » / « Heure » au format `.field` (libellé au-dessus).
+class _ChampChoix extends StatelessWidget {
+  final IconData icone;
+  final String titre;
+  final String? libelle;
+  final VoidCallback onTap;
+
+  const _ChampChoix({
+    required this.icone,
+    required this.titre,
+    required this.libelle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final r = BorderRadius.circular(16);
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: r,
+        side: const BorderSide(color: AppColors.line, width: 1.5),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: r,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 9, 12, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(titre, style: AppTextStyles.xs.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text(
+                      libelle ?? 'Choisir',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: libelle == null
+                          ? AppTextStyles.small.copyWith(color: AppColors.ink4)
+                          : AppTextStyles.strong.copyWith(fontSize: 14.5),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(icone, size: 17, color: AppColors.ink3),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-InputDecoration _deco(String libelle) => InputDecoration(
-      labelText: libelle,
-      isDense: true,
-      filled: true,
-      fillColor: AppColors.paper,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.line),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.line),
-      ),
-    );
-
-class _ChampChoix extends StatelessWidget {
-  final IconData icone;
-  final String libelle;
-  final VoidCallback onTap;
-
-  const _ChampChoix({required this.icone, required this.libelle, required this.onTap});
+/// Bandeau violet « Publiez votre besoin » et ses trois étapes.
+class _BandeauExpress extends StatelessWidget {
+  const _BandeauExpress();
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-        decoration: BoxDecoration(
-          color: AppColors.paper,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.line),
-        ),
-        child: Row(
-          children: [
-            Icon(icone, size: 16, color: AppColors.inkSoft),
-            const SizedBox(width: 8),
-            Expanded(child: Text(libelle, style: AppTextStyles.body, overflow: TextOverflow.ellipsis)),
-          ],
-        ),
+    Widget etape(String n, String libelle, {bool active = false}) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+          decoration: BoxDecoration(
+            color: active ? Colors.white : Colors.white.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text.rich(
+            TextSpan(children: [
+              TextSpan(text: '$n  ', style: const TextStyle(fontWeight: FontWeight.w800)),
+              TextSpan(text: libelle),
+            ]),
+            style: TextStyle(
+              fontFamily: AppTextStyles.fontSans,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: active ? AppColors.violet700 : Colors.white,
+            ),
+          ),
+        );
+    final chevron = Icon(Icons.chevron_right_rounded,
+        size: 14, color: Colors.white.withValues(alpha: 0.5));
+
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        gradient: AppColors.gradientViolet,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -14,
+            top: -10,
+            child: Icon(Icons.campaign_outlined,
+                size: 110, color: Colors.white.withValues(alpha: 0.12)),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Publiez votre besoin',
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontSans,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Les médecins disponibles répondent au tarif de leur profil. Vous choisissez.',
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontSans,
+                    fontSize: 12.5,
+                    height: 1.45,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.8),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    etape('1', 'Publier'),
+                    chevron,
+                    etape('2', 'Comparer'),
+                    chevron,
+                    etape('3', 'Valider', active: true),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -455,33 +556,87 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
     final executer = ref.read(sessionControllerProvider.notifier).appelAuthentifie;
     final telephone = ref.read(sessionControllerProvider).value?.utilisateur.telephone;
 
-    return CardSurface(
-      padding: const EdgeInsets.all(14),
+    final nbReponses = o.reponses.length;
+    return ApsCard(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.zero,
+      clip: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: Text(o.specialite, style: AppTextStyles.cardTitle)),
-              BadgeChip(label: o.statut.libelle, style: _styleStatut(o.statut)),
-            ],
+          Container(
+            color: AppColors.ink,
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    if (o.statut.estEnCours)
+                      ApsPill(
+                        nbReponses > 1
+                            ? '$nbReponses réponses'
+                            : (nbReponses == 1 ? '1 réponse' : 'En attente'),
+                        dot: true,
+                        background: AppColors.mint.withValues(alpha: 0.16),
+                        foreground: AppColors.mint,
+                      )
+                    else
+                      BadgeChip(label: o.statut.libelle, style: _styleStatut(o.statut)),
+                    const Spacer(),
+                    Icon(
+                      o.typeRdv == TypeRdvOffre.teleconsultation
+                          ? Icons.videocam_outlined
+                          : Icons.local_hospital_outlined,
+                      size: 15,
+                      color: Colors.white.withValues(alpha: 0.6),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '${o.specialite} · ${_dateOffre(o.dateSouhaitee)}',
+                  style: const TextStyle(
+                    fontFamily: AppTextStyles.fontSans,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  [
+                    o.ville,
+                    o.typeRdv.libelle,
+                    if (o.motif != null && o.motif!.isNotEmpty) '« ${o.motif} »',
+                  ].join(' · '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontSans,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.65),
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 6),
-          _Meta(Icons.event_outlined, _dateOffre(o.dateSouhaitee)),
-          _Meta(
-            o.typeRdv == TypeRdvOffre.teleconsultation ? Icons.videocam_outlined : Icons.medical_services_outlined,
-            o.typeRdv.libelle,
-          ),
-          _Meta(Icons.location_on_outlined, o.ville),
-          if (o.motif != null && o.motif!.isNotEmpty) _Meta(Icons.notes_outlined, 'Motif : ${o.motif}'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
           if (o.statut == StatutOffreRdv.attribuee && rdv != null) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             if (rdv.estNonPaye) ...[
-              const Text(
-                'Rendez-vous créé : réglez-le pour le confirmer. Sans paiement dans le délai, '
+              ApsNote.text(
+                'Réglez-le pour le confirmer. Sans paiement dans le délai, '
                 'il est annulé et la demande redevient ouverte.',
-                style: AppTextStyles.cardMeta,
+                bold: 'Rendez-vous créé.',
+                icon: Icons.schedule_rounded,
+                tone: ApsTone.amber,
               ),
               const SizedBox(height: 8),
               BoutonPayerRdv(
@@ -494,31 +649,22 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
                 },
               ),
             ] else
-              const Text(
-                "Rendez-vous confirmé : retrouvez-le dans l'onglet RdV.",
-                style: AppTextStyles.cardMeta,
+              ApsNote.text(
+                "Retrouvez-le dans l'onglet Rendez-vous.",
+                bold: 'Rendez-vous confirmé.',
+                icon: Icons.check_circle_outline_rounded,
               ),
           ],
           if (o.statut.estEnCours) ...[
             const SizedBox(height: 12),
             if (o.reponses.isEmpty)
-              const Row(
-                children: [
-                  Icon(Icons.hourglass_empty, size: 15, color: AppColors.inkFaint),
-                  SizedBox(width: 6),
-                  Expanded(
-                    child: Text('En attente de réponses des médecins…', style: AppTextStyles.cardMeta),
-                  ),
-                ],
+              ApsNote.text(
+                'Les médecins de la spécialité sont prévenus. Les réponses arrivent ici.',
+                bold: 'En attente de réponses.',
+                icon: Icons.hourglass_empty_rounded,
+                tone: ApsTone.violet,
               )
             else ...[
-              Text(
-                o.reponses.length > 1
-                    ? '${o.reponses.length} médecins ont répondu'
-                    : '1 médecin a répondu',
-                style: AppTextStyles.cardTitle.copyWith(fontSize: 13),
-              ),
-              const SizedBox(height: 8),
               for (final r in o.reponses)
                 if (r.medecin != null)
                   _CarteRepondant(
@@ -538,10 +684,13 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
                 onPressed: _enCours == null ? _annuler : null,
                 icon: const Icon(Icons.close, size: 16),
                 label: const Text('Retirer la demande'),
-                style: TextButton.styleFrom(foregroundColor: AppColors.inkSoft),
+                style: TextButton.styleFrom(foregroundColor: AppColors.red),
               ),
             ),
           ],
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -568,12 +717,15 @@ class _CarteRepondant extends StatelessWidget {
     final m = reponse.medecin!;
     final retenue = reponse.statut == StatutReponseOffre.retenue;
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: retenue ? AppColors.primarySurface : AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: retenue ? AppColors.primary : AppColors.line),
+        color: retenue ? AppColors.b0 : AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: retenue ? AppColors.b5 : AppColors.line,
+          width: retenue ? 2 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -586,13 +738,25 @@ class _CarteRepondant extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(m.nomComplet, style: AppTextStyles.cardTitle.copyWith(fontSize: 13.5)),
-                    Text(
-                      [
-                        if (m.ville != null) m.ville!,
-                        if (m.noteMoyenne != null) '★ ${m.noteMoyenne} (${m.totalAvis})',
-                      ].join(' · '),
-                      style: AppTextStyles.cardMeta,
+                    Text(m.nomComplet,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.strong.copyWith(fontSize: 13.5)),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        if (m.ville != null)
+                          Flexible(
+                            child: Text(m.ville!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.xs),
+                          ),
+                        if (m.noteMoyenne != null) ...[
+                          const SizedBox(width: 6),
+                          ApsStars(m.noteMoyenne!.toDouble(), count: m.totalAvis),
+                        ],
+                      ],
                     ),
                   ],
                 ),
@@ -602,42 +766,46 @@ class _CarteRepondant extends StatelessWidget {
                 children: [
                   Text(
                     m.tarifIndicatif == null ? '—' : fcfa(m.tarifIndicatif),
-                    style: AppTextStyles.price.copyWith(color: AppColors.primaryDark, fontWeight: FontWeight.w700),
+                    style: AppTextStyles.strong.copyWith(fontSize: 16, letterSpacing: -0.3),
                   ),
-                  const Text('honoraires', style: TextStyle(fontSize: 10.5, color: AppColors.inkFaint)),
+                  Text('honoraires', style: AppTextStyles.xs),
                 ],
               ),
             ],
           ),
           if (reponse.message != null && reponse.message!.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text('« ${reponse.message} »', style: AppTextStyles.cardMeta.copyWith(fontStyle: FontStyle.italic)),
+            const SizedBox(height: 8),
+            Text('« ${reponse.message} »',
+                style: AppTextStyles.small.copyWith(fontStyle: FontStyle.italic)),
           ],
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Row(
             children: [
-              TextButton(
-                onPressed: () => _ouvrirProfil(context, m),
-                child: const Text('Voir le profil'),
+              Expanded(
+                child: ApsButton(
+                  label: 'Voir le profil',
+                  variant: ApsButtonVariant.ghost,
+                  small: true,
+                  onPressed: () => _ouvrirProfil(context, m),
+                ),
               ),
-              const Spacer(),
-              if (retenue) const BadgeChip(label: 'Retenu', style: BadgeChipStyle.green, icon: Icons.check),
-              if (peutValider)
-                ElevatedButton(
-                  onPressed: desactive ? null : onValider,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              if (retenue || peutValider) const SizedBox(width: 8),
+              if (retenue)
+                const Expanded(
+                  flex: 13,
+                  child: Center(
+                    child: ApsPill('Médecin retenu', icon: Icons.check_rounded),
                   ),
-                  child: enCours
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Text('Valider ce médecin'),
+                )
+              else if (peutValider)
+                Expanded(
+                  flex: 13,
+                  child: ApsButton(
+                    label: 'Valider ce médecin',
+                    small: true,
+                    loading: enCours,
+                    onPressed: desactive ? null : onValider,
+                  ),
                 ),
             ],
           ),
@@ -652,15 +820,24 @@ void _ouvrirProfil(BuildContext context, MedecinRepondant m) {
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: AppColors.card,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Center(
+              child: Container(
+                width: 42,
+                height: 5,
+                margin: const EdgeInsets.only(top: 10, bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.lineStrong,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+            ),
             Row(
               children: [
                 _Avatar(m, taille: 56),
@@ -669,7 +846,7 @@ void _ouvrirProfil(BuildContext context, MedecinRepondant m) {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(m.nomComplet, style: AppTextStyles.h3),
+                      Text(m.nomComplet, style: AppTextStyles.m),
                       if (m.specialite != null) Text(m.specialite!, style: AppTextStyles.cardMeta),
                     ],
                   ),
@@ -719,15 +896,7 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CircleAvatar(
-      radius: taille / 2,
-      backgroundColor: AppColors.primaryLight,
-      foregroundImage: m.photoUrl != null ? NetworkImage(m.photoUrl!) : null,
-      child: Text(
-        m.initiales,
-        style: const TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.w700),
-      ),
-    );
+    return ApsAvatar(name: m.nomComplet, photoUrl: m.photoUrl, size: taille);
   }
 }
 
@@ -740,35 +909,8 @@ class _PageHead extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(2, 10, 56, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'ESPACE PATIENT',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-              color: AppColors.primary,
-            ),
-          ),
-          SizedBox(height: 5),
-          Text(
-            'Demande rapide',
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontDisplay,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.2,
-              color: AppColors.ink,
-            ),
-          ),
-        ],
-      ),
-    );
+    // La cloche du shell flotte en haut à droite : place réservée.
+    return const ApsPageTitle('Demande express', trailing: SizedBox(width: 42));
   }
 }
 
@@ -778,30 +920,7 @@ class _Titre extends StatelessWidget {
   const _Titre(this.texte);
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Text(texte, style: AppTextStyles.cardTitle.copyWith(fontSize: 15)),
-      );
-}
-
-class _Meta extends StatelessWidget {
-  final IconData icone;
-  final String texte;
-
-  const _Meta(this.icone, this.texte);
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 3),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icone, size: 14, color: AppColors.inkFaint),
-            const SizedBox(width: 6),
-            Expanded(child: Text(texte, style: AppTextStyles.cardMeta)),
-          ],
-        ),
-      );
+  Widget build(BuildContext context) => ApsSectionTitle(texte);
 }
 
 class _Vide extends StatelessWidget {
@@ -810,15 +929,11 @@ class _Vide extends StatelessWidget {
   const _Vide(this.texte);
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        child: Column(
-          children: [
-            const Icon(Icons.campaign_outlined, size: 30, color: AppColors.inkFaint),
-            const SizedBox(height: 6),
-            Text(texte, style: AppTextStyles.cardMeta),
-          ],
-        ),
+  Widget build(BuildContext context) => ApsEmptyState(
+        icon: Icons.campaign_outlined,
+        tone: ApsTone.violet,
+        title: texte,
+        message: 'Publiez une demande : les médecins disponibles vous répondront.',
       );
 }
 

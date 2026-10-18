@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'components/style/app_theme.dart';
 import 'controllers/authentification_controller.dart';
 import 'pages/public/onboarding/onboarding_accueil_page.dart';
 import 'utils/identifiant_installation.dart';
@@ -59,9 +60,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
     return MaterialApp(
       title: 'APS Santé',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
+      theme: AppTheme.light,
       // L'application démarre sur l'écran de choix de l'onboarding
       // (Écran 1, portage de OnboardingAccueil.jsx) plutôt que
       // directement sur l'accueil public : un nouvel arrivant est

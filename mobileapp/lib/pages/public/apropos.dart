@@ -147,9 +147,9 @@ class _AProposPageState extends State<AProposPage> {
             ],
           ),
           Positioned(
-            left: 10,
-            right: 10,
-            bottom: 10,
+            left: 16,
+            right: 16,
+            bottom: 12 + MediaQuery.paddingOf(context).bottom,
             child: AppBottomNav(
               currentIndex: _navIndex,
               onTap: _onBottomNavTap,

@@ -41,16 +41,12 @@ class OnboardingServicesPage extends StatelessWidget {
             children: [
               Text(
                 'APS SANTÉ',
-                style: AppTextStyles.cardMeta.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.6,
-                ),
+                style: AppTextStyles.over.copyWith(color: AppColors.b6),
               ),
               const SizedBox(height: 8),
               Text(
                 'Liste des services de ApSa Santé',
-                style: AppTextStyles.h3.copyWith(fontSize: 20),
+                style: AppTextStyles.l,
               ),
               const SizedBox(height: 22),
               _ServiceCard(
@@ -134,26 +130,26 @@ class _ServiceCard extends StatelessWidget {
     final disabled = onTap == null;
     return Material(
       color: AppColors.card,
-      borderRadius: AppRadius.mdRadius,
+      borderRadius: AppRadius.lgRadius,
       child: InkWell(
-        borderRadius: AppRadius.mdRadius,
+        borderRadius: AppRadius.lgRadius,
         onTap: onTap,
         child: Opacity(
           opacity: disabled ? 0.5 : 1,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
-              borderRadius: AppRadius.mdRadius,
-              border: Border.all(color: AppColors.line),
+              borderRadius: AppRadius.lgRadius,
+              boxShadow: AppColors.shadowCard,
             ),
             child: Row(
               children: [
                 Container(
                   width: 44,
                   height: 44,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     color: AppColors.primarySurface,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   alignment: Alignment.center,
                   child: Icon(icon, color: AppColors.primary, size: 22),
@@ -164,14 +160,14 @@ class _ServiceCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(title,
-                          style: AppTextStyles.cardTitle.copyWith(fontSize: 15.5)),
+                          style: AppTextStyles.strong.copyWith(fontSize: 15)),
                       const SizedBox(height: 3),
                       Text(subtitle, style: AppTextStyles.body),
                     ],
                   ),
                 ),
                 if (!disabled)
-                  const Icon(Icons.chevron_right, color: AppColors.inkFaint),
+                  const Icon(Icons.chevron_right_rounded, color: AppColors.ink4),
               ],
             ),
           ),

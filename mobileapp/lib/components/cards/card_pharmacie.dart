@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
+
 import '../style/colors.dart';
 import '../style/text_styles.dart';
-import '../buttons/call_button.dart';
-import '../buttons/itinerary_button.dart';
+import '../ui/aps_ui.dart';
 import 'badge_chip.dart';
 
-/// Carte « Pharmacie » — `.list-card` (annuaire pharmacies + gardes).
+/// Carte « Pharmacie » — ligne de la liste des gardes (écran 20).
 ///
-/// Reprend le point de statut (`.guard-dot`), le badge « Fiche vérifiée »,
-/// le numéro d'ordre et la distance.
+/// Vignette, nom, quartier et distance, pastille de statut (de garde /
+/// ouverte, fiche vérifiée), et deux actions directes : appeler et
+/// itinéraire.
 ///
 /// ```dart
 /// CardPharmacie(
@@ -48,75 +49,94 @@ class CardPharmacie extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final meta = [
+      quartier,
+      if (distanceKm != null) '${distanceKm!.toStringAsFixed(1).replaceAll('.', ',')} km',
+    ].where((e) => e.isNotEmpty).join(' · ');
+
     return CardSurface(
       onTap: onTap,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 56,
-            height: 56,
+            width: 58,
+            height: 58,
             decoration: BoxDecoration(
-              color: AppColors.amber100,
-              borderRadius: BorderRadius.circular(14),
+              color: deGarde ? AppColors.b1 : AppColors.bg,
+              borderRadius: BorderRadius.circular(18),
             ),
             alignment: Alignment.center,
-            child: const Icon(Icons.medication_outlined, color: AppColors.amber500, size: 24),
+            child: Icon(
+              Icons.local_pharmacy_rounded,
+              color: deGarde ? AppColors.b6 : AppColors.ink3,
+              size: 26,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(nom, style: AppTextStyles.cardTitle),
-                const SizedBox(height: 2),
                 Row(
                   children: [
-                    GuardDot(active: deGarde),
-                    Expanded(
-                      child: Text(
-                        deGarde ? 'De garde — $quartier' : 'Ouverte — $quartier',
-                        style: AppTextStyles.cardMeta,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    Flexible(
+                      child: Text(nom,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.strong),
                     ),
+                    if (verifiee) ...[
+                      const SizedBox(width: 4),
+                      const ApsVerified(size: 13),
+                    ],
                   ],
                 ),
+                const SizedBox(height: 2),
+                Text(meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.xs),
                 const SizedBox(height: 6),
                 Wrap(
-                  spacing: 5,
-                  runSpacing: 5,
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
-                    if (verifiee)
-                      const BadgeChip(
-                        label: 'Fiche vérifiée',
-                        style: BadgeChipStyle.green,
-                        icon: Icons.verified_outlined,
-                      ),
-                    if (numeroOrdre != null)
-                      BadgeChip(label: 'N° ordre $numeroOrdre', style: BadgeChipStyle.outline, mono: true),
-                  ],
-                ),
-                const SizedBox(height: 9),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    if (distanceKm != null)
-                      Text('${distanceKm!.toStringAsFixed(1)} km',
-                          style: AppTextStyles.cardMeta.copyWith(fontSize: 11, color: AppColors.inkFaint))
-                    else
-                      const SizedBox.shrink(),
-                    Row(
-                      children: [
-                        CallButton(onPressed: onAppeler),
-                        const SizedBox(width: 6),
-                        ItineraryButton(onPressed: onItineraire),
-                      ],
+                    ApsPill(
+                      deGarde ? 'De garde' : 'Ouverte',
+                      tone: deGarde ? ApsTone.green : ApsTone.neutral,
+                      dot: true,
                     ),
+                    if (numeroOrdre != null)
+                      BadgeChip(
+                          label: 'N° $numeroOrdre',
+                          style: BadgeChipStyle.outline,
+                          mono: true),
                   ],
                 ),
               ],
             ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            children: [
+              ApsIconButton(
+                icon: Icons.call_outlined,
+                flat: true,
+                size: 38,
+                iconColor: AppColors.b6,
+                tooltip: 'Appeler',
+                onPressed: onAppeler,
+              ),
+              const SizedBox(height: 6),
+              ApsIconButton(
+                icon: Icons.near_me_outlined,
+                flat: true,
+                size: 38,
+                iconColor: AppColors.ink2,
+                tooltip: 'Itinéraire',
+                onPressed: onItineraire,
+              ),
+            ],
           ),
         ],
       ),

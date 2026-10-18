@@ -11,6 +11,9 @@
 //     par WhatsApp le lien de paiement. Rejeter : motif obligatoire, envoyé
 //     par WhatsApp. Les textes se modifient dans Configuration > WhatsApp.
 //   - Paiements tardifs (place reprise entre-temps) : remboursement manuel.
+//   - Modifier (contenu affiché, visuel, annonceur) et Supprimer, quel que
+//     soit le statut : une publicité avec historique de paiement n'est pas
+//     effacée mais retirée de la diffusion (facture conservée).
 import { useCallback, useEffect, useState } from 'react';
 import './../assets/style/Referentiel.css';
 import FondsModal from '../components/FondsModal';
@@ -19,6 +22,7 @@ import {
   accepterPublicite,
   listerPaiementsTardifsPublicite,
   listerReservationsPublicitaires,
+  modifierPublicite,
   obtenirFacturePublicite,
   obtenirStatistiquesPublicite,
   rejeterPublicite,
@@ -40,6 +44,21 @@ const dernierJour = (iso) => {
 const position = (r) => (Number(r) === 1 ? '1re position' : `${r}e position`);
 const aujourdhuiIso = () => new Date().toISOString().slice(0, 10);
 
+const CHAMPS_EDITION = [
+  { cle: 'titre', libelle: 'Titre', requis: true, max: 150 },
+  { cle: 'description', libelle: 'Description', type: 'textarea' },
+  { cle: 'telephone_contact', libelle: 'Téléphone affiché', max: 30 },
+  { cle: 'email_contact', libelle: 'E-mail affiché', type: 'email', max: 150 },
+  { cle: 'localisation', libelle: 'Localisation', max: 255 },
+  { cle: 'annonceur_nom', libelle: "Nom de l'annonceur", max: 150 },
+  { cle: 'annonceur_entreprise', libelle: 'Entreprise', max: 150 },
+  { cle: 'annonceur_telephone', libelle: 'WhatsApp annonceur', max: 30 },
+  { cle: 'annonceur_email', libelle: 'E-mail annonceur', type: 'email', max: 150 },
+];
+const formulaireDepuis = (p) => Object.fromEntries(CHAMPS_EDITION.map(({ cle }) => [cle, p[cle] ?? '']));
+/** Payée : la suppression devient un retrait de diffusion (facture conservée). */
+const aHistoriquePaiement = (p) => !!p.facture || p.statut === 'payee';
+
 export default function Publicite() {
   const [onglet, setOnglet] = useState('en_moderation');
   const [recherche, setRecherche] = useState('');
@@ -50,7 +69,9 @@ export default function Publicite() {
   const [detail, setDetail] = useState(null);
   const [stats, setStats] = useState(null);
   const [facture, setFacture] = useState(null);
-  const [decision, setDecision] = useState(null); // null | 'accepter' | 'rejeter'
+  const [decision, setDecision] = useState(null); // null | 'accepter' | 'rejeter' | 'modifier'
+  const [formulaire, setFormulaire] = useState({});
+  const [visuel, setVisuel] = useState(null);
   const [dateDebut, setDateDebut] = useState('');
   const [motif, setMotif] = useState('');
   const [occupe, setOccupe] = useState(false);
@@ -79,9 +100,11 @@ export default function Publicite() {
   }, [charger]);
   useEffect(() => { chargerTardifs(); }, [chargerTardifs]);
 
-  const ouvrirDetail = (p) => {
+  const ouvrirDetail = (p, mode = null) => {
     setDetail(p);
-    setDecision(null);
+    setDecision(mode);
+    setFormulaire(formulaireDepuis(p));
+    setVisuel(null);
     setErreurDecision(null);
     setMotif('');
     setDateDebut(p.date_debut >= aujourdhuiIso() ? p.date_debut : aujourdhuiIso());
@@ -112,11 +135,35 @@ export default function Publicite() {
     }
   };
 
-  const supprimer = async (p) => {
-    if (!window.confirm(`Supprimer définitivement la demande « ${p.titre} » ?`)) return;
+  const enregistrer = async () => {
+    setOccupe(true);
+    setErreurDecision(null);
     try {
-      await supprimerPublicite(p.publicite_id);
-      setMessage({ type: 'success', texte: 'Demande supprimée.' });
+      // Seuls les champs modifiés partent (le serveur ignore les champs vides).
+      const changes = Object.fromEntries(
+        Object.entries(formulaire).filter(([k, v]) => String(v ?? '').trim() !== String(detail[k] ?? '').trim()),
+      );
+      if (visuel) changes.visuel = visuel;
+      if (!Object.keys(changes).length) { setDecision(null); return; }
+      await modifierPublicite(detail.publicite_id, changes);
+      setMessage({ type: 'success', texte: 'Publicité mise à jour.' });
+      setDetail(null);
+      await charger();
+    } catch (err) {
+      setErreurDecision(err.message || 'Mise à jour impossible.');
+    } finally {
+      setOccupe(false);
+    }
+  };
+
+  const supprimer = async (p) => {
+    const question = aHistoriquePaiement(p)
+      ? `« ${p.titre} » a un paiement : elle sera retirée de la diffusion et conservée avec sa facture (onglet Annulée). Continuer ?`
+      : `Supprimer définitivement la publicité « ${p.titre} » ?`;
+    if (!window.confirm(question)) return;
+    try {
+      const r = await supprimerPublicite(p.publicite_id);
+      setMessage({ type: 'success', texte: r?.message || 'Publicité supprimée.' });
       setDetail(null);
       await charger();
     } catch (err) {
@@ -247,10 +294,20 @@ export default function Publicite() {
                       <small>{p.statistiques.impressions} vues · {p.statistiques.clics} clics</small>
                       {p.en_diffusion && <span className="aps-badge is-success d-block mt-1">En diffusion</span>}
                     </td>
-                    <td className="text-end">
+                    <td className="text-end text-nowrap">
                       <button className="btn btn-sm btn-outline-primary" onClick={() => ouvrirDetail(p)}>
                         {p.statut === 'en_moderation' ? 'Examiner' : 'Détail'}
                       </button>
+                      <button className="btn btn-sm btn-light ms-1" title="Modifier" aria-label={`Modifier ${p.titre}`}
+                        onClick={() => ouvrirDetail(p, 'modifier')}>
+                        <i className="fa-solid fa-pen"></i>
+                      </button>
+                      {!(p.statut === 'annulee' && aHistoriquePaiement(p)) && (
+                        <button className="btn btn-sm btn-outline-danger ms-1" title="Supprimer" aria-label={`Supprimer ${p.titre}`}
+                          onClick={() => supprimer(p)}>
+                          <i className="fa-solid fa-trash"></i>
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -266,7 +323,15 @@ export default function Publicite() {
         occupe={occupe}
         onFermer={() => setDetail(null)}
         pied={detail && (
-          decision ? (
+          decision === 'modifier' ? (
+            <>
+              <button className="btn btn-light" onClick={() => setDecision(null)} disabled={occupe}>Annuler</button>
+              <button className="btn btn-primary" onClick={enregistrer} disabled={occupe || !formulaire.titre?.trim()}>
+                {occupe && <span className="spinner-border spinner-border-sm me-2" />}
+                Enregistrer
+              </button>
+            </>
+          ) : decision ? (
             <>
               <button className="btn btn-light" onClick={() => setDecision(null)} disabled={occupe}>Retour</button>
               <button
@@ -280,11 +345,14 @@ export default function Publicite() {
             </>
           ) : (
             <>
-              {['en_moderation', 'rejetee', 'annulee', 'expiree'].includes(detail.statut) && (
-                <button className="btn btn-light me-auto" onClick={() => supprimer(detail)}>
-                  <i className="fa-solid fa-trash me-1"></i>Supprimer
+              {!(detail.statut === 'annulee' && aHistoriquePaiement(detail)) && (
+                <button className="btn btn-outline-danger" onClick={() => supprimer(detail)}>
+                  <i className="fa-solid fa-trash me-1"></i>{aHistoriquePaiement(detail) ? 'Retirer' : 'Supprimer'}
                 </button>
               )}
+              <button className="btn btn-light me-auto" onClick={() => setDecision('modifier')}>
+                <i className="fa-solid fa-pen me-1"></i>Modifier
+              </button>
               {['en_moderation', 'en_attente_paiement'].includes(detail.statut) && (
                 <button className="btn btn-outline-danger" onClick={() => setDecision('rejeter')}>Rejeter</button>
               )}
@@ -310,6 +378,27 @@ export default function Publicite() {
                   Date demandée : {jour(detail.date_debut)}. La place est bloquée pendant le délai de paiement ;
                   l'annonceur reçoit le lien de paiement par WhatsApp.
                 </small>
+              </div>
+            )}
+            {decision === 'modifier' && (
+              <div className="row g-2">
+                {CHAMPS_EDITION.map(({ cle, libelle, type, max, requis }) => (
+                  <div key={cle} className={type === 'textarea' ? 'col-12' : 'col-md-6'}>
+                    <label className="form-label small mb-1" htmlFor={`pub-${cle}`}>{libelle}{requis && ' *'}</label>
+                    {type === 'textarea' ? (
+                      <textarea id={`pub-${cle}`} className="form-control" rows={3} value={formulaire[cle]}
+                        onChange={(e) => setFormulaire((f) => ({ ...f, [cle]: e.target.value }))} disabled={occupe} />
+                    ) : (
+                      <input id={`pub-${cle}`} type={type ?? 'text'} className="form-control" maxLength={max} value={formulaire[cle]}
+                        onChange={(e) => setFormulaire((f) => ({ ...f, [cle]: e.target.value }))} disabled={occupe} />
+                    )}
+                  </div>
+                ))}
+                <div className="col-12">
+                  <label className="form-label small mb-1" htmlFor="pub-visuel">Remplacer le visuel (JPEG, PNG, WEBP)</label>
+                  <input id="pub-visuel" type="file" className="form-control" accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => setVisuel(e.target.files?.[0] ?? null)} disabled={occupe} />
+                </div>
               </div>
             )}
             {decision === 'rejeter' && (

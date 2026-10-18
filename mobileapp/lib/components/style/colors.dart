@@ -1,55 +1,101 @@
 import 'package:flutter/material.dart';
 
-/// Palette de couleurs de l'application APS Santé.
+/// Palette de couleurs de l'application APS Santé — refonte 2026.
 ///
-/// Reprend fidèlement les variables CSS du design system
-/// (--green-*, --coral-*, --amber-*, --ink*, --paper, --card, --line*).
+/// Reprend les jetons de `mobile/new-mobile-ui.html` :
+/// verts `--b9…--b0`, corail `--co`, ambre `--am`, violet `--vi`
+/// (demande express), bleu ciel `--sk` (vidéo, vérifié), rouge `--rd`
+/// (urgence), encres `--ink…--ink4`, surfaces `--bg`, `--sf`, `--ln`.
 ///
-/// Utilisation :
-/// ```dart
-/// Container(color: AppColors.primary)
-/// Text('Alerte', style: TextStyle(color: AppColors.danger))
-/// ```
+/// Les anciens noms (`green700`, `paper`, `inkSoft`…) restent disponibles
+/// et pointent vers les nouvelles teintes : tout l'existant bascule ainsi
+/// sur la nouvelle direction visuelle sans réécriture.
 class AppColors {
   AppColors._();
 
   // ===========================================================
-  // VERTS — couleur de marque / actions principales / succès
+  // VERTS — marque, actions principales, succès
   // ===========================================================
-  static const Color green900 = Color(0xFF0F3A2B);
-  static const Color green700 = Color(0xFF1E8A63);
-  static const Color green600 = Color(0xFF279A6E);
-  static const Color green500 = Color(0xFF2FAB7B);
-  static const Color green100 = Color(0xFFE4F3EC);
-  static const Color green50 = Color(0xFFF1F8F4);
+  static const Color b9 = Color(0xFF062E21);
+  static const Color b8 = Color(0xFF0A4A35);
+  static const Color b7 = Color(0xFF0E6A4A);
+  static const Color b6 = Color(0xFF12865D);
+  static const Color b5 = Color(0xFF19A06F);
+  static const Color b4 = Color(0xFF4CC495);
+  static const Color b2 = Color(0xFFBDEAD6);
+  static const Color b1 = Color(0xFFE1F4EA);
+  static const Color b0 = Color(0xFFF0F9F4);
+
+  /// Vert menthe utilisé sur fonds sombres (accroches, pastilles).
+  static const Color mint = Color(0xFF7FE0B5);
+
+  // Anciens noms (compatibilité).
+  static const Color green900 = b9;
+  static const Color green700 = b7;
+  static const Color green600 = b6;
+  static const Color green500 = b5;
+  static const Color green100 = b1;
+  static const Color green50 = b0;
 
   // ===========================================================
-  // CORAIL — urgence / danger / actions destructives ou fortes
+  // CORAIL — badges, points de notification
   // ===========================================================
-  static const Color coral500 = Color(0xFFE1604A);
-  static const Color coral600 = Color(0xFFC94E3A);
-  static const Color coral100 = Color(0xFFFBE7E2);
+  static const Color coral500 = Color(0xFFEE6847);
+  static const Color coral600 = Color(0xFFB8432A);
+  static const Color coral100 = Color(0xFFFDEBE5);
 
   // ===========================================================
-  // AMBRE — avertissement / mise en garde
+  // AMBRE — attente (paiement attendu, expiration)
   // ===========================================================
-  static const Color amber500 = Color(0xFFDD9A2E);
-  static const Color amber100 = Color(0xFFFBF0DC);
+  static const Color amber500 = Color(0xFFE59E2E);
+  static const Color amber700 = Color(0xFF9A6100);
+  static const Color amber100 = Color(0xFFFCF2DF);
+
+  // ===========================================================
+  // VIOLET — demande express (RDV sur offre)
+  // ===========================================================
+  static const Color violet = Color(0xFF6B5CF0);
+  static const Color violet700 = Color(0xFF4A3DC4);
+  static const Color violet100 = Color(0xFFEDEBFE);
+
+  // ===========================================================
+  // BLEU CIEL — vidéo, compte vérifié, informations
+  // ===========================================================
+  static const Color sky = Color(0xFF2F80ED);
+  static const Color sky100 = Color(0xFFE6F0FD);
+
+  // ===========================================================
+  // ROUGE — urgence, actions destructives
+  // ===========================================================
+  static const Color red = Color(0xFFE5484D);
+  static const Color red100 = Color(0xFFFDE8E8);
+
+  /// Étoiles des avis.
+  static const Color star = Color(0xFFF5B400);
 
   // ===========================================================
   // ENCRE — texte
   // ===========================================================
-  static const Color ink = Color(0xFF16241F);
-  static const Color inkSoft = Color(0xFF5B6B64);
-  static const Color inkFaint = Color(0xFF93A39C);
+  static const Color ink = Color(0xFF0D1B16);
+  static const Color ink2 = Color(0xFF4A5A53);
+  static const Color ink3 = Color(0xFF8A9992);
+  static const Color ink4 = Color(0xFFBAC6C0);
+
+  static const Color inkSoft = ink2;
+  static const Color inkFaint = ink3;
 
   // ===========================================================
   // SURFACES
   // ===========================================================
-  static const Color paper = Color(0xFFF5F8F6);
-  static const Color card = Color(0xFFFFFFFF);
-  static const Color line = Color(0xFFE5ECE8);
-  static const Color lineStrong = Color(0xFFD3DFD9);
+  static const Color bg = Color(0xFFF3F6F4);
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color segment = Color(0xFFE8EEEA);
+  static const Color slotOff = Color(0xFFF1F4F2);
+
+  static const Color paper = bg;
+  static const Color card = surface;
+  static const Color line = Color(0xFFE6ECE9);
+  static const Color lineStrong = Color(0xFFD6E0DB);
 
   // ===========================================================
   // RÔLES SÉMANTIQUES
@@ -59,17 +105,17 @@ class AppColors {
   // ===========================================================
 
   /// Couleur d'action principale (boutons primaires, liens, icônes actives).
-  static const Color primary = green700;
-  static const Color primaryDark = green900;
-  static const Color primaryLight = green100;
-  static const Color primarySurface = green50;
+  static const Color primary = b7;
+  static const Color primaryDark = b9;
+  static const Color primaryLight = b1;
+  static const Color primarySurface = b0;
 
   /// Succès / validation / éléments vérifiés.
-  static const Color success = green600;
-  static const Color successLight = green100;
+  static const Color success = b6;
+  static const Color successLight = b1;
 
   /// Neutre / secondaire (boutons outline, badges neutres).
-  static const Color secondary = inkSoft;
+  static const Color secondary = ink2;
   static const Color secondaryLight = lineStrong;
 
   /// Avertissement.
@@ -77,42 +123,77 @@ class AppColors {
   static const Color warningLight = amber100;
 
   /// Danger / urgence / actions d'appel immédiat.
-  static const Color danger = coral500;
-  static const Color dangerDark = coral600;
-  static const Color dangerLight = coral100;
+  static const Color danger = red;
+  static const Color dangerDark = Color(0xFFC7343A);
+  static const Color dangerLight = red100;
 
   /// Petit point vert utilisé pour signaler « ouvert / de garde ».
-  static const Color guardDotOn = green500;
-  static const Color guardDotOff = inkFaint;
+  static const Color guardDotOn = b5;
+  static const Color guardDotOff = ink3;
 
   // ===========================================================
-  // OMBRES (approximation Material des box-shadow CSS)
+  // DÉGRADÉS
+  // ===========================================================
+
+  /// Carte « prochain RDV », carte santé, en-têtes de fiche.
+  static const LinearGradient gradientForest = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [b7, b9],
+  );
+
+  /// Logo et pastille de confirmation.
+  static const LinearGradient gradientLogo = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF2CC286), b8],
+  );
+
+  /// Bandeau « Demande express ».
+  static const LinearGradient gradientViolet = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [violet, Color(0xFF3E31B8)],
+  );
+
+  // ===========================================================
+  // OMBRES (box-shadow --sh1 et --sh2 de la maquette)
   // ===========================================================
   static List<BoxShadow> get shadowCard => [
         BoxShadow(
-          color: ink.withOpacity(0.03),
-          blurRadius: 1,
+          color: ink.withValues(alpha: 0.04),
+          blurRadius: 2,
           offset: const Offset(0, 1),
         ),
         BoxShadow(
-          color: ink.withOpacity(0.08),
-          blurRadius: 12,
-          offset: const Offset(0, 4),
-          spreadRadius: -6,
+          color: ink.withValues(alpha: 0.12),
+          blurRadius: 16,
+          offset: const Offset(0, 6),
+          spreadRadius: -8,
         ),
       ];
 
   static List<BoxShadow> get shadowSoft => [
         BoxShadow(
-          color: ink.withOpacity(0.04),
-          blurRadius: 2,
-          offset: const Offset(0, 1),
+          color: ink.withValues(alpha: 0.05),
+          blurRadius: 6,
+          offset: const Offset(0, 2),
         ),
         BoxShadow(
-          color: ink.withOpacity(0.10),
-          blurRadius: 20,
-          offset: const Offset(0, 8),
-          spreadRadius: -10,
+          color: ink.withValues(alpha: 0.28),
+          blurRadius: 40,
+          offset: const Offset(0, 20),
+          spreadRadius: -18,
+        ),
+      ];
+
+  /// Ombre colorée sous le bouton principal.
+  static List<BoxShadow> shadowGlow(Color c) => [
+        BoxShadow(
+          color: c.withValues(alpha: 0.55),
+          blurRadius: 24,
+          offset: const Offset(0, 12),
+          spreadRadius: -12,
         ),
       ];
 }

@@ -38,10 +38,6 @@ Future<bool> afficherAccepterRdv(
   final resultat = await showModalBottomSheet<ResultatAcceptation>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: AppColors.card,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
     builder: (_) => AccepterRdvSheet(rdv: rdv, nomPatient: nomPatient),
   );
   if (resultat == null) return false;
@@ -125,45 +121,58 @@ class _AccepterRdvSheetState extends ConsumerState<AccepterRdvSheet> {
     final qui = (nom != null && nom.isNotEmpty) ? nom : 'Le patient';
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, 14, 20, 20 + bas),
+      padding: EdgeInsets.fromLTRB(18, 0, 18, 24 + bas),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 38,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.lineStrong,
-                  borderRadius: BorderRadius.circular(100),
+            ApsSheetHeader(
+              title: _modification ? 'Modifier le lieu' : 'Accepter le rendez-vous',
+              onClose: _enCours ? () {} : () => Navigator.of(context).pop(),
+            ),
+            if (nom != null && nom.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              ApsCard(
+                flat: true,
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    ApsAvatar(name: nom, size: 40),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(nom,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.strong.copyWith(fontSize: 13.5)),
+                    ),
+                    const ApsPill('Payé', icon: Icons.check_rounded),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _modification ? 'Modifier le lieu du rendez-vous' : 'Accepter le rendez-vous',
-              style: const TextStyle(
-                fontFamily: AppTextStyles.fontDisplay,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.ink,
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.lock_outline_rounded, size: 13, color: AppColors.b6),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Fonds sous séquestre, versés après la consultation',
+                      style: AppTextStyles.xs.copyWith(color: AppColors.ink2, fontSize: 11.5),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              _modification
-                  ? 'Saisissez le nouveau lieu : $qui sera prévenu du changement.'
-                  : 'Indiquez où aura lieu la consultation : $qui recevra une '
-                      'notification avec la date et le lieu.',
-              style: const TextStyle(
-                fontSize: 12.5,
-                height: 1.4,
-                color: AppColors.inkSoft,
-              ),
-            ),
+            ],
             const SizedBox(height: 16),
+            Text.rich(
+              const TextSpan(children: [
+                TextSpan(text: 'Lieu de consultation '),
+                TextSpan(text: '*', style: TextStyle(color: AppColors.red)),
+              ]),
+              style: AppTextStyles.strong.copyWith(fontSize: 13),
+            ),
+            const SizedBox(height: 8),
             TextField(
               controller: _controleur,
               enabled: !_enCours,
@@ -173,70 +182,37 @@ class _AccepterRdvSheetState extends ConsumerState<AccepterRdvSheet> {
               maxLength: longueurMaxLieuRdv,
               textCapitalization: TextCapitalization.sentences,
               keyboardType: TextInputType.multiline,
-              style: const TextStyle(fontSize: 14, color: AppColors.ink),
-              decoration: InputDecoration(
-                labelText: 'Lieu du rendez-vous *',
+              style: AppTextStyles.strong.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+              decoration: const InputDecoration(
                 hintText: 'Ex. : Cabinet médical Bonapriso, rue des Palmiers, 2e étage, Douala',
                 hintMaxLines: 2,
-                filled: true,
-                fillColor: AppColors.paper,
-                prefixIcon: const Icon(Icons.location_on_outlined),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.lineStrong),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
-                ),
-                disabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.line),
-                ),
+                prefixIcon: Icon(Icons.location_on_outlined),
               ),
               onChanged: (_) => setState(() => _erreur = null),
             ),
             if (_erreur != null) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 4),
               AppAlert(type: AppAlertType.danger, message: _erreur!),
             ],
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: AppOutlineButton(
-                    label: 'Annuler',
-                    expanded: true,
-                    onPressed: _enCours ? () {} : () => Navigator.of(context).pop(),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _enCours
-                      ? const SizedBox(
-                          height: 34,
-                          child: Center(
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2.4),
-                            ),
-                          ),
-                        )
-                      : Opacity(
-                          opacity: _peutValider ? 1 : 0.45,
-                          child: IgnorePointer(
-                            ignoring: !_peutValider,
-                            child: RdvButton(
-                              label: _modification ? 'Enregistrer' : 'Accepter',
-                              icon: Icons.check_circle_outline,
-                              expanded: true,
-                              onPressed: _valider,
-                            ),
-                          ),
-                        ),
-                ),
-              ],
+            const SizedBox(height: 10),
+            ApsNote.text(
+              _modification
+                  ? '$qui sera prévenu tout de suite du changement de lieu.'
+                  : '$qui reçoit tout de suite une notification avec la date et le lieu.',
+              icon: Icons.notifications_none_rounded,
+            ),
+            const SizedBox(height: 14),
+            ApsButton(
+              label: _modification ? 'Enregistrer et notifier' : 'Accepter et notifier',
+              icon: Icons.check_rounded,
+              loading: _enCours,
+              onPressed: _peutValider ? _valider : null,
+            ),
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: _enCours ? null : () => Navigator.of(context).pop(),
+              style: TextButton.styleFrom(foregroundColor: AppColors.ink2),
+              child: const Text('Plus tard'),
             ),
           ],
         ),

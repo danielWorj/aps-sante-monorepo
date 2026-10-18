@@ -27,39 +27,39 @@ class _AlertPalette {
 const Map<AppAlertType, _AlertPalette> _palettes = {
   // Bandeau vert d'information générale (ex: "Présentation seulement...")
   AppAlertType.primary: _AlertPalette(
-    background: AppColors.green50,
-    border: AppColors.green100,
-    foreground: AppColors.green900,
-    icon: Icons.info_outline,
+    background: AppColors.b0,
+    border: AppColors.b1,
+    foreground: AppColors.b6,
+    icon: Icons.info_outline_rounded,
   ),
   // Confirmation / élément vérifié / règle autorisée (rule-tag.ok)
   AppAlertType.success: _AlertPalette(
-    background: AppColors.green100,
-    border: AppColors.green100,
-    foreground: AppColors.green700,
-    icon: Icons.check_circle_outline,
+    background: AppColors.b1,
+    border: AppColors.b2,
+    foreground: AppColors.b7,
+    icon: Icons.check_circle_outline_rounded,
   ),
   // Neutre / hors-ligne / info discrète (offline-note)
   AppAlertType.secondary: _AlertPalette(
-    background: AppColors.paper,
+    background: AppColors.surface,
     border: AppColors.lineStrong,
-    foreground: AppColors.inkSoft,
+    foreground: AppColors.ink2,
     icon: Icons.wifi_off_rounded,
     dashed: true,
   ),
   // Avertissement (rule-tag.warn)
   AppAlertType.warning: _AlertPalette(
     background: AppColors.amber100,
-    border: AppColors.amber100,
-    foreground: AppColors.amber500,
+    border: Color(0xFFF6E1BA),
+    foreground: AppColors.amber700,
     icon: Icons.warning_amber_rounded,
   ),
   // Danger / interdit / urgence (rule-tag.off)
   AppAlertType.danger: _AlertPalette(
-    background: AppColors.coral100,
-    border: AppColors.coral100,
-    foreground: AppColors.coral600,
-    icon: Icons.error_outline,
+    background: AppColors.red100,
+    border: Color(0xFFF8CFD0),
+    foreground: AppColors.dangerDark,
+    icon: Icons.error_outline_rounded,
   ),
 };
 
@@ -97,7 +97,7 @@ class AppAlert extends StatelessWidget {
     final palette = _palettes[type]!;
 
     final content = Padding(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -110,9 +110,9 @@ class AppAlert extends StatelessWidget {
                 if (title != null) ...[
                   Text(
                     title!,
-                    style: AppTextStyles.cardTitle.copyWith(
-                      fontSize: 12.5,
-                      color: palette.foreground,
+                    style: AppTextStyles.strong.copyWith(
+                      fontSize: 13,
+                      color: AppColors.ink,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -120,9 +120,11 @@ class AppAlert extends StatelessWidget {
                 Text(
                   message,
                   style: AppTextStyles.body.copyWith(
-                    fontSize: 11.5,
+                    fontSize: 12,
                     height: 1.5,
-                    color: type == AppAlertType.primary ? AppColors.green900 : palette.foreground,
+                    color: type == AppAlertType.danger
+                        ? palette.foreground
+                        : AppColors.ink2,
                   ),
                 ),
               ],
@@ -139,7 +141,7 @@ class AppAlert extends StatelessWidget {
 
     final decoration = BoxDecoration(
       color: palette.background,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       border: Border.all(
         color: palette.border,
         width: palette.dashed ? 1 : 1,
@@ -154,9 +156,9 @@ class AppAlert extends StatelessWidget {
     // Bordure pointillée pour la variante "secondary" (offline-note).
     return _DashedBorder(
       color: palette.border,
-      borderRadius: 12,
+      borderRadius: 16,
       child: Container(
-        decoration: BoxDecoration(color: palette.background, borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(color: palette.background, borderRadius: BorderRadius.circular(16)),
         child: content,
       ),
     );

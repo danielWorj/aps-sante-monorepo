@@ -22,14 +22,16 @@ class ItineraryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final button = OutlinedButton.icon(
       onPressed: onPressed,
-      icon: const Icon(Icons.location_on_outlined, size: 14, color: AppColors.ink),
-      label: Text(label, style: AppTextStyles.buttonLabel.copyWith(fontSize: 11.5, color: AppColors.ink)),
+      icon: const Icon(Icons.near_me_outlined, size: 15, color: AppColors.ink),
+      label: Text(label, style: AppTextStyles.buttonLabel.copyWith(fontSize: 12.5, color: AppColors.ink)),
       style: OutlinedButton.styleFrom(
         backgroundColor: AppColors.card,
-        side: const BorderSide(color: AppColors.lineStrong),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        side: const BorderSide(color: AppColors.lineStrong, width: 1.5),
+        minimumSize: const Size(0, 40),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(9),
+          borderRadius: BorderRadius.circular(13),
         ),
       ),
     );

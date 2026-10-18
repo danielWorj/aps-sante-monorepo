@@ -936,7 +936,7 @@ class ApsBanner extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: error ? const Color(0xFFFDF0EE) : AppColors.green50,
+        color: error ? AppColors.red100 : AppColors.green50,
         border: Border.all(
             color: error ? AppColors.danger : AppColors.green100, width: 1),
         borderRadius: AppRadius.smRadius,
