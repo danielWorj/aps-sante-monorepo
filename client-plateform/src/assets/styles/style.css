@@ -806,6 +806,7 @@ table{max-width:100%; display:block; overflow-x:auto;}
 
 /* ---------------------------- FOOTER ---------------------------- */
 .aps-footer{background:#4C6459; padding:3.5rem 0 0; color:rgba(255,255,255,.82);}
+.aps-footer-logo .aps-logo-img{height:56px; background:#fff; padding:3px;}
 .aps-footer h5{color:#fff; font-size:.85rem; text-transform:uppercase; letter-spacing:.05em; margin-bottom:1.1rem;}
 .footer-links{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.7rem;}
 .footer-links a{color:rgba(255,255,255,.68); font-size:.87rem;}
@@ -1796,3 +1797,23 @@ table{max-width:100%; display:block; overflow-x:auto;}
   margin-bottom:0;
   align-self:flex-start;
 }
+/* ---------------------------- POP-UP DE CONNEXION ---------------------------- */
+.connexion-modale{max-width:420px; padding:2rem 1.8rem 1.5rem;}
+.connexion-modale-head{text-align:center; margin-bottom:1.3rem;}
+.connexion-modale-mark{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:52px; height:52px; border-radius:50%; margin-bottom:.8rem;
+  background:var(--primary-tint); color:var(--primary-dark); font-size:1.25rem;
+}
+.connexion-modale-head h3{font-size:1.2rem; margin:0 0 .35rem;}
+.connexion-modale-sub{font-size:.86rem; color:var(--ink-soft);}
+.connexion-modale-formule{
+  display:inline-flex; align-items:center; gap:.45rem; margin-top:.6rem;
+  padding:.35rem .8rem; border-radius:999px;
+  background:var(--primary-tint); color:var(--primary-dark); font-weight:700; font-size:.8rem;
+}
+.connexion-modale-oeil{
+  position:absolute; right:.85rem; top:50%; transform:translateY(-50%);
+  background:transparent; border:none; color:var(--ink-faint); cursor:pointer; padding:0;
+}
+.connexion-modale-foot{text-align:center; font-size:.84rem; color:var(--ink-soft); margin:1.1rem 0 0;}

@@ -966,6 +966,29 @@ export async function terminerRendezVous(rdvId, code) {
 }
 
 /**
+ * POST /rendez-vous/:id/accepter { lieu }
+ * Réservé au MÉDECIN du rendez-vous (RDV PHYSIQUE payé, statut « confirme »).
+ * Le médecin accepte le RDV en saisissant le lieu de la consultation
+ * (obligatoire), ou en change le lieu. Le patient est notifié (date + lieu).
+ * Renvoyer le même lieu ne fait rien (`deja_accepte: true`).
+ *
+ * Erreurs (Error avec `.status` et `.data`, voir apiFetch) :
+ *   - 400 : lieu absent / trop long, ou téléconsultation ;
+ *   - 403 : autre médecin ;
+ *   - 409 : RDV non payé (`data.code` = RDV_NON_PAYE) ou statut incompatible.
+ *
+ * @param {string} rdvId
+ * @param {string} lieu
+ * @returns {Promise<{ message: string, deja_accepte: boolean, rendez_vous: Object }>}
+ */
+export async function accepterRendezVous(rdvId, lieu) {
+  return apiFetch(`/rendez-vous/${rdvId}/accepter`, {
+    method: 'POST',
+    body: { lieu },
+  });
+}
+
+/**
  * DELETE /rendez-vous/:id
  * Réservé à admin/superadmin — suppression PHYSIQUE. Un rendez-vous
  * s'annule normalement via annulerRendezVous(id, { motif }).

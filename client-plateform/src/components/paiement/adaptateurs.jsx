@@ -35,6 +35,13 @@ import {
   obtenirStatutPaiementAbonnement,
   annulerPaiementAbonnement,
 } from '../../services/abonnementAssuranceService';
+import {
+  demanderPaiementPresence,
+  demanderPaiementCampayPresence,
+  obtenirDevisPresence,
+  obtenirStatutPaiementPresence,
+  annulerPaiementPresence,
+} from '../../services/abonnementPresenceService';
 import { montantDevise } from '../../utils/fonds';
 
 export function adaptateurRdv(rdvId) {
@@ -71,13 +78,25 @@ export function adaptateurAbonnement(abonnementId) {
     texteDevis: (d) => (
       <small>
         Total : <strong>{montantDevise(d.total, d.devise)}</strong>
-        {d.frais_operateur && (
-          <>
-            <br />
-            {d.frais_operateur.mention} (environ {montantDevise(d.frais_operateur.montant, d.devise)}).
-          </>
+        {d.frais_agregateur > 0 && (
+          <> (dont {montantDevise(d.frais_agregateur, d.devise)} de frais d&apos;agrégateur)</>
         )}
       </small>
     ),
+  };
+}
+
+/** Abonnement de présence (pharmacie, centre de santé, médecin) : même contrat. */
+export function adaptateurAbonnementPresence(abonnementId) {
+  return {
+    ...adaptateurAbonnement(abonnementId),
+    cle: `abonnement-presence:${abonnementId}`,
+    demanderStripe: () => demanderPaiementPresence(abonnementId),
+    demanderCampay: (numero) => demanderPaiementCampayPresence(abonnementId, numero),
+    obtenirDevis: (agregateur) => obtenirDevisPresence(abonnementId, agregateur),
+    obtenirFacture: (agregateur) => obtenirDevisPresence(abonnementId, agregateur || 'stripe'),
+    lireStatut: () => obtenirStatutPaiementPresence(abonnementId),
+    annuler: () => annulerPaiementPresence(abonnementId),
+    urlSucces: `/paiement/abonnement-presence/succes?abonnement_id=${abonnementId}`,
   };
 }

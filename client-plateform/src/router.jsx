@@ -39,6 +39,11 @@ import GestionAssurance from './pages/GestionAssurance.jsx';
 import MonEspaceAssurance from './pages/MonEspaceAssurance.jsx';
 import PaiementAbonnementSucces from './pages/PaiementAbonnementSucces.jsx';
 import PaiementAbonnementAnnule from './pages/PaiementAbonnementAnnule.jsx';
+// Abonnements de présence : pharmacies, centres de santé, médecins
+import GestionPresence from './pages/GestionPresence.jsx';
+import MonEspacePresence from './pages/MonEspacePresence.jsx';
+import PaiementAbonnementPresenceSucces from './pages/PaiementAbonnementPresenceSucces.jsx';
+import PaiementAbonnementPresenceAnnule from './pages/PaiementAbonnementPresenceAnnule.jsx';
 
 
 //PORTAIL 
@@ -52,6 +57,10 @@ import MedecinAgenda from './components/portails/components/medecin-agenda';
 import RequireAuth from './routes/RequireAuth';
 import MedecinProfil from './components/portails/components/medecin-profil.jsx';
 import MedecinRdv from './components/portails/components/medecin-rdv';
+import MedecinAbonnement from './components/portails/components/medecin-abonnement.jsx';
+// RDV aléatoire (RDV sur offre)
+import MedecinDemandes from './components/portails/components/medecin-demandes.jsx';
+import PatientDemandes from './components/portails/components/patient-demandes.jsx';
 import Teleconsultation from './pages/Teleconsultation';
 
 //PORTAIL PATIENT
@@ -113,6 +122,9 @@ export const router = createBrowserRouter([
       // Abonnements assurance (guide abonnements v3, §2.2.4)
       { path: '/paiement/abonnement/succes', element: <PaiementAbonnementSucces /> },
       { path: '/paiement/abonnement/annule', element: <PaiementAbonnementAnnule /> },
+      // Abonnements de présence (pharmacies, centres de santé, médecins)
+      { path: '/paiement/abonnement-presence/succes', element: <PaiementAbonnementPresenceSucces /> },
+      { path: '/paiement/abonnement-presence/annule', element: <PaiementAbonnementPresenceAnnule /> },
       // Espace gestionnaire assurance : connexion requise (le serveur vérifie
       // en plus que l'utilisateur est l'agent de la fiche ou un admin).
       {
@@ -120,6 +132,11 @@ export const router = createBrowserRouter([
         children: [
           { path: '/mon-espace-assurance', element: <MonEspaceAssurance /> },
           { path: '/assurances/:id/gestion', element: <GestionAssurance /> },
+          // Espaces gestionnaire pharmacie / centre de santé (abonnement de présence)
+          { path: '/mon-espace-pharmacie', element: <MonEspacePresence key="pharmacie" type="pharmacie" /> },
+          { path: '/mon-espace-structure', element: <MonEspacePresence key="structure" type="structure" /> },
+          { path: '/pharmacie/:id/gestion', element: <GestionPresence key="pharmacie" type="pharmacie" /> },
+          { path: '/structure-sante/:id/gestion', element: <GestionPresence key="structure" type="structure" /> },
         ],
       },
     ],
@@ -133,6 +150,8 @@ export const router = createBrowserRouter([
           { path: '/portail/medecin-agenda', element: <MedecinAgenda /> },
           { path: '/portail/medecin-rdv', element: <MedecinRdv /> },
           { path: '/portail/medecin-profil', element: <MedecinProfil /> },
+          { path: '/portail/medecin-abonnement', element: <MedecinAbonnement /> },
+          { path: '/portail/medecin-demandes', element: <MedecinDemandes /> },
           // { path: '/portail/medecin-rdv', element: <MedecinAgenda /> },
           // { path: '/portail/medecin-agenda', element: <MedecinAgenda /> },
           // { path: '/portail/medecin-agenda', element: <MedecinAgenda /> },
@@ -153,6 +172,7 @@ export const router = createBrowserRouter([
         element:<PortailParentLayout />,
         children:[
           { path: '/portail/patient-rdv', element: <PatientRdv /> },
+          { path: '/portail/patient-demandes', element: <PatientDemandes /> },
           { path: '/portail/patient-profil', element: <PatientProfil /> },
           //{ path: '/portail/patient-profil', element: <PatientProfil /> },
         ]

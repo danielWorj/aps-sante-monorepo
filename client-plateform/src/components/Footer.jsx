@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
+import logoApsa from '../assets/img/logoapsa.jpeg';
 
 export default function Footer() {
   const [email, setEmail] = useState('');
@@ -40,8 +41,9 @@ export default function Footer() {
 
         <div className="row g-4">
           <div className="col-lg-4">
-            <Link to="/" className="aps-logo" style={{ color: '#fff' }}>
-              <span className="mark"><i className="fa-solid fa-staff-snake" /></span> ApSa
+            <Link to="/" className="aps-logo aps-footer-logo" style={{ color: '#fff' }}>
+              <img src={logoApsa} alt="ApSa" className="aps-logo-img" />
+              ApSa
             </Link>
             <p className="mt-3" style={{ fontSize: '.87rem', maxWidth: 320 , color: '#fff'}}>
               La plateforme qui connecte patients et professionnels de santé, avec un paiement sécurisé à chaque étape.
@@ -92,7 +94,7 @@ export default function Footer() {
         </div>
 
         <div className="footer-bottom">
-          <span>© 2026 AZA PROXI SANTÉ ASURANCES (ApSa). Tous droits réservés.</span>
+          <span>© 2026 AZA PROXI SANTÉ ASSURANCES (ApSa). Tous droits réservés.</span>
           <div className="footer-lang">
             <i className="fa-solid fa-earth-africa" />
             <select aria-label="Choisir le pays" defaultValue="Cameroun">

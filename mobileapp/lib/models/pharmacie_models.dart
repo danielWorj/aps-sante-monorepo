@@ -179,13 +179,17 @@ class Pharmacie {
           ? Geolocalisation.fromJson(
           json['geolocalisation'] as Map<String, dynamic>)
           : null,
-      telephone: json['telephone'] as String,
+      // Abonnement de présence : le serveur renvoie null (téléphone, photo)
+      // pour une fiche sans abonnement actif -> chaîne vide, jamais d'exception.
+      telephone: (json['telephone'] as String?) ?? '',
       statutVerification:
       StatutVerificationPharmacie.fromApi(json['statut_verification'] as String?),
       numeroOrdreTitulaire: json['numero_ordre_titulaire'] as String,
-      imageNom: json['image_nom'] as String,
-      pieceIdentiteNom: json['piece_identite_nom'] as String,
-      documentAgrementNom: json['document_agrement_nom'] as String,
+      imageNom: (json['image_nom'] as String?) ?? '',
+      // Pièces justificatives : jamais renvoyées par les routes publiques
+      // (seulement au gestionnaire et à l'administration) -> chaîne vide.
+      pieceIdentiteNom: (json['piece_identite_nom'] as String?) ?? '',
+      documentAgrementNom: (json['document_agrement_nom'] as String?) ?? '',
       imageUrl: _lire<String>(json, 'image_url'),
       pieceIdentiteUrl: _lire<String>(json, 'piece_identite_url'),
       documentAgrementUrl: _lire<String>(json, 'document_agrement_url'),

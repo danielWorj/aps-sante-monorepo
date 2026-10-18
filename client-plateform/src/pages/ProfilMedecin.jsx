@@ -183,6 +183,11 @@ export default function ProfilMedecin() {
   }
 
   const localisation = [medecin.ville_exercice?.nom, medecin.pays_exercice?.nom].filter(Boolean).join(' — ');
+  // Abonnement de présence : le serveur indique si la prise de RDV en ligne
+  // est ouverte (pays où l'abonnement est obligatoire) et n'expose le
+  // téléphone (contact_telephone) qu'avec le droit « contact direct ».
+  const rdvEnLigne = medecin.droits?.prise_rdv_en_ligne !== false;
+  const telephone = medecin.contact_telephone ?? medecin.utilisateur?.telephone ?? null;
 
   // Le backend renvoie la position sous `geolocalisation: { latitude, longitude } | null`
   // (même contrat que les pharmacies et centres de santé).
@@ -230,16 +235,18 @@ export default function ProfilMedecin() {
               </div>
             </div>
             <div className="profile-actions">
-              <button type="button" className="btn btn-primary btn-lg-aps" onClick={() => allerVersRendezVous('physique')}>
-                <i className="fa-solid fa-calendar-check" /> Prendre RDV
-              </button>
-              {medecin.teleconsultation_activee && (
+              {rdvEnLigne && (
+                <button type="button" className="btn btn-primary btn-lg-aps" onClick={() => allerVersRendezVous('physique')}>
+                  <i className="fa-solid fa-calendar-check" /> Prendre RDV
+                </button>
+              )}
+              {rdvEnLigne && medecin.teleconsultation_activee && (
                 <button type="button" className="btn btn-outline-primary" onClick={() => allerVersRendezVous('teleconsultation')}>
                   <i className="fa-solid fa-video" /> Téléconsulter
                 </button>
               )}
-              {medecin.utilisateur?.telephone && (
-                <a href={`tel:${medecin.utilisateur.telephone}`} className="btn btn-ghost"><i className="fa-solid fa-phone" /></a>
+              {telephone && (
+                <a href={`tel:${telephone}`} className="btn btn-ghost"><i className="fa-solid fa-phone" /></a>
               )}
             </div>
           </div>
@@ -383,7 +390,11 @@ export default function ProfilMedecin() {
             <div className="col-lg-4">
               <div className="info-card">
                 <h3><i className="fa-solid fa-calendar-days" /> Prendre rendez-vous</h3>
-                {chargementAgenda ? (
+                {!rdvEnLigne ? (
+                  <p style={{ fontSize: '.85rem', color: 'var(--ink-soft)' }}>
+                    Ce médecin ne propose pas la prise de rendez-vous en ligne pour le moment.
+                  </p>
+                ) : chargementAgenda ? (
                   <p style={{ fontSize: '.85rem', color: 'var(--ink-soft)' }}>Chargement des disponibilités…</p>
                 ) : prochainsCreneaux.length === 0 ? (
                   <p style={{ fontSize: '.85rem', color: 'var(--ink-soft)' }}>
@@ -410,9 +421,11 @@ export default function ProfilMedecin() {
                     </div>
                   </>
                 )}
-                <button type="button" className="btn btn-primary btn-block-aps mt-3" onClick={() => allerVersRendezVous('physique')}>
-                  Prendre rendez-vous
-                </button>
+                {rdvEnLigne && (
+                  <button type="button" className="btn btn-primary btn-block-aps mt-3" onClick={() => allerVersRendezVous('physique')}>
+                    Prendre rendez-vous
+                  </button>
+                )}
               </div>
 
               <div className="info-card">

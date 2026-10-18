@@ -313,6 +313,32 @@ class ActionsRendezVousController extends AsyncNotifier<void> {
     }
   }
 
+  /// Accepte un RDV physique payé en précisant le lieu, ou en change le lieu
+  /// (POST /rendez-vous/:id/accepter). Réservé au médecin du RDV. Lève
+  /// [ApiException] avec le message du serveur ; la liste des RDV est
+  /// invalidée seulement en cas de succès.
+  Future<ResultatAcceptation> accepter(
+    String id, {
+    required String lieu,
+    required String token,
+  }) async {
+    state = const AsyncLoading<void>().copyWithPrevious(state);
+    try {
+      final resultat =
+          await ref.read(rendezVousRepositoryProvider).accepterRendezVous(
+                id: id,
+                lieu: lieu,
+                token: token,
+              );
+      state = const AsyncData(null);
+      ref.invalidate(listeRendezVousControllerProvider);
+      return resultat;
+    } catch (e, pile) {
+      state = AsyncError<void>(e, pile);
+      rethrow;
+    }
+  }
+
   /// Propose une nouvelle date pour un RDV `a_reprogrammer` (phase 5).
   /// [nouvelleDateIso] vient de `CreneauAgenda.iso`. Lève [ApiException]
   /// avec le message du serveur ; la liste des RDV est invalidée seulement

@@ -198,6 +198,11 @@ class ApiRealEndpoints {
   static String terminerRendezVous(String id) =>
       '${baseUrl}/rendez-vous/$id/terminer';
 
+  // RDV physique payé : le médecin l'accepte en saisissant le lieu (ou change
+  // le lieu). POST { lieu } — voir accepterRendezVous (rendezVous.controller.js).
+  static String accepterRendezVous(String id) =>
+      '${baseUrl}/rendez-vous/$id/accepter';
+
   // ─── Politique de fonds v2 : reprogrammation « deux absents » ─────
   // Voir reprogrammation.controller.js : authentifié, réservé aux deux
   // parties du rendez-vous (un admin n'est pas une partie), statut
@@ -312,6 +317,23 @@ class ApiRealEndpoints {
       '${baseUrl}/notifications/$id/lue';
   static const String notificationsToutesLues =
       '${baseUrl}/notifications/lues';
+
+  // ─── RDV aléatoire (RDV sur offre) ─────────────────────────────────
+  // Voir offreRdv.routes.js : toutes authentifiées, rôle vérifié par profil.
+  //   Patient : POST /offres-rdv, GET /offres-rdv/mes-offres,
+  //             POST /offres-rdv/:id/annuler,
+  //             POST /offres-rdv/:id/reponses/:reponseId/valider.
+  //   Médecin : GET /offres-rdv/medecin?vue=ouvertes|mes_reponses,
+  //             POST | DELETE /offres-rdv/:id/reponse.
+  static const String offresRdv = '${baseUrl}/offres-rdv';
+  static const String mesOffresRdv = '${baseUrl}/offres-rdv/mes-offres';
+  static const String offresRdvMedecin = '${baseUrl}/offres-rdv/medecin';
+  static String annulerOffreRdv(String offreId) =>
+      '${baseUrl}/offres-rdv/$offreId/annuler';
+  static String validerReponseOffreRdv(String offreId, String reponseId) =>
+      '${baseUrl}/offres-rdv/$offreId/reponses/$reponseId/valider';
+  static String reponseOffreRdv(String offreId) =>
+      '${baseUrl}/offres-rdv/$offreId/reponse';
 
   // ─── Ordonnances (module transverse "Gestion des médecins") ──────
   // Voir rendezVous.controller.js / medecin.routes.js : toutes

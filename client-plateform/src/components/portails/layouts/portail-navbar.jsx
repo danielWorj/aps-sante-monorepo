@@ -11,6 +11,7 @@ const PortailNavbar = ({ activePage = "" }) => {
 
   const navLinks = [
     { label: "Rendez-vous", to: "/portail/medecin-rdv", key: "rdv", icon: "fa-calendar-check" },
+    { label: "Demandes", to: "/portail/medecin-demandes", key: "demandes", icon: "fa-bullhorn" },
     { label: "Profil", to: "/portail/medecin-profil", key: "profil", icon: "fa-user-doctor" },
     { label: "Agenda", to: "/portail/medecin-agenda", key: "agenda", icon: "fa-calendar-days" },
     { label: "Site public", to: "/", key: "site", icon: "fa-house" },

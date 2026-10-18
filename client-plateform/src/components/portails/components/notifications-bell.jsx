@@ -16,7 +16,18 @@ const ICONES = {
   rdv_reprogrammation_acceptee: 'fa-calendar-check',
   // D8 : le médecin n'est notifié qu'à la confirmation du paiement (cree -> confirme).
   rdv_paye: 'fa-circle-check',
+  // RDV physique accepté par le médecin (ou lieu modifié) : le patient reçoit date + lieu.
+  rdv_accepte: 'fa-location-dot',
+  // Abonnement de présence du médecin : activation, rappel d'échéance.
+  abonnement_presence_active: 'fa-id-card-clip',
+  abonnement_presence_echeance: 'fa-hourglass-half',
+  // RDV aléatoire : nouvelle demande (médecin), réponse d'un médecin, demande expirée (patient).
+  offre_rdv_nouvelle: 'fa-bullhorn',
+  offre_rdv_reponse: 'fa-user-doctor',
+  offre_rdv_expiree: 'fa-hourglass-end',
 };
+// Date du créneau (ISO dans `donnees`), affichée dans le fuseau du navigateur.
+const dateRdv = (iso) => new Date(iso).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 const heure = (iso) => new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 /** @param {{ cheminRdv: string }} props  page cible au clic (portail médecin ou patient) */
@@ -55,7 +66,9 @@ export default function NotificationsBell({ cheminRdv }) {
       setNonLues((c) => Math.max(0, c - 1));
       try { await marquerNotificationLue(n.notification_id); } catch { /* idempotent, rechargé au prochain cycle */ }
     }
-    navigate(cheminRdv);
+    // Une notification peut porter sa propre page (ex. abonnement de présence).
+    const lien = n.donnees?.lien;
+    navigate(typeof lien === 'string' && lien.startsWith('/') && !lien.startsWith('//') ? lien : cheminRdv);
   };
 
   const toutLire = async () => {
@@ -88,6 +101,16 @@ export default function NotificationsBell({ cheminRdv }) {
                   <span>
                     <span className="d-block">{n.titre}</span>
                     <span className="d-block small text-muted fw-normal">{n.message}</span>
+                    {n.donnees?.date_creneau && (
+                      <span className="d-block small fw-normal">
+                        <i className="fa-regular fa-calendar me-1"></i>Rendez-vous le {dateRdv(n.donnees.date_creneau)}
+                      </span>
+                    )}
+                    {n.donnees?.date_souhaitee && (
+                      <span className="d-block small fw-normal">
+                        <i className="fa-regular fa-calendar me-1"></i>Demande pour le {dateRdv(n.donnees.date_souhaitee)}
+                      </span>
+                    )}
                     <span className="d-block small text-muted fw-normal">{heure(n.date_creation)}</span>
                   </span>
                 </button>

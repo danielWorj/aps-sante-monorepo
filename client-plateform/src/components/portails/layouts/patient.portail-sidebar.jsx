@@ -20,6 +20,7 @@ import { deconnecter as deconnecterApi } from "../../../services/authService";
 
 const LIENS = [
   { to: "/portail/patient-rdv", icone: "fa-calendar-check", label: "Rendez-vous", badgeKey: "rdvBadge" },
+  { to: "/portail/patient-demandes", icone: "fa-bullhorn", label: "Demande rapide" },
   { to: "/portail/patient-messages", icone: "fa-comment-medical", label: "Messages", badgeKey: "messagesBadge" },
   { to: "/portail/patient-annonces", icone: "fa-bullhorn", label: "Annonces", badgeKey: "annoncesBadge" },
   { to: "/portail/patient-profil", icone: "fa-user", label: "Profil" },

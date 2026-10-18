@@ -167,7 +167,9 @@ export async function notifierRdvPaye(rdv_id) {
       titre: "Nouveau rendez-vous confirmé",
       message:
         "Un patient a payé et confirmé un rendez-vous avec vous. " +
-        "Consultez votre agenda pour en voir les détails.",
+        (rdv.type_rdv === "physique"
+          ? "Acceptez-le en précisant le lieu de la consultation : le patient en sera prévenu."
+          : "Consultez votre agenda pour en voir les détails."),
       donnees: { date_creneau: rdv.date_creneau.toISOString(), type_rdv: rdv.type_rdv },
       cle: `rdv_paye:${rdv_id}:${destinataire}`,
     },

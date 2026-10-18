@@ -18,7 +18,7 @@
 // « Télécharger » : impression native du navigateur (window.print()) ; la feuille
 // @media print de FactureRecapitulative.css n'imprime QUE la copie montée sous <body>. Dans la boîte
 // d'impression, choisir « Enregistrer au format PDF ». Aucune dépendance ajoutée.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { obtenirFacture } from '../../services/paiementService';
 import { dateHeure, montantDevise } from '../../utils/fonds';
@@ -78,7 +78,20 @@ function FactureCorps({ facture, compact = false, className = '' }) {
         </div>
       </header>
 
-      {entete.assurance ? (
+      {entete.souscripteur ? (
+        // Abonnement de présence (pharmacie, centre de santé, médecin).
+        <section className="facture-consultation">
+          <div className="facture-consultation-titre">Abonnement de présence — {entete.souscripteur}</div>
+          <dl className="facture-infos">
+            {entete.type_acteur_libelle && (<><dt>Fiche</dt><dd>{entete.type_acteur_libelle}</dd></>)}
+            {entete.niveau?.libelle && (<><dt>Niveau</dt><dd>{entete.niveau.libelle}</dd></>)}
+            {entete.duree_mois && (<><dt>Durée</dt><dd>{entete.duree_mois} mois</dd></>)}
+            {facture.periode?.debut && (
+              <><dt>Période</dt><dd>du {formatDate(facture.periode.debut)} au {formatDate(finInclusive(facture.periode.fin_exclusive))}</dd></>
+            )}
+          </dl>
+        </section>
+      ) : entete.assurance ? (
         // Abonnement assurance (devis ou facture archivée — guide abonnements v3, §1.5.9).
         <section className="facture-consultation">
           <div className="facture-consultation-titre">Abonnement de {entete.assurance}</div>
@@ -106,13 +119,22 @@ function FactureCorps({ facture, compact = false, className = '' }) {
         {lignes.map((l) => {
           const detail = formule(l, devise);
           return (
-            <li key={l.code} className="facture-ligne">
-              <span className="facture-ligne-libelle">
-                {l.libelle}
-                {detail && <small>{detail}</small>}
-              </span>
-              <span className="facture-ligne-montant">{montantDevise(l.montant, devise)}</span>
-            </li>
+            <Fragment key={l.code}>
+              {/* Abonnements : sous-total après réduction, avant les frais d'agrégateur. */}
+              {l.code === 'frais_agregateur' && facture.sous_total != null && (
+                <li className="facture-ligne facture-sous-total">
+                  <span className="facture-ligne-libelle">Sous-total après réduction</span>
+                  <span className="facture-ligne-montant">{montantDevise(facture.sous_total, devise)}</span>
+                </li>
+              )}
+              <li className="facture-ligne">
+                <span className="facture-ligne-libelle">
+                  {l.libelle}
+                  {detail && <small>{detail}</small>}
+                </span>
+                <span className="facture-ligne-montant">{montantDevise(l.montant, devise)}</span>
+              </li>
+            </Fragment>
           );
         })}
       </ul>

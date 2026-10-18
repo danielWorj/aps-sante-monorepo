@@ -418,7 +418,10 @@ export default function Medecin() {
                             <span className="price">{Number(m.tarif_indicatif).toLocaleString('fr-FR')} FCFA</span>
                           )}
                           <Link to={`/profil/${m.medecin_id}`} className="btn btn-outline-primary btn-sm-aps">Voir le profil</Link>
-                          <Link to={`/rendez-vous/${m.medecin_id}`} className="btn btn-primary btn-sm-aps">Prendre RDV</Link>
+                          {/* Abonnement de présence : RDV en ligne fermé si le serveur le refuse. */}
+                          {m.droits?.prise_rdv_en_ligne !== false && (
+                            <Link to={`/rendez-vous/${m.medecin_id}`} className="btn btn-primary btn-sm-aps">Prendre RDV</Link>
+                          )}
                           {hrefItineraire && (
                             <a
                               href={hrefItineraire}

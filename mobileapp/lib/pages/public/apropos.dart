@@ -683,21 +683,50 @@ class _Footer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 18),
-      child: Center(
-        child: RichText(
-          textAlign: TextAlign.center,
-          text: const TextSpan(
-            style: TextStyle(fontSize: 10, color: AppColors.inkFaint, height: 1.6),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              TextSpan(text: 'Conçu '),
-              WidgetSpan(
-                alignment: PlaceholderAlignment.middle,
-                child: Icon(Icons.favorite, size: 11, color: AppColors.danger),
+              ClipRRect(
+                borderRadius: AppRadius.mdRadius,
+                child: Image.asset('assets/img/logoapsa.jpeg', height: 44),
               ),
-              TextSpan(text: ' au Cameroun · © 2026 APS Santé'),
+              const SizedBox(width: 10),
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: AppRadius.mdRadius,
+                ),
+                child: const Icon(Icons.local_hospital_rounded, color: AppColors.primary, size: 18),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'ApSa',
+                style: AppTextStyles.h3.copyWith(fontSize: 16, color: AppColors.primaryDark),
+              ),
             ],
           ),
-        ),
+          const SizedBox(height: 10),
+          Center(
+            child: RichText(
+              textAlign: TextAlign.center,
+              text: const TextSpan(
+                style: TextStyle(fontSize: 10, color: AppColors.inkFaint, height: 1.6),
+                children: [
+                  TextSpan(text: 'Conçu '),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: Icon(Icons.favorite, size: 11, color: AppColors.danger),
+                  ),
+                  TextSpan(text: ' au Cameroun · © 2026 AZA PROXI SANTÉ ASSURANCES (ApSa)'),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

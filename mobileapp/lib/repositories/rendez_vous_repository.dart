@@ -324,6 +324,28 @@ class RendezVousRepository {
     return ResultatTerminaison.fromJson(donnees);
   }
 
+  /// POST /rendez-vous/:id/accepter  { lieu }
+  ///
+  /// RDV PHYSIQUE payé (`confirme`) : réservé au médecin du rendez-vous, qui
+  /// l'accepte en saisissant le lieu de la consultation (obligatoire), ou en
+  /// change le lieu. Le patient est notifié (date + lieu). Lève
+  /// [ApiException] avec le message du serveur : 400 lieu absent / trop long
+  /// ou téléconsultation, 403 autre médecin, 409 non payé ou statut
+  /// incompatible.
+  Future<ResultatAcceptation> accepterRendezVous({
+    required String id,
+    required String lieu,
+    required String token,
+  }) async {
+    final donnees = await _post(
+      ApiRealEndpoints.accepterRendezVous(id),
+      body: {'lieu': lieu},
+      token: token,
+    );
+    if (donnees is! Map<String, dynamic>) return const ResultatAcceptation();
+    return ResultatAcceptation.fromJson(donnees);
+  }
+
   /// PATCH /rendez-vous/:id/statut avec `statut: annule`.
   ///
   /// Politique de fonds v2 : la réponse porte le résultat financier

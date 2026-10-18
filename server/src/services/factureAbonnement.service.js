@@ -10,14 +10,16 @@
 //     aucun numéro.
 
 import { arrondir, decimalesPourMontant } from "../utils/montants.js";
+import { ligneFraisAbonnement, fraisDeLaTransaction, libelleAbonnement } from "./fraisAbonnement.service.js";
 import { calculerMontantsAbonnement } from "./tarifAbonnementAssurance.service.js";
 
 /**
- * @param {{ abonnement: object, niveau: object, service: object, frais_operateur?: number|null }} p
- *   frais_operateur : frais Mobile Money estimés, payés EN SUS à l'opérateur
- *   (information, hors total APS — voir guide §1.5.3).
+ * @param {{ abonnement: object, niveau: object, service: object, frais_agregateur?: object|null }} p
+ *   frais_agregateur : { agregateur, ligne, montant } (fraisAbonnement.service.js),
+ *   payés par le souscripteur en plus de l'abonnement, comme pour un RDV ;
+ *   null = virement / aucun frais.
  */
-export function construireDevisAbonnement({ abonnement, niveau, service, frais_operateur = null }) {
+export function construireDevisAbonnement({ abonnement, niveau, service, frais_agregateur = null }) {
   const devise = abonnement.devise;
   const decimales = decimalesPourMontant({ devise });
   const m = calculerMontantsAbonnement({
@@ -27,20 +29,20 @@ export function construireDevisAbonnement({ abonnement, niveau, service, frais_o
     credit_prorata: abonnement.credit_prorata,
     devise,
   });
-  const total = arrondir(Number(abonnement.montant_total), decimales);
+  const sousTotal = arrondir(Number(abonnement.montant_total), decimales);
 
   // Garde-fou : le devis ne doit jamais afficher un total différent du
   // montant figé sur l'abonnement (= montant débité).
-  if (Math.abs(m.total - total) > 0.001) {
+  if (Math.abs(m.total - sousTotal) > 0.001) {
     throw new Error(
-      `Incohérence devis abonnement ${abonnement.abonnement_id} : total figé ${total} ≠ brut − remise − crédit (${m.total}).`
+      `Incohérence devis abonnement ${abonnement.abonnement_id} : total figé ${sousTotal} ≠ brut − remise − crédit (${m.total}).`
     );
   }
 
   const lignes = [
     {
       code: "abonnement",
-      libelle: `Abonnement ${niveau.libelle} - ${abonnement.duree_mois} mois`,
+      libelle: `${libelleAbonnement("Abonnement", niveau)} - ${abonnement.duree_mois} mois`,
       base: Number(abonnement.prix_mensuel_applique),
       montant: m.brut,
     },
@@ -51,6 +53,8 @@ export function construireDevisAbonnement({ abonnement, niveau, service, frais_o
   if (m.credit_prorata > 0) {
     lignes.push({ code: "credit_prorata", libelle: "Crédit de l'abonnement remplacé", montant: -m.credit_prorata });
   }
+  const frais = frais_agregateur?.montant > 0 ? frais_agregateur : null;
+  if (frais) lignes.push(ligneFraisAbonnement(frais, sousTotal));
 
   return {
     type: "devis",
@@ -65,15 +69,20 @@ export function construireDevisAbonnement({ abonnement, niveau, service, frais_o
       duree_mois: abonnement.duree_mois,
     },
     lignes,
-    total,
-    ...(frais_operateur != null
-      ? { frais_operateur: { montant: frais_operateur, mention: "Frais de l'opérateur Mobile Money en sus" } }
-      : {}),
+    // Prix sans réduction, après réduction (= montant de l'abonnement), puis total débité.
+    montant_brut: m.brut,
+    sous_total: sousTotal,
+    frais_agregateur: frais ? frais.montant : 0,
+    total: arrondir(sousTotal + (frais?.montant ?? 0), decimales),
   };
 }
 
-/** Numéro suivant, sans trou : compteur annuel verrouillé par la ligne (ON CONFLICT DO UPDATE). */
-async function numeroSuivant(tx, annee) {
+/**
+ * Numéro suivant, sans trou : compteur annuel verrouillé par la ligne (ON CONFLICT DO UPDATE).
+ * Partagé avec les abonnements de présence (pharmacies, centres, médecins) :
+ * même nature de facture, donc même séquence.
+ */
+export async function numeroSuivant(tx, annee) {
   const [{ dernier }] = await tx.$queryRaw`
     INSERT INTO compteur_facture_abonnement (annee, dernier) VALUES (${annee}, 1)
     ON CONFLICT (annee) DO UPDATE SET dernier = compteur_facture_abonnement.dernier + 1
@@ -91,7 +100,7 @@ export async function emettreFactureAbonnement(tx, abonnement_id, transaction) {
     where: { abonnement_id },
     include: { niveau: true, service: true },
   });
-  const devis = construireDevisAbonnement({ abonnement: abo, niveau: abo.niveau, service: abo.service });
+  const devis = construireDevisAbonnement({ abonnement: abo, niveau: abo.niveau, service: abo.service, frais_agregateur: await fraisDeLaTransaction(tx, abo, transaction) });
   const maintenant = new Date();
   const numero = await numeroSuivant(tx, maintenant.getUTCFullYear());
   const snapshot = {
@@ -113,6 +122,8 @@ export async function emettreFactureAbonnement(tx, abonnement_id, transaction) {
       abonnement_id,
       transaction_id: transaction.transaction_id,
       devise: abo.devise,
+      // Revenu APS (hors frais d'agrégateur, reversés à Stripe / CamPay) :
+      // le montant débité, frais compris, est snapshot.total.
       total: abo.montant_total,
       snapshot,
     },

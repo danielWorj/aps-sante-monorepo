@@ -43,9 +43,14 @@ const APS_MENU = [
         key: "structure-sante",
         label: "Structures & hôpitaux",
         icon: "fa-solid fa-hospital",
-        to: "/structure-sante"
-        // Pas de /publicite-structure-sante ni /avis-structure-sante dans
-        // router.jsx pour l'instant -> pas de "children" ici.
+        to: "/structure-sante",
+        // Abonnements de présence des centres de santé (cliniques, hôpitaux, laboratoires)
+        children: [
+          { key: "abonnements-presence-structure", label: "Abonnements", icon: "fa-solid fa-id-card-clip", to: "/abonnements-presence/structure" },
+          { key: "niveaux-abonnement-presence-structure", label: "Niveaux", icon: "fa-solid fa-layer-group", to: "/niveaux-abonnement-presence/structure" },
+          { key: "tarifs-abonnement-presence-structure", label: "Tarifs & paramètres", icon: "fa-solid fa-tags", to: "/tarifs-abonnement-presence/structure" },
+          { key: "paiements-abonnement-presence-structure", label: "Paiements", icon: "fa-solid fa-receipt", to: "/paiements-abonnement-presence/structure" }
+        ]
       },
       {
         key: "pharmacies",
@@ -53,7 +58,12 @@ const APS_MENU = [
         icon: "fa-solid fa-mortar-pestle",
         to: "/pharmacie",
         children: [
-          { key: "avis-pharmacie", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-pharmacie" }
+          { key: "avis-pharmacie", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-pharmacie" },
+          // Abonnements de présence des pharmacies
+          { key: "abonnements-presence-pharmacie", label: "Abonnements", icon: "fa-solid fa-id-card-clip", to: "/abonnements-presence/pharmacie" },
+          { key: "niveaux-abonnement-presence-pharmacie", label: "Niveaux", icon: "fa-solid fa-layer-group", to: "/niveaux-abonnement-presence/pharmacie" },
+          { key: "tarifs-abonnement-presence-pharmacie", label: "Tarifs & paramètres", icon: "fa-solid fa-tags", to: "/tarifs-abonnement-presence/pharmacie" },
+          { key: "paiements-abonnement-presence-pharmacie", label: "Paiements", icon: "fa-solid fa-receipt", to: "/paiements-abonnement-presence/pharmacie" }
           // Pas de /publicite-pharmacie dédiée : la publicité pharmacie
           // passe par la rubrique "Publicité" générique plus bas.
         ]
@@ -68,7 +78,13 @@ const APS_MENU = [
         to: "/medecin",
         children: [
           { key: "avis-medecin", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-medecin" },
-          { key: "abonnement-medecin", label: "Abonnements", icon: "fa-solid fa-id-card-clip", to: "/abonnement-medecin" },
+          // Abonnements de présence des médecins ; l'obligation de souscrire
+          // s'active ou se désactive par pays dans « Tarifs & paramètres ».
+          // (L'ancien écran /abonnement-medecin reste routé, hors menu.)
+          { key: "abonnements-presence-medecin", label: "Abonnements", icon: "fa-solid fa-id-card-clip", to: "/abonnements-presence/medecin" },
+          { key: "niveaux-abonnement-presence-medecin", label: "Niveaux", icon: "fa-solid fa-layer-group", to: "/niveaux-abonnement-presence/medecin" },
+          { key: "tarifs-abonnement-presence-medecin", label: "Tarifs & activation", icon: "fa-solid fa-toggle-on", to: "/tarifs-abonnement-presence/medecin" },
+          { key: "paiements-abonnement-presence-medecin", label: "Paiements", icon: "fa-solid fa-receipt", to: "/paiements-abonnement-presence/medecin" },
           { key: "ordonnance", label: "Ordonnances", icon: "fa-solid fa-file-prescription", to: "/ordonnance" },
           { key: "retraits", label: "Retraits", icon: "fa-solid fa-money-bill-transfer", to: "/retraits" }
         ]
@@ -108,6 +124,12 @@ const APS_MENU = [
         label: "Rendez-vous",
         icon: "fa-solid fa-calendar-check",
         to: "/rendez-vous"
+      },
+      {
+        key: "offres-rdv",
+        label: "Demandes de RDV",
+        icon: "fa-solid fa-bullhorn",
+        to: "/offres-rdv"
       },
       {
         key: "parametre-delai-confirmation",

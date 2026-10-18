@@ -12,6 +12,7 @@
 
 import { expirerRdvNonConfirmes } from "../services/expirationConfirmation.service.js";
 import { synchroniserTousLesAgendas } from "../services/agendaCreneau.service.js";
+import { expirerOffresEchues } from "../services/offreRdv.service.js";
 
 function sansChevauchement(nom, tache) {
   let enCours = false;
@@ -31,3 +32,5 @@ function sansChevauchement(nom, tache) {
 
 export const expirerRdvNonConfirmesJob = sansChevauchement("expiration-confirmation", expirerRdvNonConfirmes);
 export const synchroniserAgendasJob = sansChevauchement("agenda-synchronisation", synchroniserTousLesAgendas);
+// RDV aléatoire : expiration des offres ouvertes dont la date est passée.
+export const expirerOffresRdvJob = sansChevauchement("offres-rdv-expiration", expirerOffresEchues);

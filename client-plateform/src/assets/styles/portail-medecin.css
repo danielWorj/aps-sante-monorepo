@@ -779,3 +779,21 @@ RESPONSIVE
 .retrait-date{ font-size:.78rem; color:var(--ink-faint); }
 .retrait-motif{ font-size:.8rem; color:var(--urgence-dark); margin-top:.15rem; }
 @media (max-width:640px){ .retrait-ligne{ flex-direction:column; align-items:flex-start; } }
+/* ─── RDV aléatoire (demande rapide) ─────────────────────────── */
+.offre-card h3{ font-size:1rem; font-weight:700; }
+.offre-reponses{ display:flex; flex-direction:column; gap:.6rem; }
+.offre-reponse{ display:flex; align-items:center; gap:.9rem; padding:.75rem .9rem;
+  border:1px solid var(--line, #e5e7eb); border-radius:12px; background:var(--surface); }
+.offre-reponse.is-retenue{ border-color:var(--teal-dark); background:var(--teal-tint); }
+.offre-reponse-avatar{ flex:0 0 48px; width:48px; height:48px; border-radius:50%; overflow:hidden;
+  display:flex; align-items:center; justify-content:center; background:var(--primary-tint);
+  color:var(--primary-dark); font-weight:700; }
+.offre-reponse-avatar img{ width:100%; height:100%; object-fit:cover; }
+.offre-reponse-body{ flex:1 1 auto; min-width:0; }
+.offre-reponse-message{ font-size:.82rem; font-style:italic; margin:.25rem 0; }
+.offre-reponse-actions{ flex:0 0 auto; text-align:right; display:flex; flex-direction:column; align-items:flex-end; }
+.offre-tarif{ font-weight:700; font-size:1.05rem; color:var(--primary-dark); }
+@media (max-width:640px){
+  .offre-reponse{ flex-wrap:wrap; }
+  .offre-reponse-actions{ width:100%; align-items:stretch; text-align:left; }
+}

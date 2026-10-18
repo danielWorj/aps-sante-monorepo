@@ -35,7 +35,7 @@ class CardMedecin extends StatelessWidget {
     this.teleconsultation = false,
     this.disponibleAujourdhui = false,
     required this.onVoirProfil,
-    required this.onPrendreRdv,
+    this.onPrendreRdv,
     this.onTap,
   });
 
@@ -48,7 +48,8 @@ class CardMedecin extends StatelessWidget {
   final bool teleconsultation;
   final bool disponibleAujourdhui;
   final VoidCallback onVoirProfil;
-  final VoidCallback onPrendreRdv;
+  /// null = prise de RDV en ligne indisponible (bouton masqué).
+  final VoidCallback? onPrendreRdv;
   final VoidCallback? onTap;
 
   @override
@@ -127,8 +128,10 @@ class CardMedecin extends StatelessWidget {
                     Row(
                       children: [
                         AppOutlineButton(label: 'Voir le profil', onPressed: onVoirProfil),
-                        const SizedBox(width: 6),
-                        RdvButton(onPressed: onPrendreRdv),
+                        if (onPrendreRdv != null) ...[
+                          const SizedBox(width: 6),
+                          RdvButton(onPressed: onPrendreRdv!),
+                        ],
                       ],
                     ),
                   ],

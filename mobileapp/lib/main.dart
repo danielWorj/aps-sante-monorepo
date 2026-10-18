@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'pages/public/onboarding/onboarding_accueil_page.dart';
+import 'utils/identifiant_installation.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Identifiant d'installation (statistiques de vues des fiches) : lu une
+  // fois, avant le premier appel réseau. Ne lève jamais.
+  await IdentifiantInstallation.charger();
   runApp(
     // ProviderScope DOIT envelopper toute l'app dès la racine : tous les
     // écrans Riverpod (AssurancePage, PharmaciePage, CentreSantePage,

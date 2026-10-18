@@ -5,6 +5,7 @@ import 'package:mobileapp/pages/portails/patient/portail-patient-profil.dart';
 import '../../../components/cards/notifications_bell.dart';
 import '../../../components/navigation/patient-bottom-navigation.dart';
 import '../../../controllers/notification_controller.dart';
+import 'portail-patient-demandes.dart';
 import 'portail-patient-rdv.dart';
 
 /// Shell (Scaffold + PatientBottomNavigationBar) affiché une fois
@@ -34,9 +35,13 @@ class _PatientHomeShellState extends ConsumerState<PatientHomeShell> {
   /// Index de l'onglet « Rendez-vous » dans [_pages].
   static const int _indexRendezVous = 1;
 
+  /// Index de l'onglet « Demande » (RDV aléatoire) dans [_pages].
+  static const int _indexDemandes = 2;
+
   static const _pages = <Widget>[
     Center(child: Text('Accueil patient')), // TODO: écran réel "Accueil"
     PortailPatientRdv(),
+    PortailPatientDemandes(),
     PortailPatientProfil(), // TODO: créer PortailPatientProfil
   ];
 
@@ -59,6 +64,8 @@ class _PatientHomeShellState extends ConsumerState<PatientHomeShell> {
               child: NotificationsBell(
                 onOuvrirRendezVous: () =>
                     setState(() => _index = _indexRendezVous),
+                onOuvrirDemandes: () =>
+                    setState(() => _index = _indexDemandes),
               ),
             ),
           ],

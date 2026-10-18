@@ -16,6 +16,12 @@
 //     renvoie que { rdv_id, date_creneau, statut, non_paye: true } : aucune
 //     identité patient, aucun motif. Un 409 RDV_NON_PAYE est géré proprement. Le
 //     médecin n'« accepte » plus un RDV : la confirmation résulte du paiement.
+//
+// Acceptation d'un RDV PHYSIQUE (après paiement, statut « confirme ») : le
+// médecin saisit le lieu de la consultation (AccepterRdvModal, obligatoire) ;
+// le patient est notifié (date + lieu). Tant qu'il ne l'a pas fait, le RDV
+// porte le chip « Lieu à préciser ». Le lieu reste modifiable tant que le RDV
+// est « confirme ».
 //   - le client n'invente aucun montant : il affiche ce que le serveur renvoie.
 //
 // Code de fin de consultation & libération différée des fonds (T heures) :
@@ -34,6 +40,7 @@ import MotifAnnulationModal from "./motif-annulation-modal";
 import AvertissementAnnulation from "./avertissement-annulation";
 import ReprogrammationPanel from "./reprogrammation-panel";
 import TerminerRdvModal from "./terminer-rdv-modal";
+import AccepterRdvModal from "./accepter-rdv-modal";
 import {
   listerRendezVousMedecinConnecte,
   MOTIFS_ANNULATION_MEDECIN,
@@ -46,6 +53,8 @@ import {
   estRdvNonPaye,
   estErreurRdvNonPaye,
   peutTerminerRdv,
+  peutAccepterRdv,
+  lieuAPreciser,
   fondsEnAttenteDeLiberation,
   formaterDateLiberation,
 } from "./../../../utils/rdv";
@@ -394,6 +403,26 @@ const MedecinRdv = () => {
     chargerRendezVous();
   };
 
+  // ─── Accepter un RDV physique payé (lieu obligatoire) ──────
+  const [rdvAAccepter, setRdvAAccepter] = useState(null); // rdv | null
+  const ouvrirAccepter = (rdv) => {
+    fermerDetail();
+    setRdvAAccepter(rdv);
+  };
+  const fermerAccepter = () => setRdvAAccepter(null);
+
+  const apresAcceptation = (resultat) => {
+    const id = rdvAAccepter?.rdv_id;
+    setRdvAAccepter(null);
+    if (id && resultat?.rendez_vous) {
+      setRendezVous((prev) =>
+        prev.map((r) => (r.rdv_id === id ? { ...r, ...resultat.rendez_vous } : r))
+      );
+    }
+    showToast(resultat?.message || "Rendez-vous accepté.", 7000);
+    chargerRendezVous();
+  };
+
   const tabs = [
     { key: "avenir", label: "À venir", count: rdvParCategorie.avenir.length },
     { key: "attente", label: "En attente", count: rdvParCategorie.attente.length },
@@ -451,6 +480,11 @@ const MedecinRdv = () => {
                 <i className="fa-solid fa-calendar-xmark"></i> À reprogrammer
               </span>
             )}
+            {lieuAPreciser(rdv) && (
+              <span className="chip chip-st-attente">
+                <i className="fa-solid fa-location-dot"></i> Lieu à préciser
+              </span>
+            )}
             {fondsEnAttenteDeLiberation(rdv) && (
               <span className="chip chip-st-confirme">
                 <i className="fa-solid fa-hourglass-half"></i> Fonds libérés le{" "}
@@ -484,10 +518,12 @@ const MedecinRdv = () => {
       : "";
     const typeLabel = TYPE_RDV_LABEL[rdv.type_rdv] || rdv.type_rdv;
     const isTeleconsultation = rdv.type_rdv === "teleconsultation";
-    const lieu = isTeleconsultation ? "Téléconsultation" : rdv.structure?.nom || "Cabinet";
+    const lieu = isTeleconsultation ? "Téléconsultation" : rdv.lieu_rdv || "À préciser";
     const lieuIcon = isTeleconsultation ? "fa-video" : "fa-location-dot";
     const typeIcon = isTeleconsultation ? "fa-video" : "fa-stethoscope";
     const peutTerminer = categorie === "avenir" && peutTerminerRdv(rdv);
+    const peutAccepter = categorie === "avenir" && peutAccepterRdv(rdv);
+    const aAccepter = peutAccepter && !rdv.accepte_le;
     const fondsEnAttente = fondsEnAttenteDeLiberation(rdv);
 
     // B7 : net perçu, uniquement si le RDV est payé et que le serveur a
@@ -620,6 +656,16 @@ const MedecinRdv = () => {
             </div>
           )}
 
+          {aAccepter && (
+            <div className="note-box">
+              <i className="fa-solid fa-location-dot"></i>
+              <span>
+                Le patient a payé ce rendez-vous. Acceptez-le en précisant le
+                lieu de la consultation : il en sera prévenu.
+              </span>
+            </div>
+          )}
+
           {fondsEnAttente && (
             <div className="note-box">
               <i className="fa-solid fa-hourglass-half"></i>
@@ -684,6 +730,16 @@ const MedecinRdv = () => {
                   <i className="fa-solid fa-video"></i> Démarrer la visio
                 </button>
               )}
+            {peutAccepter && (
+              <button
+                type="button"
+                className={`btn ${aAccepter ? "btn-primary" : "btn-outline-primary"} btn-sm-aps`}
+                onClick={() => ouvrirAccepter(rdv)}
+              >
+                <i className="fa-solid fa-location-dot"></i>{" "}
+                {aAccepter ? "Accepter et préciser le lieu" : "Modifier le lieu"}
+              </button>
+            )}
             {peutTerminer && (
               <button
                 type="button"
@@ -987,6 +1043,14 @@ const MedecinRdv = () => {
         enCours={actionEnCours !== null && actionEnCours === rdvARefuser}
         onClose={fermerRefus}
         onConfirm={confirmerRefus}
+      />
+
+      <AccepterRdvModal
+        open={rdvAAccepter !== null}
+        rdv={rdvAAccepter}
+        patientNom={rdvAAccepter ? nomPatient(rdvAAccepter) : ""}
+        onClose={fermerAccepter}
+        onAccepte={apresAcceptation}
       />
 
       <TerminerRdvModal

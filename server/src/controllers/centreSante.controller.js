@@ -35,6 +35,14 @@ import { televerserFichier, supprimerFichier, construireUrl } from "../lib/cloud
 import crypto from "crypto";
 import bcrypt from "bcrypt"; // même bibliothèque que authentification.controller.js
 import { creerAccesseurGeospatial, validerCoordonnees } from "../lib/geo.js";
+import { estAdminOuSuperadmin, peutGererFichePresence } from "../lib/acteursPresence.js";
+import {
+  appliquerDroitsPresenceALaListe,
+  resoudreDroitsPresence,
+  droitsPresencePublics,
+  filtrerStructure,
+} from "../lib/droitsPresence.js";
+import { enregistrerVueFiche } from "../services/vuesFiche.service.js";
 
 const SALT_ROUNDS = 10; // valeur identique à authentification.controller.js
 
@@ -224,6 +232,17 @@ async function enrichirCentreSante(structure) {
   return avecUrlsFichiers(avecGeo);
 }
 
+/*
+ * Abonnement de présence : sans abonnement actif, la fiche reste au palier
+ * Basique (identité, adresse, type, localisation) ; téléphone, photo et
+ * contenus enrichis ne sont exposés qu'avec les droits du niveau souscrit.
+ * Aucun effet sur l'ordre des listes. Un admin voit la fiche complète.
+ */
+async function restituerCentres(req, centres) {
+  if (estAdminOuSuperadmin(req.utilisateur)) return centres;
+  return appliquerDroitsPresenceALaListe("structure", centres);
+}
+
 /* ===================================================================
  * Centres de santé
  * =================================================================== */
@@ -298,7 +317,7 @@ export async function listerCentresSante(req, res, next) {
         resultat.push({ ...enrichie, distance_km: Math.round(distanceParId.get(id) * 10) / 10 });
       }
 
-      return res.status(200).json({ centresSante: resultat });
+      return res.status(200).json({ centresSante: await restituerCentres(req, resultat) });
     }
 
     const structures = await prisma.structureSante.findMany({
@@ -309,7 +328,7 @@ export async function listerCentresSante(req, res, next) {
 
     const centresSante = await Promise.all(structures.map(enrichirCentreSante));
 
-    return res.status(200).json({ centresSante });
+    return res.status(200).json({ centresSante: await restituerCentres(req, centresSante) });
   } catch (err) {
     next(err);
   }
@@ -329,7 +348,18 @@ export async function obtenirCentreSante(req, res, next) {
     }
 
     const centreSante = await enrichirCentreSante(structure);
-    return res.status(200).json({ centreSante });
+    const { droits, statut_abonnement } = await resoudreDroitsPresence("structure", structure.structure_id);
+    // Admin et agent du centre : fiche complète (droits indiqués pour l'aperçu).
+    const complete = await peutGererFichePresence(req.utilisateur, "structure", structure.structure_id);
+    // Statistiques de consultation : sans attendre (jamais bloquant).
+    enregistrerVueFiche({ req, type: "structure", acteur_id: structure.structure_id, gestionnaire: complete });
+    return res.status(200).json({
+      centreSante: {
+        ...(complete ? centreSante : filtrerStructure(centreSante, droits)),
+        droits: droitsPresencePublics(droits),
+        statut_abonnement,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -575,7 +605,7 @@ export async function creerCentreSante(req, res, next) {
 
 /**
  * PUT /api/centres-sante/:id
- * Ouvert à tout utilisateur authentifié (voir centreSante.routes.js).
+ * Réservé à l'agent du centre et à admin/superadmin (403 sinon).
  * Les 3 fichiers sont optionnels ici : seuls ceux effectivement
  * envoyés sont remplacés (l'ancien fichier Cloudinary correspondant
  * est alors supprimé après succès du nouvel upload).
@@ -591,6 +621,8 @@ export async function modifierCentreSante(req, res, next) {
       type_structure,
       latitude,
       longitude,
+      description_enrichie,
+      presentation_equipe,
     } = req.body;
 
     const existante = await prisma.structureSante.findUnique({
@@ -598,6 +630,13 @@ export async function modifierCentreSante(req, res, next) {
     });
     if (!existante) {
       return res.status(404).json({ message: "Centre de santé introuvable." });
+    }
+
+    // Seuls l'agent de la fiche et l'administration la modifient : toute
+    // modification repasse la fiche en vérification (droits enrichis de
+    // l'abonnement suspendus), un tiers ne doit pas pouvoir la déclencher.
+    if (!(await peutGererFichePresence(req.utilisateur, "structure", req.params.id))) {
+      return res.status(403).json({ message: "Seul l'agent de ce centre de santé ou un administrateur peut la modifier." });
     }
 
     if (type_structure && !TYPES_STRUCTURE.includes(type_structure)) {
@@ -679,6 +718,14 @@ export async function modifierCentreSante(req, res, next) {
         ...(telephone && { telephone }),
         statut_verification: statutApplique,
         ...(type_structure && { type_structure }),
+        // Contenus enrichis (abonnement de présence) : chaîne vide = effacé.
+        // Toujours enregistrés ; leur exposition dépend de l'abonnement.
+        ...(description_enrichie !== undefined && {
+          description_enrichie: String(description_enrichie).trim().slice(0, 5000) || null,
+        }),
+        ...(presentation_equipe !== undefined && {
+          presentation_equipe: String(presentation_equipe).trim().slice(0, 5000) || null,
+        }),
         ...donneesFichiers,
       },
       include: { pays: true, ville: true },
@@ -716,8 +763,19 @@ export async function supprimerCentreSante(req, res, next) {
         message: `Impossible de supprimer : ${nbAgents} agent(s) sont encore rattaché(s) à ce centre de santé.`,
       });
     }
+    // Abonnements de présence (et leurs factures archivées) : jamais supprimés.
+    const nbAbonnements = await prisma.abonnementPresence.count({ where: { structure_id: req.params.id } });
+    if (nbAbonnements > 0) {
+      return res.status(409).json({
+        message: `Impossible de supprimer : ce centre de santé porte ${nbAbonnements} abonnement(s) de présence.`,
+      });
+    }
 
-    await prisma.structureSante.delete({ where: { structure_id: req.params.id } });
+    await prisma.$transaction([
+      prisma.vueFiche.deleteMany({ where: { type_acteur: "structure", acteur_id: req.params.id } }),
+      prisma.vueFicheVisiteur.deleteMany({ where: { type_acteur: "structure", acteur_id: req.params.id } }),
+      prisma.structureSante.delete({ where: { structure_id: req.params.id } }),
+    ]);
 
     // Nettoyage Cloudinary après suppression réussie en base (best
     // effort — voir supprimerFichier). On ne bloque jamais la

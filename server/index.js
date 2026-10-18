@@ -35,6 +35,8 @@ import retraitRoutes from "./src/routes/retrait.routes.js";
 import remboursementRoutes from "./src/routes/remboursement.routes.js";
 import notificationRoutes from "./src/routes/notification.routes.js";
 import abonnementAssuranceRoutes from "./src/routes/abonnementAssurance.routes.js";
+import abonnementPresenceRoutes from "./src/routes/abonnementPresence.routes.js";
+import offreRdvRoutes from "./src/routes/offreRdv.routes.js";
 import { demarrerScheduler } from "./src/lib/scheduler.js";
 
 const app = express();
@@ -156,6 +158,9 @@ app.use("/api", remboursementRoutes);
 app.use("/api", notificationRoutes);
 // Abonnements des assurances : souscription (promoteur) et administration.
 app.use("/api", abonnementAssuranceRoutes);
+// Abonnements de présence : pharmacies, centres de santé, médecins.
+app.use("/api", abonnementPresenceRoutes);
+app.use("/api", offreRdvRoutes);
 // NB : le webhook Stripe (paiementWebhookRoutes) est déjà monté plus
 // haut, avant express.json() — voir commentaire à cet endroit.
 

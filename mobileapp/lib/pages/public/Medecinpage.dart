@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:riverpod/riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // Si votre projet utilise des imports package (ex: package:aps/...),
 // remplacez les lignes ci-dessous par les équivalents package:aps/...
@@ -396,7 +397,9 @@ class _MedecinPageState extends State<MedecinPage> {
                             // fiche Medecin elle-même.
                             disponibleAujourdhui: false,
                             onVoirProfil: () => _voirProfil(m),
-                            onPrendreRdv: () => _prendreRendezVous(m),
+                            // Abonnement de présence : RDV en ligne fermé
+                            // par le serveur => pas de bouton.
+                            onPrendreRdv: m.priseRdvEnLigne ? () => _prendreRendezVous(m) : null,
                           ),
                         ),
                     ],
@@ -777,10 +780,25 @@ class _MedecinDetailPageState extends State<_MedecinDetailPage> {
               Text(medecin.biographie, style: AppTextStyles.body),
               const SizedBox(height: 20),
             ],
-            AppOutlineButton(
-              label: 'Prendre rendez-vous',
-              onPressed: () => _prendreRendezVous(medecin),
-            ),
+            if (medecin.contactTelephone != null &&
+                medecin.contactTelephone!.isNotEmpty) ...[
+              CallButton(
+                label: 'Appeler',
+                onPressed: () =>
+                    launchUrl(Uri.parse('tel:${medecin.contactTelephone}')),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (medecin.priseRdvEnLigne)
+              AppOutlineButton(
+                label: 'Prendre rendez-vous',
+                onPressed: () => _prendreRendezVous(medecin),
+              )
+            else
+              Text(
+                'Ce médecin ne propose pas la prise de rendez-vous en ligne pour le moment.',
+                style: AppTextStyles.body.copyWith(color: AppColors.inkFaint),
+              ),
           ],
         ),
       ),

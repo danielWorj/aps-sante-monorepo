@@ -35,6 +35,7 @@ import 'package:http/http.dart' as http;
 import '../models/medecin_models.dart';
 import '../utils/endpoint.dart';
 import '../utils/multipart_utils.dart';
+import '../utils/identifiant_installation.dart';
 
 /// Erreur levée quand une requête HTTP échoue (statut hors 2xx) ou
 /// quand un appel est mal formé côté client (ex. rien à mettre à
@@ -72,7 +73,8 @@ class MedecinRepository {
    * =================================================================== */
 
   Map<String, String> _entetes({String? token, bool avecJson = true}) {
-    final entetes = <String, String>{};
+    // Identifiant d'installation : compteur de vues des fiches uniquement.
+    final entetes = <String, String>{...IdentifiantInstallation.entete};
     if (avecJson) entetes['Content-Type'] = 'application/json';
     if (token != null) entetes['Authorization'] = 'Bearer $token';
     return entetes;

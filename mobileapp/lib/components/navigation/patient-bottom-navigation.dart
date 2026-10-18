@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 ///
 /// Barre de navigation basse flottante de l'espace patient (APS).
 /// Reproduit le même style que la barre médecin : items
-/// "Accueil", "Rendez-vous", "Profil".
+/// "Accueil", "Rendez-vous", "Demande" (RDV aléatoire), "Profil".
 /// ============================================================
 
 /// Palette reprise des design tokens CSS (`:root`).
@@ -58,6 +58,10 @@ class PatientBottomNavigationBar extends StatelessWidget {
       PatientNavItem(
         icon: Icons.event_note_outlined,
         label: 'RdV',
+      ),
+      PatientNavItem(
+        icon: Icons.campaign_outlined,
+        label: 'Demande',
       ),
       PatientNavItem(
         icon: Icons.person_outline,

@@ -65,6 +65,8 @@ import {
   analyserParametresProximite,
   validerCoordonnees,
 } from "../lib/geo.js";
+import { resoudreDroitsPresenceEnLot, droitsPresencePublics, filtrerMedecin } from "../lib/droitsPresence.js";
+import { enregistrerVueFiche } from "../services/vuesFiche.service.js";
 
 export {
   listerAvisMedecin,
@@ -99,6 +101,7 @@ export {
   // par un endpoint du médecin mais par le webhook de fin de session Jitsi
   // (visio.controller.js, traiterFinSessionVisio). Remplace scannerQrRendezVous.
   terminerRendezVous,
+  accepterRendezVous,
   // Correction manuelle admin (voir rendezVous.controller.js) : importée
   // par medecin.routes.js, mais jamais ré-exportée ici — même cause que
   // la note ci-dessus (le serveur ne démarrait pas).
@@ -193,7 +196,32 @@ const SELECTION_UTILISATEUR_ADMIN = {
 // (GET /medecins, GET /medecins/:id) pour ne dévoiler email/téléphone
 // qu'au back-office, jamais à un visiteur anonyme.
 function selectionUtilisateurSelonRole(utilisateur) {
-  return estAdmin(utilisateur) ? SELECTION_UTILISATEUR_ADMIN : SELECTION_UTILISATEUR_PUBLIC;
+  return estAdmin(utilisateur) ? SELECTION_UTILISATEUR_ADMIN : SELECTION_UTILISATEUR_ANNUAIRE;
+}
+
+// Abonnement de présence : l'annuaire lit aussi le téléphone du compte,
+// mais restituerMedecins le retire TOUJOURS de `utilisateur` et ne l'expose
+// (champ `contact_telephone`) qu'avec le droit contact_direct. Ne jamais
+// renvoyer une fiche lue avec cette sélection sans passer par restituerMedecins.
+const SELECTION_UTILISATEUR_ANNUAIRE = {
+  select: { nom: true, prenom: true, telephone: true },
+};
+
+/**
+ * Restitution publique selon l'abonnement de présence (photo, biographie,
+ * contact, prise de RDV en ligne). Chaque fiche gagne `droits` et
+ * `statut_abonnement` ; l'ordre n'est jamais modifié. Admin et médecin
+ * propriétaire : fiche complète.
+ */
+async function restituerMedecins(req, medecins) {
+  const droitsParId = await resoudreDroitsPresenceEnLot("medecin", medecins.map((m) => m.medecin_id));
+  const admin = estAdmin(req.utilisateur);
+  return medecins.map((m) => {
+    const { droits, statut_abonnement } = droitsParId.get(m.medecin_id);
+    const complete = admin || (req.utilisateur && m.utilisateur_id === req.utilisateur.utilisateur_id);
+    const fiche = complete ? m : filtrerMedecin(m, droits, m.utilisateur?.telephone ?? null);
+    return { ...fiche, droits: droitsPresencePublics(droits), statut_abonnement };
+  });
 }
 
 // Spécialité : entité réelle et réutilisable (table "specialite"),
@@ -675,7 +703,7 @@ export async function listerMedecins(req, res, next) {
         });
       }
 
-      return res.status(200).json({ medecins: resultat });
+      return res.status(200).json({ medecins: await restituerMedecins(req, resultat) });
     }
 
     const medecins = await prisma.medecin.findMany({
@@ -685,7 +713,7 @@ export async function listerMedecins(req, res, next) {
     });
     const medecinsGeo = await avecGeolocalisations(medecins);
 
-    return res.status(200).json({ medecins: medecinsGeo.map(avecUrlsFichiersMedecin) });
+    return res.status(200).json({ medecins: await restituerMedecins(req, medecinsGeo.map(avecUrlsFichiersMedecin)) });
   } catch (err) {
     next(err);
   }
@@ -716,7 +744,13 @@ export async function obtenirMedecin(req, res, next) {
       return res.status(404).json({ message: "Médecin introuvable." });
     }
 
-    return res.status(200).json({ medecin: avecUrlsFichiersMedecin(await avecGeolocalisation(medecin)) });
+    const [restitue] = await restituerMedecins(req, [avecUrlsFichiersMedecin(await avecGeolocalisation(medecin))]);
+    // Statistiques de consultation : sans attendre ; le médecin lui-même et l'admin ne comptent pas.
+    enregistrerVueFiche({
+      req, type: "medecin", acteur_id: medecin.medecin_id,
+      gestionnaire: !!req.utilisateur && req.utilisateur.utilisateur_id === medecin.utilisateur_id,
+    });
+    return res.status(200).json({ medecin: restitue });
   } catch (err) {
     next(err);
   }
@@ -1222,7 +1256,11 @@ export async function supprimerMedecin(req, res, next) {
       return res.status(404).json({ message: "Médecin introuvable." });
     }
 
-    await prisma.medecin.delete({ where: { medecin_id: req.params.id } });
+    await prisma.$transaction([
+      prisma.vueFiche.deleteMany({ where: { type_acteur: "medecin", acteur_id: req.params.id } }),
+      prisma.vueFicheVisiteur.deleteMany({ where: { type_acteur: "medecin", acteur_id: req.params.id } }),
+      prisma.medecin.delete({ where: { medecin_id: req.params.id } }),
+    ]);
     return res.status(200).json({ message: "Fiche médecin supprimée." });
   } catch (err) {
     if (err.code === "P2003") {

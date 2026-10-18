@@ -210,7 +210,10 @@ function PresentationPanel({ pharmacie }) {
             <tr>
               <td>Téléphone</td>
               <td>
-                <a href={`tel:${pharmacie.telephone}`}>{pharmacie.telephone}</a>
+                {/* Contact direct : exposé par le serveur seulement avec un abonnement de présence. */}
+                {pharmacie.telephone
+                  ? <a href={`tel:${pharmacie.telephone}`}>{pharmacie.telephone}</a>
+                  : <span className="minimal-note">Non communiqué</span>}
               </td>
             </tr>
             {pharmacie.email && (
@@ -231,12 +234,21 @@ function PresentationPanel({ pharmacie }) {
         </table>
       </div>
 
-      {pharmacie.description && (
+      {(pharmacie.description_enrichie || pharmacie.description) && (
         <div className="info-card">
           <h3>
             <i className="fa-solid fa-prescription-bottle-medical" /> Présentation
           </h3>
-          <p style={{ fontSize: ".9rem" }}>{pharmacie.description}</p>
+          <p style={{ fontSize: ".9rem", whiteSpace: "pre-line" }}>{pharmacie.description_enrichie || pharmacie.description}</p>
+        </div>
+      )}
+
+      {pharmacie.services_particuliers && (
+        <div className="info-card">
+          <h3>
+            <i className="fa-solid fa-kit-medical" /> Services particuliers
+          </h3>
+          <p style={{ fontSize: ".9rem", whiteSpace: "pre-line" }}>{pharmacie.services_particuliers}</p>
         </div>
       )}
 

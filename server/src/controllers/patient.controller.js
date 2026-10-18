@@ -153,7 +153,7 @@ export async function obtenirMonProfil(req, res, next) {
         },
         orderBy: { date_creneau: "asc" },
         include: {
-          medecin: { include: { utilisateur: { select: { nom: true, prenom: true } } } },
+          medecin: { omit: { cni_url: true, attestation_url: true }, include: { utilisateur: { select: { nom: true, prenom: true } } } },
         },
       }),
       prisma.ordonnance.count({ where: { patient_id: patient.patient_id } }),
@@ -245,7 +245,7 @@ export async function listerRendezVousPatient(req, res, next) {
     const rendezVous = await prisma.rendezVous.findMany({
       where,
       include: {
-        medecin: { include: { utilisateur: { select: { nom: true, prenom: true } } } },
+        medecin: { omit: { cni_url: true, attestation_url: true }, include: { utilisateur: { select: { nom: true, prenom: true } } } },
         structure: { select: { structure_id: true, nom: true } },
       },
       orderBy: { date_creneau: "desc" },

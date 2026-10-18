@@ -11,6 +11,7 @@ import '../../../models/rendez_vous_models.dart';
 import '../../../utils/fonds.dart';
 import '../teleconsultation_screen.dart';
 import 'terminer_rdv_sheet.dart';
+import 'accepter_rdv_sheet.dart';
 
 /// ============================================================
 /// portail-medecin-rdv.dart - VERSION ADAPTÉE
@@ -598,6 +599,8 @@ class _PanelConfirme extends ConsumerWidget {
 
                 final nbARepro =
                     rdvConfirmes.where((r) => r.estAReprogrammer).length;
+                final nbLieuAPreciser =
+                    rdvConfirmes.where((r) => r.lieuAPreciser).length;
 
                 // Grouper par date
                 final groupesParDate = _grouperParDate(rdvConfirmes);
@@ -615,6 +618,19 @@ class _PanelConfirme extends ConsumerWidget {
                                             'proposer ou accepter une date (délai de 48 h).'
                                         : '$nbARepro rendez-vous à reprogrammer : ouvrez-les '
                                             'pour proposer ou accepter une date (délai de 48 h).',
+                                ),
+                                const SizedBox(height: 4),
+                            ],
+                            // RDV physiques payés pas encore acceptés : le patient
+                            // attend le lieu de la consultation.
+                            if (nbLieuAPreciser > 0) ...[
+                                AppAlert(
+                                    type: AppAlertType.warning,
+                                    message: nbLieuAPreciser == 1
+                                        ? '1 rendez-vous payé à accepter : précisez le lieu '
+                                            'de la consultation, le patient en sera prévenu.'
+                                        : '$nbLieuAPreciser rendez-vous payés à accepter : précisez '
+                                            'le lieu de chaque consultation, les patients en seront prévenus.',
                                 ),
                                 const SizedBox(height: 4),
                             ],
@@ -642,14 +658,29 @@ class _PanelConfirme extends ConsumerWidget {
                                                 subtitle: 'Consultation',
                                                 subtitle2: rdv.typeRdv == TypeRdv.teleconsultation
                                                     ? 'Téléconsultation'
-                                                    : 'Cabinet',
+                                                    : rdv.lieuRdv ?? 'Lieu à préciser',
                                                 footer: rdv.estAReprogrammer
                                                     ? PanneauReprogrammation(
                                                         key: ValueKey('repro-${rdv.rdvId}'),
                                                         rdv: rdv,
                                                         role: PartieRendezVous.medecin,
                                                       )
-                                                    : null,
+                                                    // RDV déjà accepté : le lieu reste modifiable
+                                                    // tant qu'il est `confirme` (patient renotifié).
+                                                    : rdv.peutEtreAccepte && rdv.accepteLe != null
+                                                        ? Align(
+                                                            alignment: Alignment.centerLeft,
+                                                            child: TextButton.icon(
+                                                                onPressed: () => afficherAccepterRdv(
+                                                                    context,
+                                                                    rdv: rdv,
+                                                                    nomPatient: '${rdv.patient?.utilisateur?.prenom ?? ''} ${rdv.patient?.utilisateur?.nom ?? ''}',
+                                                                ),
+                                                                icon: const Icon(Icons.edit_location_alt_outlined, size: 16),
+                                                                label: const Text('Modifier le lieu', style: TextStyle(fontSize: 12)),
+                                                            ),
+                                                          )
+                                                        : null,
                                                 bottom: _Frow(
                                                     badge: rdv.estAReprogrammer
                                                         ? const BadgeChip(
@@ -657,6 +688,12 @@ class _PanelConfirme extends ConsumerWidget {
                                                             style: BadgeChipStyle.coral,
                                                             icon: Icons.event_busy_outlined,
                                                         )
+                                                        : rdv.lieuAPreciser
+                                                            ? const BadgeChip(
+                                                                label: 'Lieu à préciser',
+                                                                style: BadgeChipStyle.amber,
+                                                                icon: Icons.location_on_outlined,
+                                                            )
                                                         : rdv.statut ==
                                                                 StatutRendezVous.enAttentePresence
                                                             ? const BadgeChip(
@@ -672,8 +709,20 @@ class _PanelConfirme extends ConsumerWidget {
                                                     // Téléconsultation : « Démarrer » (fin détectée par
                                                     // la visio, aucun code). RDV physique : « Terminé »
                                                     // (saisie du code donné par le patient).
+                                                    // RDV physique payé non accepté : « Accepter »
+                                                    // (saisie du lieu) avant toute autre action.
                                                     action: rdv.estAReprogrammer
                                                         ? null
+                                                        : rdv.lieuAPreciser
+                                                            ? RdvButton(
+                                                                label: 'Accepter',
+                                                                icon: Icons.location_on_outlined,
+                                                                onPressed: () => afficherAccepterRdv(
+                                                                    context,
+                                                                    rdv: rdv,
+                                                                    nomPatient: '${rdv.patient?.utilisateur?.prenom ?? ''} ${rdv.patient?.utilisateur?.nom ?? ''}',
+                                                                ),
+                                                            )
                                                         : rdv.typeRdv == TypeRdv.teleconsultation
                                                             ? RdvButton(
                                                                 label: 'Démarrer',
