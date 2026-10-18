@@ -88,3 +88,5 @@
   .facture-print-root .facture-total{background:none; border:1px solid #999;}
   .facture-print-root .facture-badge{background:none; border:1px solid #999; color:#000;}
 }
+/* Abonnements : sous-total après réduction, avant les frais d'agrégateur */
+.facture-ligne.facture-sous-total{font-weight:700; border-top:1px solid var(--line);}

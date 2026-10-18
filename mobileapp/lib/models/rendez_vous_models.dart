@@ -309,6 +309,13 @@ class RendezVous {
   /// est annulée automatiquement et le créneau est libéré.
   final DateTime? echeanceConfirmation;
 
+  /// RDV PHYSIQUE : lieu de la consultation, saisi par le médecin quand il
+  /// accepte le RDV (après paiement). `null` tant qu'il ne l'a pas fait.
+  final String? lieuRdv;
+
+  /// Date de la première acceptation par le médecin (`null` = pas acceptée).
+  final DateTime? accepteLe;
+
   final MedecinRdvRef? medecin;
   final PatientRdvRef? patient;
 
@@ -338,6 +345,8 @@ class RendezVous {
     this.termineLe,
     this.liberationPrevueLe,
     this.echeanceConfirmation,
+    this.lieuRdv,
+    this.accepteLe,
     this.medecin,
     this.patient,
     this.nonPaye = false,
@@ -363,6 +372,16 @@ class RendezVous {
   /// `cree` (miroir de `estRdvNonPaye` côté web). Pour le médecin, un tel
   /// RDV est en lecture seule : aucune action, aucune donnée patient.
   bool get estNonPaye => nonPaye || statut == StatutRendezVous.cree;
+
+  /// Le médecin peut accepter ce RDV (ou en changer le lieu) : RDV physique
+  /// payé, encore `confirme` (miroir de `peutAccepterRdv` côté web).
+  bool get peutEtreAccepte =>
+      !estNonPaye &&
+      typeRdv == TypeRdv.physique &&
+      statut == StatutRendezVous.confirme;
+
+  /// RDV physique payé que le médecin n'a pas encore accepté (lieu à préciser).
+  bool get lieuAPreciser => peutEtreAccepte && accepteLe == null;
 
   bool get estAReprogrammer => statut == StatutRendezVous.aReprogrammer;
   bool get estStatutConnu => statut != StatutRendezVous.inconnu;
@@ -402,6 +421,8 @@ class RendezVous {
       termineLe: _lireDate(json, 'termine_le'),
       liberationPrevueLe: _lireDate(json, 'liberation_prevue_le'),
       echeanceConfirmation: _lireDate(json, 'echeance_confirmation'),
+      lieuRdv: _lire<String>(json, 'lieu_rdv'),
+      accepteLe: _lireDate(json, 'accepte_le'),
       medecin: json['medecin'] is Map<String, dynamic>
           ? MedecinRdvRef.fromJson(json['medecin'] as Map<String, dynamic>)
           : null,
@@ -433,6 +454,8 @@ class RendezVous {
     if (termineLe != null) 'termine_le': termineLe!.toIso8601String(),
     if (liberationPrevueLe != null)
       'liberation_prevue_le': liberationPrevueLe!.toIso8601String(),
+    if (lieuRdv != null) 'lieu_rdv': lieuRdv,
+    if (accepteLe != null) 'accepte_le': accepteLe!.toIso8601String(),
     if (medecin != null) 'medecin': medecin!.toJson(),
     if (patient != null) 'patient': patient!.toJson(),
     if (nonPaye) 'non_paye': true,
@@ -457,6 +480,8 @@ class RendezVous {
     DateTime? termineLe,
     DateTime? liberationPrevueLe,
     DateTime? echeanceConfirmation,
+    String? lieuRdv,
+    DateTime? accepteLe,
     MedecinRdvRef? medecin,
     PatientRdvRef? patient,
     bool? nonPaye,
@@ -481,6 +506,8 @@ class RendezVous {
       termineLe: termineLe ?? this.termineLe,
       liberationPrevueLe: liberationPrevueLe ?? this.liberationPrevueLe,
       echeanceConfirmation: echeanceConfirmation ?? this.echeanceConfirmation,
+      lieuRdv: lieuRdv ?? this.lieuRdv,
+      accepteLe: accepteLe ?? this.accepteLe,
       medecin: medecin ?? this.medecin,
       patient: patient ?? this.patient,
       nonPaye: nonPaye ?? this.nonPaye,
@@ -1059,6 +1086,25 @@ class ResultatTerminaison {
   }
 }
 
+/// Réponse de POST /rendez-vous/:id/accepter (RDV physique accepté par le
+/// médecin avec le lieu, ou lieu modifié). [dejaAccepte] : même lieu renvoyé,
+/// rien n'a changé (aucune notification).
+class ResultatAcceptation {
+  final String? message;
+  final bool dejaAccepte;
+  final RendezVous? rendezVous;
+
+  const ResultatAcceptation({this.message, this.dejaAccepte = false, this.rendezVous});
+
+  factory ResultatAcceptation.fromJson(Map<String, dynamic> json) {
+    return ResultatAcceptation(
+      message: _lire<String>(json, 'message'),
+      dejaAccepte: json['deja_accepte'] == true,
+      rendezVous: _rendezVousTolerant(json['rendez_vous']),
+    );
+  }
+}
+
 /// Devis avant paiement — GET /paiement/rendez-vous/:id/devis
 /// ?agregateur=stripe|campay.
 /// `total = honoraires + frais d'envoi + commission APS patient (CP)`.
@@ -1113,6 +1159,15 @@ enum TypeNotification {
   rdvAReprogrammer('rdv_a_reprogrammer'),
   rdvReprogrammationProposee('rdv_reprogrammation_proposee'),
   rdvReprogrammationAcceptee('rdv_reprogrammation_acceptee'),
+  // Médecin : paiement confirmé (RDV physique : à accepter avec le lieu).
+  rdvPaye('rdv_paye'),
+  // Patient : RDV physique accepté par le médecin (date + lieu dans donnees).
+  rdvAccepte('rdv_accepte'),
+  // RDV aléatoire : nouvelle demande (médecin), réponse d'un médecin et
+  // demande expirée (patient). Un appui ouvre l'onglet des demandes.
+  offreRdvNouvelle('offre_rdv_nouvelle'),
+  offreRdvReponse('offre_rdv_reponse'),
+  offreRdvExpiree('offre_rdv_expiree'),
   inconnu('');
 
   const TypeNotification(this.valeurApi);

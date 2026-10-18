@@ -39,15 +39,18 @@ export function depuisUniteStripe(montantStripe, devise) {
  * dans l'unité Stripe, doit être STRICTEMENT égale au montant de la
  * transaction — le webhook compare `amount === versUniteStripe(montant)`.
  * Sans `lignes`, une ligne unique (comportement historique).
+ * `remise` (unité de la devise) : réduction appliquée par coupon, à
+ * retrancher de la somme des lignes (Stripe refuse les lignes négatives).
  */
-function lignesCheckout({ montant, devise, libelle, lignes }) {
+function lignesCheckout({ montant, devise, libelle, lignes, remise = 0 }) {
   const source = lignes?.length ? lignes : [{ libelle, description: null, montant }];
   const retenues = source.filter((l) => versUniteStripe(l.montant, devise) > 0);
   const somme = retenues.reduce((total, l) => total + versUniteStripe(l.montant, devise), 0);
-  if (retenues.length === 0 || somme !== versUniteStripe(montant, devise)) {
+  const attendu = versUniteStripe(montant, devise) + versUniteStripe(remise, devise);
+  if (retenues.length === 0 || somme !== attendu) {
     throw new Error(
       `Incohérence de facturation : la somme des lignes (${somme}) diffère du montant à débiter ` +
-      `(${versUniteStripe(montant, devise)}) — session Checkout non créée.`
+      `augmenté de la remise (${attendu}) — session Checkout non créée.`
     );
   }
   return retenues.map((l) => ({
@@ -68,6 +71,9 @@ function lignesCheckout({ montant, devise, libelle, lignes }) {
  * `lignes` : [{ libelle, description?, montant }] — détail de la facture,
  * dont la somme doit égaler `montant` (voir lignesCheckout).
  * `description_facture` : texte de la facture Stripe (invoice_creation).
+ * `remise` : { libelle, montant } — réduction affichée par Stripe entre le
+ * sous-total et le total (coupon à usage unique créé pour cette session).
+ * `recapitulatif` : texte libre affiché au-dessus du bouton « Payer ».
  *
  * NB : les metadata `transaction_id` / `rdv_id` ne sont posées que sur la
  * SESSION (et sur la facture), jamais sur le PaymentIntent du Checkout : un
@@ -80,16 +86,30 @@ function lignesCheckout({ montant, devise, libelle, lignes }) {
  */
 export async function creerSessionCheckout({
   montant, devise, transaction_id, rdv_id, metadata = {}, libelle, lignes, description_facture,
-  email_client, url_succes, url_annulation,
+  remise = null, recapitulatif = null, email_client, url_succes, url_annulation,
 }) {
   const descriptionFacture = description_facture ?? libelle;
   const meta = { transaction_id, ...(rdv_id ? { rdv_id } : {}), ...metadata };
+  const montantRemise = remise && versUniteStripe(remise.montant, devise) > 0 ? Number(remise.montant) : 0;
+  const line_items = lignesCheckout({ montant, devise, libelle, lignes, remise: montantRemise });
+  const coupon = montantRemise
+    ? await stripe.coupons.create({
+        amount_off: versUniteStripe(montantRemise, devise),
+        currency: devise.toLowerCase(),
+        duration: "once",
+        max_redemptions: 1,
+        name: String(remise.libelle).slice(0, 40), // limite Stripe
+        metadata: { transaction_id },
+      })
+    : null;
   return stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
     customer_email: email_client,
     client_reference_id: transaction_id,
-    line_items: lignesCheckout({ montant, devise, libelle, lignes }),
+    line_items,
+    ...(coupon ? { discounts: [{ coupon: coupon.id }] } : {}),
+    ...(recapitulatif ? { custom_text: { submit: { message: String(recapitulatif).slice(0, 1200) } } } : {}),
     // Facture Stripe émise après paiement (détail identique au récapitulatif).
     invoice_creation: {
       enabled: true,

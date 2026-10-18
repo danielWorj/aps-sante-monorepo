@@ -11,6 +11,7 @@ const PatientPortailNavbar = ({ activePage = "" }) => {
 
   const navLinks = [
     { label: "Rendez-vous", to: "/portail/patient-rdv", key: "rdv", icon: "fa-calendar-check" },
+    { label: "Demande rapide", to: "/portail/patient-demandes", key: "demandes", icon: "fa-bullhorn" },
     { label: "Messages", to: "/portail/patient-messages", key: "messages", icon: "fa-comment-medical" },
     { label: "Annonces", to: "/portail/patient-annonces", key: "annonces", icon: "fa-bullhorn" },
     { label: "Profil", to: "/portail/patient-profil", key: "profil", icon: "fa-user" },

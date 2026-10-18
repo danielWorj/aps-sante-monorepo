@@ -606,9 +606,7 @@ class _PanelConfirme extends ConsumerWidget {
                         subtitle: rdv.motif?.isNotEmpty == true
                             ? rdv.motif!
                             : 'Consultation',
-                        subtitle2: rdv.typeRdv == TypeRdv.teleconsultation
-                            ? 'Téléconsultation'
-                            : 'Cabinet',
+                        subtitle2: _lieuAffiche(rdv),
                         // Facture : RDV payé (confirmé / à reprogrammer).
                         footer: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -773,9 +771,7 @@ class _PanelAttente extends ConsumerWidget {
                   subtitle: rdv.motif?.isNotEmpty == true
                       ? rdv.motif!
                       : 'Consultation générale',
-                  subtitle2: rdv.typeRdv == TypeRdv.teleconsultation
-                      ? 'Téléconsultation'
-                      : 'Cabinet',
+                  subtitle2: _lieuAffiche(rdv),
                   bottom: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -871,9 +867,7 @@ class _PanelTermines extends ConsumerWidget {
                       : rdv.statut == StatutRendezVous.nonHonore
                       ? 'Non honoré'
                       : 'Litige en cours',
-                  subtitle2: rdv.typeRdv == TypeRdv.teleconsultation
-                      ? 'Téléconsultation'
-                      : 'Cabinet',
+                  subtitle2: _lieuAffiche(rdv),
                   footer: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -992,9 +986,7 @@ class _PanelAnnules extends ConsumerWidget {
                   subtitle: rdv.motif?.isNotEmpty == true
                       ? rdv.motif!
                       : 'Consultation',
-                  subtitle2: rdv.typeRdv == TypeRdv.teleconsultation
-                      ? 'Téléconsultation'
-                      : 'Cabinet',
+                  subtitle2: _lieuAffiche(rdv),
                   bottom: const _Frow(
                     badge: BadgeChip(
                       label: 'Annulé',
@@ -1453,4 +1445,15 @@ Future<void> _executerActionRdv({
       );
     }
   }
+}
+
+/// Lieu affiché au patient. RDV physique : lieu saisi par le médecin quand il
+/// accepte le RDV, après paiement (notification « rdv_accepte »).
+String _lieuAffiche(RendezVous rdv) {
+  if (rdv.typeRdv == TypeRdv.teleconsultation) return 'Téléconsultation';
+  final lieu = rdv.lieuRdv;
+  if (lieu != null && lieu.isNotEmpty) return lieu;
+  if (rdv.estNonPaye) return 'Lieu communiqué par le médecin après paiement';
+  if (rdv.lieuAPreciser) return 'Le médecin va préciser le lieu';
+  return 'Lieu non précisé';
 }

@@ -544,6 +544,16 @@ class Medecin {
   final VilleExerciceRef? villeExercice;
   final PaysExerciceRef? paysExercice;
 
+  /// Abonnement de présence (décidé par le serveur, lib/droitsPresence.js) :
+  /// la prise de RDV en ligne peut être fermée dans un pays où
+  /// l'abonnement des médecins est obligatoire. Absent (anciennes
+  /// réponses) => autorisée, comme avant le module.
+  final bool priseRdvEnLigne;
+
+  /// Téléphone du médecin, exposé seulement avec le droit « contact
+  /// direct » de son abonnement (jamais `utilisateur.telephone`).
+  final String? contactTelephone;
+
   const Medecin({
     required this.medecinId,
     required this.utilisateurId,
@@ -565,6 +575,8 @@ class Medecin {
     this.specialite,
     this.villeExercice,
     this.paysExercice,
+    this.priseRdvEnLigne = true,
+    this.contactTelephone,
   });
 
   bool get estPublie => statutVerification == StatutVerificationMedecin.publie;
@@ -605,6 +617,10 @@ class Medecin {
       paysExercice: json['pays_exercice'] is Map<String, dynamic>
           ? PaysExerciceRef.fromJson(json['pays_exercice'] as Map<String, dynamic>)
           : null,
+      priseRdvEnLigne: json['droits'] is Map<String, dynamic>
+          ? (json['droits'] as Map<String, dynamic>)['prise_rdv_en_ligne'] != false
+          : true,
+      contactTelephone: _lire<String>(json, 'contact_telephone'),
     );
   }
 
@@ -637,6 +653,8 @@ class Medecin {
     if (specialite != null) 'specialite': specialite!.toJson(),
     if (villeExercice != null) 'ville_exercice': villeExercice!.toJson(),
     if (paysExercice != null) 'pays_exercice': paysExercice!.toJson(),
+    'droits': {'prise_rdv_en_ligne': priseRdvEnLigne},
+    if (contactTelephone != null) 'contact_telephone': contactTelephone,
   };
 
   Medecin copyWith({
@@ -660,6 +678,8 @@ class Medecin {
     Specialite? specialite,
     VilleExerciceRef? villeExercice,
     PaysExerciceRef? paysExercice,
+    bool? priseRdvEnLigne,
+    String? contactTelephone,
   }) {
     return Medecin(
       medecinId: medecinId ?? this.medecinId,
@@ -683,6 +703,8 @@ class Medecin {
       specialite: specialite ?? this.specialite,
       villeExercice: villeExercice ?? this.villeExercice,
       paysExercice: paysExercice ?? this.paysExercice,
+      priseRdvEnLigne: priseRdvEnLigne ?? this.priseRdvEnLigne,
+      contactTelephone: contactTelephone ?? this.contactTelephone,
     );
   }
 

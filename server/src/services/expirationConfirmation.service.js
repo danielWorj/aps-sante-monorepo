@@ -29,6 +29,7 @@ import { neutraliserPaiementsEnCours } from "./annulation.service.js";
 import { libererCreneauxDuRdv, libererCreneauxOrphelins } from "./agendaCreneau.service.js";
 import { resoudreDelaiConfirmationPays } from "./parametreDelaiConfirmation.service.js";
 import { creerNotifications } from "./notification.service.js";
+import { rouvrirOffreApresAnnulationRdv } from "./offreRdv.service.js";
 
 export const MOTIF_EXPIRATION = "delai_confirmation_expire";
 const COMMENTAIRE_EXPIRATION =
@@ -90,6 +91,8 @@ async function expirerRdv(rdv, maintenant) {
 
   // Après la transaction : appels Stripe et notification, jamais bloquants.
   await neutraliserPaiementsEnCours(rdv.rdv_id);
+  // RDV aléatoire : l'offre d'origine redevient « ouverte » (non bloquant).
+  await rouvrirOffreApresAnnulationRdv(rdv.rdv_id, maintenant);
   try {
     await notifierPatient(rdv);
   } catch (err) {

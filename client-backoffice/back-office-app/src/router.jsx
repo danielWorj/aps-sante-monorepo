@@ -33,6 +33,12 @@ import AbonnementsAssurance from './pages/AbonnementsAssurance';
 import NiveauxAbonnementAssurance from './pages/NiveauxAbonnementAssurance';
 import TarifsAbonnementAssurance from './pages/TarifsAbonnementAssurance';
 import PaiementsAbonnementAssurance from './pages/PaiementsAbonnementAssurance';
+// Abonnements de présence : pharmacies, centres de santé, médecins
+import AbonnementsPresence from './pages/AbonnementsPresence';
+import NiveauxAbonnementPresence from './pages/NiveauxAbonnementPresence';
+import TarifsAbonnementPresence from './pages/TarifsAbonnementPresence';
+import PaiementsAbonnementPresence from './pages/PaiementsAbonnementPresence';
+import PagePresence from './components/PagePresence';
 //URGENCES
 import Urgences from './pages/urgences';
 //MEDECIN 
@@ -63,6 +69,7 @@ import LignesTarifaires from './pages/LignesTarifaires';
 import ParametreAmende from './pages/ParametreAmende';
 import ParametreDelaiLiberation from './pages/ParametreDelaiLiberation';
 import ParametreDelaiConfirmation from './pages/ParametreDelaiConfirmation';
+import OffresRdv from './pages/OffresRdv';
 import RemboursementsCampay from './pages/RemboursementsCampay';
 
 export const router = createBrowserRouter([
@@ -103,6 +110,11 @@ export const router = createBrowserRouter([
           { path: '/niveaux-abonnement-assurance', element: <NiveauxAbonnementAssurance /> },
           { path: '/tarifs-abonnement-assurance', element: <TarifsAbonnementAssurance /> },
           { path: '/paiements-abonnement-assurance', element: <PaiementsAbonnementAssurance /> },
+          // Abonnements de présence (pharmacies, centres de santé, médecins)
+          { path: '/abonnements-presence/:type', element: <PagePresence page={AbonnementsPresence} /> },
+          { path: '/niveaux-abonnement-presence/:type', element: <PagePresence page={NiveauxAbonnementPresence} /> },
+          { path: '/tarifs-abonnement-presence/:type', element: <PagePresence page={TarifsAbonnementPresence} /> },
+          { path: '/paiements-abonnement-presence/:type', element: <PagePresence page={PaiementsAbonnementPresence} /> },
 
           // URGENCES
           { path: '/urgences', element: <Urgences /> },
@@ -121,6 +133,7 @@ export const router = createBrowserRouter([
 
           // RENDEZ VOUS 
           { path: '/rendez-vous', element: <RendezVous /> },
+          { path: '/offres-rdv', element: <OffresRdv /> },
           // APK
           { path: '/apk', element: <GestionApk /> },
           

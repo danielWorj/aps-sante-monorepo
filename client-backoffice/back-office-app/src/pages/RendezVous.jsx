@@ -356,6 +356,29 @@ function InfoLiberation({ rdv }) {
   );
 }
 
+// Détail du RDV PHYSIQUE : acceptation par le médecin après paiement et lieu
+// qu'il a saisi (lecture seule : seul le médecin du RDV accepte ou change le lieu).
+function DetailAcceptation({ rdv }) {
+  if (rdv?.type_rdv !== 'physique' || (['cree', 'annule'].includes(rdv.statut) && !rdv.accepte_le)) return null;
+  return (
+    <div className="mb-3">
+      <label className="form-label">Lieu du rendez-vous</label>
+      {rdv.accepte_le ? (
+        <div className="form-control-plaintext" style={{ fontSize: 14 }}>
+          <i className="fa-solid fa-location-dot me-1 aps-text-muted"></i>
+          {rdv.lieu_rdv}
+          <small className="aps-text-muted d-block">Accepté par le médecin le {formaterDateHeure(rdv.accepte_le)}</small>
+        </div>
+      ) : (
+        <div className="aps-notice is-warning">
+          <i className="fa-solid fa-hourglass-half"></i>
+          <div>Pas encore accepté : le médecin n'a pas précisé le lieu.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Détail du RDV : fin de consultation constatée, T figé et date de libération.
 // Affiché dès que `termine_le` est renseigné (aussi après passage à « honoré »).
 function DetailLiberation({ rdv }) {
@@ -1298,6 +1321,7 @@ export default function RendezVous() {
               </div>
             </div>
 
+            <DetailAcceptation rdv={rdvActif} />
             <DetailLiberation rdv={rdvActif} />
 
             {rdvActif.type_rdv === 'physique' && (

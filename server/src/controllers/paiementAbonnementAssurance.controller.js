@@ -37,6 +37,8 @@ import {
 } from "../services/abonnementAssurance.service.js";
 import { DUREES_PROPOSEES } from "../services/tarifAbonnementAssurance.service.js";
 import { construireDevisAbonnement } from "../services/factureAbonnement.service.js";
+import { fraisEnvoiAbonnement, detailCheckoutAbonnement, libelleAbonnement } from "../services/fraisAbonnement.service.js";
+import { synchroniserStripeAbonnement } from "../services/synchroStripeAbonnement.service.js";
 import { journaliserAudit } from "../lib/audit.js";
 import { repondreSiPaiementExistant, repondreSiBaremeAbsent, marquerTransactionEchouee } from "./paiement.controller.js";
 
@@ -135,6 +137,15 @@ async function fraisCampay(montant) {
 }
 
 /** Réponse d'erreur commune aux routes de ce contrôleur ; true si traitée. */
+/** Rattrapage des paiements Stripe sans webhook ; un échec n'empêche jamais la réponse. */
+async function rattraperStripe(nature, abonnement_id) {
+  try {
+    await synchroniserStripeAbonnement(nature, abonnement_id);
+  } catch (err) {
+    console.error(`[stripe] Rattrapage de l'abonnement ${abonnement_id} impossible :`, err.message);
+  }
+}
+
 function repondreErreurConnue(err, res) {
   if (repondreSiErreurAbonnement(err, res)) return true;
   if (repondreSiPaiementExistant(err, res)) return true;
@@ -304,8 +315,8 @@ export async function creerAbonnement(req, res, next) {
 
 /**
  * GET /api/abonnements-assurance/:id/devis?agregateur=stripe|campay
- * Devis recalculé (jamais stocké), aucune écriture. CamPay : frais de
- * l'opérateur estimés, indiqués EN SUS.
+ * Devis recalculé (jamais stocké), aucune écriture. Carte et Mobile Money :
+ * frais d'agrégateur en vigueur ajoutés au total, comme pour un RDV.
  */
 export async function obtenirDevis(req, res, next) {
   try {
@@ -317,8 +328,8 @@ export async function obtenirDevis(req, res, next) {
     if (abo.statut !== "en_attente_paiement") {
       throw new ErreurAbonnement(409, "ABONNEMENT_NON_PAYABLE", `Cet abonnement n'est plus à payer (statut : ${abo.statut}).`);
     }
-    const frais = agregateur === "campay" ? (await fraisCampay(Number(abo.montant_total))).montant : null;
-    const devis = construireDevisAbonnement({ abonnement: abo, niveau: abo.niveau, service: abo.service, frais_operateur: frais });
+    const frais = await fraisEnvoiAbonnement(agregateur, Number(abo.montant_total), abo.devise);
+    const devis = construireDevisAbonnement({ abonnement: abo, niveau: abo.niveau, service: abo.service, frais_agregateur: frais });
     return res.status(200).json({ ...devis, agregateur });
   } catch (err) {
     if (repondreErreurConnue(err, res)) return;
@@ -333,6 +344,9 @@ export async function obtenirDevis(req, res, next) {
 /** POST /api/abonnements-assurance/:id/paiement — Stripe Checkout -> { url } */
 export async function creerPaiementStripe(req, res, next) {
   try {
+    // Session déjà payée sans webhook reçu : activée ici, puis refusée
+    // ci-dessous comme « plus à payer » au lieu de rester bloquée.
+    await rattraperStripe("assurance", req.params.id);
     const ctx = await verifierAbonnementPayable(req);
 
     // Session Checkout ouverte (page fermée puis réessai) : expirée avant
@@ -355,25 +369,29 @@ export async function creerPaiementStripe(req, res, next) {
       await marquerTransactionEchouee(t.transaction_id);
     }
 
+    // Total débité = abonnement + frais d'agrégateur (ligne figée sur la transaction).
+    const frais = await fraisEnvoiAbonnement("stripe", ctx.montant, ctx.devise);
+    const devis = construireDevisAbonnement({ abonnement: ctx.abo, niveau: ctx.niveau, service: ctx.service, frais_agregateur: frais });
     const transaction = await creerTransactionAbonnement(ctx, {
-      montant: ctx.montant,
+      montant: devis.total,
       devise: ctx.devise,
       fournisseur: "stripe",
+      frais_envoi_id: frais.ligne.frais_agregateur_id,
     });
 
     let session;
     try {
       const base = process.env.FRONTEND_URL || "http://localhost:5173";
-      const libelle = `Abonnement ${ctx.niveau.libelle} (${ctx.abo.duree_mois} mois)`;
+      const libelle = `${libelleAbonnement("Abonnement", ctx.niveau)} (${ctx.abo.duree_mois} mois)`;
+      // Prix sans réduction + frais, remise par coupon, récapitulatif des montants.
+      const detail = detailCheckoutAbonnement(devis, { duree_mois: ctx.abo.duree_mois });
       session = await creerSessionCheckout({
-        montant: ctx.montant,
+        montant: devis.total,
         devise: ctx.devise,
         transaction_id: transaction.transaction_id,
         metadata: { objet: "abonnement_assurance" }, // l'abonnement se lit via la transaction
         libelle,
-        // UNE ligne égale au total (après remise et crédit) : la somme est
-        // toujours exacte ; le détail figure sur le devis et la facture.
-        lignes: [{ libelle, montant: ctx.montant }],
+        ...detail,
         description_facture: `Abonnement APS Santé - ${ctx.service.nom}`,
         email_client: ctx.payeur.email,
         url_succes: `${base}/paiement/abonnement/succes?abonnement_id=${ctx.abo.abonnement_id}`,
@@ -492,6 +510,7 @@ export async function obtenirStatutPaiement(req, res, next) {
     } catch (err) {
       console.error(`[campay] Synchronisation de l'abonnement ${abo.abonnement_id} impossible :`, err.message);
     }
+    await rattraperStripe("assurance", abo.abonnement_id);
     const actuel = await prisma.abonnementAssurance.findUnique({
       where: { abonnement_id: abo.abonnement_id },
       include: {

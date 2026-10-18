@@ -45,6 +45,7 @@ import { annulerPaymentIntentsRdv } from "../lib/stripeService.js";
 import { EVENEMENTS } from "./politiqueFonds.service.js";
 import { appliquerEvenementFonds } from "./traitementFonds.service.js";
 import { libererCreneauxDuRdv } from "./agendaCreneau.service.js";
+import { rouvrirOffreApresAnnulationRdv } from "./offreRdv.service.js";
 
 // « conteste » : litiges hors périmètre (ne pas toucher). Statuts terminaux :
 // rien à annuler. « a_reprogrammer » N'est PAS ici : il est annulable (point G).
@@ -198,6 +199,9 @@ export async function traiterAnnulation(
   } catch (err) {
     console.error(`[annulation] Libération du créneau impossible pour le rdv ${rdv.rdv_id} :`, err.message);
   }
+  // RDV aléatoire : un RDV jamais payé issu d'une offre rend l'offre au
+  // patient (elle redevient « ouverte », les réponses restent valables).
+  if (!escrow) await rouvrirOffreApresAnnulationRdv(rdv.rdv_id, maintenant);
 
   return {
     evenement: resultat.evenement,

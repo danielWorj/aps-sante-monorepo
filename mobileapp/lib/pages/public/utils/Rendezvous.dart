@@ -1541,7 +1541,7 @@ class _RendezVousPageState extends State<RendezVousPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '${widget.tarifFcfa} FCFA',
+                    'Frais de prise de RDV : ${widget.tarifFcfa} FCFA',
                     style: AppTextStyles.price.copyWith(fontSize: 16),
                   ),
                   Text(

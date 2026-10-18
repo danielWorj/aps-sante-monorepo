@@ -32,8 +32,10 @@ import { deconnecter as deconnecterApi } from "../../../services/authService";
 
 const LIENS = [
   { to: "/portail/medecin-rdv", icone: "fa-calendar-check", label: "Rendez-vous", badgeKey: "rdvBadge" },
+  { to: "/portail/medecin-demandes", icone: "fa-bullhorn", label: "Demandes patients" },
   { to: "/portail/medecin-profil", icone: "fa-user-doctor", label: "Profil" },
   { to: "/portail/medecin-agenda", icone: "fa-calendar-days", label: "Agenda" },
+  { to: "/portail/medecin-abonnement", icone: "fa-id-card-clip", label: "Abonnement" },
 ];
 
 /** "Jean" + "Dupont" → "JD". Retombe sur "?" si aucun nom exploitable. */

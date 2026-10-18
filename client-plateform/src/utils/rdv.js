@@ -118,6 +118,22 @@ export function peutTerminerRdv(rdv) {
   );
 }
 
+/** Longueur maximale du lieu saisi par le médecin (voir acceptationRdv.service.js). */
+export const LIEU_RDV_LONGUEUR_MAX = 500;
+
+/**
+ * Le médecin peut-il accepter ce RDV (ou en changer le lieu) ? RDV PHYSIQUE
+ * payé et encore « confirme » ; le serveur reste seul juge.
+ */
+export function peutAccepterRdv(rdv) {
+  return rdv?.type_rdv === "physique" && !estRdvNonPaye(rdv) && rdv.statut === "confirme";
+}
+
+/** RDV physique payé que le médecin n'a pas encore accepté (lieu non précisé). */
+export function lieuAPreciser(rdv) {
+  return peutAccepterRdv(rdv) && !rdv.accepte_le;
+}
+
 /**
  * Les fonds de ce RDV sont-ils encore en attente de libération ? Vrai tant
  * que la fin est constatée et que le RDV n'est pas encore passé « honore »

@@ -61,6 +61,7 @@ import {
   categoriserRdv,
   fondsEnAttenteDeLiberation,
   formaterDateLiberation,
+  lieuAPreciser,
 } from "./../../../utils/rdv";
 import ContestationRdv from "./contestation-rdv";
 import PaiementMobileMoney from "./../../paiement/PaiementMobileMoney";
@@ -446,6 +447,11 @@ const PatientRdv = () => {
                 <i className="fa-solid fa-calendar-xmark"></i> À reprogrammer
               </span>
             )}
+            {lieuAPreciser(rdv) && (
+              <span className="chip chip-st-attente">
+                <i className="fa-solid fa-location-dot"></i> Lieu en attente du médecin
+              </span>
+            )}
             {fondsEnAttenteDeLiberation(rdv) && (
               <span className="chip chip-st-confirme">
                 <i className="fa-solid fa-hourglass-half"></i> Fonds libérés le{" "}
@@ -489,7 +495,10 @@ const PatientRdv = () => {
       : "";
     const typeLabel = TYPE_RDV_LABEL[rdv.type_rdv] || rdv.type_rdv;
     const isTeleconsultation = rdv.type_rdv === "teleconsultation";
-    const lieu = isTeleconsultation ? "Téléconsultation" : rdv.structure?.nom || "Cabinet";
+    // RDV physique : lieu saisi par le médecin à l'acceptation (après paiement).
+    const lieu = isTeleconsultation
+      ? "Téléconsultation"
+      : rdv.lieu_rdv || (rdv.statut === "confirme" ? "Le médecin va préciser le lieu" : "À préciser");
     const lieuIcon = isTeleconsultation ? "fa-video" : "fa-location-dot";
     const typeIcon = isTeleconsultation ? "fa-video" : "fa-stethoscope";
     const peutAnnuler =
@@ -540,6 +549,11 @@ const PatientRdv = () => {
             {rdv.statut === "a_reprogrammer" && (
               <span className="chip chip-st-attente">
                 <i className="fa-solid fa-calendar-xmark"></i> À reprogrammer
+              </span>
+            )}
+            {lieuAPreciser(rdv) && (
+              <span className="chip chip-st-attente">
+                <i className="fa-solid fa-location-dot"></i> Lieu en attente du médecin
               </span>
             )}
             {categorie === "passes" && (
@@ -785,6 +799,12 @@ const PatientRdv = () => {
                 >
                   <i className="fa-solid fa-download"></i> Exporter
                 </button>
+                <Link
+                  to="/portail/patient-demandes"
+                  className="btn btn-outline-primary btn-sm-aps"
+                >
+                  <i className="fa-solid fa-bullhorn"></i> Demande rapide
+                </Link>
                 <Link
                   to="/medecin"
                   className="btn btn-primary btn-sm-aps"

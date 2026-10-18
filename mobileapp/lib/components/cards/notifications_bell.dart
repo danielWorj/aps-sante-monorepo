@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../controllers/notification_controller.dart';
+import '../../controllers/offre_rdv_controller.dart';
 import '../../controllers/rendez_vous_controller.dart';
 import '../../models/rendez_vous_models.dart';
 import '../../utils/fonds.dart';
@@ -26,10 +27,25 @@ IconData iconeNotification(TypeNotification type) {
       return Icons.edit_calendar_outlined;
     case TypeNotification.rdvReprogrammationAcceptee:
       return Icons.event_available_outlined;
+    case TypeNotification.rdvPaye:
+      return Icons.check_circle_outline;
+    case TypeNotification.rdvAccepte:
+      return Icons.location_on_outlined;
+    case TypeNotification.offreRdvNouvelle:
+      return Icons.campaign_outlined;
+    case TypeNotification.offreRdvReponse:
+      return Icons.person_search_outlined;
+    case TypeNotification.offreRdvExpiree:
+      return Icons.hourglass_bottom_outlined;
     case TypeNotification.inconnu:
       return Icons.notifications_none_outlined;
   }
 }
+
+bool _estNotificationDemande(TypeNotification type) =>
+    type == TypeNotification.offreRdvNouvelle ||
+    type == TypeNotification.offreRdvReponse ||
+    type == TypeNotification.offreRdvExpiree;
 
 /// Texte du compteur : « 9+ » au-delà de 9 (comme sur le web).
 String libelleCompteur(int nombre) => nombre > 9 ? '9+' : '$nombre';
@@ -39,7 +55,16 @@ class NotificationsBell extends ConsumerWidget {
   /// le shell y bascule sur son onglet « Rendez-vous ».
   final VoidCallback onOuvrirRendezVous;
 
-  const NotificationsBell({super.key, required this.onOuvrirRendezVous});
+  /// Appelé à la place de [onOuvrirRendezVous] pour une notification de RDV
+  /// aléatoire (demande / réponse / expiration) : le shell bascule sur son
+  /// onglet des demandes. Sans ce rappel, on reste sur « Rendez-vous ».
+  final VoidCallback? onOuvrirDemandes;
+
+  const NotificationsBell({
+    super.key,
+    required this.onOuvrirRendezVous,
+    this.onOuvrirDemandes,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -122,6 +147,12 @@ class NotificationsBell extends ConsumerWidget {
     // ignore: unawaited_futures
     ref.read(notificationControllerProvider.notifier).marquerLue(notification);
     // Sans effet si aucun token n'a encore été défini côté liste de RDV.
+    if (_estNotificationDemande(notification.type)) {
+      ref.invalidate(mesOffresRdvProvider);
+      ref.invalidate(offresRdvMedecinProvider);
+      (onOuvrirDemandes ?? onOuvrirRendezVous)();
+      return;
+    }
     // ignore: unawaited_futures
     ref.read(listeRendezVousControllerProvider.notifier).rafraichir();
     onOuvrirRendezVous();

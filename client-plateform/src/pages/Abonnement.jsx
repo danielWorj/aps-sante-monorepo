@@ -2,20 +2,33 @@
 // cliniques, pharmacies, assurances) et espace annonceurs.
 
 //
-// Assurances (guide abonnements v3, §2.2.2) : visiteur -> vitrine inchangée
-// (prix indicatifs de data/subscriptionPlans.js) ; agent connecté d'une fiche
+// Assurances (guide abonnements v3, §2.2.2) : visiteur -> vitrine lue depuis
+// la console admin (<CatalogueAbonnements />, prix indicatifs du pays) ; agent connecté d'une fiche
 // -> offres CALCULÉES PAR LE SERVEUR (<SouscriptionAssurance />), seule
 // source de vérité pour le montant débité. Un admin peut viser une fiche
 // précise via ?type=assurance&service=<service_assurance_id>.
+//
+// Pharmacies, cliniques et médecins (abonnements de présence) : même
+// principe — le gestionnaire connecté de la fiche voit les offres calculées
+// par le serveur (<SouscriptionPresence />) ; le visiteur voit le catalogue.
+// data/subscriptionPlans.js ne fournit plus que les textes (accroche, palier
+// gratuit, notes) et la grille des annonceurs, sans module serveur.
 
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { clientTypes, getClientType } from "../data/subscriptionPlans";
 import { useAuth } from "../context/AuthContext";
 import { obtenirMonServiceAssurance } from "../services/abonnementAssuranceService";
 import SouscriptionAssurance from "../components/assurances/SouscriptionAssurance";
+import { obtenirMonActeur } from "../services/abonnementPresenceService";
+import SouscriptionPresence from "../components/abonnements/SouscriptionPresence";
+import CatalogueAbonnements from "../components/abonnements/CatalogueAbonnements";
+import ConnexionModale from "../components/auth/ConnexionModale";
 
 const TYPE_ASSURANCE = "assurance";
+// Type de la vitrine -> type d'acteur des abonnements de présence.
+const TYPE_PRESENCE = { pharmacie: "pharmacie", clinique: "structure", medecin: "medecin" };
+const CREATION_PRESENCE = { pharmacie: "/pharmacie/creation", structure: "/structure-sante/creation", medecin: "/devenir-medecin" };
 
 function PlanCard({ tier, isBase, onChoisir }) {
   return (
@@ -55,44 +68,89 @@ function PlanCard({ tier, isBase, onChoisir }) {
 }
 
 export default function Abonnement() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const typeDemande = searchParams.get("type");
   const serviceDemande = searchParams.get("service");
   const [selected, setSelected] = useState(
     clientTypes.some((c) => c.id === typeDemande) ? typeDemande : clientTypes[0].id
   );
   const client = getClientType(selected);
-  const navigate = useNavigate();
   const { status, user } = useAuth();
+  const connecte = status === "authenticated";
+  const [connexionOuverte, setConnexionOuverte] = useState(false);
+
+  // Formule choisie sur la vitrine (?niveau=&duree=) : gardée dans l'URL
+  // pour survivre à la connexion, puis reprise par le composant de
+  // souscription qui ouvre directement son récapitulatif.
+  const niveauDemande = searchParams.get("niveau");
+  const dureeDemandee = Number(searchParams.get("duree")) || null;
+  const intention = typeDemande === selected && niveauDemande && dureeDemandee
+    ? { niveau_id: niveauDemande, duree_mois: dureeDemandee, libelle: searchParams.get("libelle") }
+    : null;
+
+  const oublierIntention = () => {
+    setSearchParams((sp) => {
+      const suite = new URLSearchParams(sp);
+      ["niveau", "duree", "libelle"].forEach((cle) => suite.delete(cle));
+      return suite;
+    }, { replace: true });
+  };
 
   // Fiche assurance de l'agent connecté : null = inconnue, "" = aucune.
   const [ficheAgent, setFicheAgent] = useState(null);
-  const [messageAssurance, setMessageAssurance] = useState(null);
   const estAdmin = user?.role === "admin" || user?.role === "superadmin";
   const ficheVisee = estAdmin && serviceDemande ? serviceDemande : null;
   const ficheAssurance = ficheVisee ?? ficheAgent;
 
   useEffect(() => {
-    if (selected !== TYPE_ASSURANCE || status !== "authenticated" || ficheVisee) return undefined;
+    if (selected !== TYPE_ASSURANCE || !connecte || ficheVisee) return undefined;
     let annule = false;
     obtenirMonServiceAssurance()
       .then((d) => { if (!annule) setFicheAgent(d.service_assurance.service_assurance_id); })
       .catch(() => { if (!annule) setFicheAgent(""); });
     return () => { annule = true; };
-  }, [selected, status, ficheVisee]);
+  }, [selected, connecte, ficheVisee]);
 
-  const choisirFormule = () => {
-    if (selected !== TYPE_ASSURANCE) return;
-    if (status !== "authenticated") {
-      navigate("/login", { state: { from: "/pricing?type=assurance" } });
-      return;
-    }
-    if (ficheAssurance === "") {
-      setMessageAssurance(true);
-    }
+  const souscriptionAssurance = selected === TYPE_ASSURANCE && connecte && !!ficheAssurance;
+
+  // Abonnements de présence : fiche gérée par l'utilisateur connecté pour le
+  // type affiché (null = inconnue, "" = aucune).
+  const typePresence = TYPE_PRESENCE[selected] ?? null;
+  const [fichePresence, setFichePresence] = useState({ type: null, id: null });
+
+  useEffect(() => {
+    if (!typePresence || !connecte) return undefined;
+    let annule = false;
+    obtenirMonActeur(typePresence)
+      .then((d) => { if (!annule) setFichePresence({ type: typePresence, id: d.fiche.acteur_id }); })
+      .catch(() => { if (!annule) setFichePresence({ type: typePresence, id: "" }); });
+    return () => { annule = true; };
+  }, [typePresence, connecte]);
+
+  const acteurPresence = fichePresence.type === typePresence ? fichePresence.id : null;
+  const souscriptionPresence = !!typePresence && connecte && !!acteurPresence;
+
+  // Connecté, mais aucune fiche du type affiché : invitation à la référencer.
+  const sansFiche = connecte && !!intention && (
+    typePresence ? acteurPresence === "" : selected === TYPE_ASSURANCE && !ficheVisee && ficheAgent === ""
+  );
+
+  const choisirFormule = (offre, choix) => {
+    setSearchParams((sp) => {
+      const suite = new URLSearchParams(sp);
+      suite.set("type", selected);
+      suite.set("niveau", offre.niveau_id);
+      suite.set("duree", String(choix.duree_mois));
+      suite.set("libelle", offre.libelle);
+      return suite;
+    }, { replace: true });
+    if (!connecte) setConnexionOuverte(true);
   };
 
-  const souscriptionAssurance = selected === TYPE_ASSURANCE && status === "authenticated" && !!ficheAssurance;
+  const changerType = (type) => {
+    setSelected(type);
+    oublierIntention();
+  };
 
   return (
     <>
@@ -126,7 +184,7 @@ export default function Abonnement() {
               id="client-type"
               className="form-select"
               value={selected}
-              onChange={(e) => setSelected(e.target.value)}
+              onChange={(e) => changerType(e.target.value)}
             >
               {clientTypes.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -143,7 +201,7 @@ export default function Abonnement() {
                 key={c.id}
                 type="button"
                 className={`plan-type-chip${selected === c.id ? " active" : ""}`}
-                onClick={() => setSelected(c.id)}
+                onClick={() => changerType(c.id)}
               >
                 <i className={`fa-solid ${c.icon}`} /> {c.shortLabel}
               </button>
@@ -162,27 +220,70 @@ export default function Abonnement() {
             <h2 style={{ fontSize: "1.4rem" }}>{client.tagline}</h2>
           </div>
 
-          {messageAssurance && !souscriptionAssurance && (
+          {sansFiche && (
             <div className="banner-institutionnel mb-3">
               <i className="fa-solid fa-circle-info" />
               <span>
-                Votre compte n&apos;est rattaché à aucune fiche assurance.{" "}
-                <Link to="/assurances/creation">Référencez votre compagnie ou votre cabinet</Link> pour souscrire.
+                Pour souscrire{intention.libelle ? ` la formule « ${intention.libelle} »` : ""}, votre compte doit
+                être rattaché à la fiche de votre {selected === TYPE_ASSURANCE ? "compagnie ou cabinet" : "structure"}.{" "}
+                <Link to={selected === TYPE_ASSURANCE ? "/assurances/creation" : CREATION_PRESENCE[typePresence]}>
+                  Référencez-la
+                </Link>{" "}
+                : dès sa validation par ApSa, vous pourrez activer votre abonnement depuis cette page.
               </span>
             </div>
           )}
 
           {souscriptionAssurance ? (
-            <SouscriptionAssurance serviceAssuranceId={ficheAssurance} />
+            <SouscriptionAssurance
+              serviceAssuranceId={ficheAssurance}
+              intention={intention}
+              onIntentionTraitee={oublierIntention}
+            />
+          ) : souscriptionPresence ? (
+            <SouscriptionPresence
+              key={typePresence}
+              type={typePresence}
+              acteurId={acteurPresence}
+              intention={intention}
+              onIntentionTraitee={oublierIntention}
+            />
+          ) : typePresence || selected === TYPE_ASSURANCE ? (
+            <CatalogueAbonnements
+              key={selected}
+              type={typePresence ?? TYPE_ASSURANCE}
+              baseTier={client.baseTier}
+              onChoisir={choisirFormule}
+            />
           ) : (
             <div className="plan-grid">
               {client.baseTier && (
                 <PlanCard tier={client.baseTier} isBase />
               )}
               {client.tiers.map((tier) => (
-                <PlanCard key={tier.id} tier={tier} isBase={false} onChoisir={choisirFormule} />
+                <PlanCard key={tier.id} tier={tier} isBase={false} />
               ))}
             </div>
+          )}
+
+          {connexionOuverte && (
+            <ConnexionModale
+              titre="Connectez-vous pour souscrire"
+              sousTitre={
+                <>
+                  Votre choix est conservé : vous reprendrez directement au paiement.
+                  {intention && (
+                    <div>
+                      <span className="connexion-modale-formule">
+                        <i className="fa-solid fa-star" /> {intention.libelle ?? "Formule"} · {intention.duree_mois} mois
+                      </span>
+                    </div>
+                  )}
+                </>
+              }
+              onFermer={() => setConnexionOuverte(false)}
+              onConnecte={() => setConnexionOuverte(false)}
+            />
           )}
 
           {client.notes && client.notes.length > 0 && (

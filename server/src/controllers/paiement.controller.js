@@ -17,6 +17,7 @@ import { creerTransactionSansDoublon, invaliderCheckoutsOuverts, annulerPaiement
 import { decimalesPourMontant, arrondir } from "../utils/montants.js";
 import { finaliserPaiement } from "../services/finalisationPaiement.service.js";
 import { finaliserAbonnementAssurance } from "../services/finalisationAbonnementAssurance.service.js";
+import { finaliserAbonnementPresence } from "../services/finalisationAbonnementPresence.service.js";
 import { synchroniserCampayPourRdv, derniereTentativeCampay, verifierEtFinaliserTransactionCampay } from "../services/paiementCampay.service.js";
 
 const DEVISE_PAR_DEFAUT = process.env.STRIPE_DEVISE_PAR_DEFAUT || "xaf";
@@ -606,6 +607,19 @@ async function traiterPaiementReussi(session) {
       return;
     }
     await finaliserAbonnementAssurance({
+      transaction_id: session.metadata.transaction_id,
+      payment_intent_id: session.payment_intent,
+    });
+    return;
+  }
+  // Abonnement de présence (pharmacie, centre de santé, médecin) : même règle.
+  if (session.metadata?.objet === "abonnement_presence") {
+    if (!session.metadata.transaction_id) return;
+    if (session.payment_status !== "paid") {
+      console.warn(`[paiement] session ${session.id} (abonnement de présence) non payée (${session.payment_status}) — ignorée.`);
+      return;
+    }
+    await finaliserAbonnementPresence({
       transaction_id: session.metadata.transaction_id,
       payment_intent_id: session.payment_intent,
     });

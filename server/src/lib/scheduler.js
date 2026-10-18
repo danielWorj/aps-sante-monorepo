@@ -9,7 +9,7 @@ import cron from "node-cron";
 import { detecterCreneauxDepasses } from "../jobs/detecterCreneauxDepasses.job.js";
 import { traiterReprogrammations } from "../jobs/traiterReprogrammations.job.js";
 import { libererFondsEchusJob } from "../jobs/libererFondsEchus.job.js";
-import { expirerRdvNonConfirmesJob, synchroniserAgendasJob } from "../jobs/agenda.job.js";
+import { expirerOffresRdvJob, expirerRdvNonConfirmesJob, synchroniserAgendasJob } from "../jobs/agenda.job.js";
 import { reconcilierCampayEnAttente } from "../services/paiementCampay.service.js";
 import { reconcilierRetraitsEnCours } from "../services/retrait.service.js";
 import {
@@ -17,6 +17,12 @@ import {
   envoyerRappelsEcheance,
   annulerBrouillonsPerimes,
 } from "../services/cycleAbonnementAssurance.service.js";
+import {
+  expirerAbonnementsPresenceEchus,
+  envoyerRappelsEcheancePresence,
+  annulerBrouillonsPresencePerimes,
+} from "../services/cycleAbonnementPresence.service.js";
+import { purgerVisiteursVuesFiche } from "../services/vuesFiche.service.js";
 
 // Fréquence non précisée par le cahier des charges ni par le plan
 // ("fréquence courte, ex. toutes les 15 min") — valeur par défaut
@@ -53,6 +59,11 @@ const CRON_SYNCHRO_AGENDAS = process.env.CRON_SYNCHRO_AGENDAS || "40 0 * * *";
 // jours UTC) ; brouillons périmés (> 24 h) chaque heure.
 const CRON_CYCLE_ABONNEMENTS_ASSURANCE = process.env.CRON_CYCLE_ABONNEMENTS_ASSURANCE || "10 0 * * *";
 const CRON_BROUILLONS_ABONNEMENTS_ASSURANCE = process.env.CRON_BROUILLONS_ABONNEMENTS_ASSURANCE || "25 * * * *";
+
+// Abonnements de présence (pharmacies, centres de santé, médecins) : même
+// rythme que les assurances, décalé de quelques minutes.
+const CRON_CYCLE_ABONNEMENTS_PRESENCE = process.env.CRON_CYCLE_ABONNEMENTS_PRESENCE || "15 0 * * *";
+const CRON_BROUILLONS_ABONNEMENTS_PRESENCE = process.env.CRON_BROUILLONS_ABONNEMENTS_PRESENCE || "35 * * * *";
 
 /**
  * Démarre tous les jobs planifiés du back-end. Appelé une seule fois,
@@ -99,6 +110,10 @@ export function demarrerScheduler() {
     expirerRdvNonConfirmesJob().catch((err) => {
       console.error("[scheduler] Échec expiration des RDV non confirmés :", err);
     });
+    // RDV aléatoire : même rythme que l'expiration des RDV non confirmés.
+    expirerOffresRdvJob().catch((err) => {
+      console.error("[scheduler] Échec expiration des offres de RDV :", err);
+    });
   });
 
   const synchroniserAgendas = () =>
@@ -131,7 +146,36 @@ export function demarrerScheduler() {
     });
   });
 
+  cron.schedule(
+    CRON_CYCLE_ABONNEMENTS_PRESENCE,
+    async () => {
+      try {
+        await expirerAbonnementsPresenceEchus();
+      } catch (err) {
+        console.error("[scheduler] Échec expiration des abonnements de présence :", err);
+      }
+      try {
+        await envoyerRappelsEcheancePresence();
+      } catch (err) {
+        console.error("[scheduler] Échec rappels d'échéance des abonnements de présence :", err);
+      }
+      // Compteur de vues : seules les empreintes de la veille sont gardées.
+      try {
+        await purgerVisiteursVuesFiche();
+      } catch (err) {
+        console.error("[scheduler] Échec purge des empreintes de vues de fiche :", err);
+      }
+    },
+    { timezone: "UTC" }
+  );
+
+  cron.schedule(CRON_BROUILLONS_ABONNEMENTS_PRESENCE, () => {
+    annulerBrouillonsPresencePerimes().catch((err) => {
+      console.error("[scheduler] Échec annulation des brouillons d'abonnement de présence :", err);
+    });
+  });
+
   console.info(
-    `[scheduler] Démarré — detecterCreneauxDepasses planifié (${CRON_DETECTION_DEFAILLANCE}), traiterReprogrammations planifié (${CRON_REPROGRAMMATIONS}), reconcilierCampayEnAttente planifié (${CRON_RECONCILIATION_CAMPAY}), reconcilierRetraitsEnCours planifié (${CRON_RECONCILIATION_RETRAITS}), libererFondsEchus planifié (${CRON_LIBERATION_FONDS}), expiration RDV non confirmés (${CRON_EXPIRATION_CONFIRMATION}), synchronisation agendas (${CRON_SYNCHRO_AGENDAS}), cycle abonnements assurance (${CRON_CYCLE_ABONNEMENTS_ASSURANCE}), brouillons abonnements assurance (${CRON_BROUILLONS_ABONNEMENTS_ASSURANCE}).`
+    `[scheduler] Démarré — detecterCreneauxDepasses planifié (${CRON_DETECTION_DEFAILLANCE}), traiterReprogrammations planifié (${CRON_REPROGRAMMATIONS}), reconcilierCampayEnAttente planifié (${CRON_RECONCILIATION_CAMPAY}), reconcilierRetraitsEnCours planifié (${CRON_RECONCILIATION_RETRAITS}), libererFondsEchus planifié (${CRON_LIBERATION_FONDS}), expiration RDV non confirmés (${CRON_EXPIRATION_CONFIRMATION}), synchronisation agendas (${CRON_SYNCHRO_AGENDAS}), cycle abonnements assurance (${CRON_CYCLE_ABONNEMENTS_ASSURANCE}), brouillons abonnements assurance (${CRON_BROUILLONS_ABONNEMENTS_ASSURANCE}), cycle abonnements de présence (${CRON_CYCLE_ABONNEMENTS_PRESENCE}), brouillons abonnements de présence (${CRON_BROUILLONS_ABONNEMENTS_PRESENCE}).`
   );
 }

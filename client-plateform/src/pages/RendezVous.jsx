@@ -438,6 +438,9 @@ export default function RendezVous() {
   const specialiteLabel = medecin?.specialite?.nom ?? medecin?.specialite ?? '';
   const villeLabel = medecin?.ville_exercice?.nom ?? medecin?.ville_exercice ?? '';
   const teleconsultationDisponible = Boolean(medecin?.teleconsultation_activee);
+  const fraisRdvLabel = medecin?.tarif_indicatif != null
+    ? `${Number(medecin.tarif_indicatif).toLocaleString('fr-FR')} FCFA`
+    : '';
 
   const dateLabel = formatDateLabel(date);
   const typeRdvLabel = TYPES_RENDEZ_VOUS.find((t) => t.valeur === typeRdv)?.libelle ?? typeRdv;
@@ -560,6 +563,7 @@ export default function RendezVous() {
       <div className="recap-row"><span className="label">Date</span><span className="val">{dateLabel || '—'}</span></div>
       <div className="recap-row"><span className="label">Heure</span><span className="val">{heure || '—'}</span></div>
       {motif.trim() && <div className="recap-row"><span className="label">Motif</span><span className="val">{motif.trim()}</span></div>}
+      {fraisRdvLabel && <div className="recap-row"><span className="label">Frais de prise de RDV</span><span className="val">{fraisRdvLabel}</span></div>}
     </>
   );
 
@@ -605,7 +609,15 @@ export default function RendezVous() {
             </p>
           )}
 
-          {!chargementMedecin && !erreurMedecin && (
+          {/* Abonnement de présence : prise de RDV en ligne fermée par le serveur. */}
+          {!chargementMedecin && !erreurMedecin && medecin?.droits?.prise_rdv_en_ligne === false && (
+            <div className="banner-institutionnel">
+              <i className="fa-solid fa-circle-info" />
+              <span>Ce médecin ne propose pas la prise de rendez-vous en ligne pour le moment.</span>
+            </div>
+          )}
+
+          {!chargementMedecin && !erreurMedecin && medecin?.droits?.prise_rdv_en_ligne !== false && (
             <>
               <div className="d-flex align-items-center gap-3 mb-4">
                 <div className="avatar-ph" style={{ width: 56, height: 56, fontSize: '1.3rem' }}>
@@ -908,6 +920,7 @@ export default function RendezVous() {
                                 <tr><td>Date</td><td>{dateLabel}</td></tr>
                                 <tr><td>Heure</td><td>{heure}</td></tr>
                                 {motif.trim() && <tr><td>Motif</td><td>{motif.trim()}</td></tr>}
+                                {fraisRdvLabel && <tr><td>Frais de prise de RDV</td><td>{fraisRdvLabel}</td></tr>}
                               </tbody>
                             </table>
 

@@ -115,6 +115,36 @@ export async function tenterRefresh() {
  * Lève une Error (avec `.status` et `.data`) si la réponse finale n'est
  * pas OK, pour un traitement simple par les appelants (try/catch).
  */
+// Identifiant aléatoire de ce navigateur, envoyé en `X-Installation-Id`
+// pour le SEUL compteur de vues des fiches (statistiques des abonnements
+// de présence) : il distingue deux visiteurs derrière la même IP
+// (NAT d'opérateur). Jamais lié au compte côté serveur ; sans stockage
+// disponible, un identifiant de session est utilisé.
+const CLE_INSTALLATION = 'aps_identifiant_installation';
+let identifiantInstallation = null;
+
+function enteteInstallation() {
+  if (!identifiantInstallation) {
+    try {
+      identifiantInstallation = localStorage.getItem(CLE_INSTALLATION);
+    } catch {
+      // stockage indisponible (navigation privée, cookies bloqués)
+    }
+    if (!identifiantInstallation || identifiantInstallation.length < 16) {
+      // randomUUID n'existe qu'en contexte sécurisé (HTTPS, localhost).
+      identifiantInstallation = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+      try {
+        localStorage.setItem(CLE_INSTALLATION, identifiantInstallation);
+      } catch {
+        // identifiant de session seulement
+      }
+    }
+  }
+  return { 'X-Installation-Id': identifiantInstallation };
+}
+
 export async function apiFetch(
   path,
   { body, headers, skipAuthRetry = false, authOverride, ...options } = {}
@@ -134,6 +164,7 @@ export async function apiFetch(
       credentials: 'include',
       headers: {
         ...(estFormData ? {} : { 'Content-Type': 'application/json' }),
+        ...enteteInstallation(),
         // `authOverride` (ex. token restreint de changement de mot de passe
         // temporaire) prime sur l'access token en mémoire, qui est null
         // tant qu'aucune session n'est ouverte.

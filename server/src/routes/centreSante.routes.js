@@ -24,9 +24,10 @@
 // Un compte ne peut être agent que d'un seul centre de santé à la fois
 // (voir centreSante.controller.js).
 //
-// Modification (PUT) : tout utilisateur authentifié, quel que soit son
-// rôle — même logique que la création (n'importe qui peut compléter ou
-// corriger une fiche, y compris ré-envoyer une pièce justificative).
+// Modification (PUT) : réservée à l'agent du centre et à admin/superadmin
+// (vérifié dans le contrôleur — une modification repasse la fiche en
+// vérification et suspend ses droits d'abonnement de présence, un tiers
+// ne doit pas pouvoir la déclencher).
 // Seuls admin/superadmin peuvent choisir librement statut_verification ;
 // pour tout autre profil, toute modification repasse la fiche en
 // "en_cours" pour re-vérification (voir le contrôleur).
@@ -43,6 +44,9 @@ import {
   supprimerCentreSante,
 } from "../controllers/centreSante.controller.js";
 import { authentifier } from "../middlewares/auth.middleware.js";
+// Lectures publiques : le jeton, s'il est présent, permet à l'admin et à
+// l'agent de la fiche de la voir complète (abonnement de présence).
+import { authentifierOptionnel } from "../middlewares/authOptionnel.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
 import { gererTeleversementCentreSante } from "../middlewares/upload.middleware.js";
 
@@ -57,8 +61,8 @@ const router = Router();
 // que le module Assurance et le module Pharmacie). Quand la proximité
 // est active, chaque fiche renvoyée gagne un champ distance_km et le
 // tri se fait par distance croissante.
-router.get("/centres-sante", listerCentresSante);
-router.get("/centres-sante/:id", obtenirCentreSante);
+router.get("/centres-sante", authentifierOptionnel, listerCentresSante);
+router.get("/centres-sante/:id", authentifierOptionnel, obtenirCentreSante);
 
 router.post(
   "/centres-sante",
@@ -67,8 +71,8 @@ router.post(
   creerCentreSante
 );
 
-// Ouvert à tout utilisateur authentifié (plus de restriction
-// admin/superadmin) — voir le commentaire d'en-tête.
+// Agent de la fiche ou admin/superadmin (contrôle dans le contrôleur) —
+// voir le commentaire d'en-tête.
 router.put(
   "/centres-sante/:id",
   authentifier,

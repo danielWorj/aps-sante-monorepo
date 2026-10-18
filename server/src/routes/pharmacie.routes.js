@@ -28,8 +28,10 @@
 // Un compte ne peut être agent que d'une seule pharmacie à la fois
 // (voir pharmacie.controller.js).
 //
-// Modification (PUT) : tout utilisateur authentifié, quel que soit son
-// rôle — même logique que la création. Seuls admin/superadmin peuvent
+// Modification (PUT) : réservée à l'agent de la pharmacie et à
+// admin/superadmin (vérifié dans le contrôleur — une modification repasse
+// la fiche en vérification et suspend ses droits d'abonnement de présence,
+// un tiers ne doit pas pouvoir la déclencher). Seuls admin/superadmin peuvent
 // choisir librement statut_verification ; pour tout autre profil,
 // toute modification repasse la fiche en "en_cours" pour
 // re-vérification (voir le contrôleur).
@@ -64,6 +66,9 @@ import {
   supprimerGardePharmacie,
 } from "../controllers/pharmacie.controller.js";
 import { authentifier } from "../middlewares/auth.middleware.js";
+// Lectures publiques : le jeton, s'il est présent, permet à l'admin et à
+// l'agent de la fiche de la voir complète (abonnement de présence).
+import { authentifierOptionnel } from "../middlewares/authOptionnel.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
 import { gererTeleversementPharmacie } from "../middlewares/upload.middleware.js";
 
@@ -77,8 +82,8 @@ const router = Router();
 // défaut 10 km) — voir listerPharmacies / lib/geo.js. Quand la
 // proximité est active, chaque fiche renvoyée gagne un champ
 // distance_km et le tri se fait par distance croissante.
-router.get("/pharmacies", listerPharmacies);
-router.get("/pharmacies/:id", obtenirPharmacie);
+router.get("/pharmacies", authentifierOptionnel, listerPharmacies);
+router.get("/pharmacies/:id", authentifierOptionnel, obtenirPharmacie);
 
 router.post(
   "/pharmacies",
@@ -87,8 +92,8 @@ router.post(
   creerPharmacie
 );
 
-// Ouvert à tout utilisateur authentifié (pas de restriction
-// admin/superadmin) — voir le commentaire d'en-tête.
+// Agent de la fiche ou admin/superadmin (contrôle dans le contrôleur) —
+// voir le commentaire d'en-tête.
 router.put(
   "/pharmacies/:id",
   authentifier,
@@ -111,8 +116,8 @@ router.put("/plannings-garde/:id", authentifier, autoriser("admin", "superadmin"
 router.delete("/plannings-garde/:id", authentifier, autoriser("admin", "superadmin"), supprimerPlanningGarde);
 
 // ─── Gardes (pharmacie <-> créneau) ────────────────────────────
-router.get("/gardes-pharmacie", listerGardesPharmacie);
-router.get("/gardes-pharmacie/:id", obtenirGardePharmacie);
+router.get("/gardes-pharmacie", authentifierOptionnel, listerGardesPharmacie);
+router.get("/gardes-pharmacie/:id", authentifierOptionnel, obtenirGardePharmacie);
 router.post("/gardes-pharmacie", authentifier, autoriser("admin", "superadmin"), creerGardePharmacie);
 router.put("/gardes-pharmacie/:id", authentifier, autoriser("admin", "superadmin"), modifierGardePharmacie);
 router.delete("/gardes-pharmacie/:id", authentifier, autoriser("admin", "superadmin"), supprimerGardePharmacie);

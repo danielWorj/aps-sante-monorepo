@@ -23,6 +23,7 @@ import { traiterAnnulation } from "../services/annulation.service.js";
 import { STATUTS_FIN_CONSULTATION, validerCodeConsultation } from "../services/finConsultation.service.js";
 import { ErreurParametreDelai } from "../services/parametreDelaiLiberation.service.js";
 import { genererCodeConsultation } from "../lib/codeConsultation.js";
+import { accepterRendezVous as accepterRdvPhysique } from "../services/acceptationRdv.service.js";
 import {
   ROLES_VISIBILITE,
   filtrerResultatAnnulation,
@@ -38,6 +39,7 @@ import {
 } from "../services/agendaCreneau.service.js";
 import { resoudreDelaiConfirmationMedecin } from "../services/parametreDelaiConfirmation.service.js";
 import { echeanceConfirmation } from "../lib/delaiConfirmation.js";
+import { resoudreDroitsPresence } from "../lib/droitsPresence.js";
 
 function repondreErreurCreneau(res, err) {
   return res.status(err.status).json({ message: err.message, code: err.code });
@@ -82,7 +84,9 @@ function estAdmin(utilisateur) {
 // du même type que `medecin.utilisateur` (schema.prisma non fourni) —
 // à confirmer/ajuster si le nom de la relation diffère.
 const INCLUSION_NOMS_RDV = {
-  medecin: { include: { utilisateur: { select: { nom: true, prenom: true } } } },
+  // Pièces justificatives du médecin (CNI, attestation de l'Ordre) : jamais
+  // renvoyées avec un rendez-vous (le patient n'a pas à les voir).
+  medecin: { omit: { cni_url: true, attestation_url: true }, include: { utilisateur: { select: { nom: true, prenom: true } } } },
   patient: { include: { utilisateur: { select: { nom: true, prenom: true } } } },
 };
 
@@ -479,6 +483,16 @@ export async function creerRendezVous(req, res, next) {
     if (type_rdv === "teleconsultation" && !medecin.teleconsultation_activee) {
       return res.status(400).json({
         message: "Ce médecin n'a pas activé la téléconsultation.",
+      });
+    }
+    // Abonnement de présence : dans un pays où l'abonnement des médecins est
+    // obligatoire, la prise de RDV en ligne exige un abonnement actif qui
+    // l'inclut (sinon droits « sans obligation » : toujours autorisée).
+    const { droits: droitsPresence } = await resoudreDroitsPresence("medecin", medecin_id);
+    if (!droitsPresence.prise_rdv_en_ligne) {
+      return res.status(403).json({
+        code: "PRISE_RDV_INDISPONIBLE",
+        message: "Ce médecin ne propose pas la prise de rendez-vous en ligne pour le moment.",
       });
     }
 
@@ -1010,6 +1024,56 @@ export async function terminerRendezVous(req, res, next) {
       termine_le: resultat.termine_le,
       delai_liberation_heures: resultat.delai_liberation_heures,
       liberation_prevue_le: resultat.date_liberation,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/rendez-vous/:id/accepter
+ * Body: { lieu: string }
+ *
+ * Le médecin du RDV accepte un RDV PHYSIQUE payé (« confirme ») en saisissant
+ * le lieu de la consultation (obligatoire), ou en change le lieu. Le patient
+ * est notifié (rdv_accepte : date + lieu). Le statut reste « confirme ».
+ * Renvoyer le même lieu ne fait rien (`deja_accepte: true`, sans notification).
+ * Réservé au médecin du RDV (ni patient, ni admin).
+ *
+ * Toute la règle vit dans acceptationRdv.service.js ; ici : traduction HTTP.
+ * Erreurs : 400 (lieu manquant / trop long, téléconsultation), 403 (autre
+ * médecin), 404, 409 (RDV_NON_PAYE, statut autre que « confirme »).
+ */
+export async function accepterRendezVous(req, res, next) {
+  try {
+    const medecin = await profilMedecinCourant(req.utilisateur);
+    if (!medecin) {
+      return res.status(403).json({ message: "Accès refusé : vous n'êtes pas le médecin de ce rendez-vous." });
+    }
+
+    const resultat = await accepterRdvPhysique({
+      rdv_id: req.params.id,
+      medecin_id: medecin.medecin_id,
+      lieu: req.body?.lieu,
+    });
+    if (resultat.erreur) {
+      const { status, message, code } = resultat.erreur;
+      return res.status(status).json({ message, ...(code ? { code } : {}) });
+    }
+
+    const rdvMisAJour = await prisma.rendezVous.findUnique({
+      where: { rdv_id: req.params.id },
+      include: INCLUSION_NOMS_RDV,
+    });
+
+    return res.status(200).json({
+      message: resultat.deja_accepte
+        ? "Ce rendez-vous est déjà accepté à ce lieu."
+        : resultat.modification
+          ? "Lieu du rendez-vous modifié. Le patient a été prévenu."
+          : "Rendez-vous accepté. Le patient a été prévenu.",
+      deja_accepte: resultat.deja_accepte,
+      rendez_vous: projeterRdvPourRole(rdvMisAJour, ROLES_VISIBILITE.MEDECIN),
     });
   } catch (err) {
     next(err);

@@ -5,6 +5,7 @@ import '../../../components/cards/notifications_bell.dart';
 import '../../../components/navigation/medecin-bottom-navigation-bar.dart';
 import '../../../controllers/notification_controller.dart';
 import 'portail-medecin-agenda.dart';
+import 'portail-medecin-demandes.dart';
 import 'portail-medecin-rdv.dart';
 import 'portail-medecin-profil.dart';
 
@@ -34,8 +35,12 @@ class _MedecinHomeShellState extends ConsumerState<MedecinHomeShell> {
   /// Index de l'onglet « Rendez-vous » dans [_pages].
   static const int _indexRendezVous = 0;
 
+  /// Index de l'onglet « Demandes » (RDV aléatoire) dans [_pages].
+  static const int _indexDemandes = 1;
+
   static const _pages = <Widget>[
     PortailMedecinRdv(),
+    PortailMedecinDemandes(),
     PortailMedecinAgenda(),
     PortailMedecinProfil(),
     Center(child: Text('Aide')), // TODO: écran réel "Aide"
@@ -59,6 +64,8 @@ class _MedecinHomeShellState extends ConsumerState<MedecinHomeShell> {
               child: NotificationsBell(
                 onOuvrirRendezVous: () =>
                     setState(() => _index = _indexRendezVous),
+                onOuvrirDemandes: () =>
+                    setState(() => _index = _indexDemandes),
               ),
             ),
           ],

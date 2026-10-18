@@ -334,19 +334,23 @@ class CentreSante {
       nom: json['nom'] as String,
       paysId: json['pays_id'] as String,
       villeId: json['ville_id'] as String,
-      telephone: json['telephone'] as String,
+      // Abonnement de présence : le serveur renvoie null (téléphone, photo)
+      // pour une fiche sans abonnement actif -> chaîne vide, jamais d'exception.
+      telephone: (json['telephone'] as String?) ?? '',
       statutVerification: StatutVerificationStructure.fromApi(
         json['statut_verification'] as String?,
       ),
       typeStructure: TypeStructure.fromApi(
         json['type_structure'] as String?,
       ),
-      imageNom: json['image_nom'] as String,
-      pieceIdentiteNom: json['piece_identite_nom'] as String,
-      documentAgrementNom: json['document_agrement_nom'] as String,
-      imageUrl: json['image_url'] as String,
-      pieceIdentiteUrl: json['piece_identite_url'] as String,
-      documentAgrementUrl: json['document_agrement_url'] as String,
+      imageNom: (json['image_nom'] as String?) ?? '',
+      // Pièces justificatives : jamais renvoyées par les routes publiques
+      // (seulement au gestionnaire et à l'administration) -> chaîne vide.
+      pieceIdentiteNom: (json['piece_identite_nom'] as String?) ?? '',
+      documentAgrementNom: (json['document_agrement_nom'] as String?) ?? '',
+      imageUrl: (json['image_url'] as String?) ?? '',
+      pieceIdentiteUrl: (json['piece_identite_url'] as String?) ?? '',
+      documentAgrementUrl: (json['document_agrement_url'] as String?) ?? '',
       geolocalisation: json['geolocalisation'] is Map<String, dynamic>
           ? Geolocalisation.fromJson(
           json['geolocalisation'] as Map<String, dynamic>)

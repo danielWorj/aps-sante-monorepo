@@ -11,7 +11,7 @@
 // Gratuité d'amorçage ou montant nul : activé directement, sans paiement.
 //
 // Le montant n'est JAMAIS envoyé : seulement niveau_id et duree_mois.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import {
@@ -19,19 +19,14 @@ import {
   creerBrouillonAbonnement,
   choisirVirementAbonnement,
   annulerPaiementAbonnement,
+  LIBELLES_AVANTAGES_ASSURANCE,
 } from '../../services/abonnementAssuranceService';
 import ChoixMoyenPaiement from '../paiement/ChoixMoyenPaiement';
 import PaiementMobileMoney from '../paiement/PaiementMobileMoney';
 import { adaptateurAbonnement } from '../paiement/adaptateurs';
 import { montantDevise } from '../../utils/fonds';
 
-const AVANTAGES = [
-  ['siege_complet', 'Fiche du siège complète (contacts, agrément, présentation)'],
-  ['afficher_activites', 'Activités et produits visibles'],
-  ['afficher_agences', 'Agences visibles et localisables'],
-  ['formulaire_contact', 'Formulaire de mise en relation'],
-  ['suivi_demandes', 'Suivi des demandes reçues'],
-];
+const AVANTAGES = LIBELLES_AVANTAGES_ASSURANCE;
 
 const formatDate = (iso) =>
   iso ? new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' }) : '';
@@ -141,7 +136,7 @@ function OffreCard({ offre, onChoisir, estCourant }) {
  * @param {{ serviceAssuranceId: string, onActive?: () => void }} props
  *   onActive : appelé quand un abonnement est activé sans paiement (gratuité).
  */
-export default function SouscriptionAssurance({ serviceAssuranceId, onActive }) {
+export default function SouscriptionAssurance({ serviceAssuranceId, onActive, intention, onIntentionTraitee }) {
   const [donnees, setDonnees] = useState(null);
   const [erreur, setErreur] = useState(null);
   const [selection, setSelection] = useState(null); // { offre, choix }
@@ -152,11 +147,33 @@ export default function SouscriptionAssurance({ serviceAssuranceId, onActive }) 
   const [etape, setEtape] = useState(null); // recap | choix | momo | virement | active
   const [virement, setVirement] = useState(null);
 
+  // Formule choisie avant la connexion (niveau + durée, lus dans l'URL par
+  // la page) : ouverte une seule fois, au premier chargement des offres.
+  const intentionRef = useRef(intention);
+  const onIntentionTraiteeRef = useRef(onIntentionTraitee);
+  useEffect(() => { onIntentionTraiteeRef.current = onIntentionTraitee; });
+  const reprendreIntention = useCallback((d) => {
+    const voulue = intentionRef.current;
+    if (!voulue) return;
+    intentionRef.current = null;
+    const offre = d.offres?.find((o) => o.niveau_id === voulue.niveau_id);
+    const choix = offre?.durees.find((x) => x.disponible && x.duree_mois === voulue.duree_mois);
+    if (offre && choix) {
+      setSelection({ offre, choix });
+      setEtape('recap');
+    }
+    onIntentionTraiteeRef.current?.();
+  }, []);
+
   const charger = useCallback(() => {
     obtenirOffresAbonnement(serviceAssuranceId)
-      .then((d) => { setDonnees(d); setErreur(null); })
+      .then((d) => {
+        setDonnees(d);
+        setErreur(null);
+        reprendreIntention(d);
+      })
       .catch((err) => setErreur(err?.message || 'Offres indisponibles pour le moment.'));
-  }, [serviceAssuranceId]);
+  }, [serviceAssuranceId, reprendreIntention]);
 
   useEffect(() => { charger(); }, [charger]);
 

@@ -205,9 +205,23 @@ enum TypeNotification {
   // J-30 / J-7 / J-1. Destinataires : les agents de la fiche.
   abonnement_assurance_active
   abonnement_assurance_echeance
+  // Abonnements de présence (pharmacies, centres de santé, médecins) :
+  // activation et rappels d'échéance. Destinataires : les gestionnaires
+  // de la fiche (agents, ou le médecin lui-même).
+  abonnement_presence_active
+  abonnement_presence_echeance
   // Agenda : le RDV demandé par le PATIENT n'a pas été confirmé (payé) dans
   // le délai du pays ; il est annulé et le créneau est libéré.
   rdv_confirmation_expiree
+  // RDV PHYSIQUE payé : le médecin l'accepte en précisant le lieu ; le
+  // PATIENT est notifié (date + lieu). Toujours après le paiement (D8).
+  rdv_accepte
+  // RDV aléatoire : nouvelle offre signalée aux MÉDECINS éligibles
+  // (spécialité + pays + ville) ; nouvelle réponse signalée au PATIENT ;
+  // offre expirée sans médecin validé (PATIENT).
+  offre_rdv_nouvelle
+  offre_rdv_reponse
+  offre_rdv_expiree
 }
 
 // Motif d'annulation d'un rendez-vous — liste fermée exigée par la
@@ -301,7 +315,7 @@ model Pays {
   // tranches d'Horaire et les dates de CreneauAgenda sont des heures
   // MURALES du médecin ; ce fuseau sert à les convertir en instant
   // (RendezVous.date_creneau) — voir src/lib/fuseauHoraire.js.
-  fuseau_horaire    String               @default("Africa/Douala") @db.VarChar(64)
+  fuseau_horaire String @default("Africa/Douala") @db.VarChar(64)
 
   devise Devise @relation(fields: [devise_id], references: [devise_id])
   langue Langue @relation(fields: [langue_id], references: [langue_id])
@@ -312,24 +326,24 @@ model Pays {
   structures_sante  StructureSante[]
   pharmacies        Pharmacie[]
   plannings_garde   PlanningGarde[]
-  
+
   // v8 : Publicite (module autonome, plus PublicitePharmacie) — voir
   // plus bas.
-  publicites            Publicite[]
-  
+  publicites Publicite[]
+
   // v8 : Annuaire assurances (diagramme 08_annuaire_assurances).
-  services_assurance    ServiceAssurance[]
-  
+  services_assurance ServiceAssurance[]
+
   // Module Urgences (diagramme APS — Module : Urgences).
-  urgences              Urgence[]
-  
+  urgences Urgence[]
+
   // Module transverse Gestion des médecins — pays d'émission d'une
   // ordonnance (peut différer du pays d'exercice du médecin en
   // téléconsultation transfrontalière).
-  ordonnances_emises    Ordonnance[]
-  
+  ordonnances_emises Ordonnance[]
+
   // Module transverse : Moyens de paiement du médecin
-  types_mobile_money    TypeMobileMoney[]
+  types_mobile_money TypeMobileMoney[]
 
   // Module transverse : Paiements & escrow — lignes tarifaires
   // versionnées (commission APS, taxes, frais d'agrégateur) en vigueur
@@ -354,6 +368,13 @@ model Pays {
   tarifs_abonnement_assurance TarifAbonnementAssurance[]
   config_abonnement_assurance ConfigAbonnementAssurance?
 
+  // Abonnements de présence (pharmacies, centres de santé, médecins) :
+  // grille tarifaire et configuration par type d'acteur et par pays.
+  tarifs_abonnement_presence  TarifAbonnementPresence[]
+  configs_abonnement_presence ConfigAbonnementPresence[]
+  // RDV aléatoire : offres publiées dans ce pays.
+  offres_rdv                  OffreRdv[]
+
   @@index([devise_id])
   @@index([langue_id])
   @@map("pays")
@@ -375,9 +396,11 @@ model Ville {
   structures_sante  StructureSante[]
   pharmacies        Pharmacie[]
   gardes_pharmacie  GardePharmacie[]
-  
+
   // v8 : Annuaire assurances (diagramme 08_annuaire_assurances).
   services_assurance ServiceAssurance[]
+  // RDV aléatoire : offres publiées dans cette ville.
+  offres_rdv         OffreRdv[]
 
   @@index([pays_id])
   @@map("ville")
@@ -411,14 +434,14 @@ model Role {
 model Utilisateur {
   utilisateur_id String @id @default(uuid()) @db.Uuid
 
-  nom                String       @db.VarChar(100)
-  prenom             String       @db.VarChar(100)
-  email              String       @unique @db.VarChar(255)
-  telephone          String?      @db.VarChar(20)
-  mot_de_passe_hash  String       @db.VarChar(255)
-  role_id            String       @db.Uuid
-  pays_id            String       @db.Uuid
-  statut_compte      StatutCompte
+  nom               String       @db.VarChar(100)
+  prenom            String       @db.VarChar(100)
+  email             String       @unique @db.VarChar(255)
+  telephone         String?      @db.VarChar(20)
+  mot_de_passe_hash String       @db.VarChar(255)
+  role_id           String       @db.Uuid
+  pays_id           String       @db.Uuid
+  statut_compte     StatutCompte
 
   // Comptes créés POUR un tiers (ex. agent d'un centre de santé créé
   // en même temps que la fiche structure_sante, avec un mot de passe
@@ -440,31 +463,31 @@ model Utilisateur {
   // Étape 6 : notifications in-app reçues.
   notifications Notification[]
 
-  medecin                 Medecin?
-  patient                 Patient?
-  refresh_tokens          RefreshToken[]
-  jetons_revoques         JetonRevoque[]
-  agent_structure_sante   AgentStructureSante?
-  agent_pompes_funebres   AgentPompesFunebres?
-  agent_assurance         AgentAssurance?
-  agent_pharmacie         AgentPharmacie?
-  agent_ambulance         AgentAmbulance?
-  avis_pharmacie          AvisPharmacie[]
-  
+  medecin               Medecin?
+  patient               Patient?
+  refresh_tokens        RefreshToken[]
+  jetons_revoques       JetonRevoque[]
+  agent_structure_sante AgentStructureSante?
+  agent_pompes_funebres AgentPompesFunebres?
+  agent_assurance       AgentAssurance?
+  agent_pharmacie       AgentPharmacie?
+  agent_ambulance       AgentAmbulance?
+  avis_pharmacie        AvisPharmacie[]
+
   // Module transverse Gestion des médecins — voir plus bas dans ce fichier.
-  avis_medecin            AvisMedecin[]
-  
+  avis_medecin AvisMedecin[]
+
   // v8 : module autonome "Présence, publicité & boost commercial" —
   // une publicité est déposée directement par un utilisateur, quel
   // que soit son rôle, sans passer par un profil agent_xxx.
-  publicites              Publicite[]
-  
+  publicites Publicite[]
+
   // v8 : Annuaire assurances — remplace l'ancien
   // "contact_prospect_assurance" (patient -> assurance, 1-N) par cette
   // relation N-N utilisateur <-> assurance (n'importe quel utilisateur
   // peut contacter 1-N assurances, une assurance peut être contactée
   // par 1-N utilisateurs) — voir table de jointure MiseEnRelation.
-  mises_en_relation       MiseEnRelation[]
+  mises_en_relation MiseEnRelation[]
 
   @@index([pays_id])
   @@index([role_id])
@@ -482,7 +505,9 @@ model Specialite {
   nom         String  @unique @db.VarChar(150)
   description String? @db.Text
 
-  medecins Medecin[]
+  medecins   Medecin[]
+  // RDV aléatoire : offres visant cette spécialité.
+  offres_rdv OffreRdv[]
 
   @@map("specialite")
 }
@@ -494,6 +519,10 @@ model Medecin {
   specialite_id             String                    @db.Uuid
   numero_ordre              String                    @db.VarChar(100)
   statut_verification       StatutVerificationMedecin
+  // Première mise en ligne (posée par déclencheur SQL, jamais effacée).
+  // Une fiche déjà publiée qui repasse « en_cours » après une
+  // modification garde ses droits d'abonnement pendant la modération.
+  date_premiere_publication DateTime?
   pays_exercice_id          String                    @db.Uuid
   ville_exercice_id         String                    @db.Uuid
   teleconsultation_activee  Boolean
@@ -508,8 +537,8 @@ model Medecin {
   // (20261002100000_medecin_geolocalisation).
   geolocalisation Unsupported("geography(Point, 4326)")?
 
-  biographie String @default("") @db.Text 
-  linkedInUrl               String?                    @db.VarChar(255)
+  biographie  String  @default("") @db.Text
+  linkedInUrl String? @db.VarChar(255)
 
   // Pièces justificatives (Cloudinary) — voir lib/cloudinaryService.js.
   // Seul le "nom" (public_id Cloudinary, avec extension) est stocké,
@@ -520,8 +549,8 @@ model Medecin {
   // creerCompteAdministre) :
   //   - cni_url         : carte nationale d'identité du médecin
   //   - attestation_url : attestation d'inscription à l'Ordre
-  cni_url         String @db.VarChar(255)
-  attestation_url String @db.VarChar(255)
+  cni_url         String  @db.VarChar(255)
+  attestation_url String  @db.VarChar(255)
   cv_url          String? @db.VarChar(255)
 
   // Photo de profil du médecin (Cloudinary) — même règle de stockage
@@ -537,18 +566,18 @@ model Medecin {
 
   // Module transverse Gestion des médecins (diagramme APS — Module
   // transverse : Gestion des médecins) — voir plus bas dans ce fichier.
-  avis        AvisMedecin[]
-  
+  avis AvisMedecin[]
+
   // v9 : un médecin peut souscrire à plusieurs abonnements (successifs
   // ou simultanés) — relation N-N portée par la table de jointure
   // ForfaitAbonnementMedecin, voir plus bas dans ce fichier.
   forfaits_abonnement ForfaitAbonnementMedecin[]
   rendez_vous         RendezVous[]
   ordonnances         Ordonnance[]
-  
+
   // Module transverse : Moyens de paiement du médecin
-  mobile_moneys       MobileMoney[]
-  comptes_bancaires   CompteBancaire[]
+  mobile_moneys     MobileMoney[]
+  comptes_bancaires CompteBancaire[]
 
   // Module transverse : Agenda du médecin — voir plus bas dans ce
   // fichier. disponibilites porte le gabarit récurrent (jour de la
@@ -570,6 +599,11 @@ model Medecin {
   // Phase 6 : demandes de retrait (décaissement Mobile Money via CamPay).
   demandes_retrait DemandeRetrait[]
 
+  // Abonnements de présence (voir AbonnementPresence en fin de fichier).
+  abonnements_presence AbonnementPresence[]
+  // RDV aléatoire : réponses de ce médecin aux offres des patients.
+  reponses_offre_rdv   ReponseOffreRdv[]
+
   @@index([specialite_id])
   @@index([pays_exercice_id])
   @@index([ville_exercice_id])
@@ -587,6 +621,8 @@ model Patient {
   // Module transverse Gestion des médecins — voir plus bas dans ce fichier.
   rendez_vous RendezVous[]
   ordonnances Ordonnance[]
+  // RDV aléatoire : offres publiées par ce patient.
+  offres_rdv  OffreRdv[]
 
   @@map("patient")
 }
@@ -599,14 +635,14 @@ model Patient {
 model RefreshToken {
   refresh_token_id String @id @default(uuid()) @db.Uuid
 
-  utilisateur_id   String             @db.Uuid
-  token_hash       String             @unique @db.VarChar(255)
-  date_creation    DateTime           @default(now())
-  date_expiration  DateTime
-  date_revocation  DateTime?
-  user_agent       String?            @db.VarChar(255)
-  ip_creation      String?            @db.VarChar(45)
-  statut           StatutRefreshToken
+  utilisateur_id  String             @db.Uuid
+  token_hash      String             @unique @db.VarChar(255)
+  date_creation   DateTime           @default(now())
+  date_expiration DateTime
+  date_revocation DateTime?
+  user_agent      String?            @db.VarChar(255)
+  ip_creation     String?            @db.VarChar(45)
+  statut          StatutRefreshToken
 
   utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
 
@@ -623,10 +659,10 @@ model RefreshToken {
 model JetonRevoque {
   jti String @id @default(uuid()) @db.Uuid
 
-  utilisateur_id            String          @db.Uuid
-  date_revocation           DateTime        @default(now())
-  date_expiration_initiale  DateTime
-  motif                     MotifRevocation
+  utilisateur_id           String          @db.Uuid
+  date_revocation          DateTime        @default(now())
+  date_expiration_initiale DateTime
+  motif                    MotifRevocation
 
   utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
 
@@ -654,8 +690,8 @@ model AgentStructureSante {
   structure_id   String @db.Uuid
   fonction       String @db.VarChar(100)
 
-  utilisateur Utilisateur     @relation(fields: [utilisateur_id], references: [utilisateur_id])
-  structure   StructureSante  @relation(fields: [structure_id], references: [structure_id])
+  utilisateur Utilisateur    @relation(fields: [utilisateur_id], references: [utilisateur_id])
+  structure   StructureSante @relation(fields: [structure_id], references: [structure_id])
 
   @@index([structure_id])
   @@map("agent_structure_sante")
@@ -664,9 +700,9 @@ model AgentStructureSante {
 model AgentPompesFunebres {
   agent_id String @id @default(uuid()) @db.Uuid
 
-  utilisateur_id      String @unique @db.Uuid
-  pompes_funebres_id  String @db.Uuid
-  fonction            String @db.VarChar(100)
+  utilisateur_id     String @unique @db.Uuid
+  pompes_funebres_id String @db.Uuid
+  fonction           String @db.VarChar(100)
 
   utilisateur     Utilisateur    @relation(fields: [utilisateur_id], references: [utilisateur_id])
   pompes_funebres PompesFunebres @relation(fields: [pompes_funebres_id], references: [pompes_funebres_id])
@@ -706,9 +742,9 @@ model AgentPharmacie {
 model AgentAmbulance {
   agent_id String @id @default(uuid()) @db.Uuid
 
-  utilisateur_id        String @unique @db.Uuid
-  service_ambulance_id  String @db.Uuid
-  fonction              String @db.VarChar(100)
+  utilisateur_id       String @unique @db.Uuid
+  service_ambulance_id String @db.Uuid
+  fonction             String @db.VarChar(100)
 
   utilisateur       Utilisateur      @relation(fields: [utilisateur_id], references: [utilisateur_id])
   service_ambulance ServiceAmbulance @relation(fields: [service_ambulance_id], references: [service_ambulance_id])
@@ -744,13 +780,17 @@ model AgentAmbulance {
 model StructureSante {
   structure_id String @id @default(uuid()) @db.Uuid
 
-  nom                 String                      @db.VarChar(200)
-  pays_id             String                      @db.Uuid
-  ville_id            String                      @db.Uuid
-  geolocalisation     Unsupported("geography(Point, 4326)")?
-  telephone           String                      @db.VarChar(20)
-  statut_verification StatutVerificationStructure
-  type_structure      TypeStructure
+  nom                       String                                 @db.VarChar(200)
+  pays_id                   String                                 @db.Uuid
+  ville_id                  String                                 @db.Uuid
+  geolocalisation           Unsupported("geography(Point, 4326)")?
+  telephone                 String                                 @db.VarChar(20)
+  statut_verification       StatutVerificationStructure
+  // Première mise en ligne (posée par déclencheur SQL, jamais effacée).
+  // Une fiche déjà publiée qui repasse « en_cours » après une
+  // modification garde ses droits d'abonnement pendant la modération.
+  date_premiere_publication DateTime?
+  type_structure            TypeStructure
 
   // Pièces justificatives (Cloudinary) — voir lib/cloudinaryService.js.
   // Seul le "nom" (public_id Cloudinary) est stocké ; l'URL publique
@@ -763,10 +803,18 @@ model StructureSante {
   piece_identite_nom    String @db.VarChar(255)
   document_agrement_nom String @db.VarChar(255)
 
+  // Contenus enrichis (abonnement de présence) : toujours conservés en
+  // base, exposés au public seulement si l'abonnement actif le permet
+  // (voir lib/droitsPresence.js).
+  description_enrichie String? @db.Text
+  presentation_equipe  String? @db.Text
+
   pays  Pays  @relation(fields: [pays_id], references: [pays_id])
   ville Ville @relation(fields: [ville_id], references: [ville_id])
 
   agents AgentStructureSante[]
+
+  abonnements_presence AbonnementPresence[]
 
   // Module transverse Gestion des médecins — un rendez-vous "physique"
   // peut être rattaché à une structure de santé (nullable : cabinet
@@ -810,22 +858,22 @@ model PompesFunebres {
 model ServiceAssurance {
   service_assurance_id String @id @default(uuid()) @db.Uuid
 
-  nom                 String                      @db.VarChar(200)
-  pays_id             String                      @db.Uuid
-  ville_id            String                      @db.Uuid
+  nom                 String                                 @db.VarChar(200)
+  pays_id             String                                 @db.Uuid
+  ville_id            String                                 @db.Uuid
   geolocalisation     Unsupported("geography(Point, 4326)")?
-  telephone           String                      @db.VarChar(20)
+  telephone           String                                 @db.VarChar(20)
   // Pièce justificative (Cloudinary) — voir lib/cloudinaryService.js.
   // Seul le "nom" (public_id Cloudinary) est stocké ; l'URL publique
   // est reconstruite à la volée, jamais persistée.
-  file_url            String                      @db.Text
-  email               String                      @db.VarChar(255)
+  file_url            String                                 @db.Text
+  email               String                                 @db.VarChar(255)
   // Numéro ou texte d'agrément réglementaire de la compagnie/du
   // courtier.
-  agrement            String                      @db.VarChar(100)
+  agrement            String                                 @db.VarChar(100)
   // Présentation libre de l'assurance, cf. onglet "Siège" de la
   // maquette.
-  description         String?                     @db.Text
+  description         String?                                @db.Text
   statut_verification StatutVerificationAssurance
   type_acteur         TypeActeurAssurance
 
@@ -854,9 +902,9 @@ model MiseEnRelation {
   mise_en_relation_id String @id @default(uuid()) @db.Uuid
 
   service_assurance_id String   @db.Uuid
-  utilisateur_id        String   @db.Uuid
-  message                String   @db.Text
-  date_creation          DateTime @default(now())
+  utilisateur_id       String   @db.Uuid
+  message              String   @db.Text
+  date_creation        DateTime @default(now())
 
   service_assurance ServiceAssurance @relation(fields: [service_assurance_id], references: [service_assurance_id])
   utilisateur       Utilisateur      @relation(fields: [utilisateur_id], references: [utilisateur_id])
@@ -874,9 +922,9 @@ model Activite {
   activite_id String @id @default(uuid()) @db.Uuid
 
   service_assurance_id String  @db.Uuid
-  titre                 String  @db.VarChar(200)
-  public_cible           String  @db.VarChar(200)
-  description             String? @db.Text
+  titre                String  @db.VarChar(200)
+  public_cible         String  @db.VarChar(200)
+  description          String? @db.Text
 
   service_assurance ServiceAssurance @relation(fields: [service_assurance_id], references: [service_assurance_id])
 
@@ -892,9 +940,9 @@ model Activite {
 model OptionActivite {
   option_activite_id String @id @default(uuid()) @db.Uuid
 
-  activite_id  String  @db.Uuid
-  libelle      String  @db.VarChar(150)
-  description  String? @db.Text
+  activite_id String  @db.Uuid
+  libelle     String  @db.VarChar(150)
+  description String? @db.Text
 
   activite Activite @relation(fields: [activite_id], references: [activite_id])
 
@@ -909,10 +957,10 @@ model Agence {
   agence_id String @id @default(uuid()) @db.Uuid
 
   service_assurance_id String                                 @db.Uuid
-  libelle                String                                 @db.VarChar(150)
-  localisation           String                                 @db.VarChar(255)
-  gps                    Unsupported("geography(Point, 4326)")?
-  contact                String                                 @db.VarChar(20)
+  libelle              String                                 @db.VarChar(150)
+  localisation         String                                 @db.VarChar(255)
+  gps                  Unsupported("geography(Point, 4326)")?
+  contact              String                                 @db.VarChar(20)
 
   service_assurance ServiceAssurance @relation(fields: [service_assurance_id], references: [service_assurance_id])
 
@@ -936,15 +984,19 @@ model Agence {
 model Pharmacie {
   pharmacie_id String @id @default(uuid()) @db.Uuid
 
-  nom                    String                      @db.VarChar(200)
-  pays_id                String                      @db.Uuid
-  ville_id               String                      @db.Uuid
-  geolocalisation        Unsupported("geography(Point, 4326)")?
-  telephone              String                      @db.VarChar(20)
-  statut_verification    StatutVerificationPharmacie
+  nom                       String                                 @db.VarChar(200)
+  pays_id                   String                                 @db.Uuid
+  ville_id                  String                                 @db.Uuid
+  geolocalisation           Unsupported("geography(Point, 4326)")?
+  telephone                 String                                 @db.VarChar(20)
+  statut_verification       StatutVerificationPharmacie
+  // Première mise en ligne (posée par déclencheur SQL, jamais effacée).
+  // Une fiche déjà publiée qui repasse « en_cours » après une
+  // modification garde ses droits d'abonnement pendant la modération.
+  date_premiere_publication DateTime?
   // Numéro d'ordre du titulaire (pharmacien responsable) — atteste
   // qu'il est habilité par l'ordre des pharmaciens à exercer.
-  numero_ordre_titulaire String                      @db.VarChar(100)
+  numero_ordre_titulaire    String                                 @db.VarChar(100)
 
   // Pièces justificatives (Cloudinary) — voir lib/cloudinaryService.js.
   // Seul le "nom" (public_id Cloudinary) est stocké ; l'URL publique
@@ -953,9 +1005,15 @@ model Pharmacie {
   //   - image_nom             : photo de la pharmacie
   //   - piece_identite_nom    : pièce d'identité du titulaire/responsable
   //   - document_agrement_nom : agrément officiel d'exercice
-  image_nom              String @db.VarChar(255)
-  piece_identite_nom     String @db.VarChar(255)
-  document_agrement_nom  String @db.VarChar(255)
+  image_nom             String @db.VarChar(255)
+  piece_identite_nom    String @db.VarChar(255)
+  document_agrement_nom String @db.VarChar(255)
+
+  // Contenus enrichis (abonnement de présence) : toujours conservés en
+  // base, exposés au public seulement si l'abonnement actif le permet
+  // (EF-PHA-07, voir lib/droitsPresence.js).
+  description_enrichie  String? @db.Text
+  services_particuliers String? @db.Text
 
   pays  Pays  @relation(fields: [pays_id], references: [pays_id])
   ville Ville @relation(fields: [ville_id], references: [ville_id])
@@ -964,6 +1022,8 @@ model Pharmacie {
   avis        AvisPharmacie[]
   abonnements AbonnementPharmacie[]
   gardes      GardePharmacie[]
+
+  abonnements_presence AbonnementPresence[]
 
   @@index([pays_id])
   @@index([ville_id])
@@ -1124,11 +1184,11 @@ model LigneForfaitPublicitaire {
 model Publicite {
   publicite_id String @id @default(uuid()) @db.Uuid
 
-  forfait_publicitaire_id     String @db.Uuid
-  emplacement_publicitaire_id String @db.Uuid
-  utilisateur_id              String @db.Uuid
-  pays_id                     String @db.Uuid
-  titre                       String @db.VarChar(150)
+  forfait_publicitaire_id     String                    @db.Uuid
+  emplacement_publicitaire_id String                    @db.Uuid
+  utilisateur_id              String                    @db.Uuid
+  pays_id                     String                    @db.Uuid
+  titre                       String                    @db.VarChar(150)
   // Le visuel est téléversé sur Cloudinary (voir lib/cloudinaryService.js,
   // fonction televerserFichier) : ce champ ne contient PAS une URL saisie
   // librement mais le "nom" (public_id) renvoyé par Cloudinary à
@@ -1136,10 +1196,10 @@ model Publicite {
   // ne pas casser le schéma existant, mais sa valeur est désormais
   // toujours produite par le serveur, jamais par le client. Voir
   // publicite.controller.js (creerPublicite/modifierPublicite).
-  visuel_url        String                    @db.Text
-  date_debut         DateTime                  @db.Date
-  date_fin           DateTime                  @db.Date
-  statut_moderation  StatutModerationPublicite @default(en_attente)
+  visuel_url                  String                    @db.Text
+  date_debut                  DateTime                  @db.Date
+  date_fin                    DateTime                  @db.Date
+  statut_moderation           StatutModerationPublicite @default(en_attente)
 
   forfait_publicitaire     ForfaitPublicitaire     @relation(fields: [forfait_publicitaire_id], references: [forfait_publicitaire_id])
   emplacement_publicitaire EmplacementPublicitaire @relation(fields: [emplacement_publicitaire_id], references: [emplacement_publicitaire_id])
@@ -1395,6 +1455,11 @@ model TransactionPaiement {
   // (contrainte CHECK transaction_objet_unique, ajoutée en SQL).
   abonnement_assurance_id_cible String? @db.Uuid
 
+  // Abonnement de présence (pharmacie, centre de santé, médecin) payé par
+  // cette transaction — même règle que abonnement_assurance_id_cible.
+  // Une transaction vise UN seul objet (CHECK transaction_objet_unique).
+  abonnement_presence_id_cible String? @db.Uuid
+
   // Décomposition du montant capturé — uniquement renseignés pour une
   // transaction liée à un rendez-vous (compte_escrow non nul) : une
   // transaction d'abonnement (medecin/pharmacie) n'a pas d'honoraires
@@ -1425,15 +1490,16 @@ model TransactionPaiement {
   frais_envoi_id              String?  @db.Uuid
   frais_remboursement_id      String?  @db.Uuid
 
-  ligne_commission      LigneTarifaire?       @relation("TransactionLigneCommission", fields: [ligne_commission_id], references: [ligne_tarifaire_id])
-  ligne_commission_patient LigneTarifaire?    @relation("TransactionLigneCommissionPatient", fields: [ligne_commission_patient_id], references: [ligne_tarifaire_id])
-  frais_envoi           FraisAgregateur?      @relation("TransactionFraisEnvoi", fields: [frais_envoi_id], references: [frais_agregateur_id])
-  frais_remboursement   FraisAgregateur?      @relation("TransactionFraisRemboursement", fields: [frais_remboursement_id], references: [frais_agregateur_id])
-  abonnements_pharmacie AbonnementPharmacie[]
-  abonnements_medecin   AbonnementMedecin[]
-  abonnements_assurance AbonnementAssurance[]
-  compte_escrow         CompteEscrow?
-  remboursements        RemboursementPaiement[]
+  ligne_commission         LigneTarifaire?         @relation("TransactionLigneCommission", fields: [ligne_commission_id], references: [ligne_tarifaire_id])
+  ligne_commission_patient LigneTarifaire?         @relation("TransactionLigneCommissionPatient", fields: [ligne_commission_patient_id], references: [ligne_tarifaire_id])
+  frais_envoi              FraisAgregateur?        @relation("TransactionFraisEnvoi", fields: [frais_envoi_id], references: [frais_agregateur_id])
+  frais_remboursement      FraisAgregateur?        @relation("TransactionFraisRemboursement", fields: [frais_remboursement_id], references: [frais_agregateur_id])
+  abonnements_pharmacie    AbonnementPharmacie[]
+  abonnements_medecin      AbonnementMedecin[]
+  abonnements_assurance    AbonnementAssurance[]
+  abonnements_presence     AbonnementPresence[]
+  compte_escrow            CompteEscrow?
+  remboursements           RemboursementPaiement[]
 
   // Politique de fonds v2 §5 : commissions APS effectivement conservées
   // par APS pour cette transaction (au plus une par origine : médecin,
@@ -1447,6 +1513,7 @@ model TransactionPaiement {
   @@index([fournisseur, statut])
   @@index([rdv_id_cible])
   @@index([abonnement_assurance_id_cible])
+  @@index([abonnement_presence_id_cible])
   @@map("transaction_paiement")
 }
 
@@ -1479,15 +1546,15 @@ model CompteEscrow {
 // recalcule avec RendezVous.date_creneau − date_annulation.
 // -----------------------------------------------------------------
 model RemboursementPaiement {
-  remboursement_id String   @id @default(uuid()) @db.Uuid
-  transaction_id   String   @db.Uuid
-  montant          Decimal  @db.Decimal(12, 2)
-  motif            String   @db.VarChar(50) // annulation_precoce | annulation_tardive | defaillance_pro | litige | paiement_apres_annulation
+  remboursement_id String  @id @default(uuid()) @db.Uuid
+  transaction_id   String  @db.Uuid
+  montant          Decimal @db.Decimal(12, 2)
+  motif            String  @db.VarChar(50) // annulation_precoce | annulation_tardive | defaillance_pro | litige | paiement_apres_annulation
   // Stripe : renseigné, remboursement déjà effectué (statut "effectue").
   // CamPay : NULL (pas de remboursement natif) ; la ligne naît "a_traiter"
   // et un admin effectue le retrait Mobile Money ("traite").
-  stripe_refund_id String?  @unique
-  statut           String   @default("effectue") @db.VarChar(20) // effectue | a_traiter | traite
+  stripe_refund_id String? @unique
+  statut           String  @default("effectue") @db.VarChar(20) // effectue | a_traiter | traite
 
   // Politique de fonds v2 §2 (CamPay) : frais RÉELS du retrait Mobile
   // Money constatés par l'admin à la clôture (a_traiter -> traite).
@@ -1544,11 +1611,11 @@ enum TypeMouvementPortefeuille {
 }
 
 model MouvementPortefeuille {
-  mouvement_id  String                     @id @default(uuid()) @db.Uuid
-  medecin_id    String                     @db.Uuid
+  mouvement_id  String                    @id @default(uuid()) @db.Uuid
+  medecin_id    String                    @db.Uuid
   type          TypeMouvementPortefeuille
-  montant       Decimal                    @db.Decimal(12, 2) // toujours positif, le signe vient du type (voir portefeuille.service.js)
-  date_creation DateTime                   @default(now())
+  montant       Decimal                   @db.Decimal(12, 2) // toujours positif, le signe vient du type (voir portefeuille.service.js)
+  date_creation DateTime                  @default(now())
 
   // Références vers l'événement d'origine (rendez-vous honoré, demande
   // de retrait...). Volontairement de simples colonnes UUID SANS
@@ -1611,9 +1678,9 @@ model AmendeMedecin {
   date_creation       DateTime     @default(now())
   date_imputation     DateTime? // date de la dernière imputation
 
-  medecin           Medecin         @relation(fields: [medecin_id], references: [medecin_id])
-  rendez_vous       RendezVous      @relation(fields: [rdv_id], references: [rdv_id])
-  parametre_amende  ParametreAmende @relation(fields: [parametre_amende_id], references: [parametre_amende_id])
+  medecin          Medecin         @relation(fields: [medecin_id], references: [medecin_id])
+  rendez_vous      RendezVous      @relation(fields: [rdv_id], references: [rdv_id])
+  parametre_amende ParametreAmende @relation(fields: [parametre_amende_id], references: [parametre_amende_id])
 
   @@index([medecin_id, statut])
   @@index([parametre_amende_id])
@@ -1649,9 +1716,9 @@ model CommissionApsVersee {
   montant              Decimal              @db.Decimal(12, 2)
   date_versement       DateTime             @default(now())
 
-  rendez_vous  RendezVous          @relation(fields: [rdv_id], references: [rdv_id])
-  transaction  TransactionPaiement @relation(fields: [transaction_id], references: [transaction_id])
-  ligne_commission LigneTarifaire  @relation(fields: [ligne_commission_id], references: [ligne_tarifaire_id])
+  rendez_vous      RendezVous          @relation(fields: [rdv_id], references: [rdv_id])
+  transaction      TransactionPaiement @relation(fields: [transaction_id], references: [transaction_id])
+  ligne_commission LigneTarifaire      @relation(fields: [ligne_commission_id], references: [ligne_tarifaire_id])
 
   @@unique([rdv_id, origine])
   @@unique([transaction_id, origine])
@@ -1670,7 +1737,7 @@ model CommissionApsVersee {
 
 enum StatutDemandeRetrait {
   en_attente_validation // créée, montant réservé, en attente d'approbation admin
-  en_cours              // envoyée à CamPay (ou issue incertaine) : attend le résultat
+  en_cours // envoyée à CamPay (ou issue incertaine) : attend le résultat
   reussie
   echouee
   rejetee
@@ -1685,11 +1752,11 @@ model DemandeRetrait {
   mobile_money_id String? @db.Uuid
 
   montant Decimal @db.Decimal(12, 2) // XAF, entier
-  numero  String  @db.VarChar(20)    // format CamPay normalisé (237XXXXXXXXX)
+  numero  String  @db.VarChar(20) // format CamPay normalisé (237XXXXXXXXX)
 
-  titulaire_declare   String?   @db.VarChar(255) // saisi par le médecin (MobileMoney.titulaire)
-  titulaire_campay    String?   @db.VarChar(255) // holder_info CamPay (best effort)
-  titulaire_concordant Boolean?                  // null = non vérifiable
+  titulaire_declare    String?  @db.VarChar(255) // saisi par le médecin (MobileMoney.titulaire)
+  titulaire_campay     String?  @db.VarChar(255) // holder_info CamPay (best effort)
+  titulaire_concordant Boolean? // null = non vérifiable
 
   statut           StatutDemandeRetrait @default(en_attente_validation)
   campay_reference String?              @unique @db.VarChar(100)
@@ -1697,9 +1764,9 @@ model DemandeRetrait {
   derniere_erreur  String?              @db.VarChar(500)
   traite_par       String?              @db.Uuid // utilisateur_id de l'admin
 
-  date_creation   DateTime  @default(now())
-  date_envoi      DateTime?
-  date_cloture    DateTime?
+  date_creation DateTime  @default(now())
+  date_envoi    DateTime?
+  date_cloture  DateTime?
 
   medecin Medecin @relation(fields: [medecin_id], references: [medecin_id])
 
@@ -1894,7 +1961,7 @@ model RendezVous {
   // ait eu lieu à plus ou moins de 24h du créneau se recalcule à la
   // volée (date_creneau − date_annulation), jamais stocké.
   motif_annulation       MotifAnnulation?
-  commentaire_annulation String?          @db.Text
+  commentaire_annulation String?           @db.Text
   date_annulation        DateTime?
   // Qui a annulé (fait constaté, y compris quand un admin annule au nom
   // d'une partie). Nécessaire à la règle « paiement tardif » : si le
@@ -1945,6 +2012,18 @@ model RendezVous {
   date_creation             DateTime @default(now())
   delai_confirmation_heures Int?
 
+  // Acceptation d'un RDV PHYSIQUE par le médecin, APRÈS paiement (statut
+  // « confirme » : le médecin n'agit jamais sur un RDV non payé, D8). FAITS :
+  //   - lieu_rdv   : lieu de la consultation, saisi librement par le
+  //     médecin ; obligatoire pour accepter, modifiable tant que le RDV
+  //     est « confirme » (le patient est notifié à chaque changement) ;
+  //   - accepte_le : date de la PREMIÈRE acceptation.
+  // Pas de statut dédié : « accepté » = accepte_le renseigné. Sans
+  // acceptation, rien d'automatique (le médecin peut annuler). NULL pour
+  // une téléconsultation.
+  lieu_rdv   String?   @db.VarChar(500)
+  accepte_le DateTime?
+
   patient   Patient         @relation(fields: [patient_id], references: [patient_id])
   medecin   Medecin         @relation(fields: [medecin_id], references: [medecin_id])
   structure StructureSante? @relation(fields: [structure_id], references: [structure_id])
@@ -1957,12 +2036,12 @@ model RendezVous {
   creneau_agenda CreneauAgenda?
   // Séquestre Stripe de ce rendez-vous (1-1, créé par le webhook
   // checkout.session.completed — voir paiement.controller.js).
-  compte_escrow CompteEscrow?
+  compte_escrow  CompteEscrow?
 
   // Politique de fonds v2 : amende due par le médecin pour ce RDV (au plus
   // une) et commissions APS conservées (au plus une par origine : médecin,
   // patient — voir CommissionApsVersee).
-  amende_medecin         AmendeMedecin?
+  amende_medecin          AmendeMedecin?
   commissions_aps_versees CommissionApsVersee[]
 
   // Étape 6 : notifications in-app liées à ce RDV (reprogrammation).
@@ -1975,6 +2054,8 @@ model RendezVous {
   // exprimer un index partiel : il n'est déclaré que dans la migration
   // (nom : rendez_vous_medecin_creneau_actif_key), comme l'index
   // partiel de LigneTarifaire.
+  // RDV aléatoire : offre dont ce RDV est issu (au plus une).
+  offre_rdv OffreRdv?
 
   @@index([patient_id])
   @@index([medecin_id])
@@ -2123,12 +2204,12 @@ model DisponibiliteMedecin {
 model CreneauAgenda {
   creneau_id String @id @default(uuid()) @db.Uuid
 
-  medecin_id String                @db.Uuid
-  horaire_id String                @db.Uuid
-  date       DateTime              @db.Date
-  statut     StatutCreneauAgenda   @default(disponible)
-  origine    OrigineCreneauAgenda  @default(genere)
-  rdv_id     String?               @unique @db.Uuid
+  medecin_id String               @db.Uuid
+  horaire_id String               @db.Uuid
+  date       DateTime             @db.Date
+  statut     StatutCreneauAgenda  @default(disponible)
+  origine    OrigineCreneauAgenda @default(genere)
+  rdv_id     String?              @unique @db.Uuid
 
   medecin     Medecin     @relation(fields: [medecin_id], references: [medecin_id])
   horaire     Horaire     @relation(fields: [horaire_id], references: [horaire_id])
@@ -2177,8 +2258,8 @@ model ParametreDelaiConfirmation {
 model TypeMobileMoney {
   id String @id @default(uuid()) @db.Uuid
 
-  pays_id String  @db.Uuid
-  libelle String  @db.VarChar(100)
+  pays_id String @db.Uuid
+  libelle String @db.VarChar(100)
 
   pays          Pays          @relation(fields: [pays_id], references: [pays_id])
   mobile_moneys MobileMoney[]
@@ -2194,10 +2275,10 @@ model MobileMoney {
   id String @id @default(uuid()) @db.Uuid
 
   // Correspond à "id_typemobilemoney" de la demande
-  type_mobile_money_id String  @db.Uuid 
+  type_mobile_money_id String @db.Uuid
   // Correspond à "id_medecin" de la demande
-  medecin_id           String  @db.Uuid 
-  
+  medecin_id           String @db.Uuid
+
   numero    String @db.VarChar(50)
   titulaire String @db.VarChar(255)
 
@@ -2216,11 +2297,11 @@ model CompteBancaire {
   id String @id @default(uuid()) @db.Uuid
 
   // Correspond à "id_medecin" de la demande
-  medecin_id String  @db.Uuid 
-  
-  nom_banque String  @db.VarChar(150)
-  titulaire  String  @db.VarChar(255)
-  iban       String  @db.VarChar(100)
+  medecin_id String @db.Uuid
+
+  nom_banque String @db.VarChar(150)
+  titulaire  String @db.VarChar(255)
+  iban       String @db.VarChar(100)
 
   medecin Medecin @relation(fields: [medecin_id], references: [medecin_id])
 
@@ -2233,11 +2314,11 @@ model CompteBancaire {
 model MobileApk {
   id String @id @default(uuid()) @db.Uuid
 
-  libelle      String    @db.VarChar(255)
-  description  String?   @db.Text
-  file_url     String    @db.Text
-  status       Boolean   @default(true)
-  date_upload  DateTime  @default(now())
+  libelle     String   @db.VarChar(255)
+  description String?  @db.Text
+  file_url    String   @db.Text
+  status      Boolean  @default(true)
+  date_upload DateTime @default(now())
 
   @@map("mobile_apk")
 }
@@ -2245,16 +2326,17 @@ model MobileApk {
 model Annonce {
   id String @id @default(uuid()) @db.Uuid
 
-  libelle        String   @db.VarChar(255)
-  description    String?  @db.Text
-  courte_description    String?  @db.Text
-  file_url       String?  @db.Text
-  date_creation  DateTime @default(now())
-  jour_validite  Int
-  statut         Boolean  @default(true)
+  libelle            String   @db.VarChar(255)
+  description        String?  @db.Text
+  courte_description String?  @db.Text
+  file_url           String?  @db.Text
+  date_creation      DateTime @default(now())
+  jour_validite      Int
+  statut             Boolean  @default(true)
 
   @@map("annonce")
 }
+
 // =====================================================================
 // Abonnements des assurances (guide_implementation_abonnement_assurances
 // v3, §1.1.1 et §1.2)
@@ -2358,8 +2440,8 @@ model AbonnementAssurance {
   abonnement_remplace_id String? @db.Uuid // montée de niveau : l'abonnement remplacé
   dernier_rappel_jours   Int? // 30, 7 ou 1 : dernier rappel d'échéance envoyé
 
-  transaction_id String? @db.Uuid // null : brouillon, geste commercial, gratuité
-  motif          String? @db.Text // obligatoire pour geste / prolongation
+  transaction_id String?                    @db.Uuid // null : brouillon, geste commercial, gratuité
+  motif          String?                    @db.Text // obligatoire pour geste / prolongation
   origine        OrigineAbonnementAssurance @default(self_service)
 
   date_creation    DateTime @default(now())
@@ -2442,4 +2524,309 @@ model CompteurFactureAbonnement {
   dernier Int @default(0)
 
   @@map("compteur_facture_abonnement")
+}
+
+// =====================================================================
+// Abonnements de présence : pharmacies, centres de santé, médecins
+// (cahier des charges v3, « APS — Abonnements de présence »).
+//
+// Même moteur que les abonnements assurance (niveaux à drapeaux, grille
+// niveau × pays, remises de durée, gratuité d'amorçage, grâce, facture
+// numérotée), mutualisé pour les trois types d'acteur : chaque ligne
+// porte son type_acteur. L'abonnement n'apporte AUCUN avantage de
+// classement : il ne fait qu'enrichir la fiche (lib/droitsPresence.js).
+//
+// Médecins : l'obligation de souscrire se décide PAR PAYS
+// (ConfigAbonnementPresence.abonnement_obligatoire). Désactivée, un
+// médecin garde tous ses droits sans abonnement.
+//
+// Contraintes SQL hors Prisma (CHECK, index uniques partiels, ajout
+// seul) : migration 20261017120100_abonnement_presence.
+// =====================================================================
+
+enum TypeActeurPresence {
+  pharmacie
+  structure
+  medecin
+}
+
+model NiveauAbonnementPresence {
+  niveau_id String @id @default(uuid()) @db.Uuid
+
+  type_acteur TypeActeurPresence
+  code        String             @db.VarChar(30) // "standard", "premium", "corporate"
+  libelle     String             @db.VarChar(100)
+  rang        Int // 1 = le plus bas, unique par type d'acteur
+  actif       Boolean            @default(true) // vendable ; n'affecte PAS les abonnés en cours
+
+  // Drapeaux d'avantages APPLIQUÉS (selon le type d'acteur)
+  contact_direct          Boolean @default(true) // téléphone / bouton d'appel
+  photos                  Boolean @default(true) // photo de la fiche
+  description_enrichie    Boolean @default(true) // description, services, biographie
+  presentation_equipe     Boolean @default(false) // centres de santé
+  prise_rdv_en_ligne      Boolean @default(true) // médecins
+  // Statistiques de consultation (compteur VueFiche) restituées au
+  // gestionnaire : totaux, et série par jour si « détaillées ».
+  statistiques            Boolean @default(false)
+  statistiques_detaillees Boolean @default(false)
+  // RÉSERVÉS : stockés, sans effet tant que le modèle de données manque.
+  multimedia              Boolean @default(false)
+  multi_utilisateurs      Boolean @default(false)
+  support_prioritaire     Boolean @default(false)
+
+  // Quotas (null = illimité) — réservés
+  max_photos        Int?
+  max_gestionnaires Int?
+
+  abonnements AbonnementPresence[]
+  tarifs      TarifAbonnementPresence[]
+
+  @@unique([type_acteur, code])
+  @@unique([type_acteur, rang])
+  @@map("niveau_abonnement_presence")
+}
+
+model AbonnementPresence {
+  abonnement_id String @id @default(uuid()) @db.Uuid
+
+  type_acteur  TypeActeurPresence
+  // Exactement une des trois, celle du type_acteur (CHECK SQL).
+  pharmacie_id String?            @db.Uuid
+  structure_id String?            @db.Uuid
+  medecin_id   String?            @db.Uuid
+  niveau_id    String             @db.Uuid
+
+  // Figés à la création du brouillon (jamais rétroactif).
+  duree_mois            Int
+  prix_mensuel_applique Decimal @db.Decimal(12, 2)
+  remise_pourcent       Decimal @default(0) @db.Decimal(5, 2)
+  credit_prorata        Decimal @default(0) @db.Decimal(12, 2)
+  montant_total         Decimal @db.Decimal(12, 2)
+  devise                String  @db.VarChar(3)
+
+  // date_fin EXCLUSIVE : premier jour non couvert.
+  date_debut DateTime?                 @db.Date
+  date_fin   DateTime?                 @db.Date
+  statut     StatutAbonnementAssurance @default(en_attente_paiement)
+
+  abonnement_remplace_id String? @db.Uuid
+  dernier_rappel_jours   Int?
+
+  transaction_id String?                    @db.Uuid
+  motif          String?                    @db.Text
+  origine        OrigineAbonnementAssurance @default(self_service)
+
+  date_creation    DateTime @default(now())
+  date_mise_a_jour DateTime @updatedAt
+
+  pharmacie   Pharmacie?                 @relation(fields: [pharmacie_id], references: [pharmacie_id])
+  structure   StructureSante?            @relation(fields: [structure_id], references: [structure_id])
+  medecin     Medecin?                   @relation(fields: [medecin_id], references: [medecin_id])
+  niveau      NiveauAbonnementPresence   @relation(fields: [niveau_id], references: [niveau_id])
+  transaction TransactionPaiement?       @relation(fields: [transaction_id], references: [transaction_id])
+  facture     FactureAbonnementPresence?
+
+  @@index([pharmacie_id, statut])
+  @@index([structure_id, statut])
+  @@index([medecin_id, statut])
+  @@index([type_acteur, statut, date_fin])
+  @@index([niveau_id])
+  @@index([transaction_id])
+  @@map("abonnement_presence")
+}
+
+// Grille de prix : niveau (donc type d'acteur) × pays.
+model TarifAbonnementPresence {
+  tarif_id           String   @id @default(uuid()) @db.Uuid
+  niveau_id          String   @db.Uuid
+  pays_id            String   @db.Uuid
+  devise             String   @db.VarChar(3)
+  prix_mensuel       Decimal  @db.Decimal(12, 2)
+  prix_usd_indicatif Decimal? @db.Decimal(12, 2)
+  actif              Boolean  @default(true)
+
+  niveau NiveauAbonnementPresence @relation(fields: [niveau_id], references: [niveau_id])
+  pays   Pays                     @relation(fields: [pays_id], references: [pays_id])
+
+  @@unique([niveau_id, pays_id])
+  @@index([pays_id])
+  @@map("tarif_abonnement_presence")
+}
+
+model RemiseDureeAbonnementPresence {
+  type_acteur     TypeActeurPresence
+  duree_mois      Int // 1, 3, 6, 12
+  remise_pourcent Decimal            @db.Decimal(5, 2)
+
+  @@id([type_acteur, duree_mois])
+  @@map("remise_duree_abonnement_presence")
+}
+
+// Par type d'acteur et par pays : gratuité d'amorçage, grâce et, pour les
+// médecins, obligation de souscrire (EF-ADM-03). Gratuité active : TOUTES
+// les fiches publiées du pays reçoivent les droits du niveau offert, sans
+// souscription, jusqu'à gratuite_jusqu_au inclus (ou sans fin).
+model ConfigAbonnementPresence {
+  type_acteur            TypeActeurPresence
+  pays_id                String             @db.Uuid
+  gratuite_active        Boolean            @default(false)
+  gratuite_niveau_id     String?            @db.Uuid
+  gratuite_jusqu_au      DateTime?          @db.Date
+  grace_jours            Int                @default(7)
+  // Lu pour les médecins uniquement. false : le médecin a tous les droits
+  // sans abonnement (la souscription ne lui est pas proposée).
+  abonnement_obligatoire Boolean            @default(false)
+
+  pays Pays @relation(fields: [pays_id], references: [pays_id])
+
+  @@id([type_acteur, pays_id])
+  @@map("config_abonnement_presence")
+}
+
+// Facture archivée (ajout seul). Numéro tiré du même compteur que les
+// abonnements assurance (même nature : abonnement de présence).
+model FactureAbonnementPresence {
+  facture_id     String   @id @default(uuid()) @db.Uuid
+  numero         String   @unique @db.VarChar(30)
+  abonnement_id  String   @unique @db.Uuid
+  transaction_id String   @unique @db.Uuid
+  date_emission  DateTime @default(now())
+  devise         String   @db.VarChar(3)
+  total          Decimal  @db.Decimal(12, 2)
+  snapshot       Json
+
+  abonnement AbonnementPresence @relation(fields: [abonnement_id], references: [abonnement_id])
+
+  @@map("facture_abonnement_presence")
+}
+
+// ---------------------------------------------------------------------
+// Statistiques de consultation des fiches (pharmacies, centres, médecins)
+//
+// VueFiche : agrégat par fiche et par jour UTC (vues + visiteurs uniques).
+// VueFicheVisiteur : empreinte HMAC NON réversible du visiteur (jamais
+// d'IP ni d'identifiant en clair), pour dédoublonner : un visiteur compte
+// une fois par jour, et une nouvelle vue au plus toutes les 30 minutes.
+// Purgée chaque nuit (seule la veille est conservée). acteur_id sans clé
+// étrangère (fiche polymorphe, comme les journaux) — voir
+// services/vuesFiche.service.js.
+// ---------------------------------------------------------------------
+model VueFiche {
+  type_acteur TypeActeurPresence
+  acteur_id   String             @db.Uuid
+  jour        DateTime           @db.Date
+  vues        Int                @default(0)
+  visiteurs   Int                @default(0)
+
+  @@id([type_acteur, acteur_id, jour])
+  @@index([type_acteur, jour])
+  @@map("vue_fiche")
+}
+
+model VueFicheVisiteur {
+  type_acteur  TypeActeurPresence
+  acteur_id    String             @db.Uuid
+  jour         DateTime           @db.Date
+  empreinte    String             @db.VarChar(64)
+  derniere_vue DateTime
+
+  @@id([type_acteur, acteur_id, jour, empreinte])
+  @@index([jour])
+  @@map("vue_fiche_visiteur")
+}
+
+// ===========================================================================
+// RDV ALÉATOIRE (terme technique : RDV sur offre)
+// ===========================================================================
+// Le patient ne choisit pas de médecin : il publie une OFFRE (spécialité,
+// pays + ville, jour et heure souhaités, type de RDV, motif). Elle est
+// signalée à tous les médecins publiés de cette spécialité, de ce pays et de
+// cette ville. Chaque médecin peut y RÉPONDRE, avec ses paramètres de profil
+// (tarif indicatif, téléconsultation…) : aucune saisie sur mesure, et l'heure
+// est celle du patient. Le patient compare les profils des répondants et
+// « valide » l'un d'eux : un RDV classique (« cree ») est créé à la date de
+// l'offre, puis le patient paie (même flux, même délai de confirmation).
+//
+// Statut de l'offre :
+//   - ouverte   : visible des médecins éligibles, réponses possibles ;
+//   - attribuee : un médecin a été validé, le RDV `rdv_id` est créé. Si ce
+//                 RDV est annulé AVANT paiement (délai de confirmation expiré
+//                 ou annulation du patient), l'offre REDEVIENT « ouverte »
+//                 (rdv_id effacé) tant que sa date n'est pas passée ;
+//   - expiree   : la date souhaitée est passée sans médecin validé (cron) ;
+//   - annulee   : retirée par le patient.
+enum StatutOffreRdv {
+  ouverte
+  attribuee
+  expiree
+  annulee
+}
+
+// Statut d'une réponse de médecin :
+//   - proposee : en attente du choix du patient ;
+//   - retiree  : le médecin a retiré sa réponse (offre encore ouverte) ;
+//   - retenue  : le patient a validé ce médecin (repasse « proposee » si le
+//                RDV est annulé avant paiement et que l'offre est rouverte).
+enum StatutReponseOffreRdv {
+  proposee
+  retiree
+  retenue
+}
+
+model OffreRdv {
+  offre_id String @id @default(uuid()) @db.Uuid
+
+  patient_id     String         @db.Uuid
+  specialite_id  String         @db.Uuid
+  pays_id        String         @db.Uuid
+  ville_id       String         @db.Uuid
+  type_rdv       TypeRdv
+  // Instant réel choisi par le patient (jour + heure) : ce sera
+  // RendezVous.date_creneau. Aucune modification par le médecin.
+  date_souhaitee DateTime
+  motif          String?        @db.Text
+  statut         StatutOffreRdv @default(ouverte)
+
+  // RDV issu de la validation (statut « attribuee »). Effacé si le RDV est
+  // annulé avant paiement et que l'offre est rouverte.
+  rdv_id String? @unique @db.Uuid
+
+  date_creation   DateTime  @default(now())
+  date_annulation DateTime?
+
+  patient     Patient     @relation(fields: [patient_id], references: [patient_id])
+  specialite  Specialite  @relation(fields: [specialite_id], references: [specialite_id])
+  pays        Pays        @relation(fields: [pays_id], references: [pays_id])
+  ville       Ville       @relation(fields: [ville_id], references: [ville_id])
+  rendez_vous RendezVous? @relation(fields: [rdv_id], references: [rdv_id])
+
+  reponses ReponseOffreRdv[]
+
+  @@index([patient_id])
+  @@index([statut, specialite_id, ville_id])
+  @@index([date_souhaitee])
+  @@map("offre_rdv")
+}
+
+model ReponseOffreRdv {
+  reponse_id String @id @default(uuid()) @db.Uuid
+
+  offre_id   String                @db.Uuid
+  medecin_id String                @db.Uuid
+  // Mot facultatif du médecin au patient (ex. « disponible, cabinet à
+  // Bonapriso »). Le tarif n'est JAMAIS saisi ici : c'est celui du profil.
+  message    String?               @db.VarChar(500)
+  statut     StatutReponseOffreRdv @default(proposee)
+
+  date_creation DateTime  @default(now())
+  date_retrait  DateTime?
+
+  offre   OffreRdv @relation(fields: [offre_id], references: [offre_id], onDelete: Cascade)
+  medecin Medecin  @relation(fields: [medecin_id], references: [medecin_id])
+
+  // Une seule réponse par médecin et par offre (un retrait puis une
+  // nouvelle réponse réactive la même ligne).
+  @@unique([offre_id, medecin_id])
+  @@index([medecin_id])
+  @@map("reponse_offre_rdv")
 }

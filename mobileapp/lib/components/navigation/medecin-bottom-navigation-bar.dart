@@ -48,7 +48,7 @@ class MedecinBottomNavigationBar extends StatelessWidget {
   /// « Rendez-vous » (politique de fonds v2, phase 6). `0` = pas de pastille.
   final int notificationsNonLues;
 
-  /// Liste des items. Par défaut : Rendez-vous / Agenda / Profil / Aide,
+  /// Liste des items. Par défaut : Rendez-vous / Demandes / Agenda / Profil / Aide,
   /// identique à la maquette ; la pastille de « Rendez-vous » suit
   /// [notificationsNonLues].
   final List<MedecinNavItem>? items;
@@ -68,6 +68,10 @@ class MedecinBottomNavigationBar extends StatelessWidget {
           icon: Icons.event_note_outlined,
           label: 'Rendez-vous',
           badgeCount: notificationsNonLues > 0 ? notificationsNonLues : null,
+        ),
+        const MedecinNavItem(
+          icon: Icons.campaign_outlined,
+          label: 'Demandes',
         ),
         const MedecinNavItem(
           icon: Icons.schedule_outlined,

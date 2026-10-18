@@ -465,7 +465,7 @@ class _RecapCard extends StatelessWidget {
           _kv('Type de rendez-vous', typeRdvLabel),
           if (tarifFcfa != null) ...[
             const SizedBox(height: 9),
-            _kv('Montant sous séquestre', '$tarifFcfa FCFA'),
+            _kv('Frais de prise de RDV', '$tarifFcfa FCFA'),
           ],
           if (codeUnique != null) ...[
             const SizedBox(height: 9),

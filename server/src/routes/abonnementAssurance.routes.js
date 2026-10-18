@@ -49,9 +49,13 @@ import {
   traiterPaiementTardif,
   listerServicesAssuranceAdmin,
 } from "../controllers/abonnementAssurance.controller.js";
+import { catalogueAbonnementAssurance } from "../controllers/catalogueAbonnement.controller.js";
 
 const router = Router();
 const admin = [authentifier, autoriser("admin", "superadmin")];
+
+// ─── Public : catalogue de la page « Abonnements » ────────────
+router.get("/abonnements-assurance/catalogue", catalogueAbonnementAssurance);
 
 // ─── Promoteur ────────────────────────────────────────────────
 // "offres" est déclarée avant "/:id/..." par lisibilité (pas de conflit d'arité).

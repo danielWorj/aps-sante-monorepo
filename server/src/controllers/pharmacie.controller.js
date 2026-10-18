@@ -45,6 +45,15 @@ import { televerserFichier, supprimerFichier, construireUrl } from "../lib/cloud
 import crypto from "crypto";
 import bcrypt from "bcrypt"; // même bibliothèque que authentification.controller.js
 import { creerAccesseurGeospatial, validerCoordonnees } from "../lib/geo.js";
+import { estAdminOuSuperadmin, peutGererFichePresence } from "../lib/acteursPresence.js";
+import {
+  appliquerDroitsPresenceALaListe,
+  resoudreDroitsPresence,
+  resoudreDroitsPresenceEnLot,
+  droitsPresencePublics,
+  filtrerPharmacie,
+} from "../lib/droitsPresence.js";
+import { enregistrerVueFiche } from "../services/vuesFiche.service.js";
 
 const SALT_ROUNDS = 10; // valeur identique à authentification.controller.js
 
@@ -230,6 +239,27 @@ async function enrichirPharmacie(pharmacie) {
   return avecUrlsFichiers(avecGeo);
 }
 
+/*
+ * Abonnement de présence (EF-PHA-06 / EF-PHA-07) : la restitution publique
+ * est modulée par l'abonnement — téléphone, photo et contenus enrichis ne
+ * sont exposés qu'avec un abonnement actif. Nom, adresse, géolocalisation,
+ * horaires et gardes restent TOUJOURS publics. Les données restent en base ;
+ * l'ordre des listes n'est jamais modifié. Un admin voit la fiche complète.
+ */
+async function restituerPharmacies(req, pharmacies) {
+  if (estAdminOuSuperadmin(req.utilisateur)) return pharmacies;
+  return appliquerDroitsPresenceALaListe("pharmacie", pharmacies);
+}
+
+/** Gardes : seule la pharmacie embarquée est filtrée (le calendrier reste public). */
+async function restituerGardes(req, gardes) {
+  if (estAdminOuSuperadmin(req.utilisateur)) return gardes;
+  const droits = await resoudreDroitsPresenceEnLot("pharmacie", gardes.map((g) => g.pharmacie_id));
+  return gardes.map((g) => (g.pharmacie
+    ? { ...g, pharmacie: filtrerPharmacie(g.pharmacie, droits.get(g.pharmacie_id).droits) }
+    : g));
+}
+
 /* ===================================================================
  * Pharmacies
  * =================================================================== */
@@ -298,7 +328,7 @@ export async function listerPharmacies(req, res, next) {
         resultat.push({ ...enrichie, distance_km: Math.round(distanceParId.get(id) * 10) / 10 });
       }
 
-      return res.status(200).json({ pharmacies: resultat });
+      return res.status(200).json({ pharmacies: await restituerPharmacies(req, resultat) });
     }
 
     const pharmacies = await prisma.pharmacie.findMany({
@@ -309,7 +339,7 @@ export async function listerPharmacies(req, res, next) {
 
     const resultat = await Promise.all(pharmacies.map(enrichirPharmacie));
 
-    return res.status(200).json({ pharmacies: resultat });
+    return res.status(200).json({ pharmacies: await restituerPharmacies(req, resultat) });
   } catch (err) {
     next(err);
   }
@@ -329,7 +359,18 @@ export async function obtenirPharmacie(req, res, next) {
     }
 
     const resultat = await enrichirPharmacie(pharmacie);
-    return res.status(200).json({ pharmacie: resultat });
+    const { droits, statut_abonnement } = await resoudreDroitsPresence("pharmacie", pharmacie.pharmacie_id);
+    // Admin et agent de la pharmacie : fiche complète (droits indiqués pour l'aperçu).
+    const complete = await peutGererFichePresence(req.utilisateur, "pharmacie", pharmacie.pharmacie_id);
+    // Statistiques de consultation : sans attendre (jamais bloquant).
+    enregistrerVueFiche({ req, type: "pharmacie", acteur_id: pharmacie.pharmacie_id, gestionnaire: complete });
+    return res.status(200).json({
+      pharmacie: {
+        ...(complete ? resultat : filtrerPharmacie(resultat, droits)),
+        droits: droitsPresencePublics(droits),
+        statut_abonnement,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -571,7 +612,7 @@ export async function creerPharmacie(req, res, next) {
 
 /**
  * PUT /api/pharmacies/:id
- * Ouvert à tout utilisateur authentifié (voir pharmacie.routes.js).
+ * Réservé à l'agent de la pharmacie et à admin/superadmin (403 sinon).
  * Les 3 fichiers sont optionnels ici : seuls ceux effectivement
  * envoyés sont remplacés (l'ancien fichier Cloudinary correspondant
  * est alors supprimé après succès du nouvel upload).
@@ -587,6 +628,8 @@ export async function modifierPharmacie(req, res, next) {
       numero_ordre_titulaire,
       latitude,
       longitude,
+      description_enrichie,
+      services_particuliers,
     } = req.body;
 
     const existante = await prisma.pharmacie.findUnique({
@@ -594,6 +637,13 @@ export async function modifierPharmacie(req, res, next) {
     });
     if (!existante) {
       return res.status(404).json({ message: "Pharmacie introuvable." });
+    }
+
+    // Seuls l'agent de la fiche et l'administration la modifient : toute
+    // modification repasse la fiche en vérification (droits enrichis de
+    // l'abonnement suspendus), un tiers ne doit pas pouvoir la déclencher.
+    if (!(await peutGererFichePresence(req.utilisateur, "pharmacie", req.params.id))) {
+      return res.status(403).json({ message: "Seul l'agent de cette pharmacie ou un administrateur peut la modifier." });
     }
 
     const paysCibleId = pays_id || existante.pays_id;
@@ -671,6 +721,15 @@ export async function modifierPharmacie(req, res, next) {
         ...(numero_ordre_titulaire && numero_ordre_titulaire.trim() && {
           numero_ordre_titulaire: numero_ordre_titulaire.trim(),
         }),
+        // Contenus enrichis (abonnement de présence) : chaîne vide = effacé.
+        // Toujours enregistrés ; leur exposition dépend de l'abonnement, et
+        // la fiche repasse en modération comme pour toute modification.
+        ...(description_enrichie !== undefined && {
+          description_enrichie: String(description_enrichie).trim().slice(0, 5000) || null,
+        }),
+        ...(services_particuliers !== undefined && {
+          services_particuliers: String(services_particuliers).trim().slice(0, 5000) || null,
+        }),
         ...donneesFichiers,
       },
       include: { pays: true, ville: true },
@@ -708,8 +767,19 @@ export async function supprimerPharmacie(req, res, next) {
         message: `Impossible de supprimer : ${nbAgents} agent(s) sont encore rattaché(s) à cette pharmacie.`,
       });
     }
+    // Abonnements de présence (et leurs factures archivées) : jamais supprimés.
+    const nbAbonnements = await prisma.abonnementPresence.count({ where: { pharmacie_id: req.params.id } });
+    if (nbAbonnements > 0) {
+      return res.status(409).json({
+        message: `Impossible de supprimer : cette pharmacie porte ${nbAbonnements} abonnement(s) de présence.`,
+      });
+    }
 
-    await prisma.pharmacie.delete({ where: { pharmacie_id: req.params.id } });
+    await prisma.$transaction([
+      prisma.vueFiche.deleteMany({ where: { type_acteur: "pharmacie", acteur_id: req.params.id } }),
+      prisma.vueFicheVisiteur.deleteMany({ where: { type_acteur: "pharmacie", acteur_id: req.params.id } }),
+      prisma.pharmacie.delete({ where: { pharmacie_id: req.params.id } }),
+    ]);
 
     // Nettoyage Cloudinary après suppression réussie en base (best
     // effort — voir supprimerFichier). On ne bloque jamais la
@@ -951,7 +1021,7 @@ export async function listerGardesPharmacie(req, res, next) {
       orderBy: { date_debut: "asc" },
     });
 
-    return res.status(200).json({ gardes });
+    return res.status(200).json({ gardes: await restituerGardes(req, gardes) });
   } catch (err) {
     next(err);
   }
@@ -970,7 +1040,8 @@ export async function obtenirGardePharmacie(req, res, next) {
       return res.status(404).json({ message: "Garde introuvable." });
     }
 
-    return res.status(200).json({ garde });
+    const [restituee] = await restituerGardes(req, [garde]);
+    return res.status(200).json({ garde: restituee });
   } catch (err) {
     next(err);
   }

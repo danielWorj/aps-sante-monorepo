@@ -222,7 +222,10 @@ function PresentationPanel({ structure }) {
             <tr>
               <td>Téléphone</td>
               <td>
-                <a href={`tel:${structure.telephone}`}>{structure.telephone}</a>
+                {/* Contact direct : exposé par le serveur seulement avec un abonnement de présence. */}
+                {structure.telephone
+                  ? <a href={`tel:${structure.telephone}`}>{structure.telephone}</a>
+                  : <span className="minimal-note">Non communiqué</span>}
               </td>
             </tr>
             {structure.email && (
@@ -243,12 +246,21 @@ function PresentationPanel({ structure }) {
         </table>
       </div>
 
-      {structure.description && (
+      {(structure.description_enrichie || structure.description) && (
         <div className="info-card">
           <h3>
             <i className="fa-solid fa-hospital" /> Présentation
           </h3>
-          <p style={{ fontSize: ".9rem" }}>{structure.description}</p>
+          <p style={{ fontSize: ".9rem", whiteSpace: "pre-line" }}>{structure.description_enrichie || structure.description}</p>
+        </div>
+      )}
+
+      {structure.presentation_equipe && (
+        <div className="info-card">
+          <h3>
+            <i className="fa-solid fa-user-group" /> L&apos;équipe
+          </h3>
+          <p style={{ fontSize: ".9rem", whiteSpace: "pre-line" }}>{structure.presentation_equipe}</p>
         </div>
       )}
 

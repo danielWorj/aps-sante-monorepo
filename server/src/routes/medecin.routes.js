@@ -84,6 +84,7 @@ import {
   modifierRendezVous,
   changerStatutRendezVous,
   terminerRendezVous,
+  accepterRendezVous,
   forcerLiberationEscrow,
   supprimerRendezVous,
   // Ordonnances
@@ -344,6 +345,11 @@ const limiteurTerminer = rateLimit({
   message: { message: "Trop de tentatives, réessayez plus tard." },
 });
 router.post("/rendez-vous/:id/terminer", authentifier, limiteurTerminer, terminerRendezVous);
+
+// RDV PHYSIQUE payé : le médecin l'accepte en saisissant le lieu (Body :
+// { lieu }), ou en change le lieu. Le patient est notifié (rdv_accepte).
+// Réservé au médecin du RDV (contrôlé dans acceptationRdv.service.js).
+router.post("/rendez-vous/:id/accepter", authentifier, accepterRendezVous);
 
 // Politique de fonds v2 §5 (étape 6) — reprogrammation d'un RDV « a_reprogrammer »
 // (les deux parties absentes) : l'une des parties PROPOSE une nouvelle date,

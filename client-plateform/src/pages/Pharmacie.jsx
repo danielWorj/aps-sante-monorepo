@@ -94,13 +94,16 @@ function PharmacyCard({ pharmacy, enGarde, positionActuelle, demanderPosition })
         </div>
       </Link>
       <div className="practitioner-actions" style={{ marginLeft: "auto" }}>
-        <a
-          href={`tel:${pharmacy.telephone}`}
-          className="btn btn-urgence btn-sm-aps"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <i className="fa-solid fa-phone" /> Appeler
-        </a>
+        {/* Bouton d'appel : seulement si le serveur expose le contact (abonnement de présence). */}
+        {pharmacy.telephone && (
+          <a
+            href={`tel:${pharmacy.telephone}`}
+            className="btn btn-urgence btn-sm-aps"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <i className="fa-solid fa-phone" /> Appeler
+          </a>
+        )}
         {hrefItineraire && (
           <a
             href={hrefItineraire}

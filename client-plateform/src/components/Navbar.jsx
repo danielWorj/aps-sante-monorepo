@@ -108,6 +108,17 @@ export default function Navbar() {
                 <i className="fa-solid fa-coins" /> Abonnement
               </NavLink>
             </li>
+            {(user?.role === 'agent_pharmacie' || user?.role === 'agent_structure_sante') && (
+              <li>
+                <NavLink
+                  to={user.role === 'agent_pharmacie' ? '/mon-espace-pharmacie' : '/mon-espace-structure'}
+                  className={navLinkClass}
+                  onClick={closeAll}
+                >
+                  <i className="fa-solid fa-store" /> Mon espace
+                </NavLink>
+              </li>
+            )}
             {user?.role === 'agent_assurance' && (
               <li>
                 <NavLink to="/mon-espace-assurance" className={navLinkClass} onClick={closeAll}>

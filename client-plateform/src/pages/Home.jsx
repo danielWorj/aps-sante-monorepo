@@ -781,7 +781,7 @@ export default function Home() {
               <span className="eyebrow">Santé accessible, partout</span>
               <h1>Le bon soin, <span className="accent">au bon moment</span>, près de chez vous.</h1>
               <p className="lead-text">
-                AZA PROXI SANTÉ ASURANCES (ApSa) réunit médecins, pharmacies, cliniques, ambulances et assureurs sur une seule plateforme.
+                AZA PROXI SANTÉ ASSURANCES (ApSa) réunit médecins, pharmacies, cliniques, ambulances et assureurs sur une seule plateforme.
                 Cherchez, comparez et prenez rendez-vous en quelques minutes, avec un paiement sécurisé à chaque étape.
               </p>
               <div className="d-flex gap-3 flex-wrap">

@@ -9,6 +9,24 @@
 
 import { apiFetch } from '../lib/apiClient';
 
+/** Avantages lisibles des niveaux assurance (max_agences traité à part). */
+export const LIBELLES_AVANTAGES_ASSURANCE = [
+  ['siege_complet', 'Fiche du siège complète (contacts, agrément, présentation)'],
+  ['afficher_activites', 'Activités et produits visibles'],
+  ['afficher_agences', 'Agences visibles et localisables'],
+  ['formulaire_contact', 'Formulaire de mise en relation'],
+  ['suivi_demandes', 'Suivi des demandes reçues'],
+];
+
+/**
+ * Catalogue PUBLIC (page « Abonnements », sans connexion).
+ * -> { pays, pays_disponibles, gratuite, offres }
+ */
+export function obtenirCatalogueAssurance(paysId) {
+  const qs = paysId ? `?pays_id=${encodeURIComponent(paysId)}` : '';
+  return apiFetch(`/abonnements-assurance/catalogue${qs}`);
+}
+
 /** GET /services-assurance/mon-service -> { service_assurance } (404 si le compte n'est agent d'aucune fiche). */
 export function obtenirMonServiceAssurance() {
   return apiFetch('/services-assurance/mon-service');
