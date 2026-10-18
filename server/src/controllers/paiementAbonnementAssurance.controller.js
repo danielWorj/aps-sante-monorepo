@@ -226,7 +226,11 @@ export async function obtenirOffres(req, res, next) {
           afficher_agences: niveau.afficher_agences,
           formulaire_contact: niveau.formulaire_contact,
           suivi_demandes: niveau.suivi_demandes,
+          // Portail assurance (médiathèque, tableau de bord).
+          video_presentation: niveau.video_presentation,
+          stats_completes: niveau.stats_completes,
           max_agences: niveau.max_agences,
+          max_photos: niveau.max_photos,
         },
         gratuite: gratuite ? { jusqu_au: gratuite.gratuite_jusqu_au } : null,
         durees,

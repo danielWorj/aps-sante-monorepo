@@ -16,8 +16,9 @@
 //     POST    : tout utilisateur authentifié, multipart/form-data avec
 //               1 fichier obligatoire "image_assurance" (crée aussi le
 //               compte agent — voir upload.middleware.js)
-//     PUT     : tout utilisateur authentifié (fichier optionnel ;
-//               statut_verification réservé admin/superadmin)
+//     PUT     : agent de la fiche ou admin/superadmin (fichier optionnel ;
+//               statut_verification réservé admin/superadmin, conservé
+//               sinon : plus de re-modération à chaque modification)
 //     DELETE  : superadmin uniquement
 //
 //   mise_en_relation
@@ -87,7 +88,9 @@ router.get("/services-assurance", listerServicesAssurance);
 // Déclarée AVANT "/services-assurance/:id" (Express résout par ordre de
 // déclaration) : sinon "mon-service" serait pris pour un :id.
 router.get("/services-assurance/mon-service", authentifier, obtenirMonServiceAssurance);
-router.get("/services-assurance/:id", obtenirServiceAssurance);
+// Jeton FACULTATIF : l'agent de la fiche et l'admin ne sont pas comptés
+// dans les vues (tableau de bord du portail assurance).
+router.get("/services-assurance/:id", authentifierOptionnel, obtenirServiceAssurance);
 // Vue propriétaire (agent de la fiche ou admin) : fiche complète, contenus,
 // abonnement, quotas — guide abonnements assurances v3, §1.4.2.
 router.get("/services-assurance/:id/gestion", authentifier, obtenirGestionServiceAssurance);

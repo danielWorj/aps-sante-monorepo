@@ -25,8 +25,9 @@
 // Module secondaire (Phase 4) : n'entre pas dans le parcours critique
 // de soin/urgence, mais suit la même logique d'annuaire public que
 // Centre de santé / Pharmacie pour service_assurance : lecture
-// publique, écriture ouverte à tout utilisateur authentifié avec
-// re-modération automatique, suppression réservée à superadmin.
+// publique, création ouverte à tout utilisateur authentifié, modification
+// réservée à l'agent de la fiche ou à l'administration (sans re-modération
+// depuis le 2026-10-18), suppression réservée à superadmin.
 //
 // Même patron que Centre de santé / Pharmacie pour la pièce jointe :
 // UNE image (compagnie ou courtier) est obligatoire à la création,
@@ -54,6 +55,8 @@ import {
   peutGererServiceAssurance,
   serviceAssuranceDeLAgent,
 } from "../lib/accesAssurance.js";
+import { enregistrerVueFiche } from "../services/vuesFiche.service.js";
+import { STATUTS_DEMANDE, notifierDemandeRecue } from "../services/portailAssurance.service.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt"; // même bibliothèque que authentification.controller.js
 
@@ -418,6 +421,13 @@ export async function obtenirServiceAssurance(req, res, next) {
     const enrichi = await enrichirServiceAssurance(serviceAssurance);
     const { droits, statut_abonnement } = await resoudreDroits(serviceAssurance.service_assurance_id);
 
+    // Compteur de vues (tableau de bord du portail) : l'agent de la fiche
+    // et l'administration ne comptent pas. Sans attente, ne lève jamais.
+    const gestionnaire = req.utilisateur
+      ? await peutGererServiceAssurance(req.utilisateur, serviceAssurance.service_assurance_id)
+      : false;
+    enregistrerVueFiche({ req, type: "assurance", acteur_id: serviceAssurance.service_assurance_id, gestionnaire });
+
     return res.status(200).json({
       service_assurance: { ...filtrerFiche(enrichi, droits), droits: droitsPublics(droits), statut_abonnement },
     });
@@ -440,9 +450,11 @@ export async function obtenirMonServiceAssurance(req, res, next) {
     }
     const service = await prisma.serviceAssurance.findUnique({
       where: { service_assurance_id: serviceAssuranceId },
-      select: { service_assurance_id: true, nom: true, statut_verification: true },
+      select: { service_assurance_id: true, nom: true, statut_verification: true, type_acteur: true, file_url: true },
     });
-    return res.status(200).json({ service_assurance: service });
+    // type_acteur + image_url : en-tête du portail assurance.
+    const { file_url, ...reste } = service;
+    return res.status(200).json({ service_assurance: { ...reste, image_url: construireUrl(file_url) } });
   } catch (err) {
     next(err);
   }
@@ -779,8 +791,8 @@ export async function creerServiceAssurance(req, res, next) {
 
 /**
  * PUT /api/services-assurance/:id
- * multipart/form-data — ouvert à tout utilisateur authentifié, quel
- * que soit son rôle. Ne touche jamais au compte agent (déjà créé une
+ * multipart/form-data — réservé à l'agent de la fiche et à admin/superadmin.
+ * Le statut de vérification est conservé (voir plus bas). Ne touche jamais au compte agent (déjà créé une
  * fois pour toutes à la création du service) — même logique que
  * Pharmacie. Le fichier image_assurance est optionnel ici : seul un
  * nouveau fichier effectivement envoyé remplace l'ancien (l'ancien
@@ -808,6 +820,13 @@ export async function modifierServiceAssurance(req, res, next) {
     });
     if (!existant) {
       return res.status(404).json({ message: "Service d'assurance introuvable." });
+    }
+    // Réservé à l'agent de la fiche et à l'administration (avant : tout
+    // utilisateur connecté pouvait modifier n'importe quelle fiche).
+    if (!(await peutGererServiceAssurance(req.utilisateur, existant.service_assurance_id))) {
+      return res.status(403).json({
+        message: "Seul l'agent de ce service d'assurance ou un administrateur peut modifier la fiche.",
+      });
     }
 
     if (email && !REGEX_EMAIL.test(email.trim())) {
@@ -841,9 +860,11 @@ export async function modifierServiceAssurance(req, res, next) {
       });
     }
 
-    // Seuls admin/superadmin peuvent choisir librement statut_verification ;
-    // pour tout autre profil, la fiche repasse systématiquement en
-    // "en_cours" (même logique que Centre de santé / Pharmacie).
+    // Seuls admin/superadmin choisissent statut_verification. Une
+    // modification de l'agent ne repasse PLUS la fiche en vérification
+    // (décision du 2026-10-18 : inutilement bloquant, la fiche disparaissait
+    // du public) : son statut est conservé. Seule exception : une fiche
+    // « non_publie » modifiée par son agent est re-soumise (« en_cours »).
     const estAdmin = estAdminOuSuperadmin(req.utilisateur);
 
     if (estAdmin && statut_verification && !STATUTS_VERIFICATION_ASSURANCE.includes(statut_verification)) {
@@ -851,9 +872,9 @@ export async function modifierServiceAssurance(req, res, next) {
         message: `statut_verification invalide. Valeurs acceptées : ${STATUTS_VERIFICATION_ASSURANCE.join(", ")}.`,
       });
     }
-    const statutApplique = estAdmin
-      ? statut_verification || existant.statut_verification
-      : "en_cours";
+    let statutApplique = existant.statut_verification;
+    if (estAdmin && statut_verification) statutApplique = statut_verification;
+    else if (!estAdmin && existant.statut_verification === "non_publie") statutApplique = "en_cours";
 
     // Remplacement optionnel de l'image : upload du nouveau fichier
     // AVANT suppression de l'ancien, pour ne jamais laisser la fiche
@@ -1575,15 +1596,53 @@ export async function listerMisesEnRelationAssurance(req, res, next) {
       });
     }
 
-    const misesEnRelation = await prisma.miseEnRelation.findMany({
-      where: { service_assurance_id },
-      include: {
-        utilisateur: { select: { nom: true, prenom: true, email: true, telephone: true } },
-      },
-      orderBy: { date_creation: "desc" },
-    });
+    // Portail assurance : filtres facultatifs ?statut=...&recherche=... et
+    // pagination facultative ?page=&limite= (sans `limite`, tout est
+    // renvoyé — comportement historique du back-office et du mobile).
+    const { statut, recherche } = req.query;
+    if (statut && !STATUTS_DEMANDE.includes(statut)) {
+      return res.status(400).json({ message: `statut invalide. Valeurs acceptées : ${STATUTS_DEMANDE.join(", ")}.` });
+    }
+    const where = { service_assurance_id };
+    if (statut) where.statut = statut;
+    const terme = typeof recherche === "string" ? recherche.trim() : "";
+    if (terme) {
+      where.OR = [
+        { message: { contains: terme, mode: "insensitive" } },
+        { utilisateur: { nom: { contains: terme, mode: "insensitive" } } },
+        { utilisateur: { prenom: { contains: terme, mode: "insensitive" } } },
+        { utilisateur: { email: { contains: terme, mode: "insensitive" } } },
+      ];
+    }
+    const limite = req.query.limite ? Math.min(Math.max(Number.parseInt(req.query.limite, 10) || 20, 1), 100) : null;
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
 
-    return res.status(200).json({ mises_en_relation: misesEnRelation });
+    const [misesEnRelation, total, parStatut] = await Promise.all([
+      prisma.miseEnRelation.findMany({
+        where,
+        include: {
+          utilisateur: { select: { nom: true, prenom: true, email: true, telephone: true } },
+        },
+        orderBy: { date_creation: "desc" },
+        ...(limite && { take: limite, skip: (page - 1) * limite }),
+      }),
+      prisma.miseEnRelation.count({ where }),
+      prisma.miseEnRelation.groupBy({
+        by: ["statut"],
+        where: { service_assurance_id },
+        _count: { _all: true },
+      }),
+    ]);
+    const compteurs = Object.fromEntries(STATUTS_DEMANDE.map((s) => [s, 0]));
+    for (const l of parStatut) compteurs[l.statut] = l._count._all;
+
+    return res.status(200).json({
+      mises_en_relation: misesEnRelation,
+      total,
+      page: limite ? page : 1,
+      limite,
+      compteurs,
+    });
   } catch (err) {
     next(err);
   }
@@ -1625,6 +1684,8 @@ export async function creerMiseEnRelationAssurance(req, res, next) {
         message: message.trim(),
       },
     });
+    // Cloche du portail assurance (ne lève jamais).
+    await notifierDemandeRecue(miseEnRelation);
 
     return res.status(201).json({ message: "Message envoyé au service d'assurance.", mise_en_relation: miseEnRelation });
   } catch (err) {

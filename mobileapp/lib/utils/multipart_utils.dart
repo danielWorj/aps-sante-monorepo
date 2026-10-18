@@ -26,6 +26,13 @@ MediaType mediaTypeDepuisNom(String nomFichier) {
       return MediaType('image', 'webp');
     case 'pdf':
       return MediaType('application', 'pdf');
+    // Vidéos de la médiathèque du portail assurance.
+    case 'mp4':
+      return MediaType('video', 'mp4');
+    case 'webm':
+      return MediaType('video', 'webm');
+    case 'mov':
+      return MediaType('video', 'quicktime');
     default:
       return MediaType('application', 'octet-stream');
   }

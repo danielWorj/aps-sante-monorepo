@@ -22,7 +22,10 @@ const AVANTAGES_PRESENCE = {
   medecin: ["contact_direct", "photos", "description_enrichie", "prise_rdv_en_ligne", "multimedia", "statistiques", "statistiques_detaillees", "support_prioritaire"],
 };
 
-const AVANTAGES_ASSURANCE = ["siege_complet", "afficher_activites", "afficher_agences", "formulaire_contact", "suivi_demandes"];
+const AVANTAGES_ASSURANCE = [
+  "siege_complet", "afficher_activites", "afficher_agences", "formulaire_contact", "suivi_demandes",
+  "video_presentation", "stats_completes", // appliqués par le portail assurance
+];
 
 /** Pays distincts des tarifs, triés (Cameroun d'abord, puis par nom). */
 function paysDesTarifs(tarifs) {
@@ -138,6 +141,7 @@ export async function catalogueAbonnementAssurance(req, res, next) {
         avantages: {
           ...Object.fromEntries(AVANTAGES_ASSURANCE.map((cle) => [cle, niveau[cle]])),
           max_agences: niveau.max_agences,
+          max_photos: niveau.max_photos,
         },
         a_partir_de: !general && duPays.length > 1,
         durees: dureesPour(tarif, remises),

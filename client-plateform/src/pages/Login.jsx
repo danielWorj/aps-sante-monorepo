@@ -71,7 +71,7 @@ export default function Login() {
       const destinationParRole = {
         patient: '/portail/patient-rdv',
         medecin: '/portail/medecin-agenda',
-        agent_assurance: '/mon-espace-assurance',
+        agent_assurance: '/portail/assurance',
         agent_pharmacie: '/mon-espace-pharmacie',
         agent_structure_sante: '/mon-espace-structure',
       };

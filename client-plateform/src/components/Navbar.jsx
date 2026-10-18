@@ -121,8 +121,8 @@ export default function Navbar() {
             )}
             {user?.role === 'agent_assurance' && (
               <li>
-                <NavLink to="/mon-espace-assurance" className={navLinkClass} onClick={closeAll}>
-                  <i className="fa-solid fa-building-shield" /> Mon espace
+                <NavLink to="/portail/assurance" className={navLinkClass} onClick={closeAll}>
+                  <i className="fa-solid fa-building-shield" /> Mon portail
                 </NavLink>
               </li>
             )}

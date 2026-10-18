@@ -1332,7 +1332,7 @@ class ServiceAssuranceMiseAJourRequete {
   final String? description;
 
   /// Ignoré côté serveur si l'utilisateur connecté n'est pas
-  /// admin/superadmin (la fiche repasse alors en "en_cours").
+  /// admin/superadmin (la fiche garde alors son statut).
   final StatutVerificationAssurance? statutVerification;
   final TypeActeurAssurance? typeActeur;
   final double? latitude;

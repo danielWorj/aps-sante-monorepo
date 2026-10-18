@@ -8,6 +8,7 @@ import {
 } from "../services/assuranceService";
 import { getAccessToken } from "../lib/apiClient";
 import GoogleMapView from "../components/maps/GoogleMapView";
+import { listerMediasPublics } from "../services/portailAssuranceService";
 
 // Fiche assurance — page de détail d'une compagnie d'assurance ou d'un
 // courtier, avec ses activités (catalogue produits), ses agences et
@@ -442,6 +443,33 @@ function FicheIntrouvable() {
   );
 }
 
+/* ============================ GALERIE ============================ */
+// Médiathèque de la fiche (portail assurance) : le serveur ne renvoie que
+// les médias couverts par l'abonnement de la fiche.
+function GaleriePanel({ medias }) {
+  return (
+    <div className="info-card">
+      <h3>
+        <i className="fa-solid fa-photo-film" /> Galerie
+      </h3>
+      <div className="galerie-assurance">
+        {medias.map((m) => (
+          <figure key={m.media_id}>
+            {m.type === "video" ? (
+              <video src={m.url} poster={m.vignette_url} controls preload="none" />
+            ) : (
+              <a href={m.url} target="_blank" rel="noreferrer">
+                <img src={m.vignette_url} alt={m.titre || "Photo"} loading="lazy" />
+              </a>
+            )}
+            {m.titre && <figcaption>{m.titre}</figcaption>}
+          </figure>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ============================ COMPOSANT PRINCIPAL ============================ */
 export default function FicheAssurance() {
   const { id } = useParams();
@@ -449,6 +477,7 @@ export default function FicheAssurance() {
   const [insurer, setInsurer] = useState(null);
   const [activites, setActivites] = useState([]);
   const [agences, setAgences] = useState([]);
+  const [medias, setMedias] = useState([]);
   const [chargementFiche, setChargementFiche] = useState(true);
   const [chargementActivites, setChargementActivites] = useState(true);
   const [chargementAgences, setChargementAgences] = useState(true);
@@ -462,6 +491,7 @@ export default function FicheAssurance() {
     setActiveTab("siege");
     setActivites([]);
     setAgences([]);
+    setMedias([]);
 
     // Activités et agences ne sont demandées que si les droits de la fiche
     // les autorisent (le serveur renverrait [] de toute façon — guide v3, §2.1.2).
@@ -481,6 +511,10 @@ export default function FicheAssurance() {
         } else {
           setChargementActivites(false);
         }
+
+        listerMediasPublics(id)
+          .then((liste) => { if (!annule) setMedias(liste); })
+          .catch(() => {});
 
         if (droits.afficher_agences) {
           setChargementAgences(true);
@@ -523,6 +557,7 @@ export default function FicheAssurance() {
     { id: "siege", label: "Siège", visible: true },
     { id: "activites", label: `Activités (${activites.length})`, visible: !!droits.afficher_activites },
     { id: "agences", label: `Agences (${agences.length})`, visible: !!droits.afficher_agences },
+    { id: "galerie", label: `Galerie (${medias.length})`, visible: medias.length > 0 },
   ].filter((t) => t.visible);
 
   return (
@@ -623,6 +658,7 @@ export default function FicheAssurance() {
               {activeTab === "agences" && droits.afficher_agences && (
                 <AgencesPanel agences={agences} chargement={chargementAgences} />
               )}
+              {activeTab === "galerie" && medias.length > 0 && <GaleriePanel medias={medias} />}
             </div>
 
             {/* Colonne latérale — mise en relation */}

@@ -222,6 +222,9 @@ enum TypeNotification {
   offre_rdv_nouvelle
   offre_rdv_reponse
   offre_rdv_expiree
+  // Portail assurance : nouvelle demande de mise en relation reçue par une
+  // fiche. Destinataires : les agents de la fiche.
+  mise_en_relation_recue
 }
 
 // Motif d'annulation d'un rendez-vous — liste fermée exigée par la
@@ -884,6 +887,7 @@ model ServiceAssurance {
   mises_en_relation MiseEnRelation[]
   activites         Activite[]
   agences           Agence[]
+  medias            MediaAssurance[]
 
   // Abonnements de présence (niveaux Enrichie / Premium, etc.). Voir
   // AbonnementAssurance plus bas.
@@ -898,20 +902,65 @@ model ServiceAssurance {
 // "contact_prospect_assurance" (qui référençait patient) : c'est
 // désormais un utilisateur quelconque qui contacte une assurance —
 // voir Utilisateur.mises_en_relation plus haut.
+//
+// Portail assurance : l'agent suit chaque demande (statut + note interne,
+// jamais montrée au demandeur). Le suivi exige le droit `suivi_demandes`
+// de l'abonnement ; la lecture des demandes reçues reste toujours ouverte
+// à l'agent.
+enum StatutMiseEnRelation {
+  nouvelle // pas encore ouverte par l'agent
+  en_cours // prise en charge (contact établi, devis en préparation…)
+  traitee // clôturée
+  archivee // classée sans suite
+}
+
 model MiseEnRelation {
   mise_en_relation_id String @id @default(uuid()) @db.Uuid
 
-  service_assurance_id String   @db.Uuid
-  utilisateur_id       String   @db.Uuid
-  message              String   @db.Text
-  date_creation        DateTime @default(now())
+  service_assurance_id String               @db.Uuid
+  utilisateur_id       String               @db.Uuid
+  message              String               @db.Text
+  statut               StatutMiseEnRelation @default(nouvelle)
+  note_interne         String?              @db.Text
+  date_traitement      DateTime? // passage à « traitee » ou « archivee »
+  date_creation        DateTime             @default(now())
+  date_mise_a_jour     DateTime?            @updatedAt
 
   service_assurance ServiceAssurance @relation(fields: [service_assurance_id], references: [service_assurance_id])
   utilisateur       Utilisateur      @relation(fields: [utilisateur_id], references: [utilisateur_id])
 
-  @@index([service_assurance_id])
+  @@index([service_assurance_id, statut])
   @@index([utilisateur_id])
   @@map("mise_en_relation")
+}
+
+// Médiathèque d'une fiche assurance (portail assurance) : photos et vidéos
+// téléversées sur Cloudinary. Comme partout, seul le « nom » Cloudinary est
+// stocké ; `type` donne le resource_type (image | video) nécessaire pour
+// reconstruire l'URL et supprimer le fichier. Visibilité publique selon les
+// droits de l'abonnement : `max_photos` (null = illimité) et
+// `video_presentation`. Les médias au-delà des droits sont CONSERVÉS
+// (masqués au public) et réapparaissent à la réactivation.
+enum TypeMediaAssurance {
+  image
+  video
+}
+
+model MediaAssurance {
+  media_id String @id @default(uuid()) @db.Uuid
+
+  service_assurance_id String             @db.Uuid
+  type                 TypeMediaAssurance
+  fichier_nom          String             @db.Text
+  titre                String?            @db.VarChar(150)
+  ordre                Int                @default(0)
+  taille_octets        Int?
+  date_creation        DateTime           @default(now())
+
+  service_assurance ServiceAssurance @relation(fields: [service_assurance_id], references: [service_assurance_id])
+
+  @@index([service_assurance_id, type, ordre])
+  @@map("media_assurance")
 }
 
 // Catalogue des activités (produits) d'une assurance — ex. "Activa
@@ -2397,17 +2446,18 @@ model NiveauAbonnementAssurance {
   afficher_activites Boolean @default(true)
   afficher_agences   Boolean @default(true)
   formulaire_contact Boolean @default(true)
-  suivi_demandes     Boolean @default(true)
+  suivi_demandes     Boolean @default(true) // statut + note interne des demandes (portail assurance)
+  // Appliqués par le portail assurance (médiathèque, tableau de bord).
+  video_presentation Boolean @default(false) // vidéos de la médiathèque visibles du public
+  stats_completes    Boolean @default(false) // courbe quotidienne des vues et des demandes
   // RÉSERVÉS : stockés mais non appliqués tant que le modèle de données
   // manque (phase 9).
-  video_presentation Boolean @default(false)
   vitrine_premium    Boolean @default(false)
-  stats_completes    Boolean @default(false)
   export_stats       Boolean @default(false)
 
   // Quotas (null = illimité)
   max_agences       Int?
-  max_photos        Int? // réservé
+  max_photos        Int? // photos de la médiathèque visibles du public
   max_gestionnaires Int? // réservé
 
   abonnements AbonnementAssurance[]
@@ -2548,6 +2598,10 @@ enum TypeActeurPresence {
   pharmacie
   structure
   medecin
+  // Utilisé UNIQUEMENT par le compteur de vues (VueFiche) : les assurances
+  // ont leur propre moteur d'abonnement (AbonnementAssurance). Jamais
+  // accepté par l'API des abonnements de présence (TYPES_ACTEUR_PRESENCE).
+  assurance
 }
 
 model NiveauAbonnementPresence {

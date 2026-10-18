@@ -101,6 +101,23 @@ class ApiRealEndpoints {
   static const String agences = '${baseUrl}/agences';
   static String agence(String id) => '${baseUrl}/agences/$id';
 
+  // ─── Portail assurance (agent de la fiche) ───────────────────────
+  // Voir portailAssurance.routes.js et abonnementAssurance.routes.js.
+  static const String monServiceAssurance = '${baseUrl}/services-assurance/mon-service';
+  static String gestionServiceAssurance(String id) => '${baseUrl}/services-assurance/$id/gestion';
+  static String tableauDeBordAssurance(String id) => '${baseUrl}/services-assurance/$id/tableau-de-bord';
+  static String mediasAssurance(String id) => '${baseUrl}/services-assurance/$id/medias';
+  static String mediasAssuranceGestion(String id) => '${baseUrl}/services-assurance/$id/medias/gestion';
+  static String ordreMediasAssurance(String id) => '${baseUrl}/services-assurance/$id/medias/ordre';
+  static String mediaAssurance(String id) => '${baseUrl}/medias-assurance/$id';
+  static const String offresAbonnementAssurance = '${baseUrl}/abonnements-assurance/offres';
+  static const String abonnementsAssurance = '${baseUrl}/abonnements-assurance';
+  static String paiementAbonnementAssurance(String id) => '${baseUrl}/abonnements-assurance/$id/paiement';
+  static String campayAbonnementAssurance(String id) => '${baseUrl}/abonnements-assurance/$id/paiement-campay';
+  static String annulerPaiementAbonnementAssurance(String id) =>
+      '${baseUrl}/abonnements-assurance/$id/paiement/annuler';
+  static String virementAbonnementAssurance(String id) => '${baseUrl}/abonnements-assurance/$id/virement';
+
   // ─── Pharmacies (module "annuaire — pharmacie" + sous-module
   // "Gardes officielles") ────────────────────────────────────────────
   // Voir pharmacie.routes.js :

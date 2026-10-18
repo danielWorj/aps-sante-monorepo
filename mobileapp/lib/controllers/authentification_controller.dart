@@ -24,10 +24,13 @@
 //     ni ne renvoie de refresh token.
 //   - l'access token est gardé en mémoire (état d'[AsyncNotifier]) et
 //     dupliqué dans [FlutterSecureStorage] pour survivre à un
-//     redémarrage de l'app — jamais dans SharedPreferences en clair.
-//     Si `flutter_secure_storage` n'est pas souhaité dans le projet,
-//     supprimer [_StockageSession] et se contenter de l'état mémoire
-//     (perte de session au redémarrage).
+//     redémarrage de l'app — jamais dans SharedPreferences en clair ;
+//   - le cookie du refresh token est lui aussi persisté, chiffré
+//     (PersistCookieJar + StockageCookiesSecurise) : sans cela il était
+//     perdu à la fermeture de l'app et la session ne survivait pas à
+//     l'expiration de l'access token ;
+//   - l'access token est renouvelé automatiquement avant expiration
+//     (minuteur + retour au premier plan), un seul /refresh à la fois.
 //
 // ⚠️ Ce module NE réutilise PAS `apiClientProvider` (api_client.dart) :
 // [AuthentificationRepository] a été refactorisé pour parler HTTP
@@ -43,7 +46,9 @@
 // ci-dessous, dédié à ce module.
 
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:cookie_jar/cookie_jar.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:riverpod/riverpod.dart';
@@ -51,10 +56,20 @@ import 'package:riverpod/riverpod.dart';
 import '../models/authentification_models.dart';
 import '../repositories/authentification_repository.dart';
 import '../utils/cookie_http_client.dart';
+import '../utils/stockage_cookies_securise.dart';
 
 /* =========================================================================
  * Dépendances
  * ========================================================================= */
+
+/// Pot de cookies PERSISTANT (chiffré, voir stockage_cookies_securise.dart) :
+/// le cookie httpOnly du refresh token survit ainsi aux redémarrages de
+/// l'application. Avec l'ancien CookieJar en mémoire, il était perdu à
+/// chaque fermeture et l'utilisateur devait se reconnecter dès que
+/// l'access token (15 min) avait expiré.
+final _potCookiesProvider = Provider<PersistCookieJar>((ref) {
+  return PersistCookieJar(storage: const StockageCookiesSecurise());
+});
 
 /// Client HTTP dédié au module authentification : DOIT être un client
 /// qui persiste les cookies entre appels (voir note ci-dessus). Fermé
@@ -65,7 +80,7 @@ import '../utils/cookie_http_client.dart';
 /// implémentation par `http.BrowserClient()..withCredentials = true`
 /// (le navigateur gère alors les cookies lui-même).
 final _authHttpClientProvider = Provider<http.Client>((ref) {
-  final client = CookieHttpClient();
+  final client = CookieHttpClient(pot: ref.watch(_potCookiesProvider));
   ref.onDispose(client.close);
   return client;
 });
@@ -77,13 +92,61 @@ Provider<AuthentificationRepository>((ref) {
   return AuthentificationRepository(ref.watch(_authHttpClientProvider));
 });
 
-/// Stockage sécurisé de l'access token uniquement (jamais le refresh
-/// token — voir en-tête du fichier et du repository).
+/// Stockage sécurisé de l'access token et du dernier profil connu
+/// (jamais le refresh token, qui vit dans le pot de cookies).
 final _stockageSecuriseProvider = Provider<FlutterSecureStorage>((ref) {
   return const FlutterSecureStorage();
 });
 
 const String _cleAccessTokenPersiste = 'auth.access_token';
+// Dernier profil connu : permet d'ouvrir l'espace de l'utilisateur même
+// si le serveur est injoignable au démarrage (réseau coupé).
+const String _cleUtilisateurPersiste = 'auth.utilisateur';
+
+/// L'access token est renouvelé un peu AVANT son expiration, pour que les
+/// modules qui lisent [authTokenProvider] tel quel (sans
+/// [SessionController.appelAuthentifie]) aient toujours un token valide.
+const Duration _margeRafraichissement = Duration(minutes: 2);
+const Duration _reessaiApresEchecReseau = Duration(seconds: 30);
+
+/// Date d'expiration (`exp`) lue dans l'access token JWT, sans vérifier
+/// la signature (le serveur reste seul juge) ; `null` si illisible.
+DateTime? _expirationJwt(String token) {
+  try {
+    final parties = token.split('.');
+    if (parties.length != 3) return null;
+    final charge = jsonDecode(
+      utf8.decode(base64Url.decode(base64Url.normalize(parties[1]))),
+    );
+    final exp = charge is Map ? charge['exp'] : null;
+    if (exp is! num) return null;
+    return DateTime.fromMillisecondsSinceEpoch(exp.toInt() * 1000);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Code HTTP d'une erreur levée par un repository (chacun a son propre
+/// ApiException, tous avec `statusCode`), ou `null` (réseau, inattendu).
+int? _codeHttpDe(Object erreur) {
+  if (erreur is ErreurAuthentification) {
+    return erreur.codeHttp == 0 ? null : erreur.codeHttp;
+  }
+  try {
+    final code = (erreur as dynamic).statusCode;
+    return code is int ? code : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Le serveur a REFUSÉ la session (refresh absent/révoqué/expiré, compte
+/// suspendu) : il faut se reconnecter. Toute autre erreur (réseau, 5xx)
+/// est passagère et ne doit jamais déconnecter l'utilisateur.
+bool _estRejetDefinitif(Object erreur) {
+  final code = _codeHttpDe(erreur);
+  return code == 400 || code == 401 || code == 403;
+}
 
 /* =========================================================================
  * Session — source de vérité unique de l'authentification
@@ -91,55 +154,67 @@ const String _cleAccessTokenPersiste = 'auth.access_token';
 
 /// État de session applicatif. `null` = déconnecté.
 ///
-/// [build] tente de restaurer une session existante au démarrage à
-/// partir de l'access token persisté (silencieusement : un échec de
-/// restauration ne doit jamais planter l'app, juste renvoyer `null`
-/// comme si l'utilisateur n'était pas connecté).
+/// [build] restaure la session persistée au démarrage : access token
+/// renouvelé si besoin grâce au cookie de refresh persistant ; serveur
+/// injoignable => session locale (dernier profil connu) plutôt que
+/// l'écran de connexion. Seul un REFUS du serveur déconnecte.
 class SessionController extends AsyncNotifier<SessionUtilisateur?> {
+  Timer? _minuteur;
+  // Un seul /auth/refresh à la fois : la rotation est à usage unique, deux
+  // refresh simultanés avec le même cookie feraient échouer le second (et
+  // déconnecteraient l'utilisateur à tort).
+  Future<String>? _rafraichissementEnCours;
+
   @override
   Future<SessionUtilisateur?> build() {
+    ref.onDispose(() => _minuteur?.cancel());
     return _restaurerSessionPersistee();
   }
+
+  AuthentificationRepository get _repo =>
+      ref.read(authentificationRepositoryProvider);
 
   // ───────────────────────────────────────────────────────────────
   // Restauration au démarrage
   // ───────────────────────────────────────────────────────────────
   Future<SessionUtilisateur?> _restaurerSessionPersistee() async {
-    final tokenPersiste = await ref
-        .read(_stockageSecuriseProvider)
-        .read(key: _cleAccessTokenPersiste);
+    String? tokenPersiste;
+    Utilisateur? utilisateurEnCache;
+    try {
+      final stockage = ref.read(_stockageSecuriseProvider);
+      tokenPersiste = await stockage.read(key: _cleAccessTokenPersiste);
+      utilisateurEnCache =
+          _decoderUtilisateur(await stockage.read(key: _cleUtilisateurPersiste));
+    } catch (_) {
+      return null; // stockage illisible : démarrage déconnecté
+    }
     if (tokenPersiste == null) return null;
 
-    final repo = ref.read(authentificationRepositoryProvider);
+    var token = tokenPersiste;
     try {
-      final resultat = await repo.profil(accessToken: tokenPersiste);
-      return SessionUtilisateur(
-        accessToken: tokenPersiste,
-        utilisateur: resultat.utilisateur,
-      );
-    } on ErreurAuthentification catch (e) {
-      if (e.codeHttp != 401) {
-        // Erreur autre qu'un access token expiré (réseau, 500, compte
-        // suspendu…) : on n'efface pas le token persisté (il redeviendra
-        // peut-être valide, ex: coupure réseau ponctuelle), on démarre
-        // juste déconnecté pour cet essai.
-        return null;
-      }
-      // Access token expiré : le cookie de refresh httpOnly a peut-être
-      // survécu (session encore valide côté serveur) — on tente une
-      // reprise silencieuse avant d'abandonner.
+      if (_expireBientot(token)) token = await _rafraichirUneFois();
+      Utilisateur utilisateur;
       try {
-        final rafraichi = await repo.rafraichirToken();
-        final profil = await repo.profil(accessToken: rafraichi.accessToken);
-        await _persisterAccessToken(rafraichi.accessToken);
-        return SessionUtilisateur(
-          accessToken: rafraichi.accessToken,
-          utilisateur: profil.utilisateur,
-        );
-      } on ErreurAuthentification {
-        await _effacerAccessTokenPersiste();
+        utilisateur = (await _repo.profil(accessToken: token)).utilisateur;
+      } on ErreurAuthentification catch (e) {
+        if (e.codeHttp != 401) rethrow;
+        token = await _rafraichirUneFois();
+        utilisateur = (await _repo.profil(accessToken: token)).utilisateur;
+      }
+      await _persisterUtilisateur(utilisateur);
+      _programmerRafraichissement(token);
+      return SessionUtilisateur(accessToken: token, utilisateur: utilisateur);
+    } catch (e) {
+      if (_estRejetDefinitif(e)) {
+        await _effacerPersistance();
         return null;
       }
+      // Serveur injoignable : session locale, renouvellement retenté
+      // en arrière-plan. Sans profil en cache (anciennes installations),
+      // on garde les jetons pour le prochain lancement.
+      if (utilisateurEnCache == null) return null;
+      _programmerRafraichissement(token, delai: _reessaiApresEchecReseau);
+      return SessionUtilisateur(accessToken: token, utilisateur: utilisateurEnCache);
     }
   }
 
@@ -155,17 +230,13 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
   Future<ConnexionResultat> connecter(ConnexionPayload payload) async {
     state = const AsyncLoading<SessionUtilisateur?>();
     try {
-      final resultat = await ref
-          .read(authentificationRepositoryProvider)
-          .connecter(payload);
+      final resultat = await _repo.connecter(payload);
 
       if (resultat.sessionOuverte) {
-        final session = SessionUtilisateur(
+        await _ouvrirSession(SessionUtilisateur(
           accessToken: resultat.accessToken!,
           utilisateur: resultat.utilisateur!,
-        );
-        await _persisterAccessToken(session.accessToken);
-        state = AsyncData(session);
+        ));
       } else {
         // Mot de passe temporaire : pas de session, on repasse l'état
         // précédent (déconnecté) tel quel.
@@ -189,19 +260,14 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
       }) async {
     state = const AsyncLoading<SessionUtilisateur?>();
     try {
-      final resultat = await ref
-          .read(authentificationRepositoryProvider)
-          .changerMotDePasseInitial(
+      final resultat = await _repo.changerMotDePasseInitial(
         payload,
         tokenChangementMotDePasse: tokenChangementMotDePasse,
       );
-
-      final session = SessionUtilisateur(
+      await _ouvrirSession(SessionUtilisateur(
         accessToken: resultat.accessToken,
         utilisateur: resultat.utilisateur,
-      );
-      await _persisterAccessToken(session.accessToken);
-      state = AsyncData(session);
+      ));
       return resultat;
     } catch (e, pile) {
       state = AsyncError<SessionUtilisateur?>(e, pile);
@@ -211,31 +277,27 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
 
   // ───────────────────────────────────────────────────────────────
   // POST /api/auth/refresh
-  // Rafraîchissement manuel (rarement nécessaire à appeler
-  // directement depuis un widget : préférer [appelAuthentifie], qui
-  // s'en charge automatiquement sur 401). Exposé quand même pour les
-  // cas type "réveil de l'app en arrière-plan".
+  // Rafraîchissement manuel (rarement utile : le renouvellement est
+  // automatique avant expiration, et [appelAuthentifie] rejoue sur 401).
+  // Déconnecte localement si le serveur refuse la session.
   // ───────────────────────────────────────────────────────────────
   Future<void> rafraichir() async {
-    final session = state.value;
-    if (session == null) return; // Rien à rafraîchir si déconnecté.
-
+    if (state.value == null) return; // Rien à rafraîchir si déconnecté.
     try {
-      final rafraichi =
-      await ref.read(authentificationRepositoryProvider).rafraichirToken();
-      final nouvelleSession = session.copyWith(
-        accessToken: rafraichi.accessToken,
-      );
-      await _persisterAccessToken(nouvelleSession.accessToken);
-      state = AsyncData(nouvelleSession);
-    } on ErreurAuthentification {
-      // Refresh token invalide/révoqué (rotation à usage unique déjà
-      // consommée, session expirée côté serveur, etc.) : la session
-      // n'est plus valide, on déconnecte proprement.
-      await _effacerAccessTokenPersiste();
-      state = const AsyncData(null);
+      await _rafraichirEtAppliquer();
+    } catch (e) {
+      if (_estRejetDefinitif(e)) await _terminerSessionLocale();
       rethrow;
     }
+  }
+
+  /// À appeler au retour au premier plan (voir main.dart) : le minuteur
+  /// ne tourne pas quand l'application est suspendue, le token a pu
+  /// expirer entre-temps. Silencieux si le réseau est indisponible.
+  Future<void> verifierFraicheur() async {
+    final session = state.value;
+    if (session == null || !_expireBientot(session.accessToken)) return;
+    await _rafraichirEnArrierePlan();
   }
 
   // ───────────────────────────────────────────────────────────────
@@ -254,17 +316,14 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
     StackTrace? pileServeur;
     if (session != null) {
       try {
-        await ref
-            .read(authentificationRepositoryProvider)
-            .deconnecter(accessToken: session.accessToken);
+        await _repo.deconnecter(accessToken: session.accessToken);
       } catch (e, pile) {
         erreurServeur = e;
         pileServeur = pile;
       }
     }
 
-    await _effacerAccessTokenPersiste();
-    state = const AsyncData(null);
+    await _terminerSessionLocale();
 
     if (erreurServeur != null) {
       Error.throwWithStackTrace(erreurServeur, pileServeur!);
@@ -278,37 +337,33 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
   // changer l'access token en cours.
   // ───────────────────────────────────────────────────────────────
   Future<void> rechargerProfil() async {
-    final session = state.value;
-    if (session == null) return;
-
-    state = const AsyncLoading<SessionUtilisateur?>();
-    state = await AsyncValue.guard(() async {
+    if (state.value == null) return;
+    try {
       final resultat = await appelAuthentifie(
-            (token) => ref.read(authentificationRepositoryProvider).profil(
-          accessToken: token,
-        ),
+        (token) => _repo.profil(accessToken: token),
       );
-      return session.copyWith(utilisateur: resultat.utilisateur);
-    });
+      await _persisterUtilisateur(resultat.utilisateur);
+      final courante = state.value;
+      if (courante != null) {
+        state = AsyncData(courante.copyWith(utilisateur: resultat.utilisateur));
+      }
+    } catch (_) {
+      // Profil non rechargé (réseau…) : on garde l'existant. Un refus du
+      // serveur a déjà fermé la session dans appelAuthentifie.
+    }
   }
 
   // ───────────────────────────────────────────────────────────────
   // Aide : exécute un appel authentifié quelconque (pas forcément de
-  // ce repository) avec l'access token de session courant, en
-  // rejouant automatiquement une fois après un /refresh silencieux si
-  // le serveur répond 401 (access token expiré) — encapsule
-  // [AuthentificationRepository.executerAvecRafraichissement] pour que
-  // les AUTRES controllers (medecin, rendez-vous…) n'aient jamais à
-  // gérer eux-mêmes la logique de refresh : il leur suffit d'appeler
+  // ce repository) avec l'access token de session courant :
+  //   - token déjà expiré => renouvelé AVANT l'appel ;
+  //   - réponse 401 => un /refresh (partagé) puis l'appel est rejoué une fois.
+  // Les AUTRES controllers n'ont donc jamais à gérer le refresh :
   //   ref.read(sessionControllerProvider.notifier).appelAuthentifie(
   //     (token) => monRepository.maMethode(..., token: token),
   //   );
-  // plutôt que de lire [authTokenProvider] et de le passer tel quel.
-  //
-  // Lève [ErreurAuthentification] (non catchée en 401 après une tentative
-  // de refresh infructueuse) si aucune session n'est ouverte, ou si le
-  // refresh échoue — dans ce dernier cas la session est aussi effacée
-  // localement, comme dans [rafraichir].
+  // Relance l'erreur d'origine sinon ; si le serveur refuse la session,
+  // elle est aussi fermée localement.
   // ───────────────────────────────────────────────────────────────
   Future<T> appelAuthentifie<T>(
       Future<T> Function(String accessToken) appel,
@@ -321,46 +376,147 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
       );
     }
 
+    var token = session.accessToken;
+    if (_estExpire(token)) token = await _renouvelerPourAppel();
+
     try {
-      return await ref
-          .read(authentificationRepositoryProvider)
-          .executerAvecRafraichissement<T>(
-        appel,
-        accessToken: session.accessToken,
-        surNouveauToken: (nouveauAccessToken) async {
-          await _persisterAccessToken(nouveauAccessToken);
-          final courante = state.value;
-          if (courante != null) {
-            state =
-                AsyncData(courante.copyWith(accessToken: nouveauAccessToken));
-          }
-        },
-      );
-    } on ErreurAuthentification catch (e) {
-      if (e.codeHttp == 401) {
-        // Le refresh interne à executerAvecRafraichissement a lui-même
-        // échoué (rethrow du 401 initial) : session définitivement
-        // invalide côté serveur, on nettoie localement.
-        unawaited(_effacerAccessTokenPersiste());
-        state = const AsyncData(null);
-      }
+      return await appel(token);
+    } catch (e) {
+      if (_codeHttpDe(e) != 401) rethrow;
+      token = await _renouvelerPourAppel();
+      return appel(token);
+    }
+  }
+
+  /// Refresh pour [appelAuthentifie] : en cas de refus, session fermée.
+  Future<String> _renouvelerPourAppel() async {
+    try {
+      return await _rafraichirEtAppliquer();
+    } catch (e) {
+      if (_estRejetDefinitif(e)) await _terminerSessionLocale();
       rethrow;
     }
   }
 
   // ───────────────────────────────────────────────────────────────
-  // Internes — persistance de l'access token
+  // Internes — renouvellement
   // ───────────────────────────────────────────────────────────────
+
+  bool _expireBientot(String token) {
+    final exp = _expirationJwt(token);
+    return exp == null || exp.difference(DateTime.now()) <= _margeRafraichissement;
+  }
+
+  bool _estExpire(String token) {
+    final exp = _expirationJwt(token);
+    return exp != null && !exp.isAfter(DateTime.now());
+  }
+
+  /// /auth/refresh dédoublonné : tous les appelants simultanés partagent
+  /// la même requête. Persiste le nouvel access token.
+  Future<String> _rafraichirUneFois() {
+    return _rafraichissementEnCours ??= () async {
+      try {
+        final rafraichi = await _repo.rafraichirToken();
+        await _persisterAccessToken(rafraichi.accessToken);
+        return rafraichi.accessToken;
+      } finally {
+        _rafraichissementEnCours = null;
+      }
+    }();
+  }
+
+  /// Refresh + mise à jour de l'état + nouveau minuteur.
+  Future<String> _rafraichirEtAppliquer() async {
+    final token = await _rafraichirUneFois();
+    final courante = state.value;
+    if (courante != null && courante.accessToken != token) {
+      state = AsyncData(courante.copyWith(accessToken: token));
+    }
+    _programmerRafraichissement(token);
+    return token;
+  }
+
+  Future<void> _rafraichirEnArrierePlan() async {
+    if (state.value == null) return;
+    try {
+      await _rafraichirEtAppliquer();
+    } catch (e) {
+      if (_estRejetDefinitif(e)) {
+        await _terminerSessionLocale();
+      } else {
+        final session = state.value;
+        if (session != null) {
+          _programmerRafraichissement(session.accessToken, delai: _reessaiApresEchecReseau);
+        }
+      }
+    }
+  }
+
+  void _programmerRafraichissement(String token, {Duration? delai}) {
+    _minuteur?.cancel();
+    var attente = delai;
+    if (attente == null) {
+      final exp = _expirationJwt(token);
+      if (exp == null) return;
+      attente = exp.difference(DateTime.now()) - _margeRafraichissement;
+    }
+    if (attente < const Duration(seconds: 5)) attente = const Duration(seconds: 5);
+    _minuteur = Timer(attente, _rafraichirEnArrierePlan);
+  }
+
+  // ───────────────────────────────────────────────────────────────
+  // Internes — persistance
+  // ───────────────────────────────────────────────────────────────
+  Future<void> _ouvrirSession(SessionUtilisateur session) async {
+    await _persisterAccessToken(session.accessToken);
+    await _persisterUtilisateur(session.utilisateur);
+    _programmerRafraichissement(session.accessToken);
+    state = AsyncData(session);
+  }
+
+  /// Ferme la session côté application : jetons, profil et cookies effacés.
+  Future<void> _terminerSessionLocale() async {
+    _minuteur?.cancel();
+    await _effacerPersistance();
+    state = const AsyncData(null);
+  }
+
   Future<void> _persisterAccessToken(String accessToken) {
     return ref
         .read(_stockageSecuriseProvider)
         .write(key: _cleAccessTokenPersiste, value: accessToken);
   }
 
-  Future<void> _effacerAccessTokenPersiste() {
-    return ref
-        .read(_stockageSecuriseProvider)
-        .delete(key: _cleAccessTokenPersiste);
+  Future<void> _persisterUtilisateur(Utilisateur utilisateur) async {
+    try {
+      await ref.read(_stockageSecuriseProvider).write(
+        key: _cleUtilisateurPersiste,
+        value: jsonEncode(utilisateur.toJson()),
+      );
+    } catch (_) {
+      // Cache de confort seulement.
+    }
+  }
+
+  Utilisateur? _decoderUtilisateur(String? brut) {
+    if (brut == null) return null;
+    try {
+      return Utilisateur.fromJson(jsonDecode(brut) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _effacerPersistance() async {
+    final stockage = ref.read(_stockageSecuriseProvider);
+    try {
+      await stockage.delete(key: _cleAccessTokenPersiste);
+      await stockage.delete(key: _cleUtilisateurPersiste);
+      await ref.read(_potCookiesProvider).deleteAll();
+    } catch (_) {
+      // Rien de plus à faire : l'état est de toute façon « déconnecté ».
+    }
   }
 }
 
@@ -373,6 +529,19 @@ AsyncNotifierProvider<SessionController, SessionUtilisateur?>(
  * Sélecteurs pratiques — à utiliser par les AUTRES modules plutôt que
  * de lire sessionControllerProvider.value.accessToken directement.
  * ========================================================================= */
+
+/// Session courante une fois la restauration du démarrage TERMINÉE
+/// (`null` si déconnecté). À utiliser avant toute décision « connecté ou
+/// pas » prise hors d'un widget qui observe la session : lire
+/// `sessionControllerProvider.value` pendant la restauration renverrait
+/// `null` alors que l'utilisateur a une session valide.
+Future<SessionUtilisateur?> attendreSession(ProviderContainer container) async {
+  try {
+    return await container.read(sessionControllerProvider.future);
+  } catch (_) {
+    return null;
+  }
+}
 
 /// Access token courant, ou `null` si déconnecté / session en cours de
 /// résolution / erreur. À passer aux repositories des autres modules

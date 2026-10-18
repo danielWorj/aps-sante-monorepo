@@ -233,3 +233,47 @@ export function gererTeleversementAnnonce(req, res, next) {
     next();
   });
 }
+// ─────────────────────────────────────────────────────────────────
+// Médiathèque d'une fiche assurance (portail assurance) — un fichier par
+// requête, champ "fichier" : une photo (JPEG/PNG/WEBP, 5 Mo) OU une vidéo
+// (MP4/WEBM/MOV, 50 Mo). La limite multer est celle des vidéos ; la limite
+// des photos est revérifiée dans le contrôleur (multer n'a qu'une limite
+// par middleware). Le type (image | video) se déduit du mimetype.
+// ─────────────────────────────────────────────────────────────────
+export const TAILLE_MAX_IMAGE_MEDIA = TAILLE_MAX_OCTETS;
+export const TAILLE_MAX_VIDEO_MEDIA = 50 * 1024 * 1024; // 50 Mo
+const TYPES_VIDEO = ["video/mp4", "video/webm", "video/quicktime"];
+
+/** "image" | "video" | null selon le mimetype accepté par la médiathèque. */
+export function typeMediaDuMimetype(mimetype) {
+  if (TYPES_AUTORISES_VISUEL.includes(mimetype)) return "image";
+  if (TYPES_VIDEO.includes(mimetype)) return "video";
+  return null;
+}
+
+const televersementMediaAssurance = multer({
+  storage: stockage,
+  limits: { fileSize: TAILLE_MAX_VIDEO_MEDIA },
+  fileFilter: (_req, file, cb) => {
+    if (!typeMediaDuMimetype(file.mimetype)) {
+      return cb(
+        new Error(
+          `Type de fichier non autorisé (${file.mimetype}). Formats acceptés : JPEG, PNG, WEBP pour les photos ; MP4, WEBM, MOV pour les vidéos.`
+        )
+      );
+    }
+    cb(null, true);
+  },
+}).fields([{ name: "fichier", maxCount: 1 }]);
+
+export function gererTeleversementMediaAssurance(req, res, next) {
+  televersementMediaAssurance(req, res, (err) => {
+    if (err) {
+      const message = err.code === "LIMIT_FILE_SIZE"
+        ? "Fichier trop volumineux (50 Mo maximum pour une vidéo, 5 Mo pour une photo)."
+        : err.message || "Erreur lors du téléversement du fichier.";
+      return res.status(400).json({ message });
+    }
+    next();
+  });
+}

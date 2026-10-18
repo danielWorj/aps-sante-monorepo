@@ -1,5 +1,6 @@
 // src/services/vuesFiche.service.js
-// Compteur de vues des fiches (pharmacies, centres de santé, médecins) —
+// Compteur de vues des fiches (pharmacies, centres de santé, médecins,
+// assurances) —
 // « statistiques de consultation » des abonnements de présence.
 //
 // Une vue = un affichage de la fiche DÉTAILLÉE (GET /pharmacies/:id,
@@ -24,9 +25,14 @@ import crypto from "node:crypto";
 import prisma from "../lib/prisma.js";
 import { debutDuJourUtc } from "../lib/droitsAssurance.js";
 import { ajouterJours } from "../lib/dates.js";
-import { estTypeActeurPresence } from "../lib/acteursPresence.js";
+import { TYPES_ACTEUR_PRESENCE } from "../lib/acteursPresence.js";
 
 const FENETRE_REVUE_MINUTES = 30;
+
+// Fiches comptées : celles des abonnements de présence, plus les fiches
+// assurance (tableau de bord du portail assurance — moteur d'abonnement
+// distinct, même compteur).
+const TYPES_COMPTES = [...TYPES_ACTEUR_PRESENCE, "assurance"];
 const ROBOTS = /bot|crawl|spider|slurp|facebookexternalhit|whatsapp|telegram|preview|headless|lighthouse|curl|wget|python-requests|httpclient|monitor|uptime/i;
 
 // Secret de l'empreinte : à fixer en production (sinon un secret
@@ -71,7 +77,7 @@ export function estRobot(userAgent) {
  */
 export async function enregistrerVueFiche({ req, type, acteur_id, gestionnaire = false }) {
   try {
-    if (gestionnaire || !estTypeActeurPresence(type) || !acteur_id) return { comptee: false };
+    if (gestionnaire || !TYPES_COMPTES.includes(type) || !acteur_id) return { comptee: false };
     const role = req.utilisateur?.role;
     if (role === "admin" || role === "superadmin") return { comptee: false };
     const userAgent = req.get?.("user-agent") ?? req.headers?.["user-agent"];

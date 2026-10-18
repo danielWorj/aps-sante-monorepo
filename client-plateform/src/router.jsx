@@ -63,6 +63,14 @@ import MedecinDemandes from './components/portails/components/medecin-demandes.j
 import PatientDemandes from './components/portails/components/patient-demandes.jsx';
 import Teleconsultation from './pages/Teleconsultation';
 
+//PORTAIL ASSURANCE (agent d'une compagnie / d'un courtier)
+import PortailAssuranceLayout from './Layouts/PortailAssuranceLayout.jsx';
+import AssuranceDashboard from './components/portails/assurance/assurance-dashboard.jsx';
+import AssuranceProfil from './components/portails/assurance/assurance-profil.jsx';
+import AssuranceMedias from './components/portails/assurance/assurance-medias.jsx';
+import AssuranceDemandes from './components/portails/assurance/assurance-demandes.jsx';
+import AssuranceAbonnement from './components/portails/assurance/assurance-abonnement.jsx';
+
 //PORTAIL PATIENT
 import PatientRdv from './components/portails/components/patient-rdv';
 import PatientProfil from './components/portails/components/patient-profil';
@@ -183,5 +191,20 @@ export const router = createBrowserRouter([
       { path: '/portail/consultation/:id', element: <Teleconsultation /> },
     ],
 
-  }
+  },
+  {
+    element: <RequireAuth />,
+    children: [
+      {
+        element: <PortailAssuranceLayout />,
+        children: [
+          { path: '/portail/assurance', element: <AssuranceDashboard /> },
+          { path: '/portail/assurance-demandes', element: <AssuranceDemandes /> },
+          { path: '/portail/assurance-profil', element: <AssuranceProfil /> },
+          { path: '/portail/assurance-medias', element: <AssuranceMedias /> },
+          { path: '/portail/assurance-abonnement', element: <AssuranceAbonnement /> },
+        ],
+      },
+    ],
+  },
 ]);

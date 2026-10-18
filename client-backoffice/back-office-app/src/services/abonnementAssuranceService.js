@@ -80,12 +80,13 @@ export const DRAPEAUX_APPLIQUES = [
   ['afficher_activites', 'Activités visibles'],
   ['afficher_agences', 'Agences visibles'],
   ['formulaire_contact', 'Formulaire de mise en relation'],
-  ['suivi_demandes', 'Suivi des demandes'],
+  ['suivi_demandes', 'Suivi des demandes (statut, notes)'],
+  // Appliqués par le portail assurance (médiathèque, tableau de bord).
+  ['video_presentation', 'Vidéos de présentation (médiathèque)'],
+  ['stats_completes', 'Statistiques complètes (courbes quotidiennes)'],
 ];
 export const DRAPEAUX_RESERVES = [
-  ['video_presentation', 'Vidéo de présentation'],
   ['vitrine_premium', 'Vitrine premium'],
-  ['stats_completes', 'Statistiques complètes'],
   ['export_stats', 'Export des statistiques'],
 ];
 export const STATUTS_ABONNEMENT = {

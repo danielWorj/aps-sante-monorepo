@@ -16,6 +16,8 @@ export const LIBELLES_AVANTAGES_ASSURANCE = [
   ['afficher_agences', 'Agences visibles et localisables'],
   ['formulaire_contact', 'Formulaire de mise en relation'],
   ['suivi_demandes', 'Suivi des demandes reçues'],
+  ['video_presentation', 'Vidéos de présentation'],
+  ['stats_completes', 'Statistiques détaillées jour par jour'],
 ];
 
 /**

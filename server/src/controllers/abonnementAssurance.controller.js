@@ -30,8 +30,9 @@ const TYPES_ACTEUR = ["compagnie", "courtier"];
 const STATUTS = ["en_attente_paiement", "actif", "expire", "annule", "suspendu", "remplace"];
 const REGEX_DEVISE = /^[a-z]{3}$/;
 
-// Drapeaux d'avantages : les 5 premiers sont appliqués, les 4 derniers
-// sont RÉSERVÉS (stockés, sans effet en V1 — phase 9).
+// Drapeaux d'avantages : vitrine_premium et export_stats sont RÉSERVÉS
+// (stockés, sans effet — phase 9) ; video_presentation et stats_completes
+// sont appliqués par le portail assurance.
 const DRAPEAUX = [
   "siege_complet", "afficher_activites", "afficher_agences", "formulaire_contact", "suivi_demandes",
   "video_presentation", "vitrine_premium", "stats_completes", "export_stats",

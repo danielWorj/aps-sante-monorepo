@@ -34,9 +34,14 @@ import '../pages/public/login.dart';
 /// Ouvre « Mon espace » : l'espace personnel de l'utilisateur (avec sa
 /// propre bottom navigation bar) s'il est déjà connecté, sinon l'écran
 /// de connexion.
-void ouvrirMonEspace(BuildContext context) {
+///
+/// Attend la fin de la restauration de session du démarrage : un
+/// utilisateur dont le jeton est persisté ne repasse jamais par la
+/// connexion.
+Future<void> ouvrirMonEspace(BuildContext context) async {
   final container = ProviderScope.containerOf(context, listen: false);
-  final session = container.read(sessionControllerProvider).value;
+  final session = await attendreSession(container);
+  if (!context.mounted) return;
 
   if (session != null) {
     // Déjà connecté : on ouvre directement son espace personnel.
