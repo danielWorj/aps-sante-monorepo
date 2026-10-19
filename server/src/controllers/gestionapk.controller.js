@@ -351,11 +351,21 @@ export async function obtenirApkActive(req, res, next) {
       return res.status(404).json({ message: "Aucune APK active pour le moment." });
     }
 
+    // Taille du fichier (octets) : repli côté client pour la barre de
+    // progression si un proxy retire Content-Length au téléchargement.
+    let taille = null;
+    try {
+      taille = (await fs.stat(path.join(APK_STORAGE_DIR, apk.file_url))).size;
+    } catch {
+      // Fichier absent : le téléchargement renverra lui-même un 404.
+    }
+
     return res.status(200).json({
       message: "APK active trouvée.",
       apk: {
         ...apk,
         file_url: construireUrlTelechargement(apk.id, apk.file_url),
+        taille,
       },
     });
   } catch (err) {
@@ -632,16 +642,20 @@ export async function telechargerApk(req, res, next) {
       return res.status(404).json({ message: "APK introuvable." });
     }
 
-    // Vérifier l'existence du fichier
+    // Vérifier l'existence du fichier (et récupérer sa taille)
+    let infosFichier;
     try {
-      await fs.access(cheminFichier);
+      infosFichier = await fs.stat(cheminFichier);
     } catch (err) {
       console.warn(`⚠️ Fichier introuvable sur disque : ${cheminFichier}`);
       return res.status(404).json({ message: "Fichier APK introuvable sur le serveur." });
     }
 
-    // Envoyer le fichier avec les bons en-têtes
+    // Envoyer le fichier avec les bons en-têtes. Content-Length est
+    // indispensable : sans lui, stream.pipe(res) part en "chunked" et le
+    // site public ne peut pas calculer la progression du téléchargement.
     res.setHeader("Content-Type", "application/vnd.android.package-archive");
+    res.setHeader("Content-Length", String(infosFichier.size));
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="${apk.libelle.replace(/"/g, '\\"')}.apk"`

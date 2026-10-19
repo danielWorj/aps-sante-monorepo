@@ -719,6 +719,9 @@ export default function Home() {
   // null = pas encore chargée / aucune APK active pour le moment ;
   // dans les deux cas le bouton se désactive proprement (voir plus bas).
   const [apkDownloadUrl, setApkDownloadUrl] = useState(null);
+  // Taille du fichier (octets) renvoyée par /apks/active : repli si le
+  // téléchargement n'expose pas Content-Length.
+  const [apkTaille, setApkTaille] = useState(null);
 
   // Barre de progression du téléchargement de l'APK : null = pas de
   // téléchargement en cours, sinon 0-100. S'active dès le clic sur
@@ -726,15 +729,22 @@ export default function Home() {
   // remet à null à la fin (succès ou échec).
   const [progressionTelechargement, setProgressionTelechargement] = useState(null);
   const [erreurTelechargement, setErreurTelechargement] = useState(null);
+  // Octets reçus : affichés en Mo quand aucune taille totale n'est connue
+  // (sinon le bouton resterait bloqué sur 0 % jusqu'à la fin).
+  const [octetsRecus, setOctetsRecus] = useState(0);
+  const tailleInconnue = !apkTaille && progressionTelechargement === 0 && octetsRecus > 0;
 
   async function lancerTelechargementApk() {
     if (!apkDownloadUrl || progressionTelechargement !== null) return;
     setErreurTelechargement(null);
+    setOctetsRecus(0);
     setProgressionTelechargement(0);
     try {
       const { blob, nomFichier } = await telechargerApkAvecProgression(
         apkDownloadUrl,
-        setProgressionTelechargement
+        setProgressionTelechargement,
+        apkTaille,
+        setOctetsRecus
       );
       declencherSauvegardeBlob(blob, nomFichier);
     } catch (err) {
@@ -750,7 +760,9 @@ export default function Home() {
     let annule = false;
     obtenirApkActive()
       .then((apk) => {
-        if (!annule) setApkDownloadUrl(obtenirUrlTelechargementApk(apk));
+        if (annule) return;
+        setApkDownloadUrl(obtenirUrlTelechargementApk(apk));
+        setApkTaille(apk?.taille || null);
       })
       .catch(() => {
         // Erreur réseau/serveur : on laisse le bouton désactivé plutôt
@@ -991,7 +1003,10 @@ export default function Home() {
                   >
                     {progressionTelechargement !== null ? (
                       <>
-                        <i className="fa-solid fa-spinner fa-spin" /> Téléchargement… {progressionTelechargement}%
+                        <i className="fa-solid fa-spinner fa-spin" /> Téléchargement…{' '}
+                        {tailleInconnue
+                          ? `${(octetsRecus / 1024 / 1024).toFixed(1)} Mo`
+                          : `${progressionTelechargement}%`}
                       </>
                     ) : (
                       <>
@@ -1026,7 +1041,7 @@ export default function Home() {
                 >
                   <div
                     className={`progress-bar${progressionTelechargement < 100 ? ' progress-bar-striped progress-bar-animated' : ' bg-success'}`}
-                    style={{ width: `${progressionTelechargement}%` }}
+                    style={{ width: tailleInconnue ? '100%' : `${progressionTelechargement}%` }}
                   ></div>
                 </div>
               )}
