@@ -61,6 +61,7 @@ import {
   rejeterPublicite,
   annulerPublicite,
   lienPaiementPublicite,
+  notifierPublicite,
 } from "../services/publicite.service.js";
 import {
   empreinteVisiteur,
@@ -835,6 +836,10 @@ export async function creerPublicite(req, res, next) {
       include: INCLUDE_DETAIL,
     });
 
+    // Accusé de réception WhatsApp : pas attendu (l'appel Meta peut durer
+    // 15 s) ; notifierPublicite ne lève jamais et journalise l'échec.
+    void notifierPublicite("publicite_soumise", publicite.publicite_id);
+
     return res.status(201).json({
       message: "Demande envoyée. Vous recevrez la décision par WhatsApp.",
       publicite: vueDetail(publicite),
@@ -948,6 +953,8 @@ export async function reserverAvecCompte(req, res, next) {
       // Rien n'a été créé : le visuel téléversé ne doit pas rester orphelin.
       if (!publicite) await supprimerFichier(visuelTeleverse.nom).catch(() => {});
     }
+
+    void notifierPublicite("publicite_soumise", publicite.publicite_id);
 
     const accessToken = await ouvrirSession(req, res, utilisateur);
     return res.status(201).json({

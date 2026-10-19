@@ -340,6 +340,24 @@ class ApiRealEndpoints {
   static const String notificationsToutesLues =
       '${baseUrl}/notifications/lues';
 
+  // ─── Réputation médecin (reputationMedecin.controller.js) ─────────
+  //   Médecin : tableau de bord et avis publiés (+ réponse, signalement).
+  //   Public  : avis d'une fiche, engagements des visiteurs.
+  //   Patient : consultations à noter, dépôt d'un avis (POST /avis-medecin).
+  static const String tableauDeBordMedecin =
+      '${baseUrl}/medecins/mon-espace/tableau-de-bord';
+  static const String mesAvisMedecin = '${baseUrl}/medecins/mon-espace/avis';
+  static String avisPublicsMedecin(String medecinId) =>
+      '${baseUrl}/medecins/$medecinId/avis';
+  static String engagementsMedecin(String medecinId) =>
+      '${baseUrl}/medecins/$medecinId/engagements';
+  static String reponseAvisMedecin(String avisId) =>
+      '${baseUrl}/avis-medecin/$avisId/reponse';
+  static String signalerAvisMedecin(String avisId) =>
+      '${baseUrl}/avis-medecin/$avisId/signaler';
+  static const String avisMedecin = '${baseUrl}/avis-medecin';
+  static const String consultationsANoter = '${baseUrl}/avis-medecin/a-donner';
+
   // ─── RDV aléatoire (RDV sur offre) ─────────────────────────────────
   // Voir offreRdv.routes.js : toutes authentifiées, rôle vérifié par profil.
   //   Patient : POST /offres-rdv, GET /offres-rdv/mes-offres,

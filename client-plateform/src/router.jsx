@@ -62,6 +62,9 @@ import MedecinRdv from './components/portails/components/medecin-rdv';
 import MedecinAbonnement from './components/portails/components/medecin-abonnement.jsx';
 // RDV aléatoire (RDV sur offre)
 import MedecinDemandes from './components/portails/components/medecin-demandes.jsx';
+// Réputation : tableau de bord (métriques) et avis & notes
+import MedecinTableauDeBord from './components/portails/components/medecin-tableau-de-bord.jsx';
+import MedecinAvis from './components/portails/components/medecin-avis.jsx';
 import PatientDemandes from './components/portails/components/patient-demandes.jsx';
 import Teleconsultation from './pages/Teleconsultation';
 
@@ -196,6 +199,8 @@ export const router = createBrowserRouter([
           { path: '/portail/medecin-profil', element: <MedecinProfil /> },
           { path: '/portail/medecin-abonnement', element: <MedecinAbonnement /> },
           { path: '/portail/medecin-demandes', element: <MedecinDemandes /> },
+          { path: '/portail/medecin-tableau-de-bord', element: <MedecinTableauDeBord /> },
+          { path: '/portail/medecin-avis', element: <MedecinAvis /> },
         ]
       },
     ],

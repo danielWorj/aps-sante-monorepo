@@ -10,8 +10,10 @@ const PortailNavbar = ({ activePage = "" }) => {
   const [menuOuvert, setMenuOuvert] = useState(false);
 
   const navLinks = [
+    { label: "Tableau de bord", to: "/portail/medecin-tableau-de-bord", key: "tableau", icon: "fa-chart-line" },
     { label: "Rendez-vous", to: "/portail/medecin-rdv", key: "rdv", icon: "fa-calendar-check" },
     { label: "Demandes", to: "/portail/medecin-demandes", key: "demandes", icon: "fa-bullhorn" },
+    { label: "Avis", to: "/portail/medecin-avis", key: "avis", icon: "fa-star" },
     { label: "Profil", to: "/portail/medecin-profil", key: "profil", icon: "fa-user-doctor" },
     { label: "Agenda", to: "/portail/medecin-agenda", key: "agenda", icon: "fa-calendar-days" },
     { label: "Site public", to: "/", key: "site", icon: "fa-house" },

@@ -8,7 +8,7 @@ import '../ui/aps_ui.dart';
 ///
 /// Barre de navigation basse de l'espace médecin — barre flottante
 /// sombre de la refonte 2026 (`.tab` dans new-mobile-ui.html).
-/// Items : Rendez-vous, Demandes, Agenda, Compte, Aide.
+/// Items : Rendez-vous, Demandes, Agenda, Compte, Activité.
 /// ============================================================
 
 /// Couleurs conservées pour compatibilité ; elles suivent la palette.
@@ -48,7 +48,7 @@ class MedecinBottomNavigationBar extends StatelessWidget {
   final int notificationsNonLues;
 
   /// Liste des items. Par défaut : Rendez-vous / Demandes / Agenda /
-  /// Compte / Aide ; la pastille de « Rendez-vous » suit
+  /// Compte / Activité ; la pastille de « Rendez-vous » suit
   /// [notificationsNonLues].
   final List<MedecinNavItem>? items;
 
@@ -71,7 +71,7 @@ class MedecinBottomNavigationBar extends StatelessWidget {
         const MedecinNavItem(icon: Icons.campaign_outlined, label: 'Demandes'),
         const MedecinNavItem(icon: Icons.calendar_today_rounded, label: 'Agenda'),
         const MedecinNavItem(icon: Icons.person_outline_rounded, label: 'Compte'),
-        const MedecinNavItem(icon: Icons.help_outline_rounded, label: 'Aide'),
+        const MedecinNavItem(icon: Icons.insights_rounded, label: 'Activité'),
       ];
 
   @override

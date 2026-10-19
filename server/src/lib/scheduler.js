@@ -23,6 +23,7 @@ import {
   annulerBrouillonsPresencePerimes,
 } from "../services/cycleAbonnementPresence.service.js";
 import { purgerVisiteursVuesFiche } from "../services/vuesFiche.service.js";
+import { purgerVisiteursEngagement } from "../services/engagementMedecin.service.js";
 import { relancerMessagesWhatsapp } from "../services/whatsapp.service.js";
 import { expirerPublicitesNonPayees } from "../services/publicite.service.js";
 
@@ -173,6 +174,12 @@ export function demarrerScheduler() {
         await purgerVisiteursVuesFiche();
       } catch (err) {
         console.error("[scheduler] Échec purge des empreintes de vues de fiche :", err);
+      }
+      // Engagements sur les fiches médecin : même règle de conservation.
+      try {
+        await purgerVisiteursEngagement();
+      } catch (err) {
+        console.error("[scheduler] Échec purge des empreintes d'engagement médecin :", err);
       }
     },
     { timezone: "UTC" }

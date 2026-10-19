@@ -1173,6 +1173,11 @@ enum TypeNotification {
   miseEnRelationRecue('mise_en_relation_recue'),
   abonnementAssuranceActive('abonnement_assurance_active'),
   abonnementAssuranceEcheance('abonnement_assurance_echeance'),
+  // Réputation médecin : invitation à noter une consultation (patient),
+  // avis publié (médecin), réponse du médecin à un avis (patient).
+  avisMedecinInvitation('avis_medecin_invitation'),
+  avisMedecinPublie('avis_medecin_publie'),
+  avisMedecinReponse('avis_medecin_reponse'),
   inconnu('');
 
   const TypeNotification(this.valeurApi);

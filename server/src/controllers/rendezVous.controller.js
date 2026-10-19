@@ -18,6 +18,7 @@
 
 import crypto from "crypto";
 import prisma from "../lib/prisma.js";
+import { inviterAvisPatient } from "../services/avisMedecin.service.js";
 import { libererEscrow } from "../services/liberationEscrow.service.js";
 import { traiterAnnulation } from "../services/annulation.service.js";
 import { STATUTS_FIN_CONSULTATION, validerCodeConsultation } from "../services/finConsultation.service.js";
@@ -1009,6 +1010,9 @@ export async function terminerRendezVous(req, res, next) {
         ...(reessayer_dans_secondes !== undefined ? { reessayer_dans_secondes } : {}),
       });
     }
+
+    // Consultation terminée : le patient est invité à donner son avis (sans attendre, ne lève jamais).
+    if (!resultat.deja_constate) inviterAvisPatient(req.params.id);
 
     const rdvMisAJour = await prisma.rendezVous.findUnique({
       where: { rdv_id: req.params.id },

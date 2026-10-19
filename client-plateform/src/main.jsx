@@ -8,6 +8,7 @@ import './assets/styles/style.css';
 import './assets/styles/footer-styles.css';
 import './assets/styles/portail-medecin.css';
 import './assets/styles/portail-assurance.css';
+import './assets/styles/reputation-medecin.css';
 import './assets/styles/Onboarding.css';
 import './index.css'
 import { router } from './router.jsx'

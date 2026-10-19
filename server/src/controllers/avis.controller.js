@@ -25,6 +25,12 @@
 // Suppression : l'auteur (quel que soit le statut) ou admin/superadmin.
 
 import prisma from "../lib/prisma.js";
+import {
+  normaliserSaisieAvis,
+  notifierAvisPublie,
+  recalculerNoteMedecin,
+  verifierEligibiliteAvis,
+} from "../services/avisMedecin.service.js";
 
 const NOTE_MIN = 1;
 const NOTE_MAX = 5;
@@ -241,23 +247,40 @@ export async function supprimerAvisPharmacie(req, res, next) {
 }
 
 /* ===================================================================
- * Avis médecin — même patron exact que Avis pharmacie ci-dessus, voir
- * les commentaires en tête de fichier. Réutilise estAdmin et
- * filtrerSelonVisibilite (génériques, ne dépendent que de
- * statut_moderation/utilisateur_id) ainsi que NOTE_MIN/NOTE_MAX et
- * STATUTS_MODERATION_AVIS.
+ * Avis médecin — même patron de modération que les avis pharmacie
+ * (estAdmin, filtrerSelonVisibilite, STATUTS_MODERATION_AVIS), avec les
+ * règles de la réputation médecin (services/avisMedecin.service.js) :
+ * avis rattaché à une consultation terminée du patient (rdv_id, un avis
+ * par RDV), critères facultatifs, note moyenne de la fiche recalculée à
+ * chaque modération / suppression. Réponse et signalement du médecin,
+ * avis publics et tableau de bord : reputationMedecin.controller.js.
  * =================================================================== */
+
+/** Vue back-office : auteur, médecin, RDV, réponse et signalement. */
+const INCLUSION_AVIS_ADMIN = {
+  utilisateur: { select: { utilisateur_id: true, prenom: true, nom: true, email: true } },
+  medecin: {
+    select: {
+      medecin_id: true,
+      utilisateur: { select: { prenom: true, nom: true } },
+      specialite: { select: { nom: true } },
+    },
+  },
+  rendez_vous: { select: { rdv_id: true, type_rdv: true, date_creneau: true, termine_le: true } },
+};
 
 /**
  * GET /api/avis-medecin
- * Filtres optionnels : ?medecin_id=...&statut_moderation=...
- * statut_moderation n'est pris en compte que pour un admin/superadmin
- * authentifié — un visiteur public reçoit toujours uniquement les
- * avis "publie", quel que soit le filtre envoyé.
+ * Filtres optionnels : ?medecin_id=...&statut_moderation=...&signale=true
+ * statut_moderation / signale ne sont pris en compte que pour un
+ * admin/superadmin authentifié (qui reçoit aussi auteur, médecin et RDV) —
+ * un visiteur public reçoit toujours uniquement les avis "publie".
+ * Pour l'affichage public, préférer GET /medecins/:id/avis (synthèse,
+ * pagination, identité de l'auteur réduite à « Prénom N. »).
  */
 export async function listerAvisMedecin(req, res, next) {
   try {
-    const { medecin_id, statut_moderation } = req.query;
+    const { medecin_id, statut_moderation, signale } = req.query;
 
     if (statut_moderation && !STATUTS_MODERATION_AVIS.includes(statut_moderation)) {
       return res.status(400).json({
@@ -268,8 +291,10 @@ export async function listerAvisMedecin(req, res, next) {
     const where = {};
     if (medecin_id) where.medecin_id = medecin_id;
 
-    if (estAdmin(req.utilisateur)) {
+    const admin = estAdmin(req.utilisateur);
+    if (admin) {
       if (statut_moderation) where.statut_moderation = statut_moderation;
+      if (signale === "true") where.signale_le = { not: null };
     } else {
       where.statut_moderation = "publie";
     }
@@ -277,6 +302,7 @@ export async function listerAvisMedecin(req, res, next) {
     const avis = await prisma.avisMedecin.findMany({
       where,
       orderBy: { date_creation: "desc" },
+      ...(admin ? { include: INCLUSION_AVIS_ADMIN } : {}),
     });
 
     return res.status(200).json({ avis });
@@ -292,6 +318,7 @@ export async function obtenirAvisMedecin(req, res, next) {
   try {
     const avis = await prisma.avisMedecin.findUnique({
       where: { avis_id: req.params.id },
+      ...(estAdmin(req.utilisateur) ? { include: INCLUSION_AVIS_ADMIN } : {}),
     });
     if (!avis || !filtrerSelonVisibilite(avis, req.utilisateur)) {
       return res.status(404).json({ message: "Avis introuvable." });
@@ -305,41 +332,56 @@ export async function obtenirAvisMedecin(req, res, next) {
 
 /**
  * POST /api/avis-medecin
- * Réservé aux utilisateurs authentifiés. statut_moderation est
- * toujours forcé à "en_attente" à la création, quel que soit le rôle.
+ * Body : { rdv_id, note, note_ponctualite?, note_ecoute?, note_explications?,
+ *          recommande?, commentaire?, anonyme? }
+ * Réservé au PATIENT d'une consultation terminée (voir
+ * verifierEligibiliteAvis) ; le médecin est déduit du RDV. Toujours créé
+ * "en_attente" (modération), quel que soit le rôle.
  */
 export async function creerAvisMedecin(req, res, next) {
   try {
-    const { medecin_id, note, commentaire } = req.body;
-
-    if (!medecin_id || note === undefined || note === null) {
-      return res.status(400).json({ message: "Champs requis manquants : medecin_id, note." });
-    }
-
-    const noteNombre = Number(note);
-    if (!Number.isInteger(noteNombre) || noteNombre < NOTE_MIN || noteNombre > NOTE_MAX) {
+    const { rdv_id } = req.body ?? {};
+    if (!rdv_id) {
       return res.status(400).json({
-        message: `note invalide (doit être un entier entre ${NOTE_MIN} et ${NOTE_MAX}).`,
+        message: "rdv_id est requis : un avis porte sur une consultation que vous avez eue avec ce médecin.",
       });
     }
 
-    const medecin = await prisma.medecin.findUnique({ where: { medecin_id } });
-    if (!medecin) {
-      return res.status(400).json({ message: "medecin_id introuvable." });
-    }
+    const saisie = normaliserSaisieAvis(req.body);
+    if (saisie.erreur) return res.status(saisie.erreur.status).json(saisie.erreur);
 
-    const avis = await prisma.avisMedecin.create({
-      data: {
-        utilisateur_id: req.utilisateur.utilisateur_id,
-        medecin_id,
-        note: noteNombre,
-        commentaire: commentaire?.trim() || null,
-        statut_moderation: "en_attente",
+    const rdv = await prisma.rendezVous.findUnique({
+      where: { rdv_id },
+      select: {
+        rdv_id: true, medecin_id: true, statut: true, termine_le: true, date_creneau: true,
+        patient: { select: { utilisateur_id: true } },
+        avis_medecin: { select: { avis_id: true } },
       },
     });
+    const refus = verifierEligibiliteAvis(rdv, req.utilisateur.utilisateur_id);
+    if (refus) return res.status(refus.erreur.status).json(refus.erreur);
+
+    let avis;
+    try {
+      avis = await prisma.avisMedecin.create({
+        data: {
+          ...saisie.donnees,
+          utilisateur_id: req.utilisateur.utilisateur_id,
+          medecin_id: rdv.medecin_id,
+          rdv_id: rdv.rdv_id,
+          statut_moderation: "en_attente",
+        },
+      });
+    } catch (err) {
+      // Deux envois simultanés : l'index unique sur rdv_id tranche.
+      if (err?.code === "P2002") {
+        return res.status(409).json({ message: "Vous avez déjà donné votre avis sur cette consultation.", code: "AVIS_DEJA_DEPOSE" });
+      }
+      throw err;
+    }
 
     return res.status(201).json({
-      message: "Avis déposé avec succès. Il sera visible après modération.",
+      message: "Merci ! Votre avis sera visible après une rapide vérification par notre équipe.",
       avis,
     });
   } catch (err) {
@@ -349,12 +391,11 @@ export async function creerAvisMedecin(req, res, next) {
 
 /**
  * PUT /api/avis-medecin/:id
- *   - L'auteur peut modifier note/commentaire, uniquement tant que
- *     l'avis est encore "en_attente" (un avis déjà modéré ne peut
- *     plus être réécrit après coup par son auteur).
- *   - Un admin/superadmin peut à tout moment modifier
- *     statut_moderation (modération à proprement parler), et
- *     seulement ce champ.
+ *   - L'auteur peut corriger note, critères, recommandation, commentaire
+ *     et anonymat, uniquement tant que l'avis est "en_attente".
+ *   - Un admin/superadmin peut à tout moment modifier statut_moderation
+ *     (et lever un signalement : { signalement_traite: true }).
+ * La note moyenne de la fiche est recalculée quand le statut change.
  */
 export async function modifierAvisMedecin(req, res, next) {
   try {
@@ -364,39 +405,40 @@ export async function modifierAvisMedecin(req, res, next) {
     }
 
     const estAuteur = req.utilisateur?.utilisateur_id === avis.utilisateur_id;
-    if (!estAuteur && !estAdmin(req.utilisateur)) {
+    const admin = estAdmin(req.utilisateur);
+    if (!estAuteur && !admin) {
       return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
     }
 
-    const donnees = {};
+    let donnees = {};
 
-    if (estAdmin(req.utilisateur) && req.body.statut_moderation !== undefined) {
-      if (!STATUTS_MODERATION_AVIS.includes(req.body.statut_moderation)) {
-        return res.status(400).json({
-          message: `statut_moderation invalide. Valeurs acceptées : ${STATUTS_MODERATION_AVIS.join(", ")}.`,
-        });
+    if (admin) {
+      if (req.body.statut_moderation !== undefined) {
+        if (!STATUTS_MODERATION_AVIS.includes(req.body.statut_moderation)) {
+          return res.status(400).json({
+            message: `statut_moderation invalide. Valeurs acceptées : ${STATUTS_MODERATION_AVIS.join(", ")}.`,
+          });
+        }
+        if (req.body.statut_moderation !== avis.statut_moderation) {
+          donnees.statut_moderation = req.body.statut_moderation;
+          donnees.date_moderation = new Date();
+        }
       }
-      donnees.statut_moderation = req.body.statut_moderation;
+      if (req.body.signalement_traite === true) {
+        donnees.signale_le = null;
+        donnees.motif_signalement = null;
+      }
     }
 
-    if (estAuteur) {
+    if (estAuteur && !admin) {
       if (avis.statut_moderation !== "en_attente") {
         return res.status(409).json({
           message: "Cet avis a déjà été modéré : son contenu ne peut plus être modifié.",
         });
       }
-      if (req.body.note !== undefined) {
-        const noteNombre = Number(req.body.note);
-        if (!Number.isInteger(noteNombre) || noteNombre < NOTE_MIN || noteNombre > NOTE_MAX) {
-          return res.status(400).json({
-            message: `note invalide (doit être un entier entre ${NOTE_MIN} et ${NOTE_MAX}).`,
-          });
-        }
-        donnees.note = noteNombre;
-      }
-      if (req.body.commentaire !== undefined) {
-        donnees.commentaire = req.body.commentaire?.trim() || null;
-      }
+      const saisie = normaliserSaisieAvis(req.body, { partiel: true });
+      if (saisie.erreur) return res.status(saisie.erreur.status).json(saisie.erreur);
+      donnees = saisie.donnees;
     }
 
     if (Object.keys(donnees).length === 0) {
@@ -407,6 +449,11 @@ export async function modifierAvisMedecin(req, res, next) {
       where: { avis_id: req.params.id },
       data: donnees,
     });
+
+    if (donnees.statut_moderation) {
+      await recalculerNoteMedecin(avis.medecin_id);
+      if (donnees.statut_moderation === "publie") notifierAvisPublie(avisMisAJour);
+    }
 
     return res.status(200).json({ message: "Avis mis à jour.", avis: avisMisAJour });
   } catch (err) {
@@ -431,6 +478,7 @@ export async function supprimerAvisMedecin(req, res, next) {
     }
 
     await prisma.avisMedecin.delete({ where: { avis_id: req.params.id } });
+    if (avis.statut_moderation === "publie") await recalculerNoteMedecin(avis.medecin_id);
     return res.status(200).json({ message: "Avis supprimé." });
   } catch (err) {
     next(err);

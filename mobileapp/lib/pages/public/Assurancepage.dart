@@ -79,6 +79,39 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
     }).toList();
   }
 
+  Future<void> _ouvrirFiltres(List<String> villes) async {
+    final choix = await showApsFilterSheet<({String ville, bool verifiees})>(
+      context: context,
+      initial: (ville: _villeSelectionnee, verifiees: _verifieesUniquement),
+      reset: (ville: 'Toutes les villes', verifiees: false),
+      builder: (f, maj) => [
+        ApsFilterSection(
+          title: 'Ville',
+          child: ApsFilterChoices<String>(
+            value: f.ville,
+            onChanged: (v) => maj((ville: v, verifiees: f.verifiees)),
+            options: [
+              for (final v in villes)
+                ApsFilterOption(v, v,
+                    icon: v == 'Toutes les villes' ? null : Icons.location_on_outlined),
+            ],
+          ),
+        ),
+        ApsFilterSwitch(
+          label: 'Vérifiées APS uniquement',
+          icon: Icons.verified_outlined,
+          value: f.verifiees,
+          onChanged: (v) => maj((ville: f.ville, verifiees: v)),
+        ),
+      ],
+    );
+    if (choix == null || !mounted) return;
+    setState(() {
+      _villeSelectionnee = choix.ville;
+      _verifieesUniquement = choix.verifiees;
+    });
+  }
+
   /// Gère un tap sur la barre de navigation basse : met à jour l'index actif
   /// ET navigue réellement vers l'écran correspondant (0=Accueil,
   /// 1=Médecin, 2=Assurance [écran courant], 3=À propos).
@@ -171,21 +204,20 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
         // ---- Filtres ------------------------------------------------
         const SizedBox(height: 12),
         servicesAsync.when(
-          data: (services) => ApsChipRow(
-            children: [
-              ApsChip(
-                'Vérifiées APS',
-                icon: Icons.verified_outlined,
-                soft: _verifieesUniquement,
-                onTap: () =>
-                    setState(() => _verifieesUniquement = !_verifieesUniquement),
-              ),
-              for (final ville in _villesDisponibles(services))
-                ApsChip(
-                  ville,
-                  icon: ville == 'Toutes les villes' ? null : Icons.location_on_outlined,
-                  selected: _villeSelectionnee == ville,
-                  onTap: () => setState(() => _villeSelectionnee = ville),
+          data: (services) => ApsFilterBar(
+            onOpen: () => _ouvrirFiltres(_villesDisponibles(services)),
+            actifs: [
+              if (_villeSelectionnee != 'Toutes les villes')
+                (
+                  label: _villeSelectionnee,
+                  icon: Icons.location_on_outlined,
+                  onRemove: () => setState(() => _villeSelectionnee = 'Toutes les villes'),
+                ),
+              if (_verifieesUniquement)
+                (
+                  label: 'Vérifiées APS',
+                  icon: Icons.verified_outlined,
+                  onRemove: () => setState(() => _verifieesUniquement = false),
                 ),
             ],
           ),

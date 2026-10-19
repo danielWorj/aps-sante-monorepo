@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../components/cards/notifications_bell.dart';
 import '../../../components/navigation/medecin-bottom-navigation-bar.dart';
 import '../../../controllers/notification_controller.dart';
+import 'portail-medecin-activite.dart';
 import 'portail-medecin-agenda.dart';
 import 'portail-medecin-demandes.dart';
 import 'portail-medecin-rdv.dart';
@@ -15,7 +16,7 @@ import 'portail-medecin-profil.dart';
 /// "Rendez-vous", "Agenda" et "Profil" pointent vers les vrais écrans
 /// (`PortailMedecinRdv` / `PortailMedecinAgenda` / `PortailMedecinProfil`),
 /// qui ne gèrent pas eux-mêmes de barre de navigation : c'est ce shell qui
-/// en est l'unique responsable. "Aide" reste un placeholder.
+/// en est l'unique responsable. « Activité » regroupe statistiques et avis.
 ///
 /// Notifications in-app (politique de fonds v2, phase 6) : il n'y a pas
 /// d'AppBar, la cloche flotte donc en haut à droite, au-dessus de
@@ -38,12 +39,15 @@ class _MedecinHomeShellState extends ConsumerState<MedecinHomeShell> {
   /// Index de l'onglet « Demandes » (RDV aléatoire) dans [_pages].
   static const int _indexDemandes = 1;
 
+  /// Index de l'onglet « Activité » (statistiques + avis) dans [_pages].
+  static const int _indexActivite = 4;
+
   static const _pages = <Widget>[
     PortailMedecinRdv(),
     PortailMedecinDemandes(),
     PortailMedecinAgenda(),
     PortailMedecinProfil(),
-    Center(child: Text('Aide')), // TODO: écran réel "Aide"
+    PortailMedecinActivite(),
   ];
 
   @override
@@ -66,6 +70,10 @@ class _MedecinHomeShellState extends ConsumerState<MedecinHomeShell> {
                     setState(() => _index = _indexRendezVous),
                 onOuvrirDemandes: () =>
                     setState(() => _index = _indexDemandes),
+                onOuvrirAvis: () {
+                  vueActiviteMedecin.value = 1;
+                  setState(() => _index = _indexActivite);
+                },
               ),
             ),
           ],

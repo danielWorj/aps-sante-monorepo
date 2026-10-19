@@ -465,8 +465,8 @@ export const lienPaiementPublicite = (id) => `${baseFrontend()}/publicite/${id}/
 export const lienPortailPublicite = (id) => `${baseFrontend()}/portail/annonceur/publicites/${id}`;
 
 /**
- * Envoie le message `code` (publicite_acceptee | publicite_rejetee |
- * publicite_payee) au téléphone de l'annonceur. Ne lève jamais : un échec
+ * Envoie le message `code` (publicite_soumise | publicite_acceptee |
+ * publicite_rejetee | publicite_payee) au téléphone de l'annonceur. Ne lève jamais : un échec
  * d'envoi est journalisé (table message_whatsapp) et relancé par le job.
  */
 export async function notifierPublicite(code, publicite_id) {

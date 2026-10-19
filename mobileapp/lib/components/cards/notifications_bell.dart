@@ -10,6 +10,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../controllers/reputation_medecin_controller.dart';
 import '../../controllers/notification_controller.dart';
 import '../../controllers/offre_rdv_controller.dart';
 import '../../controllers/rendez_vous_controller.dart';
@@ -44,6 +45,12 @@ IconData iconeNotification(TypeNotification type) {
       return Icons.verified_outlined;
     case TypeNotification.abonnementAssuranceEcheance:
       return Icons.hourglass_top_outlined;
+    case TypeNotification.avisMedecinInvitation:
+      return Icons.star_outline_rounded;
+    case TypeNotification.avisMedecinPublie:
+      return Icons.reviews_outlined;
+    case TypeNotification.avisMedecinReponse:
+      return Icons.reply_rounded;
     case TypeNotification.inconnu:
       return Icons.notifications_none_outlined;
   }
@@ -63,6 +70,10 @@ ApsTone _teinteNotification(TypeNotification type) {
       return ApsTone.amber;
     case TypeNotification.abonnementAssuranceActive:
       return ApsTone.sky;
+    case TypeNotification.avisMedecinInvitation:
+    case TypeNotification.avisMedecinPublie:
+    case TypeNotification.avisMedecinReponse:
+      return ApsTone.amber;
     default:
       return ApsTone.green;
   }
@@ -87,10 +98,16 @@ class NotificationsBell extends ConsumerWidget {
   /// onglet des demandes. Sans ce rappel, on reste sur « Rendez-vous ».
   final VoidCallback? onOuvrirDemandes;
 
+  /// Appelé pour une notification d'avis publié (espace médecin) : le shell
+  /// ouvre l'onglet « Activité » sur la vue des avis. Sans ce rappel, on
+  /// reste sur « Rendez-vous » (patient : les consultations à noter y sont).
+  final VoidCallback? onOuvrirAvis;
+
   const NotificationsBell({
     super.key,
     required this.onOuvrirRendezVous,
     this.onOuvrirDemandes,
+    this.onOuvrirAvis,
   });
 
   @override
@@ -168,6 +185,13 @@ class NotificationsBell extends ConsumerWidget {
       ref.invalidate(offresRdvMedecinProvider);
       (onOuvrirDemandes ?? onOuvrirRendezVous)();
       return;
+    }
+    if (notification.type == TypeNotification.avisMedecinPublie && onOuvrirAvis != null) {
+      onOuvrirAvis!();
+      return;
+    }
+    if (notification.type == TypeNotification.avisMedecinInvitation) {
+      ref.invalidate(consultationsANoterProvider);
     }
     // ignore: unawaited_futures
     ref.read(listeRendezVousControllerProvider.notifier).rafraichir();

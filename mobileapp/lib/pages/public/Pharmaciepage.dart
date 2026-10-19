@@ -161,6 +161,40 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
     }).toList();
   }
 
+  Future<void> _ouvrirFiltres(List<String> villes) async {
+    final choix = await showApsFilterSheet<({String ville, bool deGarde})>(
+      context: context,
+      initial: (ville: _villeSelectionnee, deGarde: _deGardeUniquement),
+      reset: (ville: 'Toutes les villes', deGarde: false),
+      builder: (f, maj) => [
+        ApsFilterSwitch(
+          label: 'De garde uniquement',
+          subtitle: 'Pharmacies ouvertes en ce moment',
+          icon: Icons.nightlight_outlined,
+          value: f.deGarde,
+          onChanged: (v) => maj((ville: f.ville, deGarde: v)),
+        ),
+        ApsFilterSection(
+          title: 'Ville',
+          child: ApsFilterChoices<String>(
+            value: f.ville,
+            onChanged: (v) => maj((ville: v, deGarde: f.deGarde)),
+            options: [
+              for (final v in villes)
+                ApsFilterOption(v, v,
+                    icon: v == 'Toutes les villes' ? null : Icons.location_on_outlined),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (choix == null || !mounted) return;
+    setState(() {
+      _villeSelectionnee = choix.ville;
+      _deGardeUniquement = choix.deGarde;
+    });
+  }
+
   String _messageErreur(Object erreur) {
     final texte = erreur.toString();
     return texte.isEmpty
@@ -300,13 +334,16 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
 
         // ---------- Villes ----------
         pharmaciesAsync.maybeWhen(
-          data: (liste) => _FilterChipsRow(
-            deGardeUniquement: _deGardeUniquement,
-            ville: _villeSelectionnee,
-            villes: _villesDisponibles(liste),
-            onToggleGarde: () =>
-                setState(() => _deGardeUniquement = !_deGardeUniquement),
-            onPickVille: (v) => setState(() => _villeSelectionnee = v),
+          data: (liste) => ApsFilterBar(
+            onOpen: () => _ouvrirFiltres(_villesDisponibles(liste)),
+            actifs: [
+              if (_villeSelectionnee != 'Toutes les villes')
+                (
+                  label: _villeSelectionnee,
+                  icon: Icons.location_on_outlined,
+                  onRemove: () => setState(() => _villeSelectionnee = 'Toutes les villes'),
+                ),
+            ],
           ),
           orElse: () => const SizedBox.shrink(),
         ),
@@ -412,38 +449,6 @@ class _SearchField extends StatelessWidget {
       controller: controller,
       onChanged: onChanged,
       hint: 'Pharmacie, quartier, ville…',
-    );
-  }
-}
-
-/// ---------------- Puces de ville ----------------
-class _FilterChipsRow extends StatelessWidget {
-  const _FilterChipsRow({
-    required this.deGardeUniquement,
-    required this.ville,
-    required this.villes,
-    required this.onToggleGarde,
-    required this.onPickVille,
-  });
-
-  final bool deGardeUniquement;
-  final String ville;
-  final List<String> villes;
-  final VoidCallback onToggleGarde;
-  final ValueChanged<String> onPickVille;
-
-  @override
-  Widget build(BuildContext context) {
-    return ApsChipRow(
-      children: [
-        for (final v in villes)
-          ApsChip(
-            v,
-            selected: ville == v,
-            icon: v == 'Toutes les villes' ? null : Icons.location_on_outlined,
-            onTap: () => onPickVille(v),
-          ),
-      ],
     );
   }
 }

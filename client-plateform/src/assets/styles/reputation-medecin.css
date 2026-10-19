@@ -1,0 +1,383 @@
+/* ============================================================
+APS — Réputation médecin (reputation-medecin.css)
+Tableau de bord du portail médecin, avis & notes (médecin, fiche
+publique, patient). À charger APRÈS style.css et portail-medecin.css.
+Une seule teinte de données : --primary (séries, pistes, carte des
+créneaux du clair au foncé) ; étoiles en --gold. Texte toujours en
+encre (--ink / --ink-soft), jamais dans la couleur des données.
+============================================================ */
+:root{
+  --etoile:#E9A93A;
+  --etoile-vide:#E3ECE7;
+  --donnee:var(--primary);
+  --donnee-lavis:rgba(79,158,130,.10);
+}
+
+/* ------------------------------ Étoiles ------------------------------ */
+.etoiles{ display:inline-flex; gap:2px; line-height:1; vertical-align:middle; }
+.etoile{ position:relative; display:inline-block; }
+.etoile-fond{ color:var(--etoile-vide); }
+.etoile-remplie{ position:absolute; inset:0 auto 0 0; overflow:hidden; white-space:nowrap; color:var(--etoile); }
+.etoiles-sm{ font-size:.78rem; }
+.etoiles-md{ font-size:.95rem; }
+.etoiles-lg{ font-size:1.25rem; gap:3px; }
+
+.saisie-etoiles{ display:inline-flex; flex-direction:column; align-items:center; gap:.35rem; }
+.saisie-etoiles-groupe{ display:inline-flex; gap:.25rem; }
+.saisie-etoile{
+  border:none; background:none; padding:.15rem; cursor:pointer; line-height:1;
+  color:var(--etoile-vide); transition:transform .12s ease, color .12s ease;
+}
+.saisie-etoiles-lg .saisie-etoile{ font-size:2rem; }
+.saisie-etoiles-md .saisie-etoile{ font-size:1.15rem; }
+.saisie-etoile.is-on{ color:var(--etoile); }
+.saisie-etoile:hover{ transform:scale(1.12); }
+.saisie-etoile:focus-visible{ outline:2px solid var(--primary); outline-offset:2px; border-radius:6px; }
+.saisie-etoiles-libelle{ font-size:.82rem; font-weight:600; color:var(--ink-soft); min-height:1.2em; }
+
+/* --------------------------- Synthèse des notes --------------------------- */
+.resume-notes{
+  display:grid; grid-template-columns:minmax(150px,auto) minmax(0,1.2fr) minmax(0,1fr);
+  gap:1.6rem; align-items:center;
+}
+.resume-score{ text-align:center; padding-right:1.6rem; border-right:1px solid var(--line); }
+.resume-score-valeur{
+  font-family:var(--font-display); font-weight:800; font-size:3.2rem; line-height:1; color:var(--ink);
+  letter-spacing:-.02em; margin-bottom:.35rem;
+}
+.resume-score-valeur span{ font-size:1.1rem; color:var(--ink-faint); font-weight:700; margin-left:.15rem; }
+.resume-score-nombre{ font-size:.8rem; color:var(--ink-soft); margin-top:.4rem; }
+.resume-reco{
+  display:inline-flex; align-items:center; gap:.35rem; margin-top:.7rem;
+  background:var(--primary-tint); color:var(--primary-dark);
+  border-radius:var(--radius-pill); padding:.28rem .7rem; font-size:.76rem;
+}
+.resume-distribution{ display:flex; flex-direction:column; gap:.3rem; }
+.rd-ligne{
+  display:grid; grid-template-columns:2.6rem 1fr 2.4rem; align-items:center; gap:.6rem;
+  background:none; border:none; padding:.22rem .35rem; border-radius:var(--radius-sm);
+  font-size:.82rem; color:var(--ink-soft); text-align:left; width:100%;
+}
+button.rd-ligne{ cursor:pointer; }
+button.rd-ligne:hover:not(:disabled){ background:var(--surface-alt); }
+button.rd-ligne:disabled{ cursor:default; opacity:.55; }
+.rd-ligne.is-actif{ background:var(--primary-tint); color:var(--primary-dark); font-weight:600; }
+.rd-libelle i{ color:var(--etoile); font-size:.7rem; }
+.rd-nombre{ text-align:right; font-variant-numeric:tabular-nums; }
+.rd-piste{ display:block; height:8px; border-radius:var(--radius-pill); background:var(--surface-sunk); overflow:hidden; }
+.rd-piste > span{ display:block; height:100%; border-radius:var(--radius-pill); background:var(--donnee); transition:width .35s ease; }
+.resume-criteres{ display:flex; flex-direction:column; gap:.75rem; }
+.rc-entete{ display:flex; justify-content:space-between; font-size:.84rem; color:var(--ink-soft); margin-bottom:.3rem; }
+.rc-entete i{ color:var(--primary); width:1.1rem; }
+.rc-entete strong{ color:var(--ink); }
+.rc-piste{ height:6px; border-radius:var(--radius-pill); background:var(--surface-sunk); overflow:hidden; }
+.rc-piste span{ display:block; height:100%; background:var(--donnee); border-radius:var(--radius-pill); }
+
+.resume-notes-vide{ display:flex; gap:1rem; align-items:center; grid-template-columns:none; }
+.resume-notes-vide p{ font-size:.86rem; color:var(--ink-soft); }
+.resume-vide-icone{
+  width:52px; height:52px; min-width:52px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  background:var(--gold-tint); color:var(--etoile); font-size:1.3rem;
+}
+
+/* ------------------------------ Carte avis ------------------------------ */
+.carte-avis{
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-lg);
+  padding:1.2rem 1.3rem; box-shadow:var(--shadow-sm);
+}
+.carte-avis + .carte-avis{ margin-top:.9rem; }
+.carte-avis-entete{ display:flex; gap:.8rem; align-items:flex-start; }
+.carte-avis-avatar{
+  width:42px; height:42px; min-width:42px; border-radius:50%;
+  background:var(--primary-tint); color:var(--primary-dark);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-display); font-weight:800; font-size:.85rem;
+}
+.carte-avis-avatar.is-anonyme{ background:var(--surface-sunk); color:var(--ink-soft); }
+.carte-avis-qui{ flex:1; min-width:0; }
+.carte-avis-nom{ font-weight:700; color:var(--ink); font-size:.92rem; display:flex; flex-wrap:wrap; align-items:center; gap:.45rem; }
+.chip-verifie-patient{
+  display:inline-flex; align-items:center; gap:.25rem; font-size:.68rem; font-weight:700;
+  color:var(--teal-dark); background:var(--teal-tint); border-radius:var(--radius-pill); padding:.12rem .5rem;
+}
+.carte-avis-meta{ font-size:.76rem; color:var(--ink-soft); margin-top:.1rem; }
+.carte-avis-meta i{ font-size:.7rem; }
+.carte-avis-note{ display:flex; flex-direction:column; align-items:flex-end; gap:.15rem; }
+.carte-avis-note strong{ font-size:.8rem; color:var(--ink); }
+.carte-avis-texte{ margin:.85rem 0 0; color:var(--ink); font-size:.92rem; line-height:1.6; white-space:pre-line; }
+.carte-avis-texte.is-vide{ color:var(--ink-faint); font-style:italic; font-size:.84rem; }
+.carte-avis-criteres{ display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.8rem; }
+.critere-chip{
+  display:inline-flex; align-items:center; gap:.35rem; font-size:.74rem; color:var(--ink-soft);
+  background:var(--surface-alt); border:1px solid var(--line); border-radius:var(--radius-pill); padding:.22rem .6rem;
+}
+.critere-chip i{ color:var(--primary); font-size:.7rem; }
+.critere-chip strong{ color:var(--ink); }
+.critere-chip.is-reco{ background:var(--primary-tint); border-color:var(--primary-tint-strong); color:var(--primary-dark); }
+.critere-chip.is-non-reco{ background:var(--urgence-tint); border-color:transparent; color:var(--urgence-dark); }
+.critere-chip.is-non-reco i{ color:var(--urgence-dark); }
+.carte-avis-signalement{
+  margin-top:.8rem; font-size:.78rem; color:#8A6115; background:var(--gold-tint);
+  border-radius:var(--radius-md); padding:.5rem .7rem;
+}
+.carte-avis-reponse{
+  margin-top:.9rem; padding:.8rem 1rem; background:var(--surface-alt);
+  border-left:3px solid var(--primary); border-radius:0 var(--radius-md) var(--radius-md) 0;
+}
+.car-entete{ font-size:.78rem; font-weight:700; color:var(--primary-dark); margin-bottom:.3rem; }
+.car-entete span{ font-weight:400; color:var(--ink-soft); }
+.carte-avis-reponse p{ margin:0; font-size:.88rem; color:var(--ink); white-space:pre-line; }
+.carte-avis-actions{
+  display:flex; flex-wrap:wrap; gap:.4rem; align-items:center;
+  margin-top:.9rem; padding-top:.8rem; border-top:1px solid var(--line);
+}
+.ea-signaler{ color:var(--ink-soft); }
+.editeur-reponse{ margin-top:.9rem; padding:.9rem 1rem; background:var(--surface-alt); border-radius:var(--radius-md); }
+
+/* ---------------------------- Espace avis (médecin) ---------------------------- */
+.espace-avis-resume{ padding:1.6rem; }
+.espace-avis-alertes{ display:flex; flex-wrap:wrap; gap:.6rem; margin-top:1.3rem; padding-top:1.1rem; border-top:1px solid var(--line); }
+.ea-alerte{
+  display:inline-flex; align-items:center; gap:.6rem; font-size:.84rem; color:var(--ink);
+  background:var(--gold-tint); border:1px solid transparent; border-radius:var(--radius-md); padding:.55rem .85rem;
+}
+button.ea-alerte{ cursor:pointer; }
+button.ea-alerte:hover{ border-color:var(--gold); }
+.ea-alerte > i:first-child{ color:#B07A1D; }
+.ea-alerte .fa-chevron-right{ font-size:.7rem; color:var(--ink-soft); }
+.ea-alerte.is-info{ background:var(--primary-tint); }
+.ea-alerte.is-info > i:first-child{ color:var(--primary); }
+.espace-avis-barre{ display:flex; flex-wrap:wrap; align-items:center; gap:.7rem; margin:1.4rem 0 1rem; }
+.ea-check{ display:inline-flex; align-items:center; gap:.4rem; font-size:.84rem; color:var(--ink-soft); cursor:pointer; }
+.ea-filtre-actif{
+  display:inline-flex; align-items:center; gap:.35rem; font-size:.8rem; font-weight:600;
+  background:var(--primary-tint); color:var(--primary-dark); border:none; border-radius:var(--radius-pill); padding:.3rem .7rem; cursor:pointer;
+}
+.ea-filtre-actif .fa-star{ color:var(--etoile); font-size:.7rem; }
+.ea-tri{ width:auto; margin-left:auto; }
+.espace-avis-liste, .tdb-contenu{ transition:opacity .2s ease; }
+.espace-avis-liste.is-chargement, .tdb-contenu.is-chargement{ opacity:.55; pointer-events:none; }
+.espace-avis-pagination{ display:flex; align-items:center; justify-content:center; gap:1rem; margin-top:1.2rem; font-size:.85rem; color:var(--ink-soft); }
+.aps-empty-state{
+  display:flex; flex-direction:column; align-items:center; gap:.5rem; padding:2.4rem 1rem; text-align:center;
+  color:var(--ink-soft); font-size:.9rem; background:var(--surface); border:1px dashed var(--line-strong); border-radius:var(--radius-lg);
+}
+.aps-empty-state > i{ font-size:1.6rem; color:var(--ink-faint); }
+
+/* ------------------------------- Segments ------------------------------- */
+.tdb-segment{
+  display:inline-flex; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); padding:3px; gap:2px;
+}
+.tdb-segment button{
+  border:none; background:none; padding:.42rem .8rem; border-radius:6px;
+  font-size:.82rem; font-weight:600; color:var(--ink-soft); white-space:nowrap; cursor:pointer;
+}
+.tdb-segment button:hover:not(:disabled){ color:var(--primary-dark); background:var(--surface-alt); }
+.tdb-segment button.is-actif{ background:var(--primary-tint); color:var(--primary-dark); }
+.tdb-segment button:disabled{ opacity:.4; cursor:not-allowed; }
+.tdb-segment button:focus-visible{ outline:2px solid var(--primary); outline-offset:1px; }
+
+/* ---------------------------- Tableau de bord ---------------------------- */
+.tdb-filtres{ display:flex; flex-wrap:wrap; align-items:center; gap:.7rem; margin-bottom:1.4rem; }
+.tdb-dates{ display:flex; gap:.6rem; flex-wrap:wrap; }
+.tdb-dates label{ display:inline-flex; align-items:center; gap:.4rem; font-size:.8rem; color:var(--ink-soft); }
+.tdb-dates input{ width:auto; }
+
+.tdb-kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1rem; margin-bottom:1.3rem; }
+.tdb-kpi{
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-lg);
+  padding:1rem 1.1rem; box-shadow:var(--shadow-sm); min-width:0; display:flex; flex-direction:column;
+}
+.tdb-kpi-haut{ display:flex; align-items:center; gap:.6rem; }
+.tdb-kpi-haut .stat-icon{ width:34px; height:34px; min-width:34px; font-size:.85rem; }
+.tdb-kpi-libelle{ font-size:.8rem; font-weight:600; color:var(--ink-soft); line-height:1.25; }
+.tdb-kpi-valeur{
+  font-family:var(--font-display); font-weight:800; font-size:1.9rem; color:var(--ink);
+  letter-spacing:-.02em; margin:.55rem 0 .35rem; line-height:1.1;
+}
+.tdb-kpi-bas{ display:flex; align-items:flex-end; justify-content:space-between; gap:.4rem; margin-top:auto; }
+.tdb-kpi-verrou{ margin-top:.8rem; font-size:.76rem; color:var(--ink-soft); }
+.tdb-kpi-verrou i{ color:var(--ink-faint); margin-right:.25rem; }
+
+.variation{ display:inline-flex; align-items:center; gap:.3rem; font-size:.76rem; font-weight:700; white-space:nowrap; }
+.variation.is-positif{ color:var(--teal-dark); }
+.variation.is-negatif{ color:var(--urgence-dark); }
+.variation.is-neutre{ color:var(--ink-soft); font-weight:600; }
+.variation-suffixe{ font-weight:400; color:var(--ink-soft); }
+
+.sparkline{ display:block; flex:none; }
+.sparkline.is-vide{ width:96px; height:30px; }
+.spark-ligne{ fill:none; stroke:var(--donnee); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; opacity:.85; }
+.spark-aire{ fill:var(--donnee-lavis); }
+.spark-point{ fill:var(--donnee); stroke:var(--surface); stroke-width:2; }
+
+.tdb-grille{ display:grid; grid-template-columns:minmax(0,1.75fr) minmax(0,1fr); gap:1.1rem; }
+.tdb-grille > .info-card{ margin-bottom:0; min-width:0; }
+.tdb-carte-entete{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.6rem; margin-bottom:.8rem; }
+.tdb-carte-entete h3{ margin-bottom:0; }
+.tdb-onglets{ display:flex; flex-wrap:wrap; gap:.3rem; }
+.tdb-onglets button{
+  border:1px solid var(--line); background:var(--surface); color:var(--ink-soft);
+  border-radius:var(--radius-pill); padding:.28rem .7rem; font-size:.76rem; font-weight:600; cursor:pointer;
+}
+.tdb-onglets button:hover{ border-color:var(--primary); color:var(--primary-dark); }
+.tdb-onglets button.is-actif{ background:var(--primary); border-color:var(--primary); color:#fff; }
+
+/* Courbe temporelle */
+.courbe-temporelle{ width:100%; }
+.ct-zone{ position:relative; width:100%; touch-action:pan-y; }
+.ct-zone svg{ display:block; overflow:visible; }
+.ct-zone svg:focus-visible{ outline:2px solid var(--primary); outline-offset:4px; border-radius:6px; }
+.ct-grille{ stroke:var(--line); stroke-width:1; }
+.ct-base{ stroke:var(--line-strong); stroke-width:1; }
+.ct-graduation, .ct-axe{ font-size:11px; fill:var(--ink-soft); font-variant-numeric:tabular-nums; }
+.ct-ligne{ fill:none; stroke:var(--donnee); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+.ct-aire{ fill:var(--donnee-lavis); }
+.ct-point{ fill:var(--donnee); stroke:var(--surface); stroke-width:2; }
+.ct-point.is-actif{ stroke-width:2.5; }
+.ct-reticule{ stroke:var(--ink-faint); stroke-width:1; }
+.ct-etiquette-fin{ font-size:12px; font-weight:700; fill:var(--ink); }
+.ct-colonne{ fill:var(--donnee); transition:opacity .12s ease; }
+.ct-colonne.is-attenue{ opacity:.45; }
+.ct-colonne.is-actif{ opacity:1; filter:brightness(1.08); }
+.ct-bulle{
+  position:absolute; transform:translate(-50%,-100%); pointer-events:none; z-index:2;
+  background:var(--surface); border:1px solid var(--line-strong); box-shadow:var(--shadow-md);
+  border-radius:var(--radius-md); padding:.4rem .65rem; white-space:nowrap;
+  display:flex; flex-direction:column; gap:.05rem; text-align:center;
+}
+.ct-bulle strong{ font-size:.86rem; color:var(--ink); }
+.ct-bulle span{ font-size:.72rem; color:var(--ink-soft); }
+.ct-tableau{ margin-top:.6rem; }
+.ct-tableau summary{ font-size:.8rem; color:var(--ink-soft); cursor:pointer; }
+.ct-tableau table{ margin-top:.5rem; font-size:.84rem; }
+.ct-tableau td{ font-variant-numeric:tabular-nums; }
+
+/* Réputation (tableau de bord) */
+.tdb-rep-score{ display:flex; align-items:center; gap:1rem; margin-bottom:1rem; }
+.tdb-rep-valeur{ font-family:var(--font-display); font-weight:800; font-size:2.6rem; line-height:1; color:var(--ink); letter-spacing:-.02em; }
+.tdb-rep-valeur span{ font-size:1rem; color:var(--ink-faint); margin-left:.1rem; }
+.tdb-rep-distribution{ list-style:none; margin:0 0 1rem; padding:0; display:flex; flex-direction:column; gap:.32rem; }
+.tdb-rep-distribution li{ display:grid; grid-template-columns:1rem 1fr 2rem; align-items:center; gap:.55rem; font-size:.78rem; color:var(--ink-soft); }
+.tdb-rep-distribution li span:last-child{ text-align:right; font-variant-numeric:tabular-nums; }
+.tdb-rep-periode{ display:flex; justify-content:space-between; gap:.8rem; padding-top:.9rem; border-top:1px solid var(--line); font-size:.9rem; }
+
+/* Entonnoir */
+.entonnoir{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.85rem; }
+.ent-entete{ display:flex; justify-content:space-between; gap:.6rem; font-size:.85rem; margin-bottom:.3rem; }
+.ent-libelle{ color:var(--ink-soft); }
+.ent-libelle i{ color:var(--primary); width:1.1rem; }
+.ent-valeur{ font-weight:800; color:var(--ink); font-family:var(--font-display); }
+.ent-piste{ height:14px; background:var(--surface-sunk); border-radius:4px; overflow:hidden; }
+.ent-piste span{ display:block; height:100%; background:var(--donnee); border-radius:4px; transition:width .35s ease; }
+.ent-taux{ font-size:.74rem; color:var(--ink); font-weight:700; margin-top:.25rem; }
+.ent-taux span{ color:var(--ink-soft); font-weight:400; }
+
+/* Engagements */
+.tdb-engagements{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.65rem; }
+.tdb-engagements li{ display:grid; grid-template-columns:minmax(0,11rem) 1fr 2.6rem; align-items:center; gap:.7rem; font-size:.84rem; }
+.tdb-eng-libelle{ color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tdb-eng-libelle i{ color:var(--primary); width:1.1rem; }
+.tdb-engagements strong{ text-align:right; font-variant-numeric:tabular-nums; }
+.tdb-eng-total{ padding-top:.65rem; border-top:1px solid var(--line); color:var(--ink-soft); }
+.tdb-chiffre{ font-family:var(--font-display); font-weight:800; font-size:2rem; color:var(--ink); margin-bottom:.4rem; }
+.tdb-chiffre span{ font-size:.9rem; font-weight:600; color:var(--ink-soft); }
+
+/* Carte des créneaux : une teinte, du clair au foncé */
+.carte-creneaux table{ width:100%; border-collapse:separate; border-spacing:4px; }
+.carte-creneaux th{ font-size:.74rem; font-weight:600; color:var(--ink-soft); text-align:center; }
+.carte-creneaux tbody th{ text-align:left; width:3rem; }
+.cc-case{
+  display:flex; align-items:center; justify-content:center; height:34px; border-radius:6px;
+  background:color-mix(in srgb, var(--donnee) var(--cc-intensite, 0%), var(--surface-alt));
+  font-size:.78rem; font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums;
+}
+.cc-case.is-vide{ background:var(--surface-alt); }
+.cc-case.is-fonce{ color:#fff; }
+.cc-note{ font-size:.8rem; color:var(--ink-soft); margin:.7rem 0 0; }
+
+.tdb-table{ width:100%; font-size:.86rem; border-collapse:collapse; }
+.tdb-table td{ padding:.55rem 0; border-bottom:1px solid var(--line); vertical-align:top; }
+.tdb-table td:first-child{ color:var(--ink-soft); padding-right:1rem; }
+.tdb-table td:last-child{ text-align:right; }
+.tdb-table tr:last-child td{ border-bottom:none; }
+
+.tdb-verrou{ display:flex; gap:1rem; align-items:flex-start; padding:1rem; background:var(--surface-alt); border-radius:var(--radius-md); }
+.tdb-verrou > i{ font-size:1.5rem; color:var(--primary); margin-top:.15rem; }
+.tdb-verrou p{ font-size:.84rem; color:var(--ink-soft); }
+
+/* ------------------------------ Fiche publique ------------------------------ */
+.profil-note{
+  display:inline-flex; align-items:center; gap:.4rem; margin-top:.6rem;
+  border:none; background:none; padding:0; cursor:pointer; font-size:.86rem; color:var(--ink-soft);
+}
+.profil-note strong{ color:var(--ink); }
+.profil-note:hover span{ text-decoration:underline; }
+.avis-publics .info-card{ margin-bottom:1rem; }
+.avis-publics-barre{ display:flex; justify-content:space-between; align-items:center; gap:.6rem; flex-wrap:wrap; margin-bottom:.8rem; }
+.avis-publics-note{ font-size:.78rem; color:var(--ink-soft); margin:1.1rem 0 0; }
+.avis-publics-note i{ color:var(--primary); margin-right:.25rem; }
+
+/* ------------------------------ Patient ------------------------------ */
+.avis-a-faire{
+  background:linear-gradient(180deg, var(--gold-tint), var(--surface) 75%);
+  border:1px solid #F6E3C1; border-radius:var(--radius-lg); padding:1.2rem 1.3rem; margin-bottom:1.4rem;
+}
+.aaf-entete{ display:flex; gap:.9rem; align-items:center; margin-bottom:.9rem; }
+.aaf-entete h2{ font-size:1.02rem; margin:0 0 .15rem; }
+.aaf-entete p{ margin:0; font-size:.84rem; color:var(--ink-soft); }
+.aaf-icone{
+  width:44px; height:44px; min-width:44px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  background:var(--surface); color:var(--etoile); font-size:1.15rem; box-shadow:var(--shadow-sm);
+}
+.aaf-liste{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:.7rem; }
+.aaf-item{
+  display:flex; align-items:center; justify-content:space-between; gap:.7rem;
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); padding:.7rem .8rem;
+}
+.aaf-medecin{ display:flex; align-items:center; gap:.65rem; min-width:0; }
+.aaf-photo{ width:40px; height:40px; min-width:40px; border-radius:50%; object-fit:cover; }
+.aaf-photo.is-initiales{
+  display:flex; align-items:center; justify-content:center; background:var(--primary-tint); color:var(--primary-dark);
+  font-weight:800; font-size:.8rem; font-family:var(--font-display);
+}
+.modale-avis{ max-width:520px; }
+.modale-avis-contexte{ font-size:.84rem; color:var(--ink-soft); margin-bottom:1.1rem; }
+.modale-avis-bloc{ border:none; padding:0; margin:0 0 1.2rem; }
+.modale-avis-legende{ font-size:.88rem; font-weight:700; color:var(--ink); margin-bottom:.5rem; float:none; width:auto; }
+.modale-avis-critere{ display:flex; align-items:center; justify-content:space-between; gap:.8rem; padding:.3rem 0; font-size:.86rem; color:var(--ink-soft); }
+.modale-avis-critere i{ color:var(--primary); width:1.1rem; }
+.choix-reco{ display:flex; gap:.5rem; }
+.choix-reco-btn{
+  flex:1; border:1px solid var(--line-strong); background:var(--surface); border-radius:var(--radius-md);
+  padding:.55rem; font-weight:600; font-size:.86rem; color:var(--ink-soft); cursor:pointer;
+}
+.choix-reco-btn:hover{ border-color:var(--primary); color:var(--primary-dark); }
+.choix-reco-btn.is-actif{ background:var(--primary-tint); border-color:var(--primary); color:var(--primary-dark); }
+
+/* ------------------------------ Responsive ------------------------------ */
+@media (max-width:1200px){
+  .tdb-kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .resume-notes{ grid-template-columns:minmax(140px,auto) minmax(0,1fr); }
+  .resume-criteres{ grid-column:1 / -1; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; }
+}
+@media (max-width:991px){
+  .tdb-grille{ grid-template-columns:minmax(0,1fr); }
+}
+@media (max-width:640px){
+  .tdb-kpis{ gap:.7rem; }
+  .tdb-kpi{ padding:.85rem; }
+  .tdb-kpi-valeur{ font-size:1.5rem; }
+  .sparkline, .sparkline.is-vide{ display:none; }
+  .resume-notes{ grid-template-columns:minmax(0,1fr); gap:1.2rem; }
+  .resume-score{ border-right:none; padding-right:0; border-bottom:1px solid var(--line); padding-bottom:1.1rem; }
+  .resume-criteres{ grid-template-columns:minmax(0,1fr); }
+  .tdb-engagements li{ grid-template-columns:minmax(0,1fr) 4rem 2.4rem; }
+  .ea-tri{ margin-left:0; width:100%; }
+  .carte-avis{ padding:1rem; }
+  .carte-avis-note{ align-items:flex-end; }
+  .tdb-filtres .tdb-segment{ overflow-x:auto; max-width:100%; }
+}
+@media (prefers-reduced-motion:reduce){
+  .rd-piste > span, .ent-piste span, .saisie-etoile, .ct-colonne{ transition:none; }
+}
