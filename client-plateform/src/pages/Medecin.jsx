@@ -176,7 +176,16 @@ export default function Medecin() {
     // soumission au clavier (Entrée) et éviter le rechargement de page.
   }
 
-  const totalPages = Math.max(1, Math.ceil(medecins.length / RESULTATS_PAR_PAGE));
+  const lienDemandeRapide = useMemo(() => {
+    const params = new URLSearchParams();
+    if (filtres.specialite_id) params.set('specialite_id', filtres.specialite_id);
+    if (filtres.pays_exercice_id) params.set('pays_id', filtres.pays_exercice_id);
+    if (filtres.ville_exercice_id) params.set('ville_id', filtres.ville_exercice_id);
+    const qs = params.toString();
+    return `/demande-rapide${qs ? `?${qs}` : ''}`;
+  }, [filtres.specialite_id, filtres.pays_exercice_id, filtres.ville_exercice_id]);
+
+  const totalPages = Math.max(1,Math.ceil(medecins.length / RESULTATS_PAR_PAGE));
   const medecinsPage = useMemo(
     () => medecins.slice((page - 1) * RESULTATS_PAR_PAGE, page * RESULTATS_PAR_PAGE),
     [medecins, page]
@@ -324,6 +333,25 @@ export default function Medecin() {
 
             {/* Colonne résultats — annuaire */}
             <div className="col-md-6">
+              {/* RDV aléatoire (« Demande rapide ») : le patient publie spécialité,
+                  ville, jour et heure ; les médecins disponibles répondent.
+                  Spécialité, pays et ville filtrés ici sont transmis à la page publique
+                  /demande-rapide (compte patient créé ou connexion sur place). */}
+              <div className="demande-rapide-banner">
+                <div className="demande-rapide-icone">
+                  <i className="fa-solid fa-bullhorn" />
+                </div>
+                <div className="demande-rapide-texte">
+                  <strong>Pas de médecin précis ? Lancez une demande rapide</strong>
+                  <span>
+                    Indiquez la spécialité, la ville, le jour et l&apos;heure : les médecins disponibles vous
+                    répondent, vous choisissez celui qui vous convient.
+                  </span>
+                </div>
+                <Link to={lienDemandeRapide} className="btn btn-primary btn-sm-aps">
+                  <i className="fa-solid fa-paper-plane" /> Faire une demande
+                </Link>
+              </div>
               {/* Bouton "Devenir médecin" — juste au-dessus de la liste */}
               <div className="d-flex justify-content-end mb-3">
                 <Link to="/devenir-medecin" className="btn btn-primary">

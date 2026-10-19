@@ -184,7 +184,7 @@ class _HeroSection extends StatelessWidget {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [AppColors.green600, AppColors.green900],
+              colors: [AppColors.b5, AppColors.b7],
             ),
             boxShadow: [
               BoxShadow(
@@ -306,7 +306,7 @@ class _MissionBanner extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [AppColors.primary, AppColors.primaryDark],
+          colors: [AppColors.b6, AppColors.b7],
         ),
       ),
       child: Column(

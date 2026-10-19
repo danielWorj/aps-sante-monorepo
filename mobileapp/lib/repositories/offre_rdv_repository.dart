@@ -63,19 +63,23 @@ class OffreRdvRepository {
   /* ---------------------------- Patient ---------------------------- */
 
   /// POST /offres-rdv — renvoie le nombre de médecins prévenus.
+  /// [jour] (« AAAA-MM-JJ ») et [heure] (« HH:mm ») sont ceux de la ville
+  /// choisie : le serveur les convertit dans le fuseau de son pays.
   Future<int> publier({
     required String token,
     required String specialiteId,
     required String villeId,
     required TypeRdvOffre typeRdv,
-    required DateTime dateSouhaitee,
+    required String jour,
+    required String heure,
     String? motif,
   }) async {
     final donnees = await _post(ApiRealEndpoints.offresRdv, token, {
       'specialite_id': specialiteId,
       'ville_id': villeId,
       'type_rdv': typeRdv.valeurApi,
-      'date_souhaitee': dateSouhaitee.toUtc().toIso8601String(),
+      'jour': jour,
+      'heure': heure,
       if (motif != null && motif.trim().isNotEmpty) 'motif': motif.trim(),
     });
     final n = donnees is Map<String, dynamic> ? donnees['medecins_notifies'] : null;
@@ -110,14 +114,16 @@ class OffreRdvRepository {
   /* ---------------------------- Médecin ---------------------------- */
 
   /// GET /offres-rdv/medecin?vue=ouvertes|mes_reponses
-  Future<List<OffreRdv>> listerPourMedecin({
+  Future<OffresMedecin> listerPourMedecin({
     required String token,
     bool mesReponses = false,
   }) async {
     final uri = Uri.parse(ApiRealEndpoints.offresRdvMedecin)
         .replace(queryParameters: {'vue': mesReponses ? 'mes_reponses' : 'ouvertes'});
     final reponse = await http.get(uri, headers: _entetes(token)).timeout(_timeout);
-    return _offres(_decoder(reponse));
+    final donnees = _decoder(reponse);
+    final raison = donnees is Map<String, dynamic> ? donnees['raison_ineligibilite'] : null;
+    return OffresMedecin(offres: _offres(donnees), raison: raison is String ? raison : null);
   }
 
   /// POST /offres-rdv/:id/reponse — { message? }

@@ -31,7 +31,7 @@ class ItineraryButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(13),
+          borderRadius: BorderRadius.circular(10),
         ),
       ),
     );

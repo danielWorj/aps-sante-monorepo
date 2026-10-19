@@ -246,7 +246,7 @@ class _PanneauReprogrammationState
       decoration: BoxDecoration(
         color: AppColors.amber100,
         border: Border.all(color: AppColors.amber500.withOpacity(0.45)),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

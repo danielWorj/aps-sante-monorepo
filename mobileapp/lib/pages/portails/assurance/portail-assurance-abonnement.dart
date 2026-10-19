@@ -260,7 +260,7 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: widget.estCourante ? AppColors.primary : AppColors.line, width: widget.estCourante ? 2 : 1),
       ),
       child: Column(

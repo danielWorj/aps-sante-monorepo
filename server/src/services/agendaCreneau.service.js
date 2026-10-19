@@ -288,6 +288,107 @@ export async function synchroniserCreneauxMedecin(
 }
 
 /**
+ * Rendez-vous à venir que le gabarit ne couvre plus (tranche décochée alors
+ * qu'un patient l'avait déjà réservée). La synchronisation ne les touche
+ * jamais : ils sont maintenus, et l'écran agenda prévient le médecin.
+ * @param {string} medecin_id
+ * @param {{ maintenant?: Date }} [options]
+ * @param {object} [db]
+ * @returns {Promise<object[]>} cases réservées hors gabarit, avec `debut` / `fin`
+ */
+export async function rdvHorsGabarit(medecin_id, { maintenant = new Date() } = {}, db = prisma) {
+  const fuseau = await fuseauDuMedecin(medecin_id, db);
+  const aujourdhui = dateMuraleDuJour(fuseau, maintenant);
+  const [gabarit, reservees] = await Promise.all([
+    db.disponibiliteMedecin.findMany({ where: { medecin_id }, select: { jour_semaine: true, horaire_id: true } }),
+    db.creneauAgenda.findMany({
+      where: { medecin_id, date: { gte: aujourdhui }, rdv_id: { not: null } },
+      select: { creneau_id: true, date: true, horaire_id: true, horaire: true },
+      orderBy: [{ date: "asc" }, { horaire: { heure_debut: "asc" } }],
+    }),
+  ]);
+  const cles = new Set(gabarit.map((g) => `${g.jour_semaine}|${g.horaire_id}`));
+  return avecInstants(
+    reservees.filter((c) => !cles.has(`${JOUR_SEMAINE_PAR_INDEX_JS[c.date.getUTCDay()]}|${c.horaire_id}`)),
+    fuseau
+  ).filter((c) => new Date(c.debut).getTime() > maintenant.getTime());
+}
+
+/**
+ * Exception datée : fixe les tranches OUVERTES aux patients pour une date
+ * précise, indépendamment de la semaine type (congé, demi-journée, ouverture
+ * exceptionnelle). Pour chaque tranche du jour :
+ *   - réservée par un RDV : jamais touchée (comptée dans `maintenus` si elle
+ *     n'est plus voulue) ;
+ *   - voulue : ouverte (case créée « manuel » si absente, rouverte si fermée) ;
+ *   - non voulue : fermée (« bloque », origine « manuel » pour que la
+ *     synchronisation ne la rouvre pas) ; une case ajoutée à la main et
+ *     libre est simplement supprimée.
+ * @param {{ medecin_id: string, date: Date, horaire_ids: string[] }} p
+ *   date : date murale du médecin à minuit UTC.
+ * @param {object} [db]
+ * @returns {Promise<{ ouverts: number, fermes: number, maintenus: number }>}
+ */
+export async function definirTranchesDuJour({ medecin_id, date, horaire_ids }, db = prisma) {
+  const voulues = new Set(horaire_ids);
+  const bilan = { ouverts: 0, fermes: 0, maintenus: 0 };
+
+  await db.$transaction(async (tx) => {
+    const existantes = await tx.creneauAgenda.findMany({ where: { medecin_id, date } });
+    const presentes = new Set(existantes.map((c) => c.horaire_id));
+
+    for (const c of existantes) {
+      if (c.rdv_id || c.statut === "reserve") {
+        if (!voulues.has(c.horaire_id)) bilan.maintenus += 1;
+        continue;
+      }
+      const voulue = voulues.has(c.horaire_id);
+      if (voulue && c.statut === "bloque") {
+        // eslint-disable-next-line no-await-in-loop
+        await tx.creneauAgenda.updateMany({
+          where: { creneau_id: c.creneau_id, rdv_id: null },
+          data: { statut: "disponible", origine: "manuel" },
+        });
+        bilan.ouverts += 1;
+      } else if (!voulue && c.statut === "disponible") {
+        // eslint-disable-next-line no-await-in-loop
+        await (c.origine === "manuel"
+          ? tx.creneauAgenda.deleteMany({ where: { creneau_id: c.creneau_id, rdv_id: null, statut: "disponible" } })
+          : tx.creneauAgenda.updateMany({
+              where: { creneau_id: c.creneau_id, rdv_id: null, statut: "disponible" },
+              data: { statut: "bloque", origine: "manuel" },
+            }));
+        bilan.fermes += 1;
+      }
+    }
+
+    const aCreer = [...voulues]
+      .filter((horaire_id) => !presentes.has(horaire_id))
+      .map((horaire_id) => ({ medecin_id, horaire_id, date, statut: "disponible", origine: "manuel" }));
+    if (aCreer.length) {
+      bilan.ouverts += (await tx.creneauAgenda.createMany({ data: aCreer, skipDuplicates: true })).count;
+    }
+  });
+
+  return bilan;
+}
+
+/**
+ * Annule l'exception d'une date : les cases libres ou fermées de ce jour sont
+ * effacées puis régénérées depuis la semaine type. Les cases réservées restent.
+ * @param {{ medecin_id: string, date: Date }} p
+ * @param {object} [db]
+ * @returns {Promise<{ crees: number, supprimes: number }>}
+ */
+export async function retablirJourDepuisGabarit({ medecin_id, date }, db = prisma) {
+  const { count } = await db.creneauAgenda.deleteMany({
+    where: { medecin_id, date, rdv_id: null, statut: { in: ["disponible", "bloque"] } },
+  });
+  const r = await synchroniserCreneauxMedecin(medecin_id, {}, db);
+  return { crees: r.crees, supprimes: count };
+}
+
+/**
  * Passage nocturne : prolonge l'horizon de chaque médecin qui a un gabarit.
  * Une erreur sur un médecin n'empêche pas les autres.
  * @param {{ maintenant?: Date }} [options]

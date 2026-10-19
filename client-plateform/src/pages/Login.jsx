@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import med7 from '../assets/img/med7.jpg';
 import { useAuth } from '../context/AuthContext';
+import { accueilParRole } from '../utils/roles';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -68,22 +69,13 @@ export default function Login() {
       // Session normale déjà ouverte par connecter() ci-dessus.
       const role = data?.utilisateur?.role;
 
-      const destinationParRole = {
-        patient: '/portail/patient-rdv',
-        medecin: '/portail/medecin-agenda',
-        agent_assurance: '/portail/assurance',
-        agent_pharmacie: '/mon-espace-pharmacie',
-        agent_structure_sante: '/mon-espace-structure',
-        annonceur: '/portail/annonceur',
-      };
-
       // Retour à la page qui a demandé la connexion (ex. /pricing), si fournie
       // par l'appelant (`state.from`, chemin interne uniquement).
       // `from` : chaîne, ou objet location (posé par RequireAuth).
       const from = location.state?.from;
       const retour = typeof from === 'string' ? from : from?.pathname ? `${from.pathname}${from.search ?? ''}` : null;
       const retourValide = typeof retour === 'string' && retour.startsWith('/') && !retour.startsWith('//');
-      navigate(retourValide ? retour : destinationParRole[role] ?? '/home', { replace: true });
+      navigate(retourValide ? retour : accueilParRole(role), { replace: true });
     } catch (err) {
       setErrors({
         general:

@@ -115,7 +115,7 @@ class CardSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final r = BorderRadius.circular(22);
+    final r = BorderRadius.circular(14);
     return Container(
       margin: margin ?? const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(

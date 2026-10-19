@@ -251,7 +251,7 @@ class _ProfileHero extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -283,7 +283,7 @@ class _ProfileHero extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             gradient: AppColors.gradientForest,
-            borderRadius: BorderRadius.circular(26),
+            borderRadius: BorderRadius.circular(16),
             boxShadow: AppColors.shadowSoft,
           ),
           child: Stack(

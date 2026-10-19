@@ -62,7 +62,7 @@ class CardAssurance extends StatelessWidget {
               Container(
                 width: 48,
                 height: 48,
-                decoration: BoxDecoration(color: fondLogo, borderRadius: BorderRadius.circular(15)),
+                decoration: BoxDecoration(color: fondLogo, borderRadius: BorderRadius.circular(10)),
                 alignment: Alignment.center,
                 child: Text(
                   sigle,

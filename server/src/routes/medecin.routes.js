@@ -118,6 +118,9 @@ import {
   creerCreneauAgenda,
   modifierCreneauAgenda,
   supprimerCreneauAgenda,
+  // Agenda du médecin — exceptions datées (une journée précise)
+  definirJourAgenda,
+  retablirJourAgenda,
 } from "../controllers/medecin.controller.js";
 // Politique de fonds v2 §5 (étape 6) : reprogrammation « deux absents ».
 import {
@@ -244,6 +247,9 @@ router.post("/medecins/:medecinId/agenda/generer", authentifier, genererCreneaux
 router.post("/medecins/:medecinId/agenda", authentifier, creerCreneauAgenda);
 router.put("/creneaux-agenda/:id", authentifier, modifierCreneauAgenda);
 router.delete("/creneaux-agenda/:id", authentifier, supprimerCreneauAgenda);
+// Exception datée : tranches ouvertes pour une journée précise / retour à la semaine type.
+router.put("/medecins/:medecinId/agenda/jours/:date", authentifier, definirJourAgenda);
+router.delete("/medecins/:medecinId/agenda/jours/:date", authentifier, retablirJourAgenda);
 
 /* ===================================================================
  * Avis médecin

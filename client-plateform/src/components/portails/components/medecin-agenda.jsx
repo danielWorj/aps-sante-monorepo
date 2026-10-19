@@ -1,136 +1,69 @@
 // medecin-agenda.jsx
 //
-// Consomme désormais les vraies APIs Agenda de medecinService.js (voir
-// medecin.routes.js / agenda.controller.js côté backend) au lieu des
-// données de démo codées en dur.
+// Agenda du médecin, en deux blocs :
 //
-// Confirmé via agenda.controller.js / rendezVous.controller.js :
-//   - GET /medecins/:id/agenda (SELECTION_CRENEAU_PUBLIC) renvoie
-//     { creneau_id, medecin_id, horaire_id, date, statut, origine,
-//     horaire: {horaire_id, heure_debut, heure_fin} } — et NE renvoie
-//     JAMAIS rdv_id, même pour le médecin propriétaire (route publique
-//     unique, commentaire explicite du contrôleur). Impossible donc de
-//     joindre un créneau "réservé" à son rendez-vous via rdv_id.
-//     La jointure ci-dessous se fait à la place sur (date, heure de
-//     début), en comparant creneau.date/horaire.heure_debut au
-//     date_creneau du rendez-vous — voir rdvParCase plus bas.
-//   - GET /rendez-vous inclut bien medecin.utilisateur.{nom,prenom} et
-//     patient.utilisateur.{nom,prenom} (INCLUSION_NOMS_RDV) : voir
-//     nomPatient() ci-dessous.
-//   - Horaire.heure_debut/heure_fin et CreneauAgenda.date sont stockés
-//     "épinglés" en UTC (ex. new Date(`1970-01-01T${heure}:00Z`) côté
-//     création) : ce sont des HEURES MURALES du médecin, pas de vrais
-//     instants. On extrait donc l'heure/la date par découpage de chaîne
-//     (formatHeure/dateSeuleISO) plutôt que via des getters locaux de
-//     Date (getHours/getDate), qui décaleraient le résultat selon le
-//     fuseau du navigateur.
-//   - Chaque créneau porte en plus `debut` (ISO) : l'instant réel,
-//     calculé par le serveur dans le fuseau du pays d'exercice. C'est
-//     aussi la date_creneau du rendez-vous qui l'occupe : la jointure
-//     créneau <-> rendez-vous se fait sur cet instant (rdvParInstant).
+// 1. « Ma semaine type » — le gabarit hebdomadaire (DisponibiliteMedecin).
+//    Pour chaque jour, le médecin coche des PÉRIODES (matin, après-midi,
+//    soirée : toutes leurs tranches sont sélectionnées) et peut affiner heure
+//    par heure (voir agenda/selecteur-periodes.jsx et utils/periodesAgenda.js).
+//    « Copier vers… » recopie un jour sur d'autres. Les changements sont
+//    enregistrés en une fois (PUT /medecins/:id/disponibilites) ; le serveur
+//    publie aussitôt les semaines à venir. Les rendez-vous déjà réservés sur
+//    une tranche décochée sont maintenus (rdv_maintenus) : on prévient.
 //
-// Réservation (agendaCreneau.service.js côté serveur) : dès qu'un patient
-// DEMANDE un rendez-vous (statut « cree », pas encore payé), le créneau
-// passe à « reserve » et disparaît de la grille des autres patients. Il
-// redevient libre si le rendez-vous est annulé, ou automatiquement si la
-// demande n'est pas confirmée dans le délai du pays (back-office).
+// 2. « Mes prochains jours » — les créneaux réels d'une semaine (CreneauAgenda),
+//    jour par jour : périodes ouvertes, nombre de créneaux libres, rendez-vous.
+//    « Modifier ce jour » crée une EXCEPTION pour cette date seulement (congé,
+//    demi-journée, ouverture exceptionnelle) via PUT /agenda/jours/:date ;
+//    « Revenir à la semaine type » l'annule (DELETE /agenda/jours/:date).
+//    Un jour est « personnalisé » dès qu'une de ses tranches a été modifiée à
+//    la main (origine « manuel »).
 //
-// Gabarit -> créneaux : chaque modification du gabarit est publiée
-// automatiquement sur les semaines à venir (le serveur re-synchronise ;
-// un passage nocturne prolonge l'horizon). « Régénérer la semaine » ne
-// sert plus qu'à recréer une semaine au-delà de cet horizon.
-//
-// Le bloc "Horaires hebdomadaires" (auparavant des plages libres
-// matin/après-midi) a été remplacé par une sélection de créneaux du
-// référentiel Horaire par jour de semaine : c'est le contrat réel de
-// DisponibiliteMedecin (jour_semaine + horaire_id, pas de plage libre
-// "08:00-12:00" côté serveur).
-//
-// ⚠️ CORRECTIF : la grille exposait un seul mode ("Bloquer des
-// créneaux") qui, sur une case vide ("Non proposé"), créait TOUJOURS
-// un CreneauAgenda avec statut="bloque" (voir toggleCreneau plus bas).
-// Il n'existait donc aucun moyen, depuis la grille, d'ouvrir un
-// créneau ponctuel réellement DISPONIBLE aux patients — alors que
-// creerCreneauAgenda (service + contrôleur) l'accepte très bien
-// (statut par défaut = "disponible"). La seule voie fonctionnelle
-// passait par le gabarit récurrent + "Générer les créneaux de la
-// semaine", ce qui est incohérent avec l'info-bulle affichée en mode
-// blocage ("cliquez sur une case non proposée pour la bloquer
-// directement" ne disait pas qu'on ne pouvait PAS l'ouvrir).
-//
-// Trois modes mutuellement exclusifs sont donc distingués :
-//   - modeBlocage    : agit sur des créneaux existants (libre <->
-//     bloqué) et permet de fermer explicitement une case vide
-//     (statut="bloque") pour qu'elle ne soit jamais proposée, même
-//     après génération. RÉVERSIBLE : le créneau reste en base.
-//   - modeAjout      : sur une case vide uniquement, crée un créneau
-//     PONCTUEL hors gabarit avec statut="disponible" (origine
-//     "manuel"), immédiatement visible/réservable par les patients.
-//   - modeSuppression : RETIRE DÉFINITIVEMENT un créneau existant
-//     (libre ou bloqué) via DELETE /creneaux-agenda/:id
-//     (supprimerCreneauAgenda). C'est le "D" du CRUD, absent jusqu'ici
-//     de cette page : sans lui, un créneau ponctuel ajouté par erreur
-//     (modeAjout) ou une fermeture manuelle obsolète (modeBlocage sur
-//     une case "Non proposé") ne pouvaient JAMAIS redevenir une case
-//     vraiment vide ("Non proposé") — au mieux on pouvait les rebasculer
-//     en "disponible"/"bloqué", jamais les effacer. Comme côté serveur
-//     (supprimerCreneauAgenda), un créneau "réservé" (rdv_id renseigné)
-//     n'est jamais supprimable depuis ce mode : il faut d'abord annuler
-//     le rendez-vous via le module Rendez-vous — 409 sinon.
+// Conventions de dates (inchangées) : creneau.date et horaire.heure_* sont des
+// heures MURALES du médecin épinglées en UTC, lues par découpage de chaîne ;
+// creneau.debut est l'instant réel, qui sert de jointure avec
+// rdv.date_creneau (rdv_id n'est jamais exposé par la route publique).
 //
 // D8 (politique de fonds v2) : un rendez-vous NON PAYÉ (statut « cree ») est en
-// lecture seule pour le médecin. Pour ces RDV, GET /rendez-vous ne renvoie que
-// { rdv_id, date_creneau, statut, non_paye: true } : ni identité du patient, ni
-// motif, ni type. Son créneau est déjà « reserve » (il n'est donc jamais
-// modifiable ici), mais la case s'affiche grisée, libellée « En attente de
-// paiement », sans nom de patient ni icône de visio. Le médecin n'est de toute
-// façon notifié qu'à la confirmation du paiement.
+// lecture seule pour le médecin : ni identité du patient, ni motif. Il apparaît
+// « En attente de paiement ».
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import PortailNavbar from "./../layouts/portail-navbar";
-import PortailFooter from "./../layouts/portail-footer";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import PortailSidebar from "./../layouts/portail-sidebar";
 import { estRdvNonPaye, estConsultationTerminee } from "./../../../utils/rdv";
-import "./medecin-agenda-non-paye.css";
+import { formatHeure, grouperParPeriode, periodeDeHeure, resumeJournee } from "../../../utils/periodesAgenda";
+import SelecteurPeriodes from "./agenda/selecteur-periodes";
+import "./medecin-agenda.css";
 import { useConfirmation, useToast } from "../../feedback";
 import {
   obtenirMonProfil,
   listerHoraires,
   listerDisponibilitesMedecin,
-  creerDisponibiliteMedecin,
-  supprimerDisponibiliteMedecin,
   remplacerDisponibilitesMedecin,
   listerCreneauxAgenda,
-  genererCreneauxAgenda,
-  creerCreneauAgenda,
-  modifierCreneauAgenda,
-  supprimerCreneauAgenda,
   listerRendezVousMedecinConnecte,
+  definirJourAgenda,
+  retablirJourAgenda,
   JOURS_SEMAINE_AGENDA,
-} from "../../../services/medecinService"; // ⚠️ ajuster le chemin selon l'arborescence réelle du projet
+} from "../../../services/medecinService";
 
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const JOURS_OUVRES = ["lundi", "mardi", "mercredi", "jeudi", "vendredi"];
-
-// Clé de jointure créneau <-> rendez-vous : l'instant réel (ms).
-function cleInstant(valeurISO) {
-  const t = new Date(valeurISO).getTime();
-  return Number.isNaN(t) ? null : t;
-}
 const MOIS_LABELS = [
   "janvier", "février", "mars", "avril", "mai", "juin",
   "juillet", "août", "septembre", "octobre", "novembre", "décembre",
 ];
+// L'agenda est publié sur 60 jours (AGENDA_HORIZON_JOURS côté serveur) :
+// au-delà, rien à afficher ni à modifier.
+const SEMAINES_MAX = 8;
 
-// "HH:mm:ss" | horodatage ISO complet | déjà "HH:mm" -> "HH:mm"
-function formatHeure(valeur) {
-  if (!valeur) return "--:--";
-  const correspondance = String(valeur).match(/(\d{2}):(\d{2})/);
-  return correspondance ? `${correspondance[1]}:${correspondance[2]}` : String(valeur);
+const cle = (jour, horaireId) => `${jour}|${horaireId}`;
+
+function cleInstant(valeurISO) {
+  const t = new Date(valeurISO).getTime();
+  return Number.isNaN(t) ? null : t;
 }
 
-// Pour les dates LOCALES construites en JS (semaine affichée) : ok
-// d'utiliser les getters locaux, aucune chaîne serveur n'est en jeu.
 function versDateISO(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -138,19 +71,9 @@ function versDateISO(date) {
   return `${y}-${m}-${d}`;
 }
 
-// Pour les dates VENANT DU SERVEUR (creneau.date, rdv.date_creneau) :
-// on découpe directement la chaîne ISO ("AAAA-MM-JJ...") sans passer
-// par un objet Date local, pour rester cohérent avec la façon dont le
-// backend épingle ses dates en UTC (voir en-tête de fichier).
-function dateSeuleISO(valeurISO) {
-  if (!valeurISO) return null;
-  return String(valeurISO).slice(0, 10);
-}
-
-// Lundi de la semaine courante + décalage en semaines.
 function lundiSemaine(decalageSemaines) {
   const auj = new Date();
-  const jourAuj = auj.getDay(); // 0 = dimanche ... 6 = samedi
+  const jourAuj = auj.getDay();
   const offsetVersLundi = jourAuj === 0 ? -6 : 1 - jourAuj;
   const lundi = new Date(auj);
   lundi.setHours(0, 0, 0, 0);
@@ -167,14 +90,11 @@ function nomPatient(rdv) {
 
 function libelleRendezVous(rdv) {
   if (!rdv) return "";
-  // D8 : aucun motif ni type n'est exposé au médecin avant paiement.
   if (estRdvNonPaye(rdv)) return "En attente de paiement";
-  // Libération différée : fin de consultation constatée, fonds en séquestre pendant T heures.
   if (estConsultationTerminee(rdv) && (rdv.statut === "confirme" || rdv.statut === "en_attente_presence")) {
     return "Terminé";
   }
   if (rdv.statut === "en_attente_presence") return "En attente · présence";
-  // Politique de fonds v2 : deux absents, en attente d'une nouvelle date (48 h).
   if (rdv.statut === "a_reprogrammer") return "À reprogrammer";
   if (rdv.statut === "conteste") return "Contesté";
   if (rdv.statut === "non_honore") return "Non honoré";
@@ -182,78 +102,89 @@ function libelleRendezVous(rdv) {
   return rdv.motif ? rdv.motif : "Consultation";
 }
 
+function libelleDateRdv(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+/* ------------------------------------------------------------------ */
+/* « Copier vers… » : recopie la sélection d'un jour sur d'autres jours */
+/* ------------------------------------------------------------------ */
+const CopieVers = ({ source, onAppliquer, onFermer }) => {
+  const [cibles, setCibles] = useState(() => new Set());
+  const autres = JOURS_SEMAINE_AGENDA.filter((j) => j.valeur !== source);
+  const basculer = (valeur) =>
+    setCibles((c) => {
+      const s = new Set(c);
+      if (s.has(valeur)) s.delete(valeur);
+      else s.add(valeur);
+      return s;
+    });
+  return (
+    <div className="agd-copie" role="dialog" aria-label="Copier vers d'autres jours">
+      <div className="agd-copie-raccourcis">
+        <button type="button" onClick={() => setCibles(new Set(JOURS_OUVRES.filter((j) => j !== source)))}>
+          Lun–Ven
+        </button>
+        <button type="button" onClick={() => setCibles(new Set(autres.map((j) => j.valeur)))}>
+          Tous
+        </button>
+      </div>
+      <div className="agd-copie-jours">
+        {autres.map((j) => (
+          <label key={j.valeur} className={cibles.has(j.valeur) ? "is-actif" : ""}>
+            <input type="checkbox" checked={cibles.has(j.valeur)} onChange={() => basculer(j.valeur)} />
+            {j.libelle.slice(0, 3)}
+          </label>
+        ))}
+      </div>
+      <div className="agd-copie-actions">
+        <button type="button" className="btn btn-ghost btn-sm-aps" onClick={onFermer}>
+          Annuler
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm-aps"
+          disabled={cibles.size === 0}
+          onClick={() => onAppliquer([...cibles])}
+        >
+          Copier
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const MedecinAgenda = () => {
-  // Deux modes d'édition de la grille, mutuellement exclusifs (voir
-  // note en tête de fichier) : modeBlocage agit sur des créneaux
-  // existants (libre <-> bloqué) et peut fermer une case vide ;
-  // modeAjout crée un nouveau créneau DISPONIBLE sur une case vide.
-  const [modeBlocage, setModeBlocage] = useState(false);
-  const [modeAjout, setModeAjout] = useState(false);
-  const [modeSuppression, setModeSuppression] = useState(false);
-  const [jourMobile, setJourMobile] = useState(() => {
-    const j = new Date().getDay(); // 0 = dimanche
-    return j === 0 ? 7 : j; // 1 = Lundi ... 7 = Dimanche
-  });
   const toast = useToast();
   const confirmer = useConfirmation();
 
   const [medecinId, setMedecinId] = useState(null);
-  const [semaineOffset, setSemaineOffset] = useState(0);
+  const [horaires, setHoraires] = useState([]);
+  const [gabaritServeur, setGabaritServeur] = useState(() => new Set());
+  const [gabarit, setGabarit] = useState(() => new Set());
+  const [copieOuverte, setCopieOuverte] = useState(null);
 
-  const [horairesReferentiel, setHorairesReferentiel] = useState([]);
-  const [disponibilites, setDisponibilites] = useState([]);
+  const [semaineOffset, setSemaineOffset] = useState(0);
   const [creneaux, setCreneaux] = useState([]);
   const [rendezVous, setRendezVous] = useState([]);
+  const [jourEdite, setJourEdite] = useState(null); // { iso, selection: Set, verrouilles: Set }
 
   const [chargement, setChargement] = useState(true);
+  // Semaine dont les créneaux sont affichés : tant qu'elle diffère de la
+  // semaine demandée, la liste est en cours de chargement.
+  const [semaineChargee, setSemaineChargee] = useState(null);
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreur, setErreur] = useState(null);
 
+  const groupes = useMemo(() => grouperParPeriode(horaires), [horaires]);
+  const modifie = useMemo(
+    () => gabarit.size !== gabaritServeur.size || [...gabarit].some((k) => !gabaritServeur.has(k)),
+    [gabarit, gabaritServeur]
+  );
 
-  useEffect(() => {
-    document.body.classList.toggle("block-mode", modeBlocage);
-    document.body.classList.toggle("add-mode", modeAjout);
-    document.body.classList.toggle("delete-mode", modeSuppression);
-    return () => document.body.classList.remove("block-mode", "add-mode", "delete-mode");
-  }, [modeBlocage, modeAjout, modeSuppression]);
-
-  // Activent un mode en désactivant systématiquement les deux autres :
-  // on ne veut jamais que "cliquer sur une case" soit ambigu entre "la
-  // bloquer", "l'ouvrir" ou "la supprimer".
-  const activerModeBlocage = () => {
-    setModeBlocage((v) => {
-      const suivant = !v;
-      if (suivant) {
-        setModeAjout(false);
-        setModeSuppression(false);
-      }
-      return suivant;
-    });
-  };
-
-  const activerModeAjout = () => {
-    setModeAjout((v) => {
-      const suivant = !v;
-      if (suivant) {
-        setModeBlocage(false);
-        setModeSuppression(false);
-      }
-      return suivant;
-    });
-  };
-
-  const activerModeSuppression = () => {
-    setModeSuppression((v) => {
-      const suivant = !v;
-      if (suivant) {
-        setModeBlocage(false);
-        setModeAjout(false);
-      }
-      return suivant;
-    });
-  };
-
-  // Jours (Lun -> Dim) de la semaine affichée.
+  // Jours de la semaine affichée (bloc 2).
   const jours = useMemo(() => {
     const lundi = lundiSemaine(semaineOffset);
     const ajISO = versDateISO(new Date());
@@ -261,633 +192,527 @@ const MedecinAgenda = () => {
       const d = new Date(lundi);
       d.setDate(lundi.getDate() + i);
       const iso = versDateISO(d);
-      return { dow: DOW_LABELS[i], num: d.getDate(), iso, today: iso === ajISO };
+      return {
+        dow: DOW_LABELS[i],
+        valeur: JOURS_SEMAINE_AGENDA[i].valeur,
+        libelle: JOURS_SEMAINE_AGENDA[i].libelle,
+        num: d.getDate(),
+        mois: MOIS_LABELS[d.getMonth()],
+        iso,
+        today: iso === ajISO,
+        passe: iso < ajISO,
+      };
     });
   }, [semaineOffset]);
 
-  const semaine = useMemo(() => {
-    const debut = jours[0];
-    const fin = jours[jours.length - 1];
-    const finDate = new Date(lundiSemaine(semaineOffset));
-    finDate.setDate(finDate.getDate() + 6);
-    return {
-      debut: debut?.num,
-      fin: fin?.num,
-      mois: MOIS_LABELS[finDate.getMonth()],
-      annee: finDate.getFullYear(),
-    };
-  }, [jours, semaineOffset]);
+  const cleSemaine = `${medecinId}|${jours[0].iso}`;
+  const chargementSemaine = semaineChargee !== cleSemaine;
 
-  // 1) Profil médecin connecté -> medecin_id.
+  const changerSemaine = (offset) => {
+    setJourEdite(null);
+    setSemaineOffset(offset);
+  };
+
+  const libelleSemaine = useMemo(() => {
+    const debut = jours[0];
+    const fin = jours[6];
+    return debut.mois === fin.mois
+      ? `${debut.num} – ${fin.num} ${fin.mois}`
+      : `${debut.num} ${debut.mois} – ${fin.num} ${fin.mois}`;
+  }, [jours]);
+
+  // 1) Profil, référentiel et semaine type.
+  const chargerGabarit = useCallback(async (id) => {
+    const [horairesData, disponibilitesData] = await Promise.all([
+      listerHoraires(),
+      listerDisponibilitesMedecin(id),
+    ]);
+    const cles = new Set((disponibilitesData || []).map((d) => cle(d.jour_semaine, d.horaire_id)));
+    setHoraires(horairesData || []);
+    setGabaritServeur(cles);
+    setGabarit(new Set(cles));
+  }, []);
+
   useEffect(() => {
     let annule = false;
     (async () => {
       try {
         const data = await obtenirMonProfil();
-        if (!annule) setMedecinId(data?.medecin?.medecin_id ?? null);
+        const id = data?.medecin?.medecin_id ?? null;
+        if (annule) return;
+        setMedecinId(id);
+        if (id) await chargerGabarit(id);
       } catch (err) {
-        if (!annule) setErreur(err.message || "Impossible de charger votre profil médecin.");
+        if (!annule) setErreur(err.message || "Impossible de charger votre agenda.");
+      } finally {
+        if (!annule) setChargement(false);
       }
     })();
     return () => {
       annule = true;
     };
-  }, []);
+  }, [chargerGabarit]);
 
-  // 2) Chargement de l'agenda de la semaine affichée + du gabarit de dispos.
-  const chargerSemaine = useCallback(async () => {
-    if (!medecinId) return;
-    setChargement(true);
-    setErreur(null);
-    try {
-      const dateDebut = jours[0].iso;
-      const dateFin = jours[jours.length - 1].iso;
-      const [creneauxData, rdvData, horairesData, disponibilitesData] = await Promise.all([
-        listerCreneauxAgenda(medecinId, { date_debut: dateDebut, date_fin: dateFin }),
-        listerRendezVousMedecinConnecte(),
-        listerHoraires(),
-        listerDisponibilitesMedecin(medecinId),
-      ]);
-      setCreneaux(creneauxData || []);
-      // Jointure avec les créneaux "réservé" sur l'instant (voir
-      // rdvParInstant) : un RDV annulé a libéré son créneau, on l'écarte.
-      setRendezVous((rdvData || []).filter((r) => r.statut !== "annule"));
-      setHorairesReferentiel(horairesData || []);
-      setDisponibilites(disponibilitesData || []);
-    } catch (err) {
-      setErreur(err.message || "Impossible de charger l'agenda.");
-    } finally {
-      setChargement(false);
-    }
-  }, [medecinId, jours]);
+  // 2) Créneaux réels et rendez-vous de la semaine affichée.
+  // Pas de setState synchrone : appelée depuis un effet (react-hooks/set-state-in-effect).
+  const chargerSemaine = useCallback(() => {
+    if (!medecinId) return Promise.resolve();
+    return Promise.all([
+      listerCreneauxAgenda(medecinId, { date_debut: jours[0].iso, date_fin: jours[6].iso }),
+      listerRendezVousMedecinConnecte(),
+    ])
+      .then(([creneauxData, rdvData]) => {
+        setCreneaux(creneauxData || []);
+        setRendezVous((rdvData || []).filter((r) => r.statut !== "annule"));
+      })
+      .catch((err) => toast.erreur(err.message || "Impossible de charger les créneaux de la semaine."))
+      .finally(() => setSemaineChargee(`${medecinId}|${jours[0].iso}`));
+  }, [medecinId, jours, toast]);
 
   useEffect(() => {
     chargerSemaine();
   }, [chargerSemaine]);
 
-  // Lignes (heures) affichées : uniquement les horaires réellement en
-  // jeu cette semaine (créneaux générés ou gabarit déclaré), triés.
-  const lignes = useMemo(() => {
-    const idsUtiles = new Set();
-    creneaux.forEach((c) => idsUtiles.add(c.horaire_id));
-    disponibilites.forEach((d) => idsUtiles.add(d.horaire_id));
-    const source =
-      idsUtiles.size > 0
-        ? horairesReferentiel.filter((h) => idsUtiles.has(h.horaire_id))
-        : horairesReferentiel;
-    return [...source].sort((a, b) =>
-      formatHeure(a.heure_debut).localeCompare(formatHeure(b.heure_debut))
-    );
-  }, [creneaux, disponibilites, horairesReferentiel]);
-
-  const creneauParCase = useMemo(() => {
-    const carte = new Map();
-    creneaux.forEach((c) => {
-      const dateISO = dateSeuleISO(c.date);
-      if (!dateISO) return;
-      carte.set(`${dateISO}__${c.horaire_id}`, c);
-    });
-    return carte;
-  }, [creneaux]);
-
-  // rdv_id n'est jamais exposé par GET /medecins/:id/agenda (route
-  // publique — voir en-tête de fichier) : on relie donc un créneau
-  // "réservé" à son rendez-vous par l'instant de début (creneau.debut ===
-  // rdv.date_creneau), pas par id.
   const rdvParInstant = useMemo(() => {
     const carte = new Map();
     rendezVous.forEach((r) => {
-      const cle = cleInstant(r.date_creneau);
-      if (cle !== null) carte.set(cle, r);
+      const k = cleInstant(r.date_creneau);
+      if (k !== null) carte.set(k, r);
     });
     return carte;
   }, [rendezVous]);
 
-  const obtenirCellule = useCallback(
-    (jourISO, horaire) => {
-      const creneau = creneauParCase.get(`${jourISO}__${horaire.horaire_id}`);
-      if (!creneau) return { statut: "ferme" };
-      if (creneau.statut === "disponible") return { statut: "libre", creneau };
-      if (creneau.statut === "bloque") return { statut: "bloque", creneau };
-      if (creneau.statut === "reserve") {
-        const cle = cleInstant(creneau.debut);
-        const rdv = cle !== null ? rdvParInstant.get(cle) : undefined;
-        // D8 : RDV non payé -> lecture seule, aucune donnée patient affichée.
-        const nonPaye = rdv ? estRdvNonPaye(rdv) : false;
-        return {
-          // « a_reprogrammer » partage le style « en attente » : le créneau reste
-          // occupé (jamais modifiable ici) mais n'est pas un rendez-vous ferme.
-          // Un RDV non payé est lui aussi en attente (de paiement).
-          statut:
-            nonPaye || rdv?.statut === "en_attente_presence" || rdv?.statut === "a_reprogrammer"
-              ? "attente"
-              : "reserve",
-          creneau,
-          rdv,
-          nonPaye,
-          patient: nonPaye ? "En attente de paiement" : rdv ? nomPatient(rdv) : "Patient",
-          type: nonPaye ? "" : libelleRendezVous(rdv),
-          tele: nonPaye ? false : rdv?.type_rdv === "teleconsultation",
-        };
-      }
-      return { statut: "ferme", creneau };
-    },
-    [creneauParCase, rdvParInstant]
-  );
-
-  const toggleCreneau = async (ligne, jour) => {
-    if ((!modeBlocage && !modeAjout && !modeSuppression) || !medecinId || enregistrement) return;
-    const cellule = obtenirCellule(jour.iso, ligne);
-    const label = `${jour.dow} ${jour.num} · ${formatHeure(ligne.heure_debut)}`;
-    // Un créneau réservé (ou en attente de présence) n'est jamais
-    // modifiable depuis l'agenda, dans aucun des trois modes — il faut
-    // passer par le module Rendez-vous. Le serveur refuserait de toute
-    // façon (409) une modification ou suppression tant qu'un rdv_id
-    // est rattaché, mais on évite l'appel réseau inutile.
-    if (cellule.statut === "reserve" || cellule.statut === "attente") return;
-
-    setEnregistrement(true);
-    try {
-      if (modeSuppression) {
-        // Mode suppression : retire DÉFINITIVEMENT un créneau existant
-        // (libre ou bloqué) de la base — la case redevient une vraie
-        // case vide ("Non proposé"), contrairement au blocage qui ne
-        // fait que changer son statut. Rien à supprimer sur une case
-        // déjà vide.
-        if (cellule.statut !== "libre" && cellule.statut !== "bloque") return;
-        // Un créneau issu du gabarit n'est pas effacé mais FERMÉ par le
-        // serveur (sinon la synchronisation suivante le recréerait).
-        const issuDuGabarit = cellule.creneau?.origine === "genere";
-        const confirmation = await confirmer(
-          issuDuGabarit
-            ? {
-                titre: "Retirer ce créneau de l'agenda",
-                message: `${label}\nIl vient de vos horaires de la semaine : il sera fermé pour cette date uniquement.`,
-                labelConfirmer: "Retirer",
-                variante: "avertissement",
-              }
-            : {
-                titre: "Supprimer ce créneau",
-                message: `${label}\nCette action est irréversible.`,
-                labelConfirmer: "Supprimer",
-                variante: "danger",
-              }
-        );
-        if (!confirmation) return;
-        const resultat = await supprimerCreneauAgenda(cellule.creneau.creneau_id);
-        toast.succes(`${resultat?.message || "Créneau supprimé."} — ${label}`);
-      } else if (modeAjout) {
-        // Mode ajout : uniquement les cases vides ("Non proposé")
-        // peuvent devenir un nouveau créneau. On le crée directement
-        // DISPONIBLE (hors gabarit, origine "manuel") : c'est le seul
-        // moyen, dans cette page, d'ouvrir une plage ponctuelle non
-        // couverte par le gabarit récurrent (ex. ouverture
-        // exceptionnelle un jour habituellement fermé).
-        if (cellule.statut !== "ferme") return;
-        await creerCreneauAgenda(medecinId, {
-          horaire_id: ligne.horaire_id,
-          date: jour.iso,
-          statut: "disponible",
-        });
-        toast.succes(`Créneau ajouté et ouvert aux patients — ${label}`);
-      } else {
-        // Mode blocage : agit sur des créneaux existants (libre <->
-        // bloqué), ou ferme explicitement une case vide pour qu'elle
-        // ne soit jamais proposée (même après une future génération
-        // du gabarit).
-        if (cellule.statut === "libre") {
-          await modifierCreneauAgenda(cellule.creneau.creneau_id, { statut: "bloque" });
-          toast.succes(`Créneau bloqué — ${label}`);
-        } else if (cellule.statut === "bloque") {
-          await modifierCreneauAgenda(cellule.creneau.creneau_id, { statut: "disponible" });
-          toast.succes("Créneau libéré.");
-        } else if (cellule.statut === "ferme") {
-          await creerCreneauAgenda(medecinId, {
-            horaire_id: ligne.horaire_id,
-            date: jour.iso,
-            statut: "bloque",
-          });
-          toast.succes(`Créneau fermé — ${label}`);
-        }
-      }
-      await chargerSemaine();
-    } catch (err) {
-      toast.erreur(err.message || "Action impossible sur ce créneau.");
-    } finally {
-      setEnregistrement(false);
-    }
-  };
-
-  const genererSemaine = async () => {
-    if (!medecinId || enregistrement) return;
-    setEnregistrement(true);
-    try {
-      const resultat = await genererCreneauxAgenda(medecinId, {
-        date_debut: jours[0].iso,
-        date_fin: jours[jours.length - 1].iso,
-      });
-      toast.succes(
-        resultat?.message ||
-          `${resultat?.nombre_crees ?? 0} créneau(x) régénéré(s) pour cette semaine.`
-      );
-      await chargerSemaine();
-    } catch (err) {
-      toast.erreur(err.message || "Impossible de générer les créneaux de la semaine.");
-    } finally {
-      setEnregistrement(false);
-    }
-  };
-
-  const toggleDisponibilite = async (jourValeur, horaire) => {
-    if (!medecinId || enregistrement) return;
-    const existante = disponibilites.find(
-      (d) => d.jour_semaine === jourValeur && d.horaire_id === horaire.horaire_id
+  const creneauxParJour = useMemo(() => {
+    const carte = new Map();
+    creneaux.forEach((c) => {
+      const iso = String(c.date ?? "").slice(0, 10);
+      if (!carte.has(iso)) carte.set(iso, []);
+      carte.get(iso).push(c);
+    });
+    carte.forEach((liste) =>
+      liste.sort((a, b) => formatHeure(a.horaire?.heure_debut).localeCompare(formatHeure(b.horaire?.heure_debut)))
     );
+    return carte;
+  }, [creneaux]);
+
+  /* ---------------------------- Semaine type ---------------------------- */
+
+  const selectionDuJour = (valeur) =>
+    new Set(horaires.filter((h) => gabarit.has(cle(valeur, h.horaire_id))).map((h) => h.horaire_id));
+
+  const changerJourType = (valeur, selection) => {
+    setGabarit((g) => {
+      const suivant = new Set([...g].filter((k) => !k.startsWith(`${valeur}|`)));
+      selection.forEach((id) => suivant.add(cle(valeur, id)));
+      return suivant;
+    });
+  };
+
+  const copierJour = (source, cibles) => {
+    const selection = selectionDuJour(source);
+    cibles.forEach((c) => changerJourType(c, selection));
+    setCopieOuverte(null);
+    const libelle = JOURS_SEMAINE_AGENDA.find((j) => j.valeur === source)?.libelle ?? source;
+    toast.info(`Horaires du ${libelle.toLowerCase()} copiés sur ${cibles.length} jour(s). Pensez à enregistrer.`);
+  };
+
+  const enregistrerSemaineType = async () => {
+    if (!medecinId || enregistrement) return;
     setEnregistrement(true);
     try {
-      if (existante) {
-        await supprimerDisponibiliteMedecin(existante.disponibilite_id);
-        toast.succes(`Disponibilité retirée du gabarit — ${formatHeure(horaire.heure_debut)}.`);
-      } else {
-        await creerDisponibiliteMedecin(medecinId, {
-          horaire_id: horaire.horaire_id,
-          jour_semaine: jourValeur,
-        });
-        toast.succes(`Disponibilité ajoutée au gabarit — ${formatHeure(horaire.heure_debut)}.`);
+      const { disponibilites, rdv_maintenus: maintenus } = await remplacerDisponibilitesMedecin(
+        medecinId,
+        [...gabarit].map((k) => {
+          const [jour_semaine, horaire_id] = k.split("|");
+          return { jour_semaine, horaire_id };
+        })
+      );
+      const cles = new Set(disponibilites.map((d) => cle(d.jour_semaine, d.horaire_id)));
+      setGabaritServeur(cles);
+      setGabarit(new Set(cles));
+      toast.succes("Semaine type enregistrée : vos horaires sont publiés sur les semaines à venir.");
+      if (maintenus.length > 0) {
+        const apercu = maintenus.slice(0, 3).map((m) => libelleDateRdv(m.debut)).join(", ");
+        toast.avertissement(
+          `${maintenus.length} rendez-vous déjà réservé(s) sur des horaires retirés sont maintenus` +
+            ` (${apercu}${maintenus.length > 3 ? "…" : ""}). Annulez-les depuis vos rendez-vous si besoin.`
+        );
       }
-      // Le serveur a re-synchronisé les créneaux à venir : on recharge la
-      // semaine pour voir aussitôt l'effet sur la grille.
       await chargerSemaine();
     } catch (err) {
-      toast.erreur(err.message || "Action impossible sur cette disponibilité.");
+      toast.erreur(err.message || "Impossible d'enregistrer votre semaine type.");
     } finally {
       setEnregistrement(false);
     }
   };
 
-  // Recopie les horaires d'un jour sur les jours ouvrés (lundi -> vendredi),
-  // en une seule requête (PUT du gabarit complet).
-  const copierSurJoursOuvres = async (jourSource) => {
+  /* --------------------------- Exceptions datées --------------------------- */
+
+  const ouvrirEditionJour = (jour) => {
+    const liste = creneauxParJour.get(jour.iso) ?? [];
+    setJourEdite({
+      iso: jour.iso,
+      selection: new Set(liste.filter((c) => c.statut !== "bloque").map((c) => c.horaire_id)),
+      verrouilles: new Set(liste.filter((c) => c.statut === "reserve").map((c) => c.horaire_id)),
+    });
+  };
+
+  const enregistrerJour = async (jour) => {
+    if (!medecinId || !jourEdite || enregistrement) return;
+    setEnregistrement(true);
+    try {
+      const r = await definirJourAgenda(medecinId, jour.iso, [...jourEdite.selection]);
+      toast.succes(`${jour.libelle} ${jour.num} ${jour.mois} : horaires mis à jour pour cette date.`);
+      if (r?.maintenus > 0) {
+        toast.avertissement(`${r.maintenus} rendez-vous déjà réservé(s) ce jour-là sont maintenus.`);
+      }
+      setJourEdite(null);
+      await chargerSemaine();
+    } catch (err) {
+      toast.erreur(err.message || "Impossible d'enregistrer cette journée.");
+    } finally {
+      setEnregistrement(false);
+    }
+  };
+
+  const retablirJour = async (jour) => {
     if (!medecinId || enregistrement) return;
-    const source = disponibilites.filter((d) => d.jour_semaine === jourSource).map((d) => d.horaire_id);
-    const libelleSource = JOURS_SEMAINE_AGENDA.find((j) => j.valeur === jourSource)?.libelle ?? jourSource;
-    const confirmation = await confirmer({
-      titre: "Appliquer à toute la semaine",
-      message:
-        `Les horaires du ${libelleSource.toLowerCase()} seront appliqués du lundi au vendredi.\n` +
-        "Les horaires actuels de ces jours seront remplacés.",
-      labelConfirmer: "Appliquer",
+    const ok = await confirmer({
+      titre: "Revenir à la semaine type",
+      message: `${jour.libelle} ${jour.num} ${jour.mois} reprendra les horaires de votre semaine type.\nLes rendez-vous déjà réservés sont conservés.`,
+      labelConfirmer: "Rétablir",
       variante: "avertissement",
     });
-    if (!confirmation) return;
-    const conserves = disponibilites
-      .filter((d) => !JOURS_OUVRES.includes(d.jour_semaine))
-      .map((d) => ({ jour_semaine: d.jour_semaine, horaire_id: d.horaire_id }));
-    const copies = JOURS_OUVRES.flatMap((jour) => source.map((horaire_id) => ({ jour_semaine: jour, horaire_id })));
+    if (!ok) return;
     setEnregistrement(true);
     try {
-      await remplacerDisponibilitesMedecin(medecinId, [...conserves, ...copies]);
-      toast.succes(`Horaires du ${libelleSource.toLowerCase()} appliqués du lundi au vendredi.`);
+      await retablirJourAgenda(medecinId, jour.iso);
+      toast.succes(`${jour.libelle} ${jour.num} ${jour.mois} suit de nouveau votre semaine type.`);
+      setJourEdite(null);
       await chargerSemaine();
     } catch (err) {
-      toast.erreur(err.message || "Impossible d'appliquer ces horaires.");
+      toast.erreur(err.message || "Impossible de rétablir cette journée.");
     } finally {
       setEnregistrement(false);
     }
   };
 
-  const regles = [
-    { icone: "fa-hourglass-half", titre: "Créneaux du référentiel", description: "Chaque case correspond à un horaire partagé (voir Horaire) — pas de plage libre." },
-    { icone: "fa-repeat", titre: "Horaires de la semaine", description: "Les horaires cochés ci-dessous sont publiés automatiquement sur les semaines à venir : ce sont eux que voient les patients." },
-    { icone: "fa-eye", titre: "Synchronisation publique", description: "Seuls les créneaux libres apparaissent aux patients. Un créneau demandé par un patient disparaît aussitôt de la grille, même avant le paiement." },
-    { icone: "fa-hourglass-start", titre: "Demande non confirmée", description: "Sans paiement dans le délai fixé par ApSa, la demande est annulée automatiquement et le créneau redevient libre." },
-    { icone: "fa-ban", titre: "Blocage manuel", description: "Un créneau bloqué reste invisible des patients tant qu'il n'est pas libéré (réversible, le créneau reste enregistré)." },
-    { icone: "fa-trash", titre: "Suppression définitive", description: "Retire un créneau libre ou bloqué de l'agenda ; irréversible, et impossible sur un créneau déjà réservé." },
-  ];
+  /* -------------------------------- Rendu -------------------------------- */
+
+  const resumeDate = (jour) => {
+    const liste = creneauxParJour.get(jour.iso) ?? [];
+    const ouverts = new Set(liste.filter((c) => c.statut !== "bloque").map((c) => c.horaire_id));
+    const parPeriode = groupes.map((g) => {
+      const ids = new Set(g.horaires.map((h) => h.horaire_id));
+      const duGroupe = liste.filter((c) => ids.has(c.horaire_id));
+      return {
+        ...g,
+        libres: duGroupe.filter((c) => c.statut === "disponible").length,
+        rdv: duGroupe.filter((c) => c.statut === "reserve").length,
+      };
+    });
+    const rdvs = liste
+      .filter((c) => c.statut === "reserve")
+      .map((c) => {
+        const k = cleInstant(c.debut);
+        const rdv = k !== null ? rdvParInstant.get(k) : undefined;
+        const nonPaye = rdv ? estRdvNonPaye(rdv) : false;
+        return {
+          id: c.creneau_id,
+          heure: formatHeure(c.horaire?.heure_debut),
+          patient: nonPaye ? "En attente de paiement" : rdv ? nomPatient(rdv) : "Patient",
+          type: nonPaye ? "" : libelleRendezVous(rdv),
+          tele: !nonPaye && rdv?.type_rdv === "teleconsultation",
+          nonPaye,
+          periode: periodeDeHeure(c.horaire?.heure_debut),
+        };
+      });
+    return {
+      parPeriode,
+      rdvs,
+      ouverts,
+      personnalise: liste.some((c) => c.origine === "manuel"),
+      libres: liste.filter((c) => c.statut === "disponible").length,
+    };
+  };
 
   return (
-    <>
-      <div className="container-aps">
-        <div className="portail-shell">
-          {/* ===================== CONTENU ===================== */}
-          <main className="portail-main">
-            <header className="portail-head">
-              <div>
-                <span className="eyebrow">Espace médecin</span>
-                <h1>Agenda</h1>
-                <p>Visualisez vos créneaux, bloquez des plages et gérez votre gabarit de disponibilités.</p>
-              </div>
-            </header>
-
-            {erreur && (
-              <div className="alert alert-danger" role="alert">
-                {erreur}
-              </div>
-            )}
-
-            <div className="agenda-toolbar">
-              <div className="week-nav">
-                <button
-                  className="btn btn-outline-primary btn-sm-aps btn-icon"
-                  aria-label="Semaine précédente"
-                  onClick={() => setSemaineOffset((v) => v - 1)}
-                >
-                  <i className="fa-solid fa-chevron-left"></i>
-                </button>
-                <strong>
-                  Semaine du {semaine.debut} au {semaine.fin} {semaine.mois} {semaine.annee}
-                </strong>
-                <button
-                  className="btn btn-outline-primary btn-sm-aps btn-icon"
-                  aria-label="Semaine suivante"
-                  onClick={() => setSemaineOffset((v) => v + 1)}
-                >
-                  <i className="fa-solid fa-chevron-right"></i>
-                </button>
-                <button className="btn btn-ghost btn-sm-aps" onClick={() => setSemaineOffset(0)}>
-                  Aujourd'hui
-                </button>
-              </div>
-              <div className="d-flex gap-2 flex-wrap">
-                <button
-                  className={modeAjout ? "btn btn-primary btn-sm-aps" : "btn btn-outline-primary btn-sm-aps"}
-                  onClick={activerModeAjout}
-                >
-                  <i className={`fa-solid ${modeAjout ? "fa-check" : "fa-plus"}`}></i>{" "}
-                  {modeAjout ? "Terminer l'ajout" : "Ajouter des créneaux"}
-                </button>
-                <button
-                  className={modeBlocage ? "btn btn-primary btn-sm-aps" : "btn btn-outline-primary btn-sm-aps"}
-                  onClick={activerModeBlocage}
-                >
-                  <i className={`fa-solid ${modeBlocage ? "fa-check" : "fa-ban"}`}></i>{" "}
-                  {modeBlocage ? "Terminer le blocage" : "Bloquer des créneaux"}
-                </button>
-                <button
-                  className={modeSuppression ? "btn btn-danger btn-sm-aps" : "btn btn-outline-danger btn-sm-aps"}
-                  onClick={activerModeSuppression}
-                >
-                  <i className={`fa-solid ${modeSuppression ? "fa-check" : "fa-trash"}`}></i>{" "}
-                  {modeSuppression ? "Terminer la suppression" : "Supprimer des créneaux"}
-                </button>
-                <button
-                  className="btn btn-outline-primary btn-sm-aps"
-                  onClick={genererSemaine}
-                  disabled={enregistrement}
-                  title="Les horaires de la semaine sont publiés automatiquement ; utile seulement pour une semaine lointaine."
-                >
-                  <i className="fa-solid fa-arrows-rotate"></i> Régénérer la semaine
-                </button>
-              </div>
+    <div className="container-aps">
+      <div className="portail-shell">
+        <main className="portail-main agd">
+          <header className="portail-head">
+            <div>
+              <span className="eyebrow">Espace médecin</span>
+              <h1>Agenda</h1>
+              <p>Cochez vos périodes de consultation : chaque créneau est ouvert automatiquement aux patients.</p>
             </div>
+          </header>
 
-            {modeAjout && (
-              <div className="block-hint">
-                <i className="fa-solid fa-circle-info"></i> Mode ajout actif : cliquez sur une case « Non proposé »
-                pour créer un créneau ponctuel immédiatement disponible aux patients. Les créneaux déjà existants ne
-                sont pas modifiables dans ce mode.
-              </div>
-            )}
-
-            {modeBlocage && (
-              <div className="block-hint">
-                <i className="fa-solid fa-circle-info"></i> Mode blocage actif : cliquez sur un créneau libre pour le
-                bloquer, sur un créneau bloqué pour le libérer, ou sur une case non proposée pour la fermer
-                explicitement (elle restera fermée même après une future génération du gabarit). Le créneau reste
-                enregistré — utilisez le mode suppression pour l'effacer définitivement.
-              </div>
-            )}
-
-            {modeSuppression && (
-              <div className="block-hint block-hint-danger">
-                <i className="fa-solid fa-triangle-exclamation"></i> Mode suppression actif : cliquez sur un créneau
-                libre ou bloqué pour le retirer définitivement de l'agenda (confirmation demandée à chaque fois). La
-                case redevient réellement « Non proposé », contrairement au blocage. Un créneau réservé n'est jamais
-                supprimable ici — annulez d'abord le rendez-vous.
-              </div>
-            )}
-
-            {/* Sélecteur de jour (mobile uniquement) */}
-            <div className="day-switch" aria-label="Choisir un jour">
-              {jours.map((jour, index) => (
-                <button
-                  key={jour.iso}
-                  type="button"
-                  className={`${jourMobile === index + 1 ? "active" : ""} ${jour.today ? "is-today" : ""}`}
-                  onClick={() => setJourMobile(index + 1)}
-                >
-                  <span className="dow">{jour.dow}</span>
-                  <span className="num">{jour.num}</span>
-                </button>
-              ))}
+          {erreur && (
+            <div className="alert alert-danger" role="alert">
+              {erreur}
             </div>
+          )}
 
-            {/* Grille semaine */}
-            <div className="agenda-card" data-day={jourMobile}>
-              {chargement && <div className="agenda-loading">Chargement de l'agenda…</div>}
-              {!chargement && lignes.length === 0 && (
-                <p className="text-muted">
-                  Aucun créneau pour cette semaine. Cochez vos horaires de la semaine ci-dessous : ils seront
-                  publiés automatiquement.
-                </p>
-              )}
-              {!chargement && lignes.length > 0 && (
-                <div className="agenda-grid">
-                  <div className="ag-corner"></div>
-                  {jours.map((jour) => (
-                    <div key={jour.iso} className={`ag-head ${jour.today ? "is-today" : ""}`}>
-                      <span className="dow">{jour.dow}</span>
-                      <span className="num">{jour.num}</span>
-                      {jour.today && <span className="today-tag">Aujourd'hui</span>}
-                    </div>
-                  ))}
-
-                  {lignes.map((ligne) => (
-                    <React.Fragment key={ligne.horaire_id}>
-                      <div className="ag-hour">{formatHeure(ligne.heure_debut)}</div>
-                      {jours.map((jour) => {
-                        const cellule = obtenirCellule(jour.iso, ligne);
-                        const isToday = jour.today;
-                        if (cellule.statut === "libre") {
-                          // origine="manuel" : créneau ponctuel ouvert hors gabarit
-                          // (ex. via le mode "Ajouter des créneaux" sur une case
-                          // normalement fermée), à distinguer visuellement d'un
-                          // créneau "genere" issu du gabarit récurrent — sinon les
-                          // deux sont indiscernables à l'écran après coup.
-                          const estPonctuel = cellule.creneau?.origine === "manuel";
-                          return (
-                            <div
-                              key={jour.iso}
-                              className={`ag-cell is-free ${isToday ? "is-today" : ""} ${
-                                modeSuppression ? "is-removable" : ""
-                              } ${estPonctuel ? "is-manual" : ""}`}
-                              data-label={`${jour.dow} ${jour.num} · ${formatHeure(ligne.heure_debut)}`}
-                              title={estPonctuel ? "Créneau ponctuel ajouté hors gabarit" : undefined}
-                              onClick={() => (modeBlocage || modeSuppression) && toggleCreneau(ligne, jour)}
-                            >
-                              {/* style inline en repli : garantit une distinction visuelle
-                                  même si .is-manual n'est pas (encore) défini côté CSS —
-                                  voir le souci précédent avec .is-free vide */}
-                              <span
-                                className="slot slot-free"
-                                style={estPonctuel ? { border: "1px dashed currentColor", padding: "1px 4px", borderRadius: "4px" } : undefined}
-                              >
-                                {estPonctuel && <i className="fa-solid fa-star" aria-hidden="true"></i>}
-                                {estPonctuel ? "Libre (ponctuel)" : "Libre"}
-                              </span>
-                            </div>
-                          );
-                        }
-                        if (cellule.statut === "ferme") {
-                          return (
-                            <div
-                              key={jour.iso}
-                              className={`ag-cell ${isToday ? "is-today" : ""} ${
-                                modeAjout ? "is-addable" : ""
-                              }`}
-                              onClick={() => (modeBlocage || modeAjout) && toggleCreneau(ligne, jour)}
-                            >
-                              <span className="slot slot-blocked">
-                                {modeAjout ? "Cliquer pour ouvrir" : "Non proposé"}
-                              </span>
-                            </div>
-                          );
-                        }
-                        const slotClass =
-                          cellule.statut === "reserve"
-                            ? "slot-booked"
-                            : cellule.statut === "attente"
-                            ? `slot-pending${cellule.nonPaye ? " slot-unpaid" : ""}`
-                            : "slot-blocked";
-                        const bloqueModifiable = cellule.statut === "bloque" && (modeBlocage || modeSuppression);
-                        return (
-                          <div
-                            key={jour.iso}
-                            className={`ag-cell ${isToday ? "is-today" : ""} ${
-                              cellule.statut === "bloque" && modeSuppression ? "is-removable" : ""
-                            }`}
-                            onClick={() => bloqueModifiable && toggleCreneau(ligne, jour)}
-                          >
-                            <span
-                              className={`slot ${slotClass}`}
-                              title={
-                                cellule.nonPaye
-                                  ? "Rendez-vous en attente de paiement : aucune action possible tant qu'il n'est pas payé."
-                                  : undefined
-                              }
-                            >
-                              {cellule.nonPaye && <i className="fa-solid fa-hourglass-half" aria-hidden="true"></i>}
-                              {cellule.tele && <i className="fa-solid fa-video"></i>}
-                              {cellule.patient || "Bloqué"}
-                              {cellule.patient && cellule.type && <small>{cellule.type}</small>}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </React.Fragment>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="agenda-legend">
-              <span className="legend-key"><span className="legend-swatch sw-free"></span> Libre</span>
-              <span className="legend-key"><span className="legend-swatch sw-booked"></span> Réservé</span>
-              <span className="legend-key"><span className="legend-swatch sw-pending"></span> En attente de présence / à reprogrammer</span>
-              <span className="legend-key"><span className="legend-swatch sw-unpaid"></span> Demande en attente de paiement (masqué aux autres patients)</span>
-              <span className="legend-key"><span className="legend-swatch sw-blocked"></span> Bloqué / non proposé</span>
-              <span className="legend-key"><span className="legend-swatch sw-today"></span> Aujourd'hui</span>
-            </div>
-
-            {/* Gabarit récurrent + règles */}
-            <div className="row g-4 mt-1">
-              <div className="col-lg-7">
-                <div className="info-card mb-0">
-                  <h3><i className="fa-solid fa-repeat"></i> Mes horaires de la semaine</h3>
-                  <p className="form-side-desc">
-                    Cochez les horaires où vous recevez, pour chaque jour de la semaine. Chaque case est enregistrée
-                    immédiatement et publiée sur votre agenda des semaines à venir : ce sont ces jours et horaires que
-                    les patients peuvent réserver. Les créneaux déjà réservés ne sont jamais retirés.
-                  </p>
-                  <div className="table-responsive">
-                    <table className="hours-edit">
-                      <thead>
-                        <tr>
-                          <th>Jour</th>
-                          <th>Créneaux (référentiel Horaire)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {JOURS_SEMAINE_AGENDA.map((j) => (
-                          <tr key={j.valeur}>
-                            <td className="day-name">
-                              {j.libelle}
-                              {disponibilites.some((d) => d.jour_semaine === j.valeur) && (
-                                <button
-                                  type="button"
-                                  className="btn btn-ghost btn-sm-aps d-block px-0"
-                                  disabled={enregistrement}
-                                  onClick={() => copierSurJoursOuvres(j.valeur)}
-                                  title="Appliquer ces horaires du lundi au vendredi"
-                                >
-                                  <i className="fa-regular fa-copy"></i> Lun–Ven
-                                </button>
-                              )}
-                            </td>
-                            <td>
-                              <div className="d-flex flex-wrap gap-1">
-                                {horairesReferentiel.map((h) => {
-                                  const actif = disponibilites.some(
-                                    (d) => d.jour_semaine === j.valeur && d.horaire_id === h.horaire_id
-                                  );
-                                  return (
-                                    <button
-                                      key={h.horaire_id}
-                                      type="button"
-                                      className={actif ? "btn btn-primary btn-sm-aps" : "btn btn-outline-primary btn-sm-aps"}
-                                      disabled={enregistrement}
-                                      onClick={() => toggleDisponibilite(j.valeur, h)}
-                                    >
-                                      {formatHeure(h.heure_debut)}
-                                    </button>
-                                  );
-                                })}
-                                {horairesReferentiel.length === 0 && (
-                                  <span className="text-muted">Référentiel horaire indisponible.</span>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+          {chargement ? (
+            <div className="agd-carte agd-chargement">Chargement de votre agenda…</div>
+          ) : (
+            <>
+              {/* ===================== 1. SEMAINE TYPE ===================== */}
+              <section className="agd-carte">
+                <div className="agd-carte-tete">
+                  <div>
+                    <h2>
+                      <i className="fa-solid fa-repeat" aria-hidden="true"></i> Ma semaine type
+                    </h2>
+                    <p>
+                      Ces horaires se répètent chaque semaine. Cochez une période pour ouvrir toutes ses heures,
+                      puis affinez si besoin.
+                    </p>
                   </div>
                 </div>
-              </div>
-              <div className="col-lg-5">
-                <div className="info-card mb-0">
-                  <h3><i className="fa-solid fa-sliders"></i> Règles de votre agenda</h3>
-                  <ul className="form-side-list">
-                    {regles.map((regle) => (
-                      <li key={regle.titre}>
-                        <i className={`fa-solid ${regle.icone}`}></i>
-                        <span>
-                          <strong>{regle.titre}</strong>
-                          <span className="form-side-desc">{regle.description}</span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </main>
 
-          {/* ===================== SIDEBAR (droite) ===================== */}
-          <PortailSidebar />
-        </div>
+                <div className="agd-semaine">
+                  {JOURS_SEMAINE_AGENDA.map((j) => {
+                    const selection = selectionDuJour(j.valeur);
+                    return (
+                      <div key={j.valeur} className={`agd-jour ${selection.size === 0 ? "is-ferme" : ""}`}>
+                        <div className="agd-jour-nom">
+                          <strong>{j.libelle}</strong>
+                          <small>{resumeJournee(groupes, selection)}</small>
+                        </div>
+                        <SelecteurPeriodes
+                          groupes={groupes}
+                          selection={selection}
+                          onChange={(s) => changerJourType(j.valeur, s)}
+                          disabled={enregistrement}
+                        />
+                        <div className="agd-jour-actions">
+                          <button
+                            type="button"
+                            className="agd-lien"
+                            disabled={enregistrement || selection.size === 0}
+                            onClick={() => setCopieOuverte((v) => (v === j.valeur ? null : j.valeur))}
+                            aria-expanded={copieOuverte === j.valeur}
+                          >
+                            <i className="fa-regular fa-copy" aria-hidden="true"></i> Copier vers…
+                          </button>
+                          {copieOuverte === j.valeur && (
+                            <CopieVers
+                              source={j.valeur}
+                              onAppliquer={(cibles) => copierJour(j.valeur, cibles)}
+                              onFermer={() => setCopieOuverte(null)}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className={`agd-barre-enregistrer ${modifie ? "is-visible" : ""}`}>
+                  <span>
+                    <i className="fa-solid fa-circle-exclamation" aria-hidden="true"></i> Modifications non
+                    enregistrées
+                  </span>
+                  <div>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm-aps"
+                      disabled={!modifie || enregistrement}
+                      onClick={() => setGabarit(new Set(gabaritServeur))}
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm-aps"
+                      disabled={!modifie || enregistrement}
+                      onClick={enregistrerSemaineType}
+                    >
+                      <i className="fa-solid fa-check" aria-hidden="true"></i>{" "}
+                      {enregistrement ? "Enregistrement…" : "Enregistrer ma semaine"}
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              {/* ===================== 2. PROCHAINS JOURS ===================== */}
+              <section className="agd-carte">
+                <div className="agd-carte-tete">
+                  <div>
+                    <h2>
+                      <i className="fa-regular fa-calendar" aria-hidden="true"></i> Mes prochains jours
+                    </h2>
+                    <p>Un imprévu ou un congé ? Modifiez une date précise sans toucher à votre semaine type.</p>
+                  </div>
+                  <div className="agd-nav-semaine">
+                    <button
+                      type="button"
+                      className="agd-nav-btn"
+                      aria-label="Semaine précédente"
+                      disabled={semaineOffset <= 0}
+                      onClick={() => changerSemaine(semaineOffset - 1)}
+                    >
+                      <i className="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <strong>{libelleSemaine}</strong>
+                    <button
+                      type="button"
+                      className="agd-nav-btn"
+                      aria-label="Semaine suivante"
+                      disabled={semaineOffset >= SEMAINES_MAX}
+                      onClick={() => changerSemaine(semaineOffset + 1)}
+                    >
+                      <i className="fa-solid fa-chevron-right"></i>
+                    </button>
+                    {semaineOffset !== 0 && (
+                      <button type="button" className="agd-lien" onClick={() => changerSemaine(0)}>
+                        Cette semaine
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className={`agd-dates ${chargementSemaine ? "is-chargement" : ""}`}>
+                  {jours.map((jour) => {
+                    const r = resumeDate(jour);
+                    const enEdition = jourEdite?.iso === jour.iso;
+                    return (
+                      <article
+                        key={jour.iso}
+                        className={`agd-date ${jour.today ? "is-today" : ""} ${jour.passe ? "is-passe" : ""} ${
+                          enEdition ? "is-edition" : ""
+                        }`}
+                      >
+                        <div className="agd-date-ligne">
+                          <div className="agd-date-badge">
+                            <span>{jour.dow}</span>
+                            <strong>{jour.num}</strong>
+                          </div>
+
+                          <div className="agd-date-corps">
+                            <div className="agd-date-titre">
+                              <span>
+                                {jour.libelle} {jour.num} {jour.mois}
+                              </span>
+                              {jour.today && <span className="agd-tag agd-tag-today">Aujourd'hui</span>}
+                              {r.personnalise && <span className="agd-tag agd-tag-perso">Personnalisé</span>}
+                            </div>
+
+                            {r.ouverts.size === 0 ? (
+                              <span className="agd-date-ferme">Fermé</span>
+                            ) : (
+                              <div className="agd-date-periodes">
+                                {r.parPeriode
+                                  .filter((p) => p.libres + p.rdv > 0)
+                                  .map((p) => (
+                                    <span key={p.cle} className="agd-pastille">
+                                      <i className={`fa-solid ${p.icone}`} aria-hidden="true"></i> {p.libelle}
+                                      <em>
+                                        {p.libres} libre{p.libres > 1 ? "s" : ""}
+                                        {p.rdv > 0 && ` · ${p.rdv} RDV`}
+                                      </em>
+                                    </span>
+                                  ))}
+                              </div>
+                            )}
+
+                            {r.rdvs.length > 0 && (
+                              <ul className="agd-rdvs">
+                                {r.rdvs.map((rdv) => (
+                                  <li key={rdv.id} className={rdv.nonPaye ? "is-non-paye" : ""}>
+                                    <span className="agd-rdv-heure">{rdv.heure}</span>
+                                    <span className="agd-rdv-patient">
+                                      {rdv.nonPaye && <i className="fa-solid fa-hourglass-half" aria-hidden="true"></i>}
+                                      {rdv.tele && <i className="fa-solid fa-video" aria-hidden="true"></i>}
+                                      {rdv.patient}
+                                    </span>
+                                    {rdv.type && <span className="agd-rdv-type">{rdv.type}</span>}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+
+                          {!jour.passe && !enEdition && (
+                            <div className="agd-date-actions">
+                              <button
+                                type="button"
+                                className="btn btn-outline-primary btn-sm-aps"
+                                disabled={enregistrement || chargementSemaine}
+                                onClick={() => ouvrirEditionJour(jour)}
+                              >
+                                <i className="fa-solid fa-pen" aria-hidden="true"></i> Modifier ce jour
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {enEdition && (
+                          <div className="agd-date-edition">
+                            <SelecteurPeriodes
+                              groupes={groupes}
+                              selection={jourEdite.selection}
+                              verrouilles={jourEdite.verrouilles}
+                              onChange={(s) => setJourEdite((e) => ({ ...e, selection: s }))}
+                              disabled={enregistrement}
+                            />
+                            <div className="agd-date-edition-actions">
+                              {r.personnalise && (
+                                <button
+                                  type="button"
+                                  className="agd-lien"
+                                  disabled={enregistrement}
+                                  onClick={() => retablirJour(jour)}
+                                >
+                                  <i className="fa-solid fa-rotate-left" aria-hidden="true"></i> Revenir à la
+                                  semaine type
+                                </button>
+                              )}
+                              <span className="agd-espace"></span>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm-aps"
+                                disabled={enregistrement}
+                                onClick={() => setJourEdite(null)}
+                              >
+                                Annuler
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-primary btn-sm-aps"
+                                disabled={enregistrement}
+                                onClick={() => enregistrerJour(jour)}
+                              >
+                                <i className="fa-solid fa-check" aria-hidden="true"></i> Enregistrer ce jour
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="agd-bon-a-savoir">
+                <h3>
+                  <i className="fa-solid fa-circle-info" aria-hidden="true"></i> Bon à savoir
+                </h3>
+                <ul>
+                  <li>Seuls les créneaux libres sont visibles des patients ; un créneau demandé disparaît aussitôt.</li>
+                  <li>Sans paiement dans le délai fixé par ApSa, la demande est annulée et le créneau redevient libre.</li>
+                  <li>Un créneau déjà réservé n'est jamais fermé : annulez d'abord le rendez-vous si nécessaire.</li>
+                </ul>
+              </section>
+            </>
+          )}
+        </main>
+
+        <PortailSidebar />
       </div>
-    </>
+    </div>
   );
 };
 

@@ -101,9 +101,10 @@ class AgendaRepository {
   }
 
   /// PUT /medecins/:medecinId/disponibilites — REMPLACE tout le gabarit.
-  /// Le serveur republie aussitôt les créneaux des semaines à venir (les
-  /// créneaux déjà réservés ne sont jamais retirés).
-  Future<List<DisponibiliteMedecin>> remplacerDisponibilites({
+  /// Le serveur republie aussitôt les créneaux des semaines à venir. Les
+  /// créneaux déjà réservés ne sont jamais retirés : ceux que le nouveau
+  /// gabarit ne couvre plus sont comptés dans `rdvMaintenus`.
+  Future<({List<DisponibiliteMedecin> disponibilites, int rdvMaintenus})> remplacerDisponibilites({
     required String medecinId,
     required List<({String jourSemaine, String horaireId})> disponibilites,
     required String token,
@@ -119,7 +120,46 @@ class AgendaRepository {
           }),
         )
         .timeout(_timeout);
-    return _liste(_decoder(reponse), 'disponibilites', DisponibiliteMedecin.fromJson);
+    final donnees = _decoder(reponse);
+    final maintenus = donnees is Map && donnees['rdv_maintenus'] is List ? (donnees['rdv_maintenus'] as List).length : 0;
+    return (
+      disponibilites: _liste(donnees, 'disponibilites', DisponibiliteMedecin.fromJson),
+      rdvMaintenus: maintenus,
+    );
+  }
+
+  /// PUT /medecins/:medecinId/agenda/jours/:date — exception datée : fixe les
+  /// tranches ouvertes pour [date] uniquement (AAAA-MM-JJ, date murale du
+  /// médecin). Renvoie le nombre de rendez-vous maintenus sur des tranches
+  /// retirées (jamais fermées par le serveur).
+  Future<int> definirJour({
+    required String medecinId,
+    required String date,
+    required Iterable<String> horaireIds,
+    required String token,
+  }) async {
+    final reponse = await http
+        .put(
+          Uri.parse(ApiRealEndpoints.agendaJour(medecinId, date)),
+          headers: _entetes(token: token, avecJson: true),
+          body: jsonEncode({'horaire_ids': horaireIds.toList()}),
+        )
+        .timeout(_timeout);
+    final donnees = _decoder(reponse);
+    return donnees is Map && donnees['maintenus'] is int ? donnees['maintenus'] as int : 0;
+  }
+
+  /// DELETE /medecins/:medecinId/agenda/jours/:date — la date reprend les
+  /// horaires de la semaine type (les créneaux réservés restent).
+  Future<void> retablirJour({
+    required String medecinId,
+    required String date,
+    required String token,
+  }) async {
+    final reponse = await http
+        .delete(Uri.parse(ApiRealEndpoints.agendaJour(medecinId, date)), headers: _entetes(token: token))
+        .timeout(_timeout);
+    _decoder(reponse);
   }
 
   /// PUT /creneaux-agenda/:id { statut } — ferme (`bloque`) ou rouvre

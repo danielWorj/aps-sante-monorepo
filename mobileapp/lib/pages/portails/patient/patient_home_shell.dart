@@ -22,20 +22,27 @@ import 'portail-patient-rdv.dart';
 /// l'en-tête de chaque onglet. Un appui sur une notification bascule sur
 /// l'onglet « Rendez-vous ».
 class PatientHomeShell extends ConsumerStatefulWidget {
-  const PatientHomeShell({super.key});
+  const PatientHomeShell({super.key, this.ongletInitial = 0});
+
+  /// Onglet ouvert à l'arrivée (ex. [indexDemandes] depuis le bandeau
+  /// « Demande rapide » de l'annuaire public).
+  final int ongletInitial;
+
+  /// Index de l'onglet « Demande » (RDV aléatoire).
+  static const int indexDemandes = 2;
 
   @override
   ConsumerState<PatientHomeShell> createState() => _PatientHomeShellState();
 }
 
 class _PatientHomeShellState extends ConsumerState<PatientHomeShell> {
-  int _index = 0;
+  late int _index = widget.ongletInitial;
 
   /// Index de l'onglet « Rendez-vous » dans [_pages].
   static const int _indexRendezVous = 1;
 
   /// Index de l'onglet « Demande » (RDV aléatoire) dans [_pages].
-  static const int _indexDemandes = 2;
+  static const int _indexDemandes = PatientHomeShell.indexDemandes;
 
   late final List<Widget> _pages = <Widget>[
     PortailPatientAccueil(

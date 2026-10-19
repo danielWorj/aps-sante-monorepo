@@ -6,7 +6,10 @@ import '../../../controllers/agenda_controller.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/medecin_controller.dart';
 import '../../../models/agenda_models.dart';
+import '../../../models/periodes_agenda.dart';
 import '../../../repositories/rendez_vous_repository.dart' show ApiException;
+import '../../../utils/fonds.dart' show jourLongLocal;
+import 'selecteur_periodes.dart';
 
 /// ============================================================
 /// portail-medecin-agenda.dart
@@ -14,18 +17,19 @@ import '../../../repositories/rendez_vous_repository.dart' show ApiException;
 /// Onglet « Agenda » de l'espace médecin (affiché par `MedecinHomeShell`,
 /// qui fournit le Scaffold et la barre de navigation basse).
 ///
-/// 1. **Mes horaires de la semaine** — le gabarit hebdomadaire
-///    (DisponibiliteMedecin) : pour chaque jour, les tranches de 30 min où
-///    le médecin reçoit. Enregistré en une fois (PUT
-///    /medecins/:id/disponibilites) ; le serveur publie aussitôt ces horaires
-///    sur les semaines à venir. Ce sont ces jours et horaires que les
-///    patients peuvent réserver.
-/// 2. **Mes prochains créneaux** — les 7 prochains jours : un créneau libre
-///    peut être fermé ponctuellement (congé, urgence), un créneau fermé
-///    rouvert. Un créneau « réservé » (demande en attente de paiement ou
-///    rendez-vous confirmé) n'est pas modifiable ici : il est masqué aux
-///    autres patients et redevient libre si le rendez-vous est annulé, ou
-///    si la demande n'est pas payée dans le délai fixé par ApSa.
+/// 1. **Ma semaine type** — le gabarit hebdomadaire (DisponibiliteMedecin).
+///    Pour chaque jour, le médecin coche des PÉRIODES (matin, après-midi,
+///    soirée : toutes leurs tranches sont sélectionnées) et peut affiner
+///    heure par heure (voir selecteur_periodes.dart). « Copier » recopie un
+///    jour sur d'autres. Enregistré en une fois (PUT
+///    /medecins/:id/disponibilites) ; le serveur publie aussitôt les semaines
+///    à venir. Les rendez-vous déjà réservés sur une tranche retirée sont
+///    maintenus, et on le signale.
+/// 2. **Mes prochains jours** — les créneaux réels, 7 jours à la fois :
+///    périodes ouvertes, créneaux libres, rendez-vous. « Modifier » crée une
+///    EXCEPTION pour cette date seulement (congé, demi-journée, ouverture
+///    exceptionnelle) ; « Revenir à la semaine type » l'annule. Un créneau
+///    réservé n'est jamais fermé ici.
 /// ============================================================
 class PortailMedecinAgenda extends ConsumerStatefulWidget {
   const PortailMedecinAgenda({super.key});
@@ -35,24 +39,24 @@ class PortailMedecinAgenda extends ConsumerStatefulWidget {
 }
 
 class _PortailMedecinAgendaState extends ConsumerState<PortailMedecinAgenda> {
-  static const int _joursAVenir = 7;
+  /// L'agenda est publié sur 60 jours (AGENDA_HORIZON_JOURS côté serveur).
+  static const int _semainesMax = 8;
 
   bool _chargement = true;
+  bool _chargementJours = false;
   bool _enregistrement = false;
   String? _erreur;
 
   List<HoraireAgenda> _horaires = const [];
+  List<GroupePeriode> _groupes = const [];
 
   /// Gabarit enregistré côté serveur, et gabarit en cours d'édition :
   /// ensembles de clés « jour|horaire_id ».
   Set<String> _gabaritServeur = {};
   Set<String> _gabarit = {};
 
-  String _jourEdite = 'lundi';
+  int _semaine = 0;
   List<CreneauAgenda> _creneaux = const [];
-
-  /// Créneau en cours de mise à jour (fermeture / réouverture).
-  String? _creneauEnCours;
 
   String? get _medecinId => ref.read(monProfilMedecinControllerProvider).value?.medecin.medecinId;
 
@@ -60,10 +64,33 @@ class _PortailMedecinAgendaState extends ConsumerState<PortailMedecinAgenda> {
 
   static String _cle(String jour, String horaireId) => '$jour|$horaireId';
 
+  static String _iso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  static DateTime get _aujourdhui {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, n.day);
+  }
+
+  List<DateTime> get _jours =>
+      [for (var i = 0; i < 7; i++) _aujourdhui.add(Duration(days: _semaine * 7 + i))];
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _charger());
+  }
+
+  Future<String> _exigerMedecinId() async {
+    var medecinId = _medecinId;
+    if (medecinId == null) {
+      final token = ref.read(authTokenProvider);
+      if (token == null) throw const ApiException('Session expirée : reconnectez-vous.');
+      await ref.read(monProfilMedecinControllerProvider.notifier).charger(token: token);
+      medecinId = _medecinId;
+    }
+    if (medecinId == null) throw const ApiException('Profil médecin introuvable.');
+    return medecinId;
   }
 
   Future<void> _charger() async {
@@ -72,43 +99,25 @@ class _PortailMedecinAgendaState extends ConsumerState<PortailMedecinAgenda> {
       _erreur = null;
     });
     try {
-      var medecinId = _medecinId;
-      if (medecinId == null) {
-        final token = ref.read(authTokenProvider);
-        if (token == null) throw const ApiException('Session expirée : reconnectez-vous.');
-        await ref.read(monProfilMedecinControllerProvider.notifier).charger(token: token);
-        medecinId = _medecinId;
-      }
-      if (medecinId == null) throw const ApiException('Profil médecin introuvable.');
-
+      final medecinId = await _exigerMedecinId();
       final repo = ref.read(agendaRepositoryProvider);
-      final maintenant = DateTime.now();
       final resultats = await Future.wait([
         repo.listerHoraires(),
         repo.listerDisponibilites(medecinId),
-        repo.listerCreneaux(
-          medecinId,
-          filtres: FiltresAgenda(
-            dateDebut: maintenant,
-            dateFin: maintenant.add(const Duration(days: _joursAVenir - 1)),
-          ),
-        ),
       ]);
       if (!mounted) return;
       final horaires = resultats[0] as List<HoraireAgenda>;
-      final disponibilites = resultats[1] as List<DisponibiliteMedecin>;
-      final creneaux = resultats[2] as List<CreneauAgenda>;
-      final gabarit = {for (final d in disponibilites) _cle(d.jourSemaine, d.horaireId)};
+      final gabarit = {
+        for (final d in resultats[1] as List<DisponibiliteMedecin>) _cle(d.jourSemaine, d.horaireId),
+      };
       setState(() {
-        _horaires = [...horaires]..sort((a, b) => a.libelleDebut.compareTo(b.libelleDebut));
+        _horaires = horaires;
+        _groupes = grouperParPeriode(horaires);
         _gabaritServeur = gabarit;
         _gabarit = {...gabarit};
-        _creneaux = creneaux
-            .where((c) => c.instantUtc?.isAfter(DateTime.now().toUtc()) ?? false)
-            .toList()
-          ..sort((a, b) => a.instantUtc!.compareTo(b.instantUtc!));
         _chargement = false;
       });
+      await _chargerJours();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -118,75 +127,135 @@ class _PortailMedecinAgendaState extends ConsumerState<PortailMedecinAgenda> {
     }
   }
 
+  Future<void> _chargerJours() async {
+    final medecinId = _medecinId;
+    if (medecinId == null) return;
+    setState(() => _chargementJours = true);
+    try {
+      final jours = _jours;
+      final creneaux = await ref.read(agendaRepositoryProvider).listerCreneaux(
+            medecinId,
+            filtres: FiltresAgenda(dateDebut: jours.first, dateFin: jours.last),
+          );
+      if (!mounted) return;
+      setState(() => _creneaux = creneaux);
+    } catch (e) {
+      _afficher(_message(e, 'Impossible de charger vos prochains jours.'));
+    } finally {
+      if (mounted) setState(() => _chargementJours = false);
+    }
+  }
+
   String _message(Object e, String parDefaut) => e is ApiException ? e.message : parDefaut;
 
-  void _afficher(String message) {
+  void _afficher(String message, {bool long = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: Duration(seconds: long ? 7 : 4)),
+    );
   }
 
-  void _basculer(String horaireId) {
-    final cle = _cle(_jourEdite, horaireId);
-    setState(() => _gabarit.contains(cle) ? _gabarit.remove(cle) : _gabarit.add(cle));
-  }
+  /* ----------------------------- Semaine type ----------------------------- */
 
-  void _copierSurJoursOuvres() {
-    final source = _horaires.where((h) => _gabarit.contains(_cle(_jourEdite, h.horaireId))).map((h) => h.horaireId);
+  Set<String> _selectionDuJour(String jour) =>
+      {for (final h in _horaires) if (_gabarit.contains(_cle(jour, h.horaireId))) h.horaireId};
+
+  void _changerJourType(String jour, Set<String> selection) {
     setState(() {
-      _gabarit.removeWhere((cle) => joursOuvresAgenda.contains(cle.split('|').first));
-      for (final jour in joursOuvresAgenda) {
-        for (final horaireId in source) {
-          _gabarit.add(_cle(jour, horaireId));
-        }
-      }
+      _gabarit.removeWhere((k) => k.startsWith('$jour|'));
+      _gabarit.addAll(selection.map((id) => _cle(jour, id)));
     });
-    _afficher('Horaires copiés du lundi au vendredi. Pensez à enregistrer.');
   }
 
-  Future<void> _enregistrer() async {
-    final medecinId = _medecinId;
+  Future<void> _copierJour(String source) async {
+    final cibles = await showModalBottomSheet<Set<String>>(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(14))),
+      builder: (_) => _FeuilleCopie(source: source),
+    );
+    if (cibles == null || cibles.isEmpty) return;
+    final selection = _selectionDuJour(source);
+    for (final c in cibles) {
+      _changerJourType(c, selection);
+    }
+    final libelle = joursSemaineAgenda.firstWhere((j) => j.valeur == source).libelle.toLowerCase();
+    _afficher('Horaires du $libelle copiés sur ${cibles.length} jour(s). Pensez à enregistrer.');
+  }
+
+  Future<void> _enregistrerSemaine() async {
     final token = ref.read(authTokenProvider);
+    final medecinId = _medecinId;
     if (medecinId == null || token == null || _enregistrement) return;
     setState(() => _enregistrement = true);
     try {
-      await ref.read(agendaRepositoryProvider).remplacerDisponibilites(
+      final r = await ref.read(agendaRepositoryProvider).remplacerDisponibilites(
             medecinId: medecinId,
             token: token,
             disponibilites: [
-              for (final cle in _gabarit)
-                (jourSemaine: cle.split('|').first, horaireId: cle.split('|').last),
+              for (final k in _gabarit) (jourSemaine: k.split('|').first, horaireId: k.split('|').last),
             ],
           );
-      _afficher('Horaires enregistrés : ils sont publiés sur votre agenda des semaines à venir.');
-      await _charger();
+      final gabarit = {for (final d in r.disponibilites) _cle(d.jourSemaine, d.horaireId)};
+      if (!mounted) return;
+      setState(() {
+        _gabaritServeur = gabarit;
+        _gabarit = {...gabarit};
+      });
+      _afficher(
+        r.rdvMaintenus > 0
+            ? 'Semaine type enregistrée. ${r.rdvMaintenus} rendez-vous déjà réservé(s) sur des horaires '
+                'retirés sont maintenus : annulez-les depuis vos rendez-vous si besoin.'
+            : 'Semaine type enregistrée : vos horaires sont publiés sur les semaines à venir.',
+        long: r.rdvMaintenus > 0,
+      );
+      await _chargerJours();
     } catch (e) {
-      _afficher(_message(e, "Impossible d'enregistrer vos horaires."));
+      _afficher(_message(e, "Impossible d'enregistrer votre semaine type."));
     } finally {
       if (mounted) setState(() => _enregistrement = false);
     }
   }
 
-  Future<void> _basculerCreneau(CreneauAgenda c) async {
+  /* --------------------------- Exceptions datées --------------------------- */
+
+  Future<void> _modifierJour(DateTime jour, List<CreneauAgenda> creneaux) async {
+    final medecinId = _medecinId;
     final token = ref.read(authTokenProvider);
-    if (token == null || _creneauEnCours != null || c.estReserve) return;
-    final fermer = c.estDisponible;
-    setState(() => _creneauEnCours = c.creneauId);
-    try {
-      await ref.read(agendaRepositoryProvider).changerStatutCreneau(
-            creneauId: c.creneauId,
-            statut: fermer ? StatutCreneauAgenda.bloque : StatutCreneauAgenda.disponible,
-            token: token,
-          );
-      _afficher(fermer
-          ? 'Créneau du ${c.libelleJour} à ${c.libelleHeure} fermé aux patients.'
-          : 'Créneau du ${c.libelleJour} à ${c.libelleHeure} rouvert.');
-      await _charger();
-    } catch (e) {
-      _afficher(_message(e, 'Action impossible sur ce créneau.'));
-    } finally {
-      if (mounted) setState(() => _creneauEnCours = null);
-    }
+    if (medecinId == null || token == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final resultat = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(14))),
+      builder: (_) => _FeuilleJour(
+        titre: _majuscule(jourLongLocal(jour)),
+        groupes: _groupes,
+        selection: {for (final c in creneaux) if (!c.estBloque) c.horaireId},
+        verrouilles: {for (final c in creneaux) if (c.estReserve) c.horaireId},
+        personnalise: creneaux.any((c) => c.origine == 'manuel'),
+        enregistrer: (selection) => ref.read(agendaRepositoryProvider).definirJour(
+              medecinId: medecinId,
+              date: _iso(jour),
+              horaireIds: selection,
+              token: token,
+            ),
+        retablir: () => ref.read(agendaRepositoryProvider).retablirJour(
+              medecinId: medecinId,
+              date: _iso(jour),
+              token: token,
+            ),
+      ),
+    );
+    if (resultat == null) return;
+    messenger.showSnackBar(SnackBar(content: Text(resultat), duration: const Duration(seconds: 5)));
+    await _chargerJours();
   }
+
+  static String _majuscule(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+
+  /* --------------------------------- Rendu --------------------------------- */
 
   @override
   Widget build(BuildContext context) {
@@ -199,7 +268,7 @@ class _PortailMedecinAgendaState extends ConsumerState<PortailMedecinAgenda> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(18, 0, 18, 120),
           children: [
-            const _PageHead(),
+            const ApsPageTitle('Agenda', trailing: SizedBox(width: 42)),
             if (_chargement)
               const Padding(
                 padding: EdgeInsets.only(top: 60),
@@ -215,9 +284,9 @@ class _PortailMedecinAgendaState extends ConsumerState<PortailMedecinAgenda> {
                 onAction: _charger,
               )
             else ...[
-              _buildHoraires(),
+              _buildSemaineType(),
               const SizedBox(height: 14),
-              _buildProchainsCreneaux(),
+              _buildProchainsJours(),
             ],
           ],
         ),
@@ -225,144 +294,165 @@ class _PortailMedecinAgendaState extends ConsumerState<PortailMedecinAgenda> {
     );
   }
 
-  Widget _buildHoraires() {
-    final actifs = _horaires.where((h) => _gabarit.contains(_cle(_jourEdite, h.horaireId))).length;
+  Widget _buildSemaineType() {
     return _Bloc(
-      titre: 'Mes horaires de la semaine',
+      titre: 'Ma semaine type',
       icone: Icons.repeat,
+      sousTitre: 'Ces horaires se répètent chaque semaine. Touchez une période pour ouvrir '
+          'toutes ses heures, puis affinez si besoin.',
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Choisissez un jour puis touchez les horaires où vous recevez. Après '
-            'enregistrement, ces horaires sont publiés sur les semaines à venir : '
-            'ce sont eux que les patients peuvent réserver.',
-            style: AppTextStyles.small,
-          ),
+          for (final j in joursSemaineAgenda) ...[
+            Builder(builder: (_) {
+              final selection = _selectionDuJour(j.valeur);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text.rich(
+                          TextSpan(children: [
+                            TextSpan(text: j.libelle, style: AppTextStyles.strong),
+                            TextSpan(
+                              text: '   ${resumeJournee(_groupes, selection)}',
+                              style: AppTextStyles.xs.copyWith(
+                                color: selection.isEmpty ? AppColors.ink3 : AppColors.b7,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ]),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (selection.isNotEmpty)
+                        TextButton.icon(
+                          onPressed: _enregistrement ? null : () => _copierJour(j.valeur),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.b7,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          icon: const Icon(Icons.copy_rounded, size: 15),
+                          label: const Text('Copier', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SelecteurPeriodes(
+                    groupes: _groupes,
+                    selection: selection,
+                    enabled: !_enregistrement,
+                    onChanged: (s) => _changerJourType(j.valeur, s),
+                  ),
+                ],
+              );
+            }),
+            if (j != joursSemaineAgenda.last) const ApsDivider(),
+          ],
           const SizedBox(height: 12),
-          ApsChipRow(
-            children: [
-              for (final j in joursSemaineAgenda)
-                ApsChip(
-                  j.court,
-                  selected: j.valeur == _jourEdite,
-                  icon: _gabarit.any((cle) => cle.startsWith('${j.valeur}|'))
-                      ? Icons.circle
-                      : null,
-                  iconColor: j.valeur == _jourEdite ? AppColors.mint : AppColors.b5,
-                  onTap: () => setState(() => _jourEdite = j.valeur),
-                ),
-            ],
+          ApsButton(
+            label: _modifie ? 'Enregistrer ma semaine' : 'Semaine à jour',
+            icon: _modifie ? Icons.check_rounded : null,
+            loading: _enregistrement,
+            onPressed: (_modifie && !_enregistrement) ? _enregistrerSemaine : null,
           ),
-          const SizedBox(height: 10),
+          if (_modifie && !_enregistrement)
+            TextButton(
+              onPressed: () => setState(() => _gabarit = {..._gabaritServeur}),
+              style: TextButton.styleFrom(foregroundColor: AppColors.ink2),
+              child: const Text('Annuler les modifications', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProchainsJours() {
+    final parJour = <String, List<CreneauAgenda>>{};
+    for (final c in _creneaux) {
+      parJour.putIfAbsent(c.cleJourMural, () => []).add(c);
+    }
+    final jours = _jours;
+    final aujourdhui = _aujourdhui;
+    return _Bloc(
+      titre: 'Mes prochains jours',
+      icone: Icons.calendar_month_outlined,
+      sousTitre: 'Un imprévu ou un congé ? Modifiez une date précise sans toucher à votre semaine type.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           Row(
             children: [
+              _BoutonNav(
+                icone: Icons.chevron_left_rounded,
+                onTap: _semaine > 0 && !_chargementJours
+                    ? () {
+                        setState(() => _semaine--);
+                        _chargerJours();
+                      }
+                    : null,
+              ),
               Expanded(
                 child: Text(
-                  actifs == 0 ? 'Fermé ce jour-là' : '$actifs créneau(x) de 30 min',
-                  style: AppTextStyles.xs.copyWith(fontSize: 12),
+                  '${jours.first.day}/${jours.first.month} – ${jours.last.day}/${jours.last.month}',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.strong,
                 ),
               ),
-              if (actifs > 0)
-                TextButton.icon(
-                  onPressed: _enregistrement ? null : _copierSurJoursOuvres,
-                  icon: const Icon(Icons.copy, size: 16),
-                  label: const Text('Lun–Ven', style: TextStyle(fontSize: 12)),
-                ),
+              _BoutonNav(
+                icone: Icons.chevron_right_rounded,
+                onTap: _semaine < _semainesMax && !_chargementJours
+                    ? () {
+                        setState(() => _semaine++);
+                        _chargerJours();
+                      }
+                    : null,
+              ),
             ],
           ),
-          if (_horaires.isEmpty)
-            Text('Référentiel horaire indisponible.', style: AppTextStyles.xs)
-          else
-            ApsSlotGrid(
+          const SizedBox(height: 12),
+          AnimatedOpacity(
+            opacity: _chargementJours ? 0.5 : 1,
+            duration: const Duration(milliseconds: 150),
+            child: Column(
               children: [
-                for (final h in _horaires)
-                  ApsSlot(
-                    h.libelleDebut,
-                    state: _gabarit.contains(_cle(_jourEdite, h.horaireId))
-                        ? ApsSlotState.selected
-                        : ApsSlotState.more,
-                    onTap: _enregistrement ? null : () => _basculer(h.horaireId),
+                for (final jour in jours)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _CarteJour(
+                      jour: jour,
+                      titre: _majuscule(jourLongLocal(jour)),
+                      estAujourdhui: jour == aujourdhui,
+                      creneaux: parJour[_iso(jour)] ?? const [],
+                      groupes: _groupes,
+                      onModifier: _chargementJours
+                          ? null
+                          : () => _modifierJour(jour, parJour[_iso(jour)] ?? const []),
+                    ),
                   ),
               ],
             ),
-          const SizedBox(height: 14),
-          ApsButton(
-            label: _modifie ? 'Enregistrer mes horaires' : 'Horaires à jour',
-            icon: _modifie ? Icons.check_rounded : null,
-            loading: _enregistrement,
-            onPressed: (_modifie && !_enregistrement) ? _enregistrer : null,
+          ),
+          const SizedBox(height: 4),
+          ApsNote.text(
+            'Un créneau réservé par un patient n\'est jamais fermé : annulez d\'abord le rendez-vous si nécessaire.',
+            icon: Icons.lock_outline,
           ),
         ],
       ),
     );
-  }
-
-  Widget _buildProchainsCreneaux() {
-    final parJour = <String, List<CreneauAgenda>>{};
-    for (final c in _creneaux) {
-      parJour.putIfAbsent(c.cleJour, () => []).add(c);
-    }
-    return _Bloc(
-      titre: 'Mes prochains créneaux',
-      icone: Icons.calendar_month_outlined,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Touchez un créneau libre pour le fermer ponctuellement, ou un créneau '
-            'fermé pour le rouvrir. Un créneau réservé est masqué aux autres '
-            'patients ; il redevient libre si le rendez-vous est annulé ou si '
-            "la demande n'est pas payée à temps.",
-            style: AppTextStyles.small,
-          ),
-          const SizedBox(height: 12),
-          const _Legende(),
-          if (parJour.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 12),
-              child: Text(
-                'Aucun créneau sur les 7 prochains jours. Définissez vos horaires de la semaine ci-dessus.',
-                style: AppTextStyles.small,
-              ),
-            ),
-          for (final liste in parJour.values) ...[
-            Padding(
-              padding: const EdgeInsets.only(top: 16, bottom: 8),
-              child: Text(liste.first.libelleJour.toUpperCase(), style: AppTextStyles.over),
-            ),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [for (final c in liste) _PuceCreneau(
-                creneau: c,
-                enCours: _creneauEnCours == c.creneauId,
-                onTap: c.estReserve ? null : () => _basculerCreneau(c),
-              )],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _PageHead extends StatelessWidget {
-  const _PageHead();
-
-  @override
-  Widget build(BuildContext context) {
-    // La cloche du shell flotte en haut à droite : place réservée.
-    return const ApsPageTitle('Agenda', trailing: SizedBox(width: 42));
   }
 }
 
 class _Bloc extends StatelessWidget {
-  final String? titre;
-  final IconData? icone;
+  final String titre;
+  final IconData icone;
+  final String sousTitre;
   final Widget child;
 
-  const _Bloc({this.titre, this.icone, required this.child});
+  const _Bloc({required this.titre, required this.icone, required this.sousTitre, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -371,18 +461,16 @@ class _Bloc extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (titre != null) ...[
-            Row(
-              children: [
-                if (icone != null) ...[
-                  ApsIconTile(icone!, small: true),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(child: Text(titre!, style: AppTextStyles.section)),
-              ],
-            ),
-            const SizedBox(height: 10),
-          ],
+          Row(
+            children: [
+              ApsIconTile(icone, small: true),
+              const SizedBox(width: 10),
+              Expanded(child: Text(titre, style: AppTextStyles.section)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(sousTitre, style: AppTextStyles.small),
+          const SizedBox(height: 14),
           child,
         ],
       ),
@@ -390,96 +478,355 @@ class _Bloc extends StatelessWidget {
   }
 }
 
-/// Couleurs d'un créneau selon son statut : libre (vert), réservé (ambre,
-/// lecture seule), fermé (gris barré).
-({Color fond, Color texte, Color bord}) _couleursCreneau(CreneauAgenda c) {
-  if (c.estReserve) return (fond: AppColors.amber100, texte: AppColors.amber700, bord: AppColors.amber100);
-  if (c.estBloque) return (fond: AppColors.slotOff, texte: AppColors.ink4, bord: AppColors.slotOff);
-  return (fond: AppColors.b1, texte: AppColors.b7, bord: AppColors.b1);
-}
-
-class _PuceCreneau extends StatelessWidget {
-  final CreneauAgenda creneau;
-  final bool enCours;
+class _BoutonNav extends StatelessWidget {
+  final IconData icone;
   final VoidCallback? onTap;
 
-  const _PuceCreneau({required this.creneau, required this.enCours, this.onTap});
+  const _BoutonNav({required this.icone, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final couleurs = _couleursCreneau(creneau);
     return Material(
-      color: couleurs.fond,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: couleurs.bord),
-      ),
+      color: onTap == null ? AppColors.slotOff : AppColors.b1,
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: enCours ? null : onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (enCours)
-                const Padding(
-                  padding: EdgeInsets.only(right: 6),
-                  child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.6)),
-                )
-              else if (creneau.estReserve)
-                const Padding(
-                  padding: EdgeInsets.only(right: 4),
-                  child: Icon(Icons.lock_outline, size: 13, color: AppColors.amber700),
-                ),
-              Text(
-                creneau.libelleHeure,
-                style: TextStyle(
-                  fontFamily: AppTextStyles.fontSans,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
-                  color: couleurs.texte,
-                  decoration: creneau.estBloque ? TextDecoration.lineThrough : null,
-                ),
-              ),
-            ],
-          ),
+        onTap: onTap,
+        child: SizedBox(
+          width: 38,
+          height: 38,
+          child: Icon(icone, color: onTap == null ? AppColors.ink4 : AppColors.b7),
         ),
       ),
     );
   }
 }
 
-class _Legende extends StatelessWidget {
-  const _Legende();
+/// Une date des prochains jours : périodes ouvertes, créneaux libres,
+/// rendez-vous, et accès à la modification de cette date.
+class _CarteJour extends StatelessWidget {
+  final DateTime jour;
+  final String titre;
+  final bool estAujourdhui;
+  final List<CreneauAgenda> creneaux;
+  final List<GroupePeriode> groupes;
+  final VoidCallback? onModifier;
+
+  const _CarteJour({
+    required this.jour,
+    required this.titre,
+    required this.estAujourdhui,
+    required this.creneaux,
+    required this.groupes,
+    this.onModifier,
+  });
 
   @override
   Widget build(BuildContext context) {
-    Widget cle(String libelle, Color fond, Color bord) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 12,
-              height: 12,
-              decoration: BoxDecoration(
-                color: fond,
-                borderRadius: BorderRadius.circular(3),
-                border: Border.all(color: bord),
-              ),
+    final ouverts = creneaux.where((c) => !c.estBloque).toList();
+    final personnalise = creneaux.any((c) => c.origine == 'manuel');
+    final rdv = creneaux.where((c) => c.estReserve).length;
+    return ApsCard(
+      flat: !estAujourdhui,
+      borderColor: estAujourdhui ? AppColors.b7 : null,
+      padding: const EdgeInsets.all(12),
+      onTap: onModifier,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 46,
+            height: 50,
+            decoration: BoxDecoration(
+              color: estAujourdhui ? AppColors.b7 : AppColors.b1,
+              borderRadius: BorderRadius.circular(12),
             ),
-            const SizedBox(width: 5),
-            Text(libelle,
-                style: AppTextStyles.xs.copyWith(color: AppColors.ink2, fontSize: 10.5, fontWeight: FontWeight.w700)),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  joursSemaineAgenda[jour.weekday - 1].court,
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontSans,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: estAujourdhui ? Colors.white : AppColors.b7,
+                  ),
+                ),
+                Text(
+                  '${jour.day}',
+                  style: TextStyle(
+                    fontFamily: AppTextStyles.fontSans,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: estAujourdhui ? Colors.white : AppColors.b8,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(titre, style: AppTextStyles.strong.copyWith(fontSize: 13.5)),
+                    if (estAujourdhui) const ApsPill("Aujourd'hui"),
+                    if (personnalise) const ApsPill('Personnalisé', tone: ApsTone.amber),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                if (ouverts.isEmpty)
+                  Text('Fermé', style: AppTextStyles.xs.copyWith(color: AppColors.ink3))
+                else
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final g in groupes)
+                        if (ouverts.any((c) => g.ids.contains(c.horaireId)))
+                          _PastillePeriode(
+                            groupe: g,
+                            libres: creneaux.where((c) => c.estDisponible && g.ids.contains(c.horaireId)).length,
+                          ),
+                    ],
+                  ),
+                if (rdv > 0) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.event_available_rounded, size: 14, color: AppColors.amber700),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$rdv rendez-vous',
+                        style: AppTextStyles.xs.copyWith(color: AppColors.amber700, fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (onModifier != null)
+            const Padding(
+              padding: EdgeInsets.only(left: 4, top: 14),
+              child: Icon(Icons.edit_outlined, size: 18, color: AppColors.ink3),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PastillePeriode extends StatelessWidget {
+  final GroupePeriode groupe;
+  final int libres;
+
+  const _PastillePeriode({required this.groupe, required this.libres});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(99)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(groupe.periode.icone, size: 12, color: AppColors.b7),
+          const SizedBox(width: 4),
+          Text(
+            '${groupe.periode.libelle} · $libres libre${libres > 1 ? 's' : ''}',
+            style: AppTextStyles.xs.copyWith(color: AppColors.ink2, fontWeight: FontWeight.w700, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Feuille « Copier vers… » : renvoie les jours cibles choisis.
+class _FeuilleCopie extends StatefulWidget {
+  final String source;
+
+  const _FeuilleCopie({required this.source});
+
+  @override
+  State<_FeuilleCopie> createState() => _FeuilleCopieState();
+}
+
+class _FeuilleCopieState extends State<_FeuilleCopie> {
+  final Set<String> _cibles = {};
+
+  @override
+  Widget build(BuildContext context) {
+    final autres = joursSemaineAgenda.where((j) => j.valeur != widget.source).toList();
+    final libelle = joursSemaineAgenda.firstWhere((j) => j.valeur == widget.source).libelle.toLowerCase();
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ApsSheetHeader(title: 'Copier les horaires du $libelle', onClose: () => Navigator.pop(context)),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                ApsChip(
+                  'Lun–Ven',
+                  soft: true,
+                  onTap: () => setState(() => _cibles
+                    ..clear()
+                    ..addAll(joursOuvresAgenda.where((j) => j != widget.source))),
+                ),
+                const SizedBox(width: 8),
+                ApsChip(
+                  'Tous',
+                  soft: true,
+                  onTap: () => setState(() => _cibles
+                    ..clear()
+                    ..addAll(autres.map((j) => j.valeur))),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final j in autres)
+                  ApsChip(
+                    j.libelle,
+                    selected: _cibles.contains(j.valeur),
+                    icon: _cibles.contains(j.valeur) ? Icons.check_rounded : null,
+                    onTap: () => setState(() => _cibles.contains(j.valeur) ? _cibles.remove(j.valeur) : _cibles.add(j.valeur)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            ApsButton(
+              label: _cibles.isEmpty ? 'Choisissez des jours' : 'Copier sur ${_cibles.length} jour(s)',
+              icon: Icons.copy_rounded,
+              onPressed: _cibles.isEmpty ? null : () => Navigator.pop(context, {..._cibles}),
+            ),
           ],
-        );
-    return Wrap(
-      spacing: 12,
-      runSpacing: 6,
-      children: [
-        cle('Libre', AppColors.b6, AppColors.b6),
-        cle('Réservé', AppColors.amber500, AppColors.amber500),
-        cle('Fermé', AppColors.slotOff, AppColors.ink3),
-      ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Feuille d'édition d'une date précise. Renvoie le message à afficher si la
+/// journée a été enregistrée ou rétablie, `null` si l'utilisateur ferme.
+class _FeuilleJour extends StatefulWidget {
+  final String titre;
+  final List<GroupePeriode> groupes;
+  final Set<String> selection;
+  final Set<String> verrouilles;
+  final bool personnalise;
+  final Future<int> Function(Set<String> selection) enregistrer;
+  final Future<void> Function() retablir;
+
+  const _FeuilleJour({
+    required this.titre,
+    required this.groupes,
+    required this.selection,
+    required this.verrouilles,
+    required this.personnalise,
+    required this.enregistrer,
+    required this.retablir,
+  });
+
+  @override
+  State<_FeuilleJour> createState() => _FeuilleJourState();
+}
+
+class _FeuilleJourState extends State<_FeuilleJour> {
+  late Set<String> _selection = {...widget.selection};
+  bool _enCours = false;
+  String? _erreur;
+
+  Future<void> _executer(Future<String> Function() action) async {
+    setState(() {
+      _enCours = true;
+      _erreur = null;
+    });
+    try {
+      final message = await action();
+      if (mounted) Navigator.pop(context, message);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _erreur = e is ApiException ? e.message : 'Action impossible pour cette journée.';
+        _enCours = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(18, 0, 18, 18 + MediaQuery.of(context).viewInsets.bottom),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ApsSheetHeader(title: widget.titre, onClose: _enCours ? null : () => Navigator.pop(context)),
+              const SizedBox(height: 6),
+              const Text(
+                'Ces horaires ne valent que pour cette date. Votre semaine type ne change pas.',
+                style: AppTextStyles.small,
+              ),
+              const SizedBox(height: 14),
+              SelecteurPeriodes(
+                groupes: widget.groupes,
+                selection: _selection,
+                verrouilles: widget.verrouilles,
+                enabled: !_enCours,
+                detailOuvertParDefaut: true,
+                onChanged: (s) => setState(() => _selection = s),
+              ),
+              if (_erreur != null) ...[
+                const SizedBox(height: 10),
+                ApsNote.text(_erreur!, icon: Icons.error_outline_rounded, tone: ApsTone.red),
+              ],
+              const SizedBox(height: 16),
+              ApsButton(
+                label: _selection.isEmpty ? 'Fermer cette journée' : 'Enregistrer ce jour',
+                icon: Icons.check_rounded,
+                loading: _enCours,
+                onPressed: _enCours
+                    ? null
+                    : () => _executer(() async {
+                          final maintenus = await widget.enregistrer(_selection);
+                          return maintenus > 0
+                              ? 'Journée enregistrée. $maintenus rendez-vous déjà réservé(s) sont maintenus.'
+                              : 'Journée enregistrée.';
+                        }),
+              ),
+              if (widget.personnalise)
+                TextButton.icon(
+                  onPressed: _enCours
+                      ? null
+                      : () => _executer(() async {
+                            await widget.retablir();
+                            return 'Cette journée suit de nouveau votre semaine type.';
+                          }),
+                  style: TextButton.styleFrom(foregroundColor: AppColors.ink2),
+                  icon: const Icon(Icons.undo_rounded, size: 18),
+                  label: const Text('Revenir à la semaine type', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

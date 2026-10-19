@@ -93,7 +93,7 @@ class AppBottomNav extends StatelessWidget {
                 height: 46,
                 decoration: BoxDecoration(
                   gradient: AppColors.gradientLogo,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(rdvIcon, color: Colors.white, size: 24),
               ),

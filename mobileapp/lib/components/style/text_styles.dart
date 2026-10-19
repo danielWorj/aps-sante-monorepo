@@ -157,10 +157,10 @@ class AppTextStyles {
 class AppRadius {
   AppRadius._();
 
-  static const double xl = 32;
-  static const double lg = 22;
-  static const double md = 16;
-  static const double sm = 12;
+  static const double xl = 20;
+  static const double lg = 14;
+  static const double md = 12;
+  static const double sm = 10;
 
   static BorderRadius get xlRadius => BorderRadius.circular(xl);
   static BorderRadius get lgRadius => BorderRadius.circular(lg);

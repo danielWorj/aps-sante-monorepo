@@ -181,7 +181,7 @@ class _DialogueChoixMoyenPaiementState
       // d'AlertDialog), comme la boîte de facture.
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       // Coins arrondis.
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       title: const Text('Comment souhaitez-vous payer ?'),
       content: SingleChildScrollView(
         child: Column(
@@ -270,7 +270,7 @@ class _OptionPaiement extends StatelessWidget {
     final carte = Material(
       color: _desactive ? AppColors.paper : AppColors.card,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
         side: const BorderSide(color: AppColors.lineStrong),
       ),
       clipBehavior: Clip.antiAlias,

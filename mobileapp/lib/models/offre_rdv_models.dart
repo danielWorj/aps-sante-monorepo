@@ -10,6 +10,12 @@
 //   - patient : [reponses] (médecins qui ont répondu, fiche publique) ;
 //   - médecin : [maReponse], [nombreReponses], [attribueeAMoi] (jamais
 //     l'identité du patient).
+//
+// Date : on affiche `date_murale` (jour + heure dans le fuseau du pays de la
+// demande, calculés par le serveur), jamais `date_souhaitee` convertie dans
+// le fuseau de l'appareil : patient et médecins lisent la même heure.
+
+import '../utils/fonds.dart' show jourLongLocal;
 
 T? _lire<T>(Map<String, dynamic> json, String cle) {
   final v = json[cle];
@@ -183,6 +189,10 @@ class OffreRdv {
   final String ville;
   final TypeRdvOffre typeRdv;
   final DateTime? dateSouhaitee;
+
+  /// Jour « AAAA-MM-JJ » et heure « HH:mm » dans le fuseau du pays de la demande.
+  final String? jourMural;
+  final String? heureMurale;
   final String? motif;
   final StatutOffreRdv statut;
   final DateTime? dateCreation;
@@ -203,6 +213,8 @@ class OffreRdv {
     required this.typeRdv,
     required this.statut,
     this.dateSouhaitee,
+    this.jourMural,
+    this.heureMurale,
     this.motif,
     this.dateCreation,
     this.rendezVous,
@@ -212,8 +224,20 @@ class OffreRdv {
     this.attribueeAMoi = false,
   });
 
+  /// « mardi 20 octobre à 10:00 » : jour et heure choisis par le patient,
+  /// heure locale de la ville de la demande.
+  String get dateLisible {
+    final j = jourMural == null ? null : DateTime.tryParse(jourMural!);
+    if (j != null && heureMurale != null) return '${jourLongLocal(j)} à $heureMurale';
+    final d = dateSouhaitee;
+    if (d == null) return '';
+    final h = '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+    return '${jourLongLocal(d)} à $h';
+  }
+
   factory OffreRdv.fromJson(Map<String, dynamic> json) {
     final rdv = _objet(json, 'rendez_vous');
+    final murale = _objet(json, 'date_murale') ?? const {};
     final reps = json['reponses'];
     final ma = _objet(json, 'ma_reponse');
     return OffreRdv(
@@ -222,6 +246,8 @@ class OffreRdv {
       ville: _lire<String>(_objet(json, 'ville') ?? const {}, 'nom') ?? '',
       typeRdv: TypeRdvOffre.fromApi(_lire<String>(json, 'type_rdv')),
       dateSouhaitee: _date(json, 'date_souhaitee'),
+      jourMural: _lire<String>(murale, 'jour'),
+      heureMurale: _lire<String>(murale, 'heure'),
       motif: _lire<String>(json, 'motif'),
       statut: StatutOffreRdv.fromApi(_lire<String>(json, 'statut')),
       dateCreation: _date(json, 'date_creation'),
@@ -239,6 +265,15 @@ class OffreRdv {
       attribueeAMoi: json['attribuee_a_moi'] == true,
     );
   }
+}
+
+/// Demandes vues par le médecin, avec la raison pour laquelle il n'en reçoit
+/// aucune (fiche non publiée, abonnement sans RDV en ligne…), le cas échéant.
+class OffresMedecin {
+  final List<OffreRdv> offres;
+  final String? raison;
+
+  const OffresMedecin({this.offres = const [], this.raison});
 }
 
 /// Résultat de « Valider ce médecin » (POST …/valider).

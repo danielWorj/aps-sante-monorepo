@@ -423,7 +423,7 @@ class _RecapCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(14),
         boxShadow: AppColors.shadowSoft,
       ),
       child: Column(

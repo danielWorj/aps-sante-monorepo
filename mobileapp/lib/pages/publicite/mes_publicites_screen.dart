@@ -69,7 +69,7 @@ class _Pastille extends StatelessWidget {
     final c = _couleurStatut(p);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: c.withValues(alpha: .12), borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(color: c.withValues(alpha: .12), borderRadius: BorderRadius.circular(14)),
       child: Text(p.enDiffusion ? 'En diffusion' : p.statut.libelle,
           style: TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
     );

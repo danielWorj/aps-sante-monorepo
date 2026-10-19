@@ -114,6 +114,62 @@ test("synchronisation : supprime les cases libres générées hors gabarit, jama
   assert.equal(db.appels.supprimes.origine, "genere");
 });
 
+/** Base simulée pour definirTranchesDuJour : journal des écritures. */
+function baseJournee(existantes) {
+  const journal = { ouvertes: [], fermees: [], supprimees: [], creees: [] };
+  const tx = {
+    creneauAgenda: {
+      findMany: async () => existantes,
+      updateMany: async ({ where, data }) => {
+        (data.statut === "disponible" ? journal.ouvertes : journal.fermees).push(where.creneau_id);
+        return { count: 1 };
+      },
+      deleteMany: async ({ where }) => {
+        journal.supprimees.push(where.creneau_id);
+        return { count: 1 };
+      },
+      createMany: async ({ data }) => {
+        journal.creees.push(...data);
+        return { count: data.length };
+      },
+    },
+  };
+  return { journal, $transaction: (fn) => fn(tx) };
+}
+
+test("exception datée : ouvre, ferme et ne touche jamais une case réservée", async () => {
+  const date = new Date("2026-10-21T00:00:00Z");
+  const db = baseJournee([
+    { creneau_id: "libre-genere", horaire_id: "h8", statut: "disponible", origine: "genere", rdv_id: null },
+    { creneau_id: "libre-manuel", horaire_id: "h9", statut: "disponible", origine: "manuel", rdv_id: null },
+    { creneau_id: "ferme", horaire_id: "h10", statut: "bloque", origine: "manuel", rdv_id: null },
+    { creneau_id: "rdv", horaire_id: "h11", statut: "reserve", origine: "genere", rdv_id: "r1" },
+  ]);
+  const bilan = await agenda.definirTranchesDuJour({ medecin_id: "m1", date, horaire_ids: ["h10", "h14"] }, db);
+
+  assert.deepEqual(db.journal.fermees, ["libre-genere"]);
+  assert.deepEqual(db.journal.supprimees, ["libre-manuel"]);
+  assert.deepEqual(db.journal.ouvertes, ["ferme"]);
+  assert.deepEqual(db.journal.creees.map((c) => [c.horaire_id, c.statut, c.origine]), [["h14", "disponible", "manuel"]]);
+  assert.deepEqual(bilan, { ouverts: 2, fermes: 2, maintenus: 1 });
+});
+
+test("rendez-vous hors gabarit : seulement les réservations futures non couvertes", async () => {
+  const db = {
+    medecin: { findUnique: async () => ({ pays_exercice: { fuseau_horaire: "Africa/Douala" } }) },
+    disponibiliteMedecin: { findMany: async () => [{ jour_semaine: "lundi", horaire_id: "h9" }] },
+    creneauAgenda: {
+      findMany: async () => [
+        { creneau_id: "couvert", date: new Date("2026-10-26T00:00:00Z"), horaire_id: "h9", horaire: { heure_debut: new Date("1970-01-01T09:00:00Z"), heure_fin: new Date("1970-01-01T09:30:00Z") } },
+        { creneau_id: "decoche", date: new Date("2026-10-27T00:00:00Z"), horaire_id: "h9", horaire: { heure_debut: new Date("1970-01-01T09:00:00Z"), heure_fin: new Date("1970-01-01T09:30:00Z") } },
+      ],
+    },
+  };
+  const r = await agenda.rdvHorsGabarit("m1", { maintenant: new Date("2026-10-19T06:00:00Z") }, db);
+  assert.deepEqual(r.map((c) => c.creneau_id), ["decoche"]);
+  assert.equal(r[0].debut, "2026-10-27T08:00:00.000Z");
+});
+
 test("réservation conditionnelle : la seconde demande sur la même case échoue", async () => {
   let libre = true;
   const tx = {

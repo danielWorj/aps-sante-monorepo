@@ -758,7 +758,7 @@ class CreationConfirmationPage extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: ApsColors.card,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: ApsColors.line),
               ),
               child: Column(

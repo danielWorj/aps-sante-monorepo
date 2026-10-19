@@ -16,7 +16,8 @@
 // par le serveur ; le total (frais et commission) est celui du devis de
 // paiement (ChoixMoyenPaiement).
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import PatientPortailSidebar from "./../layouts/patient.portail-sidebar";
 import ChoixMoyenPaiement from "./../../paiement/ChoixMoyenPaiement";
 import PaiementMobileMoney from "./../../paiement/PaiementMobileMoney";
@@ -27,7 +28,9 @@ import { listerVilles } from "./../../../services/geoService";
 import {
   STATUTS_OFFRE,
   annulerOffre,
+  dateOffreLisible,
   listerMesOffres,
+  partiesDateOffre,
   publierOffre,
   validerMedecin,
 } from "./../../../services/offreRdvService";
@@ -37,19 +40,6 @@ const TYPE_RDV_LABEL = {
   physique: "Consultation physique",
   teleconsultation: "Téléconsultation",
 };
-
-// Miroir de OFFRE_RDV_DELAI_MIN_MINUTES (serveur, 2 h par défaut) : le
-// serveur reste seul juge, ceci ne sert qu'à guider la saisie.
-const DELAI_MIN_MS = 2 * 60 * 60 * 1000;
-
-const dateLongue = (iso) =>
-  new Date(iso).toLocaleString("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 
 /** AAAA-MM-JJ local (valeur d'un <input type="date">). */
 function jourLocal(d) {
@@ -69,16 +59,36 @@ function initiales(m) {
 
 const FORMULAIRE_VIDE = { specialite_id: "", ville_id: "", type_rdv: "physique", jour: "", heure: "", motif: "" };
 
+/**
+ * Formulaire pré-rempli depuis l'URL : l'annuaire public (bandeau « Demande
+ * rapide ») transmet la spécialité et la ville déjà filtrées.
+ */
+function formulaireInitial(params) {
+  const type = params.get("type_rdv");
+  return {
+    ...FORMULAIRE_VIDE,
+    specialite_id: params.get("specialite_id") || "",
+    ville_id: params.get("ville_id") || "",
+    type_rdv: type === "teleconsultation" ? type : "physique",
+  };
+}
+
 export default function PatientDemandes() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, status } = useAuth();
   const estPatient = status === "authenticated" && user?.role === "patient";
 
   const [specialites, setSpecialites] = useState([]);
   const [villes, setVilles] = useState([]);
-  const [form, setForm] = useState(FORMULAIRE_VIDE);
+  const [form, setForm] = useState(() => formulaireInitial(searchParams));
   const [envoi, setEnvoi] = useState(false);
   const [erreurForm, setErreurForm] = useState(null);
+  // Formulaire de publication dans une modale ; ouverte d'emblée si l'URL
+  // transmet une spécialité ou une ville (lien depuis l'annuaire).
+  const [modaleOuverte, setModaleOuverte] = useState(
+    () => Boolean(searchParams.get("specialite_id") || searchParams.get("ville_id"))
+  );
 
   const [offres, setOffres] = useState([]);
   const [chargement, setChargement] = useState(true);
@@ -135,10 +145,42 @@ export default function PatientDemandes() {
   useEffect(() => {
     if (!estPatient) return;
     listerSpecialites().then((s) => setSpecialites(s || [])).catch(() => setSpecialites([]));
-    listerVilles(user?.pays_id).then((d) => setVilles(d?.villes || [])).catch(() => setVilles([]));
+    listerVilles(user?.pays_id)
+      .then((d) => {
+        const liste = d?.villes || [];
+        setVilles(liste);
+        // Ville transmise par l'annuaire mais hors du pays du patient : on la retire.
+        setForm((f) => (f.ville_id && !liste.some((v) => v.ville_id === f.ville_id) ? { ...f, ville_id: "" } : f));
+      })
+      .catch(() => setVilles([]));
   }, [estPatient, user?.pays_id]);
 
   const maj = (champ) => (e) => setForm((f) => ({ ...f, [champ]: e.target.value }));
+
+  const ouvrirModale = () => {
+    setErreurForm(null);
+    setModaleOuverte(true);
+  };
+
+  // Fermeture : Échap, clic sur le fond, la croix ou « Annuler » (pas
+  // pendant l'envoi). La saisie est conservée jusqu'à la publication.
+  const fermerModale = useCallback(() => {
+    if (!envoi) setModaleOuverte(false);
+  }, [envoi]);
+
+  useEffect(() => {
+    if (!modaleOuverte) return undefined;
+    const surTouche = (e) => {
+      if (e.key === "Escape") fermerModale();
+    };
+    document.addEventListener("keydown", surTouche);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", surTouche);
+      document.body.style.overflow = overflow;
+    };
+  }, [modaleOuverte, fermerModale]);
 
   const publier = async (e) => {
     e.preventDefault();
@@ -148,21 +190,20 @@ export default function PatientDemandes() {
       setErreurForm("Choisissez la spécialité, la ville, le jour et l'heure.");
       return;
     }
-    const date = new Date(`${jour}T${heure}`);
-    if (Number.isNaN(date.getTime()) || date.getTime() < Date.now() + DELAI_MIN_MS) {
-      setErreurForm("Choisissez une heure au moins 2 h plus tard, pour laisser aux médecins le temps de répondre.");
-      return;
-    }
     setEnvoi(true);
     try {
+      // Jour et heure de la ville choisie (fuseau de son pays), convertis par
+      // le serveur : le délai minimum (2 h) y est aussi vérifié.
       const data = await publierOffre({
         specialite_id,
         ville_id,
         type_rdv,
-        date_souhaitee: date.toISOString(),
+        jour,
+        heure,
         motif: motif.trim() || null,
       });
       setForm(FORMULAIRE_VIDE);
+      setModaleOuverte(false);
       toast.succes(
         data.medecins_notifies > 0
           ? `Demande publiée : ${data.medecins_notifies} médecin(s) prévenu(s).`
@@ -200,7 +241,7 @@ export default function PatientDemandes() {
     const nom = nomMedecin(reponse.medecin);
     const ok = await confirmer({
       titre: "Valider ce médecin",
-      message: `${nom}, le ${dateLongue(offre.date_souhaitee)}.\nVous passerez ensuite au paiement.`,
+      message: `${nom}, le ${dateOffreLisible(offre)}.\nVous passerez ensuite au paiement.`,
       labelConfirmer: "Valider et payer",
     });
     if (!ok) return;
@@ -283,36 +324,67 @@ export default function PatientDemandes() {
     );
   };
 
+  // Statut : pastille neutre + point de couleur (pas d'aplat coloré).
+  const TON_STATUT = { ouverte: "attente", attribuee: "ok", expiree: "neutre", annulee: "neutre" };
+
   const renderOffre = (o) => {
-    const st = STATUTS_OFFRE[o.statut] || { label: o.statut, chip: "", icone: "fa-circle" };
+    const st = STATUTS_OFFRE[o.statut] || { label: o.statut };
     const rdv = o.rendez_vous;
+    const date = partiesDateOffre(o);
+    const enCoursOffre = o.statut === "ouverte" || o.statut === "attribuee";
+    const nbReponses = o.reponses.length;
+    const publieeLe = o.date_creation
+      ? new Date(o.date_creation).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+      : null;
     return (
-      <article key={o.offre_id} className="info-card offre-card">
-        <div className="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-          <div>
-            <h3 className="mb-1">{o.specialite?.nom}</h3>
-            <div className="rdv-meta">
-              <span>
-                <i className="fa-regular fa-calendar"></i> {dateLongue(o.date_souhaitee)}
-              </span>
-              <span>
-                <i className={`fa-solid ${o.type_rdv === "teleconsultation" ? "fa-video" : "fa-stethoscope"}`}></i>{" "}
-                {TYPE_RDV_LABEL[o.type_rdv]}
-              </span>
-              <span>
-                <i className="fa-solid fa-location-dot"></i> {o.ville?.nom}
+      <article key={o.offre_id} className={`dr-card ${enCoursOffre ? "" : "is-terminee"}`}>
+        <header className="dr-card-head">
+          {date ? (
+            <div className="dr-date" aria-label={dateOffreLisible(o)}>
+              <span className="dr-date-sem">{date.jourSemaine}</span>
+              <span className="dr-date-jour">{date.jour}</span>
+              <span className="dr-date-mois">{date.mois}</span>
+            </div>
+          ) : (
+            <div className="dr-date"><i className="fa-regular fa-calendar"></i></div>
+          )}
+
+          <div className="dr-card-main">
+            <div className="dr-card-top">
+              <h3>{o.specialite?.nom}</h3>
+              <span className={`dr-statut is-${TON_STATUT[o.statut] || "neutre"}`}>
+                <span className="dr-statut-point" />
+                {st.label}
               </span>
             </div>
+            <div className="dr-heure">
+              <i className="fa-regular fa-clock"></i>
+              {date ? `${date.heure}` : dateOffreLisible(o)}
+              {o.ville?.nom && <span className="dr-heure-note">heure de {o.ville.nom}</span>}
+            </div>
+            <ul className="dr-meta">
+              <li>
+                <i className={`fa-solid ${o.type_rdv === "teleconsultation" ? "fa-video" : "fa-stethoscope"}`}></i>
+                {TYPE_RDV_LABEL[o.type_rdv]}
+              </li>
+              <li>
+                <i className="fa-solid fa-location-dot"></i>
+                {o.ville?.nom}
+              </li>
+            </ul>
           </div>
-          <span className={`chip ${st.chip}`}>
-            <i className={`fa-solid ${st.icone}`}></i> {st.label}
-          </span>
-        </div>
-        {o.motif && <p className="text-faint small mt-2 mb-0">Motif : {o.motif}</p>}
+        </header>
+
+        {o.motif && (
+          <div className="dr-motif">
+            <span className="dr-label">Motif</span>
+            <p>{o.motif}</p>
+          </div>
+        )}
 
         {o.statut === "attribuee" && rdv && (
-          <div className="alert alert-info mt-3 mb-0 d-flex align-items-center gap-2 flex-wrap">
-            <i className="fa-solid fa-circle-info"></i>
+          <div className="dr-panel">
+            <i className={`fa-solid ${rdv.statut === "cree" ? "fa-credit-card" : "fa-circle-check"}`}></i>
             <span className="flex-grow-1">
               {rdv.statut === "cree"
                 ? "Rendez-vous créé : réglez-le pour le confirmer. Sans paiement dans le délai, il est annulé et la demande redevient ouverte."
@@ -330,35 +402,44 @@ export default function PatientDemandes() {
           </div>
         )}
 
-        {(o.statut === "ouverte" || o.statut === "attribuee") && (
-          <div className="mt-3">
-            {o.reponses.length === 0 ? (
-              <div className="text-faint small">
-                <i className="fa-solid fa-hourglass-half"></i> En attente de réponses des médecins…
+        {enCoursOffre && (
+          <section className="dr-reponses">
+            {nbReponses === 0 ? (
+              <div className="dr-attente">
+                <span className="dr-attente-point" />
+                <div>
+                  <strong>En attente de réponses</strong>
+                  <span>
+                    Les médecins de cette spécialité{o.ville?.nom ? ` à ${o.ville.nom}` : ""} ont été prévenus. Leurs
+                    réponses apparaîtront ici.
+                  </span>
+                </div>
               </div>
             ) : (
               <>
-                <div className="small fw-semibold mb-2">
-                  {o.reponses.length} médecin{o.reponses.length > 1 ? "s ont" : " a"} répondu
+                <div className="dr-reponses-titre">
+                  <span className="dr-label">Médecins disponibles</span>
+                  <span className="dr-compteur">{nbReponses}</span>
                 </div>
                 <div className="offre-reponses">{o.reponses.map((r) => renderReponse(o, r))}</div>
               </>
             )}
-          </div>
+          </section>
         )}
 
-        {o.statut === "ouverte" && (
-          <div className="text-end mt-3">
+        <footer className="dr-card-foot">
+          <span className="dr-publiee">{publieeLe ? `Publiée le ${publieeLe}` : ""}</span>
+          {o.statut === "ouverte" && (
             <button
               type="button"
-              className="btn btn-ghost btn-sm-aps"
+              className="dr-lien-retirer"
               disabled={actionEnCours !== null}
               onClick={() => annuler(o)}
             >
               <i className="fa-solid fa-xmark"></i> Retirer la demande
             </button>
-          </div>
-        )}
+          )}
+        </footer>
       </article>
     );
   };
@@ -370,7 +451,7 @@ export default function PatientDemandes() {
       <div className="container-aps">
         <div className="portail-shell">
           <main className="portail-main">
-            <header className="portail-head">
+            <header className="portail-head dr-page-head">
               <div>
                 <span className="eyebrow">Espace patient</span>
                 <h1>Demande rapide</h1>
@@ -379,67 +460,10 @@ export default function PatientDemandes() {
                   celui qui vous convient.
                 </p>
               </div>
+              <button type="button" className="btn btn-primary btn-sm-aps dr-btn-nouvelle" onClick={ouvrirModale}>
+                <i className="fa-solid fa-plus"></i> Publier une nouvelle demande
+              </button>
             </header>
-
-            <form className="info-card offre-form" onSubmit={publier}>
-              <h2 className="h6 mb-3">
-                <i className="fa-solid fa-bullhorn"></i> Nouvelle demande
-              </h2>
-              <div className="row g-3">
-                <div className="col-md-6">
-                  <label className="form-label" htmlFor="offre-specialite">Spécialité</label>
-                  <select id="offre-specialite" className="form-select" value={form.specialite_id} onChange={maj("specialite_id")} required>
-                    <option value="">Choisir…</option>
-                    {specialites.map((s) => (
-                      <option key={s.specialite_id} value={s.specialite_id}>{s.nom}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label" htmlFor="offre-ville">Ville</label>
-                  <select id="offre-ville" className="form-select" value={form.ville_id} onChange={maj("ville_id")} required>
-                    <option value="">Choisir…</option>
-                    {villes.map((v) => (
-                      <option key={v.ville_id} value={v.ville_id}>{v.nom}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-md-4">
-                  <label className="form-label" htmlFor="offre-jour">Jour</label>
-                  <input id="offre-jour" type="date" className="form-control" min={aujourdhui} value={form.jour} onChange={maj("jour")} required />
-                </div>
-                <div className="col-md-4">
-                  <label className="form-label" htmlFor="offre-heure">Heure</label>
-                  <input id="offre-heure" type="time" step="900" className="form-control" value={form.heure} onChange={maj("heure")} required />
-                </div>
-                <div className="col-md-4">
-                  <label className="form-label" htmlFor="offre-type">Type</label>
-                  <select id="offre-type" className="form-select" value={form.type_rdv} onChange={maj("type_rdv")}>
-                    <option value="physique">{TYPE_RDV_LABEL.physique}</option>
-                    <option value="teleconsultation">{TYPE_RDV_LABEL.teleconsultation}</option>
-                  </select>
-                </div>
-                <div className="col-12">
-                  <label className="form-label" htmlFor="offre-motif">Motif (facultatif)</label>
-                  <textarea
-                    id="offre-motif"
-                    className="form-control"
-                    rows={2}
-                    maxLength={1000}
-                    placeholder="Ex. fièvre depuis deux jours"
-                    value={form.motif}
-                    onChange={maj("motif")}
-                  />
-                  <div className="form-text">Le motif est visible par les médecins de la spécialité, sans votre nom.</div>
-                </div>
-              </div>
-              {erreurForm && <div className="alert alert-danger mt-3 mb-0">{erreurForm}</div>}
-              <div className="text-end mt-3">
-                <button type="submit" className="btn btn-primary btn-sm-aps" disabled={envoi}>
-                  {envoi ? "Publication…" : "Publier ma demande"}
-                </button>
-              </div>
-            </form>
 
             {erreur && (
               <div className="alert alert-danger d-flex align-items-center" role="alert">
@@ -449,7 +473,7 @@ export default function PatientDemandes() {
               </div>
             )}
 
-            <h2 className="h6 mt-4 mb-3">Mes demandes en cours</h2>
+            <h2 className="h6 mt-2 mb-3">Mes demandes en cours</h2>
             {chargement ? (
               <div className="text-center py-4">
                 <div className="spinner-border text-primary" role="status">
@@ -460,6 +484,9 @@ export default function PatientDemandes() {
               <div className="aps-empty-state">
                 <i className="fa-solid fa-bullhorn"></i>
                 <div>Aucune demande en cours.</div>
+                <button type="button" className="btn btn-outline-primary btn-sm-aps mt-2" onClick={ouvrirModale}>
+                  <i className="fa-solid fa-plus"></i> Publier une nouvelle demande
+                </button>
               </div>
             ) : (
               <div className="d-flex flex-column gap-3">{enCours.map(renderOffre)}</div>
@@ -476,6 +503,104 @@ export default function PatientDemandes() {
         </div>
       </div>
 
+
+      {modaleOuverte &&
+        createPortal(
+          <div className="rdv-modal-overlay" onClick={fermerModale}>
+            <div
+              className="rdv-modal dr-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="dr-modal-titre"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button type="button" className="rdv-modal-close" onClick={fermerModale} aria-label="Fermer" disabled={envoi}>
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+              <div className="dr-modal-head">
+                <span className="dr-modal-icone"><i className="fa-solid fa-bullhorn"></i></span>
+                <div>
+                  <h3 id="dr-modal-titre">Nouvelle demande</h3>
+                  <p>Les médecins de la spécialité dans cette ville sont prévenus et vous répondent.</p>
+                </div>
+              </div>
+
+              <form onSubmit={publier}>
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <label className="form-label-aps" htmlFor="offre-specialite">Spécialité</label>
+                    <select id="offre-specialite" className="form-select" value={form.specialite_id} onChange={maj("specialite_id")} required>
+                      <option value="">Choisir…</option>
+                      {specialites.map((s) => (
+                        <option key={s.specialite_id} value={s.specialite_id}>{s.nom}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label-aps" htmlFor="offre-ville">Ville</label>
+                    <select id="offre-ville" className="form-select" value={form.ville_id} onChange={maj("ville_id")} required>
+                      <option value="">Choisir…</option>
+                      {villes.map((v) => (
+                        <option key={v.ville_id} value={v.ville_id}>{v.nom}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label-aps" htmlFor="offre-jour">Jour</label>
+                    <input id="offre-jour" type="date" className="form-control" min={aujourdhui} value={form.jour} onChange={maj("jour")} required />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label-aps" htmlFor="offre-heure">Heure (heure locale de la ville)</label>
+                    <input id="offre-heure" type="time" step="900" className="form-control" value={form.heure} onChange={maj("heure")} required />
+                  </div>
+                  <div className="col-12">
+                    <span className="form-label-aps d-block">Type de consultation</span>
+                    <div className="view-toggle w-100">
+                      {["physique", "teleconsultation"].map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          className={form.type_rdv === t ? "active" : ""}
+                          onClick={() => setForm((f) => ({ ...f, type_rdv: t }))}
+                        >
+                          <i className={`fa-solid ${t === "teleconsultation" ? "fa-video" : "fa-stethoscope"}`}></i>{" "}
+                          {TYPE_RDV_LABEL[t]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="col-12">
+                    <label className="form-label-aps" htmlFor="offre-motif">Motif (facultatif)</label>
+                    <textarea
+                      id="offre-motif"
+                      className="form-control"
+                      rows={3}
+                      maxLength={1000}
+                      placeholder="Ex. fièvre depuis deux jours"
+                      value={form.motif}
+                      onChange={maj("motif")}
+                    />
+                    <div className="dr-aide">Visible par les médecins de la spécialité, sans votre nom.</div>
+                  </div>
+                </div>
+                {erreurForm && <div className="alert alert-danger mt-3 mb-0">{erreurForm}</div>}
+                <div className="rdv-modal-actions mt-4">
+                  <button type="button" className="btn btn-ghost" onClick={fermerModale} disabled={envoi}>
+                    Annuler
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={envoi}>
+                    {envoi ? (
+                      <><i className="fa-solid fa-spinner fa-spin"></i> Publication…</>
+                    ) : (
+                      <><i className="fa-solid fa-paper-plane"></i> Publier ma demande</>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {choixRdvId && (
         <ChoixMoyenPaiement

@@ -49,7 +49,7 @@ Future<bool> afficherTerminerRdv(
     isScrollControlled: true,
     backgroundColor: AppColors.card,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
     ),
     builder: (_) => TerminerRdvSheet(rdv: rdv, nomPatient: nomPatient),
   );

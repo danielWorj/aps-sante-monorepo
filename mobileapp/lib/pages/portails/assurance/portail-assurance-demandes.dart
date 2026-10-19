@@ -231,7 +231,7 @@ class _CarteDemandeState extends ConsumerState<_CarteDemande> {
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
         border: Border(
           left: BorderSide(color: d.statut == 'nouvelle' ? AppColors.danger : AppColors.line, width: d.statut == 'nouvelle' ? 3 : 1),
           top: const BorderSide(color: AppColors.line),
@@ -244,7 +244,7 @@ class _CarteDemandeState extends ConsumerState<_CarteDemande> {
         children: [
           InkWell(
             onTap: _ouvrir,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(10),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(
