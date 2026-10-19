@@ -42,3 +42,10 @@ KEYS.txt
 /mobileapp/android/app/build
 /mobileapp/android/app/.cxx
 /mobileapp/android/local.properties
+# packages locaux (dependency_overrides) : on versionne la source, pas les builds
+/mobileapp/packages/*/build/
+/mobileapp/packages/*/.dart_tool/
+/mobileapp/packages/*/android/build/
+/mobileapp/packages/*/android/.gradle/
+/mobileapp/packages/*/android/.cxx/
+/mobileapp/packages/*/android/local.properties
