@@ -27,6 +27,27 @@ import '../../utils/fonds.dart';
 import '../../utils/mobile_money.dart';
 import 'reserver_publicite_screen.dart';
 
+Future<void> _deconnecter(BuildContext context, WidgetRef ref) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: const Text('Déconnexion'),
+      content: const Text('Se déconnecter de votre espace annonceur ?'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Annuler')),
+        FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Se déconnecter')),
+      ],
+    ),
+  );
+  if (ok != true) return;
+  try {
+    await ref.read(sessionControllerProvider.notifier).deconnecter();
+  } catch (_) {
+    // Session déjà fermée localement (voir SessionController.deconnecter).
+  }
+  if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+}
+
 String _nombre(int n) => n.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ' ');
 
 Color _couleurStatut(MaPublicite p) {
@@ -77,14 +98,28 @@ class _Kpi extends StatelessWidget {
 /* ============================== Liste ============================== */
 
 class MesPublicitesScreen extends ConsumerWidget {
-  const MesPublicitesScreen({super.key});
+  const MesPublicitesScreen({super.key, this.espaceAnnonceur = false});
+
+  /// Ouvert comme espace d'un compte « annonceur » (« Mon espace ») :
+  /// ajoute la déconnexion, ce rôle n'ayant pas d'autre écran.
+  final bool espaceAnnonceur;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final etat = ref.watch(mesPublicitesProvider);
     return Scaffold(
       backgroundColor: AppColors.paper,
-      appBar: AppBar(title: const Text('Mes publicités')),
+      appBar: AppBar(
+        title: const Text('Mes publicités'),
+        actions: [
+          if (espaceAnnonceur)
+            IconButton(
+              tooltip: 'Se déconnecter',
+              icon: const Icon(Icons.logout),
+              onPressed: () => _deconnecter(context, ref),
+            ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ReserverPubliciteScreen())),
         icon: const Icon(Icons.add),

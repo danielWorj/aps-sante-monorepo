@@ -141,6 +141,9 @@ export const router = createBrowserRouter([
       // Publicité : retours de paiement (Stripe Checkout / Mobile Money)
       { path: '/paiement/publicite/succes', element: <PaiementPubliciteSucces /> },
       { path: '/paiement/publicite/annule', element: <PaiementPubliciteAnnule /> },
+      // Réservation publicitaire : ouverte aux visiteurs, le compte annonceur
+      // est créé avec la demande (« Rejoindre mon espace » si déjà inscrit).
+      { path: '/publicite/reserver', element: <ReserverPublicite /> },
       // Espace gestionnaire assurance : connexion requise (le serveur vérifie
       // en plus que l'utilisateur est l'agent de la fiche ou un admin).
       {
@@ -153,8 +156,8 @@ export const router = createBrowserRouter([
           { path: '/mon-espace-structure', element: <MonEspacePresence key="structure" type="structure" /> },
           { path: '/pharmacie/:id/gestion', element: <GestionPresence key="pharmacie" type="pharmacie" /> },
           { path: '/structure-sante/:id/gestion', element: <GestionPresence key="structure" type="structure" /> },
-          // Publicité : compte obligatoire pour réserver, payer et suivre ses statistiques.
-          { path: '/publicite/reserver', element: <ReserverPublicite /> },
+          // Publicité : compte obligatoire pour payer et suivre ses statistiques
+          // (la réservation, elle, est publique : voir plus haut).
           { path: '/publicite/:id/paiement', element: <PaiementPublicite /> },
           { path: '/portail/annonceur', element: <PortailAnnonceur /> },
           { path: '/portail/annonceur/publicites/:id', element: <PortailAnnonceur /> },

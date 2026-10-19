@@ -12,13 +12,19 @@ import {
   optionsCookieRefreshToken,
   optionsClearCookieRefreshToken,
 } from "../utils/token.utils.js";
+import {
+  EMAIL_REGEX,
+  normaliserEmail,
+  ouvrirSession,
+  SALT_ROUNDS,
+  serialiserUtilisateur,
+  validerMotDePasse,
+} from "../services/compte.service.js";
 
 // Délai laissé au titulaire d'un mot de passe temporaire pour le
 // changer, à compter de sa toute première connexion réussie.
 const DELAI_CHANGEMENT_MOT_DE_PASSE_MS = 24 * 60 * 60 * 1000; // 24h
 
-const SALT_ROUNDS = 10;
-const MOT_DE_PASSE_LONGUEUR_MIN = 8;
 
 // ---------------------------------------------------------------------
 // SÉCURITÉ — Qui peut créer quel rôle ?
@@ -541,35 +547,7 @@ export async function connecter(req, res, next) {
       });
     }
 
-    // Le token porte le libellé du rôle (ex: "patient", "agent_pharmacie"),
-    // pas l'UUID role_id, pour rester exploitable par les middlewares
-    // d'autorisation existants.
-    const { token: accessToken } = genererAccessToken({
-      ...utilisateur,
-      role: utilisateur.role.libelle,
-    });
-    const {
-      token: refreshToken,
-      token_hash,
-      date_expiration,
-    } = genererRefreshToken();
-
-    await prisma.refreshToken.create({
-      data: {
-        utilisateur_id: utilisateur.utilisateur_id,
-        token_hash,
-        date_expiration,
-        user_agent: req.headers["user-agent"]?.slice(0, 255),
-        ip_creation: req.ip,
-        statut: "actif",
-      },
-    });
-
-    res.cookie(
-      NOM_COOKIE_REFRESH_TOKEN,
-      refreshToken,
-      optionsCookieRefreshToken(date_expiration)
-    );
+    const accessToken = await ouvrirSession(req, res, utilisateur);
 
     return res.status(200).json({
       message: "Connexion réussie.",
@@ -678,32 +656,7 @@ export async function changerMotDePasseInitial(req, res, next) {
 
     // Ouverture immédiate d'une session complète, comme un login
     // classique réussi.
-    const { token: accessToken } = genererAccessToken({
-      ...utilisateurMisAJour,
-      role: utilisateurMisAJour.role.libelle,
-    });
-    const {
-      token: refreshToken,
-      token_hash,
-      date_expiration,
-    } = genererRefreshToken();
-
-    await prisma.refreshToken.create({
-      data: {
-        utilisateur_id: utilisateurMisAJour.utilisateur_id,
-        token_hash,
-        date_expiration,
-        user_agent: req.headers["user-agent"]?.slice(0, 255),
-        ip_creation: req.ip,
-        statut: "actif",
-      },
-    });
-
-    res.cookie(
-      NOM_COOKIE_REFRESH_TOKEN,
-      refreshToken,
-      optionsCookieRefreshToken(date_expiration)
-    );
+    const accessToken = await ouvrirSession(req, res, utilisateurMisAJour);
 
     return res.status(200).json({
       message: "Mot de passe mis à jour. Connexion réussie.",
@@ -865,25 +818,6 @@ export async function profil(req, res, next) {
 // Utilitaires internes
 // ---------------------------------------------------------------------
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function normaliserEmail(email) {
-  return String(email).trim().toLowerCase();
-}
-
-/**
- * Validation serveur du mot de passe. Le champ minlength="8" côté
- * HTML n'est qu'une aide UX : sans ce contrôle serveur, n'importe quel
- * appel direct à l'API pouvait créer un compte avec un mot de passe
- * d'un seul caractère.
- */
-function validerMotDePasse(mot_de_passe) {
-  if (typeof mot_de_passe !== "string" || mot_de_passe.length < MOT_DE_PASSE_LONGUEUR_MIN) {
-    return `Le mot de passe doit contenir au moins ${MOT_DE_PASSE_LONGUEUR_MIN} caractères.`;
-  }
-  return null;
-}
-
 /**
  * Comparaison en temps constant pour éviter une attaque par mesure de
  * timing sur le jeton d'amorçage.
@@ -893,16 +827,4 @@ function comparerConstant(a, b) {
   const bufB = Buffer.from(String(b));
   if (bufA.length !== bufB.length) return false;
   return crypto.timingSafeEqual(bufA, bufB);
-}
-
-/**
- * Retire les champs sensibles avant de renvoyer l'utilisateur au client,
- * et expose le rôle sous forme de libellé lisible plutôt que role_id.
- */
-function serialiserUtilisateur(utilisateur) {
-  const { mot_de_passe_hash, role_id, role, ...reste } = utilisateur;
-  return {
-    ...reste,
-    role: role?.libelle ?? null,
-  };
 }

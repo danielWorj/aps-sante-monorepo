@@ -43,7 +43,7 @@
 //   - une fois la fin constatée (`termine_le`), le RDV passe dans « Passés » avec
 //     « Fonds libérés au médecin le jj/mm à hh:mm » (`liberation_prevue_le`) et le
 //     rappel que le patient peut contester avant cette date.
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import PortailSidebar from "./../layouts/portail-sidebar";
 import VisioModal from "./visio-modal";
@@ -57,6 +57,7 @@ import {
 import { annulerRendezVousDetaille } from "./../../../services/fondsService";
 import { resumerAnnulation } from "./../../../utils/fonds";
 import { useAuth } from "./../../../context/AuthContext";
+import { useToast } from "../../feedback";
 import {
   categoriserRdv,
   fondsEnAttenteDeLiberation,
@@ -143,8 +144,7 @@ const PatientRdv = () => {
   const estPatient = status === "authenticated" && user?.role === "patient";
 
   const [activeTab, setActiveTab] = useState("avenir");
-  const [toast, setToast] = useState(null);
-  const toastTimer = useRef(null);
+  const toast = useToast();
 
   // ─── État des rendez-vous ───────────────────────────────────
   const [rendezVous, setRendezVous] = useState([]);
@@ -193,11 +193,6 @@ const PatientRdv = () => {
 
   // Durée optionnelle : un résumé financier (annulation) doit rester lisible
   // plus longtemps qu'un simple message de confirmation.
-  const showToast = (msg, dureeMs = 2600) => {
-    setToast(msg);
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), dureeMs);
-  };
 
   // ─── Code de consultation : copie dans le presse-papiers ────
   const [codeCopieRdvId, setCodeCopieRdvId] = useState(null);
@@ -222,9 +217,9 @@ const PatientRdv = () => {
       )
     );
     fermerDetail();
-    showToast(
+    toast.succes(
       "Consultation contestée. Les fonds restent bloqués et ne seront pas versés au médecin.",
-      7000
+      { duree: 7000 }
     );
     chargerRendezVous();
   };
@@ -384,10 +379,10 @@ const PatientRdv = () => {
         prev.map((r) => (r.rdv_id === id ? { ...r, statut: "annule" } : r))
       );
       setRdvAAnnuler(null);
-      showToast(resumerAnnulation(data, "patient"), 9000);
+      toast.succes(resumerAnnulation(data, "patient"), { duree: 9000 });
     } catch (err) {
       setRdvAAnnuler(null);
-      showToast("Erreur : " + (err.message || "impossible d'annuler le RDV."));
+      toast.erreur(err.message || "Impossible d'annuler le RDV.");
     } finally {
       setActionEnCours(null);
     }
@@ -795,7 +790,7 @@ const PatientRdv = () => {
               <div className="d-flex gap-2 flex-wrap">
                 <button
                   className="btn btn-outline-primary btn-sm-aps"
-                  onClick={() => showToast("Export en cours de préparation (démo).")}
+                  onClick={() => toast.info("Export en cours de préparation (démo).")}
                 >
                   <i className="fa-solid fa-download"></i> Exporter
                 </button>
@@ -970,10 +965,6 @@ const PatientRdv = () => {
         </div>
       </div>
 
-      <div className={`toast-aps ${toast ? "show" : ""}`} role="status">
-        <i className="fa-solid fa-circle-check"></i>
-        <span>{toast}</span>
-      </div>
 
       {renderDetailModal()}
 

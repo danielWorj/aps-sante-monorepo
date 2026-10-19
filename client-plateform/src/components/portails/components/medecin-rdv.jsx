@@ -32,7 +32,7 @@
 //     mention « Fonds libérés le jj/mm à hh:mm » (`liberation_prevue_le`, calculée
 //     par le serveur) ; le statut ne passe à « honore » qu'à la libération (cron) ;
 //   - téléconsultation : pas de code, la fin est constatée par la clôture de la visio.
-import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import PortailSidebar from "./../layouts/portail-sidebar";
 import VisioModal from "./visio-modal";
@@ -48,6 +48,7 @@ import {
 import { annulerRendezVousDetaille } from "./../../../services/fondsService";
 import { obtenirStatutPaiementRdv } from "./../../../services/paiementService";
 import { useAuth } from "./../../../context/AuthContext";
+import { useToast } from "../../feedback";
 import {
   categoriserRdv,
   estRdvNonPaye,
@@ -142,8 +143,7 @@ const MedecinRdv = () => {
   const estMedecin = status === "authenticated" && user?.role === "medecin";
 
   const [activeTab, setActiveTab] = useState("avenir");
-  const [toast, setToast] = useState(null);
-  const toastTimer = useRef(null);
+  const toast = useToast();
 
   // ─── État des rendez-vous ───────────────────────────────────
   const [rendezVous, setRendezVous] = useState([]);
@@ -175,11 +175,6 @@ const MedecinRdv = () => {
 
   // Durée optionnelle : un résumé financier (annulation) doit rester lisible
   // plus longtemps qu'un simple message de confirmation.
-  const showToast = (msg, dureeMs = 2600) => {
-    setToast(msg);
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), dureeMs);
-  };
 
   // ─── Paiement du RDV affiché dans la modale de détail (B7) ──────
   // { rdvId, paiement } | null. `paiement.decomposition` contient, pour le
@@ -327,7 +322,7 @@ const MedecinRdv = () => {
   const refuser = (id) => {
     const rdv = rendezVous.find((r) => r.rdv_id === id);
     if (rdv && estRdvNonPaye(rdv)) {
-      showToast(MESSAGE_RDV_NON_PAYE);
+      toast.avertissement(MESSAGE_RDV_NON_PAYE);
       return;
     }
     setRdvARefuser(id);
@@ -348,15 +343,15 @@ const MedecinRdv = () => {
         prev.map((r) => (r.rdv_id === id ? { ...r, statut: "annule" } : r))
       );
       setRdvARefuser(null);
-      showToast(resumerAnnulation(data, "medecin"), 9000);
+      toast.succes(resumerAnnulation(data, "medecin"), { duree: 9000 });
     } catch (err) {
       setRdvARefuser(null);
       if (estErreurRdvNonPaye(err)) {
         // Course ou liste périmée : le RDV n'est pas (ou plus) payé côté serveur.
-        showToast(MESSAGE_RDV_NON_PAYE);
+        toast.avertissement(MESSAGE_RDV_NON_PAYE);
         chargerRendezVous();
       } else {
-        showToast("Erreur : " + (err.message || "impossible de refuser le RDV."));
+        toast.erreur(err.message || "Impossible de refuser le RDV.");
       }
     } finally {
       setActionEnCours(null);
@@ -393,11 +388,11 @@ const MedecinRdv = () => {
       );
     }
     const quand = formaterDateLiberation(resultat?.liberation_prevue_le);
-    showToast(
+    toast.succes(
       resultat?.deja_constate || !quand
         ? resultat?.message || "Consultation terminée."
         : `Consultation terminée. Fonds libérés le ${quand}.`,
-      7000
+      { duree: 7000 }
     );
     // Resynchronise avec le serveur (statut, notifications, etc.).
     chargerRendezVous();
@@ -419,7 +414,7 @@ const MedecinRdv = () => {
         prev.map((r) => (r.rdv_id === id ? { ...r, ...resultat.rendez_vous } : r))
       );
     }
-    showToast(resultat?.message || "Rendez-vous accepté.", 7000);
+    toast.succes(resultat?.message || "Rendez-vous accepté.", { duree: 7000 });
     chargerRendezVous();
   };
 
@@ -850,7 +845,7 @@ const MedecinRdv = () => {
               <div className="d-flex gap-2 flex-wrap">
                 <button
                   className="btn btn-outline-primary btn-sm-aps"
-                  onClick={() => showToast("Export en cours de préparation (démo).")}
+                  onClick={() => toast.info("Export en cours de préparation (démo).")}
                 >
                   <i className="fa-solid fa-download"></i> Exporter
                 </button>
@@ -1016,10 +1011,6 @@ const MedecinRdv = () => {
         </div>
       </div>
 
-      <div className={`toast-aps ${toast ? "show" : ""}`} role="status">
-        <i className="fa-solid fa-circle-check"></i>
-        <span>{toast}</span>
-      </div>
 
       {renderDetailModal()}
 

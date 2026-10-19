@@ -18,7 +18,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../controllers/annonceur_publicite_controller.dart';
 import '../../controllers/authentification_controller.dart';
 import '../../models/annonceur_publicite_models.dart';
-import '../../pages/public/login.dart';
 import '../../pages/publicite/mes_publicites_screen.dart';
 import '../../pages/publicite/reserver_publicite_screen.dart';
 import '../style/colors.dart';
@@ -71,18 +70,10 @@ class _SliderPubliciteState extends ConsumerState<SliderPublicite> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  // Formulaire ouvert à tous : un visiteur y crée son compte annonceur, un
+  // inscrit passe par « Rejoindre mon espace » (dans le formulaire).
   void _reserver() {
-    final ecran = ReserverPubliciteScreen(codePage: widget.code);
-    if (ref.read(authUtilisateurProvider) != null) {
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => ecran));
-      return;
-    }
-    final navigateur = Navigator.of(context);
-    navigateur.push(MaterialPageRoute(
-      builder: (_) => LoginScreen(
-        onLoginSuccess: () => navigateur.pushReplacement(MaterialPageRoute(builder: (_) => ecran)),
-      ),
-    ));
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReserverPubliciteScreen(codePage: widget.code)));
   }
 
   @override

@@ -11,6 +11,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import ConsultationRoom from "./../../visio/ConsultationRoom";
+import { useConfirmation } from "../../feedback";
 
 function extraireInitiales(nom) {
   if (!nom) return "?";
@@ -39,6 +40,7 @@ function formaterDuree(secondes) {
  * @param {() => void} props.onClose - Appelé à la fermeture de la modale.
  */
 const VisioModal = ({ rdv, patientNom, onClose }) => {
+  const confirmer = useConfirmation();
   const [enDirect, setEnDirect] = useState(false);
   const [duree, setDuree] = useState(0);
   const timerRef = useRef(null);
@@ -50,13 +52,20 @@ const VisioModal = ({ rdv, patientNom, onClose }) => {
     return () => clearInterval(timerRef.current);
   }, [enDirect]);
 
-  const demanderFermeture = useCallback(() => {
+  const demanderFermeture = useCallback(async () => {
     if (enDirect) {
-      const confirme = window.confirm("Quitter la consultation en cours ?");
+      const confirme = await confirmer({
+        titre: "Quitter la consultation",
+        message: "La consultation vidéo est en cours. Voulez-vous vraiment la quitter ?",
+        labelConfirmer: "Quitter",
+        labelAnnuler: "Rester",
+        variante: "danger",
+        icone: "fa-phone-slash",
+      });
       if (!confirme) return;
     }
     onClose();
-  }, [enDirect, onClose]);
+  }, [enDirect, onClose, confirmer]);
 
   // Échap pour fermer, avec confirmation si un appel est en cours.
   useEffect(() => {

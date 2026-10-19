@@ -8,6 +8,7 @@
 //      EXCEPTIONNEL validé ici (Stripe : au clic ; Mobile Money / virement :
 //      fonds renvoyés hors de cette page, puis clôture avec les frais réels).
 import { useCallback, useEffect, useState } from 'react';
+import { useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import FondsModal from '../components/FondsModal';
 import {
@@ -95,7 +96,7 @@ function PaiementsTardifs({ type }) {
   const [lignes, setLignes] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
-  const [message, setMessage] = useState(null);
+  const toast = useToast();
   const [cible, setCible] = useState(null);
   const [fraisReels, setFraisReels] = useState('0');
   const [erreurForm, setErreurForm] = useState(null);
@@ -122,7 +123,7 @@ function PaiementsTardifs({ type }) {
     setErreurForm(null);
     try {
       await traiterPaiementTardif(type, cible.remboursement_id, estStripe ? {} : { frais_reels: frais });
-      setMessage(estStripe ? 'Remboursement effectué chez Stripe.' : 'Remboursement clôturé.');
+      toast.succes(estStripe ? 'Remboursement effectué chez Stripe.' : 'Remboursement clôturé.');
       setCible(null);
       await charger();
     } catch (err) {
@@ -148,7 +149,6 @@ function PaiementsTardifs({ type }) {
           abonnement : rien n&apos;a été activé. Mobile Money / virement : renvoyez d&apos;abord les fonds au payeur,
           puis clôturez avec les frais réels.
         </p>
-        {message && <div className="alert alert-success">{message}</div>}
         {erreur && <div className="alert alert-danger">{erreur}</div>}
       </div>
       <div className="aps-table-wrap">

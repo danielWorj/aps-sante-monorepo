@@ -14,6 +14,7 @@
 //
 // Droits : lecture et modification ouvertes à admin + superadmin.
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import FondsModal from '../components/FondsModal';
 import { listerPays } from '../services/referentielService';
@@ -37,7 +38,7 @@ export default function ParametreDelaiConfirmation() {
   const [bornes, setBornes] = useState({ defaut: 4, min: 1, max: 720 });
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
-  const [message, setMessage] = useState(null);
+  const toast = useToast();
   const [cible, setCible] = useState(null); // pays en cours de paramétrage
   const [form, setForm] = useState({ libelle: '', heures: '' });
   const [erreurForm, setErreurForm] = useState(null);
@@ -98,10 +99,7 @@ export default function ParametreDelaiConfirmation() {
         libelle: form.libelle.trim(),
         heures,
       });
-      setMessage({
-        type: 'success',
-        texte: `Nouveau délai de ${heuresLisibles(heures)} activé pour ${cible.nom}. Il s’applique aux demandes de rendez-vous faites à partir de maintenant.`,
-      });
+      toast.succes(`Nouveau délai de ${heuresLisibles(heures)} activé pour ${cible.nom}. Il s’applique aux demandes de rendez-vous faites à partir de maintenant.`, { duree: 7000 });
       setCible(null);
       await charger();
     } catch (err) {
@@ -136,7 +134,6 @@ export default function ParametreDelaiConfirmation() {
         demandes suivantes. Sans valeur définie pour un pays, {heuresLisibles(bornes.defaut)} s’appliquent.
       </p>
 
-      {message && <div className={`alert alert-${message.type} mb-3`} role="status">{message.texte}</div>}
       {erreur && <div className="alert alert-danger">{erreur}</div>}
       {!chargement && !erreur && sansLigne.length > 0 && (
         <div className="alert alert-info" role="note">

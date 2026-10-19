@@ -4,6 +4,7 @@
 // versionnés. Aucune valeur par défaut : une carte « Non configuré » bloque
 // les paiements de cet agrégateur côté serveur (erreur explicite voulue).
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useConfirmation, useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import FondsModal from '../components/FondsModal';
 import { creerFraisAgregateur, listerFraisAgregateur } from '../services/fondsService';
@@ -20,10 +21,11 @@ const TYPES = [
 const EXEMPLE_HONORAIRES = 15000; // illustration uniquement
 
 export default function FraisAgregateur() {
+  const confirmer = useConfirmation();
+  const toast = useToast();
   const [lignes, setLignes] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
-  const [message, setMessage] = useState(null);
   const [cible, setCible] = useState(null); // { agregateur, type_frais }
   const [form, setForm] = useState({ libelle: '', taux: '', montant_fixe: '' });
   const [erreurForm, setErreurForm] = useState(null);
@@ -73,12 +75,18 @@ export default function FraisAgregateur() {
     if (!form.libelle.trim()) return setErreurForm('Le libellé est obligatoire.');
     if (taux === null) return setErreurForm('Taux invalide : entre 0 et 100 %, deux décimales au maximum.');
     if (!Number.isFinite(fixe) || fixe < 0) return setErreurForm('Le montant fixe doit être positif ou nul.');
-    if (!window.confirm('Activer ce barème ? Les prochains calculs (paiements, remboursements) l’utiliseront.')) return;
+    const ok = await confirmer({
+      titre: 'Activer ce barème',
+      message: 'Les prochains calculs (paiements, remboursements) l’utiliseront.',
+      labelConfirmer: 'Activer',
+      variante: 'avertissement',
+    });
+    if (!ok) return;
     setEnvoi(true);
     setErreurForm(null);
     try {
       await creerFraisAgregateur({ ...cible, libelle: form.libelle.trim(), taux, montant_fixe: fixe });
-      setMessage('Nouveau barème activé.');
+      toast.succes('Nouveau barème activé.');
       setCible(null);
       await charger();
     } catch (err) {
@@ -103,7 +111,6 @@ export default function FraisAgregateur() {
         honoraires − frais de remboursement (CamPay : estimation, les frais réels du retrait sont saisis à la clôture).
       </p>
 
-      {message && <div className="alert alert-success" role="status">{message}</div>}
       {erreur && <div className="alert alert-danger">{erreur}</div>}
       {!chargement && manquants.map((a) => (
         <div key={a.valeur} className="alert alert-warning">

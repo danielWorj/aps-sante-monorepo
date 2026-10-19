@@ -10,6 +10,7 @@
 //     la part médecin (CM) ; le médecin ne voit jamais CP ni le détail du remboursement.
 // Le serveur valide tout (créneau libre, futur, auteur) : ici, affichage et saisie.
 import React, { useEffect, useMemo, useState } from 'react';
+import { useToast } from '../../feedback';
 import { listerCreneauxAgenda } from '../../../services/medecinService';
 import { accepterReprogrammation, proposerReprogrammation } from '../../../services/fondsService';
 import {
@@ -27,7 +28,7 @@ export default function ReprogrammationPanel({ rdv, role, onChange }) {
   const [choix, setChoix] = useState('');
   const [chargement, setChargement] = useState(false);
   const [envoi, setEnvoi] = useState(false);
-  const [retour, setRetour] = useState(null); // { type, texte }
+  const toast = useToast();
 
   useEffect(() => {
     const id = setInterval(() => setMaintenant(Date.now()), 60000);
@@ -44,7 +45,6 @@ export default function ReprogrammationPanel({ rdv, role, onChange }) {
   // Créneaux libres (disponibles, sans RDV, futurs) des 30 prochains jours.
   const chargerCreneaux = async () => {
     setChargement(true);
-    setRetour(null);
     try {
       const debut = new Date();
       const fin = new Date(Date.now() + 30 * 24 * 3600 * 1000);
@@ -58,7 +58,7 @@ export default function ReprogrammationPanel({ rdv, role, onChange }) {
           .sort((a, b) => a.iso.localeCompare(b.iso))
       );
     } catch (err) {
-      setRetour({ type: 'danger', texte: err.message || 'Impossible de charger les créneaux.' });
+      toast.erreur(err.message || 'Impossible de charger les créneaux.');
     } finally {
       setChargement(false);
     }
@@ -78,14 +78,13 @@ export default function ReprogrammationPanel({ rdv, role, onChange }) {
   const proposer = async () => {
     if (!choix || envoi) return;
     setEnvoi(true);
-    setRetour(null);
     try {
       await proposerReprogrammation(rdv.rdv_id, choix);
       setSelecteurOuvert(false);
-      setRetour({ type: 'success', texte: `Proposition envoyée : ${autrePartie} doit maintenant l’accepter.` });
+      toast.succes(`Proposition envoyée : ${autrePartie} doit maintenant l’accepter.`);
       onChange?.();
     } catch (err) {
-      setRetour({ type: 'danger', texte: err.message || 'Proposition impossible.' });
+      toast.erreur(err.message || 'Proposition impossible.');
       if (err.status === 409) chargerCreneaux(); // créneau pris entre-temps
     } finally {
       setEnvoi(false);
@@ -95,13 +94,12 @@ export default function ReprogrammationPanel({ rdv, role, onChange }) {
   const accepter = async () => {
     if (envoi) return;
     setEnvoi(true);
-    setRetour(null);
     try {
       await accepterReprogrammation(rdv.rdv_id, rdv.nouvelle_date_proposee);
-      setRetour({ type: 'success', texte: 'Nouvelle date acceptée : rendez-vous confirmé, aucun nouveau paiement.' });
+      toast.succes('Nouvelle date acceptée : rendez-vous confirmé, aucun nouveau paiement.');
       onChange?.();
     } catch (err) {
-      setRetour({ type: 'danger', texte: err.message || 'Acceptation impossible.' }); // 409 : proposition modifiée, relire
+      toast.erreur(err.message || 'Acceptation impossible.'); // 409 : proposition modifiée, relire
       if (err.status === 409) onChange?.();
     } finally {
       setEnvoi(false);
@@ -169,7 +167,6 @@ export default function ReprogrammationPanel({ rdv, role, onChange }) {
         </>
       )}
 
-      {retour && <div className={`mt-2 small text-${retour.type === 'success' ? 'success' : 'danger'}`} role="status">{retour.texte}</div>}
     </div>
   );
 }

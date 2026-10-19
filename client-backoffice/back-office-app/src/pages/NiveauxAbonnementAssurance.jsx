@@ -10,6 +10,7 @@
 //   - avantages « réservés » : stockés, sans effet tant que les modèles de
 //     données correspondants n'existent pas (phase 9).
 import { useCallback, useEffect, useState } from 'react';
+import { useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import FondsModal from '../components/FondsModal';
 import {
@@ -53,7 +54,7 @@ export default function NiveauxAbonnementAssurance() {
   const [niveaux, setNiveaux] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
-  const [message, setMessage] = useState(null);
+  const toast = useToast();
   const [form, setForm] = useState(null); // null = fermé ; { niveau_id?, ...champs }
   const [erreurForm, setErreurForm] = useState(null);
   const [envoi, setEnvoi] = useState(false);
@@ -104,10 +105,10 @@ export default function NiveauxAbonnementAssurance() {
     try {
       if (form.niveau_id) {
         await modifierNiveau(form.niveau_id, donnees);
-        setMessage(`Niveau « ${donnees.libelle} » mis à jour.`);
+        toast.succes(`Niveau « ${donnees.libelle} » mis à jour.`);
       } else {
         await creerNiveau(donnees);
-        setMessage(`Niveau « ${donnees.libelle} » créé.`);
+        toast.succes(`Niveau « ${donnees.libelle} » créé.`);
       }
       setForm(null);
       await charger();
@@ -137,7 +138,6 @@ export default function NiveauxAbonnementAssurance() {
         Un niveau de rang supérieur doit inclure tous les avantages des rangs inférieurs. Les prix se saisissent
         dans « Tarifs ».
       </div>
-      {message && <div className="alert alert-success" role="status">{message}</div>}
       {erreur && <div className="alert alert-danger">{erreur}</div>}
 
       <div className="aps-card">

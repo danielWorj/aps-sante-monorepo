@@ -15,6 +15,7 @@
 //     soit le statut : une publicité avec historique de paiement n'est pas
 //     effacée mais retirée de la diffusion (facture conservée).
 import { useCallback, useEffect, useState } from 'react';
+import { useConfirmation, useSaisie, useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import FondsModal from '../components/FondsModal';
 import {
@@ -60,11 +61,13 @@ const formulaireDepuis = (p) => Object.fromEntries(CHAMPS_EDITION.map(({ cle }) 
 const aHistoriquePaiement = (p) => !!p.facture || p.statut === 'payee';
 
 export default function Publicite() {
+  const confirmer = useConfirmation();
+  const saisir = useSaisie();
+  const toast = useToast();
   const [onglet, setOnglet] = useState('en_moderation');
   const [recherche, setRecherche] = useState('');
   const [donnees, setDonnees] = useState({ publicites: [], compteurs: {} });
   const [chargement, setChargement] = useState(true);
-  const [message, setMessage] = useState(null);
 
   const [detail, setDetail] = useState(null);
   const [stats, setStats] = useState(null);
@@ -84,11 +87,11 @@ export default function Publicite() {
     try {
       setDonnees(await listerReservationsPublicitaires({ statut: onglet, recherche: recherche.trim() }));
     } catch (err) {
-      setMessage({ type: 'danger', texte: err.message || 'Chargement impossible.' });
+      toast.erreur(err.message || 'Chargement impossible.');
     } finally {
       setChargement(false);
     }
-  }, [onglet, recherche]);
+  }, [onglet, recherche, toast]);
 
   const chargerTardifs = useCallback(() => {
     listerPaiementsTardifsPublicite().then(setTardifs).catch(() => setTardifs([]));
@@ -123,7 +126,7 @@ export default function Publicite() {
       const r = decision === 'accepter'
         ? await accepterPublicite(detail.publicite_id, dateDebut !== detail.date_debut ? dateDebut : undefined)
         : await rejeterPublicite(detail.publicite_id, motif.trim());
-      setMessage({ type: 'success', texte: r.message });
+      toast.succes(r.message);
       setDetail(null);
       await charger();
     } catch (err) {
@@ -146,7 +149,7 @@ export default function Publicite() {
       if (visuel) changes.visuel = visuel;
       if (!Object.keys(changes).length) { setDecision(null); return; }
       await modifierPublicite(detail.publicite_id, changes);
-      setMessage({ type: 'success', texte: 'Publicité mise à jour.' });
+      toast.succes('Publicité mise à jour.');
       setDetail(null);
       await charger();
     } catch (err) {
@@ -157,33 +160,58 @@ export default function Publicite() {
   };
 
   const supprimer = async (p) => {
-    const question = aHistoriquePaiement(p)
-      ? `« ${p.titre} » a un paiement : elle sera retirée de la diffusion et conservée avec sa facture (onglet Annulée). Continuer ?`
-      : `Supprimer définitivement la publicité « ${p.titre} » ?`;
-    if (!window.confirm(question)) return;
+    const ok = await confirmer(aHistoriquePaiement(p)
+      ? {
+          titre: 'Retirer la publicité',
+          message: `« ${p.titre} » a un paiement : elle sera retirée de la diffusion et conservée avec sa facture (onglet Annulée).`,
+          labelConfirmer: 'Retirer',
+          variante: 'avertissement',
+        }
+      : {
+          titre: 'Supprimer la publicité',
+          message: `« ${p.titre} » sera supprimée définitivement.`,
+          labelConfirmer: 'Supprimer',
+          variante: 'danger',
+        });
+    if (!ok) return;
     try {
       const r = await supprimerPublicite(p.publicite_id);
-      setMessage({ type: 'success', texte: r?.message || 'Publicité supprimée.' });
+      toast.succes(r?.message || 'Publicité supprimée.');
       setDetail(null);
       await charger();
     } catch (err) {
-      setMessage({ type: 'danger', texte: err.message || 'Suppression impossible.' });
+      toast.erreur(err.message || 'Suppression impossible.');
     }
   };
 
   const traiterTardif = async (r) => {
     let frais;
     if (r.transaction.fournisseur !== 'stripe') {
-      const saisie = window.prompt('Fonds renvoyés à la main par Mobile Money. Frais réels supportés (FCFA) :', '0');
+      const saisie = await saisir({
+        titre: 'Remboursement Mobile Money',
+        message: 'Fonds renvoyés à la main par Mobile Money.',
+        label: 'Frais réels supportés (FCFA)',
+        type: 'number',
+        min: 0,
+        valeurInitiale: '0',
+        obligatoire: true,
+        valider: (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? null : 'Montant invalide.'),
+        labelConfirmer: 'Enregistrer',
+      });
       if (saisie === null) return;
       frais = Number(saisie);
-    } else if (!window.confirm('Rembourser ce paiement chez Stripe ?')) return;
+    } else if (!(await confirmer({
+      titre: 'Rembourser chez Stripe',
+      message: 'Ce paiement sera remboursé via Stripe.',
+      labelConfirmer: 'Rembourser',
+      variante: 'avertissement',
+    }))) return;
     try {
       await traiterPaiementTardifPublicite(r.remboursement_id, frais);
-      setMessage({ type: 'success', texte: 'Remboursement enregistré.' });
+      toast.succes('Remboursement enregistré.');
       chargerTardifs();
     } catch (err) {
-      setMessage({ type: 'danger', texte: err.message || 'Traitement impossible.' });
+      toast.erreur(err.message || 'Traitement impossible.');
     }
   };
 
@@ -209,8 +237,6 @@ export default function Publicite() {
         jusqu'au paiement ; l'annonceur reçoit la décision par WhatsApp (textes modifiables dans{' '}
         <a href="/whatsapp">Configuration &gt; WhatsApp</a>).
       </p>
-
-      {message && <div className={`alert alert-${message.type} mb-3`} role="status">{message.texte}</div>}
 
       {tardifs.length > 0 && (
         <div className="aps-card mb-3 p-3">

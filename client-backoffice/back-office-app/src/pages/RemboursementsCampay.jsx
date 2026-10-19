@@ -4,6 +4,7 @@
 // Flux : (1) retrait Mobile Money vers le payeur hors de cette page,
 // (2) clôture ici avec les FRAIS RÉELS. Le net est recalculé côté serveur.
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import FondsModal from '../components/FondsModal';
 import { cloturerRemboursementCampay, listerRemboursementsCampay } from '../services/fondsService';
@@ -14,7 +15,7 @@ export default function RemboursementsCampay() {
   const [lignes, setLignes] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
-  const [message, setMessage] = useState(null);
+  const toast = useToast();
   const [cible, setCible] = useState(null);
   const [fraisReels, setFraisReels] = useState('');
   const [erreurForm, setErreurForm] = useState(null);
@@ -53,7 +54,7 @@ export default function RemboursementsCampay() {
     try {
       const rep = await cloturerRemboursementCampay(cible.remboursement_id, frais);
       const r = rep.remboursement;
-      setMessage(`${rep.message} Net versé au patient : ${montantDevise(r.net_verse, cible.devise)}.`);
+      toast.succes(`${rep.message} Net versé au patient : ${montantDevise(r.net_verse, cible.devise)}.`);
       setCible(null);
       await charger();
     } catch (err) {
@@ -77,7 +78,6 @@ export default function RemboursementsCampay() {
         <strong>Procédure :</strong> 1) effectuez le retrait Mobile Money vers le numéro du patient, 2) cliquez sur « Clôturer »
         et saisissez les frais réels du retrait. Le patient reçoit le montant brut moins ces frais.
       </div>
-      {message && <div className="alert alert-success" role="status">{message}</div>}
       {erreur && <div className="alert alert-danger">{erreur}</div>}
 
       <div className="aps-card">

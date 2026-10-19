@@ -1,0 +1,170 @@
+/* feedback.css — toasts et modales de confirmation / saisie.
+ *
+ * Tailles en px (et non en rem) : les deux applications n'ont pas la même
+ * taille de police racine, le rendu doit rester identique.
+ *
+ * Seul fichier du module qui diffère entre client-plateform et
+ * client-backoffice : le bloc de jetons ci-dessous branche les couleurs de
+ * l'application ; tout le reste est identique dans les deux copies.
+ */
+.aps-toast-pile,
+.aps-dialog-fond {
+  --fb-font: var(--font-body, 'Inter', sans-serif);
+  --fb-font-titre: var(--font-display, 'Manrope', sans-serif);
+  --fb-surface: var(--surface, #fff);
+  --fb-surface-alt: var(--surface-alt, #F5F9F7);
+  --fb-texte: var(--ink, #3F4A44);
+  --fb-texte-doux: var(--ink-soft, #71807A);
+  --fb-bordure: var(--line-strong, #D6E5DD);
+  --fb-rayon: var(--radius-lg, 10px);
+  --fb-rayon-sm: var(--radius-sm, 6px);
+  --fb-ombre: 0 20px 44px rgba(30, 40, 35, .18), 0 2px 6px rgba(30, 40, 35, .08);
+
+  --fb-primaire: var(--primary, #4F9E82);
+  --fb-primaire-fonce: var(--primary-hover, #458B70);
+  --fb-primaire-teinte: var(--primary-tint, #EAF6F0);
+  --fb-succes: var(--teal-dark, #2FA57F);
+  --fb-succes-teinte: var(--teal-tint, #E9FBF3);
+  --fb-danger: var(--urgence, #EC7A6B);
+  --fb-danger-fonce: var(--urgence-dark, #D9604F);
+  --fb-danger-teinte: var(--urgence-tint, #FDEEEC);
+  --fb-avertissement: var(--orange-dark, #F0964F);
+  --fb-avertissement-fonce: #D97F38;
+  --fb-avertissement-teinte: var(--orange-tint, #FFF6EC);
+  --fb-info: var(--primary, #4F9E82);
+  --fb-info-teinte: var(--primary-tint, #EAF6F0);
+}
+
+/* =============================== TOASTS =============================== */
+.aps-toast-pile {
+  position: fixed; right: 16px; bottom: 16px; z-index: 2000;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.aps-toast {
+  --fb-accent: var(--fb-info);
+  --fb-accent-teinte: var(--fb-info-teinte);
+  position: relative; overflow: hidden;
+  display: flex; align-items: flex-start; gap: 9px;
+  width: 100%; padding: 11px 10px 12px 13px;
+  background: var(--fb-surface); color: var(--fb-texte);
+  border: 1px solid var(--fb-bordure); border-left: 4px solid var(--fb-accent);
+  border-radius: var(--fb-rayon); box-shadow: var(--fb-ombre);
+  font-family: var(--fb-font); font-size: 13px; line-height: 1.45;
+  pointer-events: auto;
+  animation: apsToastEntree .22s ease-out;
+}
+.aps-toast.is-sortie { animation: apsToastSortie .2s ease-in forwards; }
+.aps-toast--succes { --fb-accent: var(--fb-succes); --fb-accent-teinte: var(--fb-succes-teinte); }
+.aps-toast--erreur { --fb-accent: var(--fb-danger); --fb-accent-teinte: var(--fb-danger-teinte); }
+.aps-toast--avertissement { --fb-accent: var(--fb-avertissement); --fb-accent-teinte: var(--fb-avertissement-teinte); }
+
+.aps-toast-icone {
+  flex: none; width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--fb-accent-teinte); color: var(--fb-accent); font-size: 13px;
+}
+.aps-toast-corps { flex: 1; min-width: 0; padding-top: 3px; }
+.aps-toast-titre { display: block; font-weight: 700; margin-bottom: 2px; }
+.aps-toast-message { white-space: pre-line; overflow-wrap: anywhere; }
+.aps-toast-fermer {
+  flex: none; width: 26px; height: 26px; margin: -2px -2px 0 0;
+  border: none; border-radius: 50%; background: transparent; color: var(--fb-texte-doux);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px;
+}
+.aps-toast-fermer:hover { background: var(--fb-surface-alt); color: var(--fb-texte); }
+.aps-toast-progression {
+  position: absolute; left: 0; bottom: 0; height: 3px; width: 100%;
+  background: var(--fb-accent); opacity: .35; transform-origin: left;
+  animation: apsToastProgression linear forwards;
+}
+.aps-toast:hover .aps-toast-progression,
+.aps-toast:focus-within .aps-toast-progression { animation-play-state: paused; }
+
+@keyframes apsToastEntree { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes apsToastSortie { to { opacity: 0; transform: translateX(16px); } }
+@keyframes apsToastProgression { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+@media (max-width: 576px) {
+  .aps-toast-pile { left: 50%; right: auto; bottom: 16px; transform: translateX(-50%); align-items: stretch; }
+  .aps-toast { font-size: 12.5px; }
+}
+
+/* =============================== MODALE =============================== */
+.aps-dialog-fond {
+  position: fixed; inset: 0; z-index: 1990;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: rgba(18, 22, 28, .5); backdrop-filter: blur(2px);
+  animation: apsDialogFond .16s ease;
+}
+.aps-dialog {
+  --fb-accent: var(--fb-primaire);
+  --fb-accent-fonce: var(--fb-primaire-fonce);
+  --fb-accent-teinte: var(--fb-primaire-teinte);
+  width: 100%; max-width: 440px; max-height: calc(100vh - 32px); overflow-y: auto;
+  padding: 22px 22px 18px;
+  background: var(--fb-surface); color: var(--fb-texte);
+  border-radius: var(--fb-rayon); box-shadow: var(--fb-ombre);
+  font-family: var(--fb-font); font-size: 13px; line-height: 1.5;
+  animation: apsDialogEntree .2s ease-out;
+}
+.aps-dialog--danger { --fb-accent: var(--fb-danger); --fb-accent-fonce: var(--fb-danger-fonce); --fb-accent-teinte: var(--fb-danger-teinte); }
+.aps-dialog--avertissement { --fb-accent: var(--fb-avertissement); --fb-accent-fonce: var(--fb-avertissement-fonce); --fb-accent-teinte: var(--fb-avertissement-teinte); }
+
+.aps-dialog-tete { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.aps-dialog-icone {
+  flex: none; width: 42px; height: 42px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--fb-accent-teinte); color: var(--fb-accent); font-size: 16px;
+}
+.aps-dialog-titre {
+  margin: 0; font-family: var(--fb-font-titre); font-size: 16px; font-weight: 700;
+  color: var(--fb-texte); line-height: 1.3;
+}
+.aps-dialog-message { color: var(--fb-texte-doux); white-space: pre-line; overflow-wrap: anywhere; }
+.aps-dialog-message p:last-child { margin-bottom: 0; }
+
+.aps-dialog-saisie { margin-top: 14px; }
+.aps-dialog-label { display: block; font-weight: 600; margin-bottom: 5px; }
+.aps-dialog-champ {
+  display: block; width: 100%; padding: 8px 10px;
+  border: 1px solid var(--fb-bordure); border-radius: var(--fb-rayon-sm);
+  background: var(--fb-surface); color: var(--fb-texte); font: inherit; resize: vertical;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.aps-dialog-champ:focus { outline: none; border-color: var(--fb-accent); box-shadow: 0 0 0 3px var(--fb-accent-teinte); }
+.aps-dialog-champ.is-invalide { border-color: var(--fb-danger); }
+.aps-dialog-erreur { margin-top: 5px; color: var(--fb-danger-fonce); font-size: 12px; font-weight: 600; }
+
+.aps-dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.aps-dialog-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-width: 96px; padding: 8px 16px;
+  border: 1px solid transparent; border-radius: var(--fb-rayon-sm);
+  font: inherit; font-weight: 600; cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.aps-dialog-btn:focus-visible { outline: 2px solid var(--fb-accent); outline-offset: 2px; }
+.aps-dialog-btn--neutre { background: var(--fb-surface); border-color: var(--fb-bordure); color: var(--fb-texte); }
+.aps-dialog-btn--neutre:hover { background: var(--fb-surface-alt); }
+.aps-dialog-btn--primaire,
+.aps-dialog-btn--danger,
+.aps-dialog-btn--avertissement { background: var(--fb-accent); border-color: var(--fb-accent); color: #fff; }
+.aps-dialog-btn--primaire:hover,
+.aps-dialog-btn--danger:hover,
+.aps-dialog-btn--avertissement:hover { background: var(--fb-accent-fonce); border-color: var(--fb-accent-fonce); }
+
+@keyframes apsDialogFond { from { opacity: 0; } to { opacity: 1; } }
+@keyframes apsDialogEntree { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 576px) {
+  .aps-dialog-fond { align-items: flex-end; padding: 0; }
+  .aps-dialog { max-width: none; border-radius: var(--fb-rayon) var(--fb-rayon) 0 0; padding: 18px 16px 16px; }
+  .aps-dialog-actions { flex-direction: column-reverse; }
+  .aps-dialog-btn { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aps-toast, .aps-toast.is-sortie, .aps-dialog, .aps-dialog-fond { animation-duration: .01ms; }
+}

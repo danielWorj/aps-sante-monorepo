@@ -1,17 +1,17 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
+import { useToast } from './feedback';
 import logoApsa from '../assets/img/logoapsa.jpeg';
 
 export default function Footer() {
   const [email, setEmail] = useState('');
-  const [subscribeMessage, setSubscribeMessage] = useState('');
+  const toast = useToast();
 
   const handleSubscribe = (e) => {
     e.preventDefault();
     if (email) {
-      setSubscribeMessage('Merci de vous être abonné !');
+      toast.succes('Merci de vous être abonné !');
       setEmail('');
-      setTimeout(() => setSubscribeMessage(''), 3000);
     }
   };
 
@@ -32,11 +32,6 @@ export default function Footer() {
             />
             <button type="submit">S'abonner</button>
           </form>
-          {subscribeMessage && (
-            <p style={{ color: '#2d5016', marginTop: '0.5rem', fontSize: '.9rem' }}>
-              {subscribeMessage}
-            </p>
-          )}
         </div>
 
         <div className="row g-4">

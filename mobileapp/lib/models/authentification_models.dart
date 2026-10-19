@@ -44,7 +44,9 @@ enum RoleUtilisateur {
   agentPharmacie,
   agentAmbulance,
   agentPompesFunebres,
-  agentAssurance;
+  agentAssurance,
+  // Compte créé depuis le formulaire de réservation publicitaire.
+  annonceur;
 
   static RoleUtilisateur fromApi(String? valeur) {
     switch (valeur) {
@@ -66,6 +68,8 @@ enum RoleUtilisateur {
         return RoleUtilisateur.agentPompesFunebres;
       case 'agent_assurance':
         return RoleUtilisateur.agentAssurance;
+      case 'annonceur':
+        return RoleUtilisateur.annonceur;
       default:
         return RoleUtilisateur.patient;
     }
@@ -93,6 +97,8 @@ enum RoleUtilisateur {
         return 'agent_pompes_funebres';
       case RoleUtilisateur.agentAssurance:
         return 'agent_assurance';
+      case RoleUtilisateur.annonceur:
+        return 'annonceur';
     }
   }
 

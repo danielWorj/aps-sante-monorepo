@@ -7,6 +7,7 @@
 // publics (qui les masquent hors droits) : la donnée est conservée et
 // réapparaît au public dès l'activation d'un abonnement.
 import { useCallback, useEffect, useState } from 'react';
+import { useToast } from '../components/feedback';
 import { Link, useParams } from 'react-router-dom';
 import { obtenirGestionPresence, LIBELLES_AVANTAGES } from '../services/abonnementPresenceService';
 import { modifierPharmacie } from '../services/pharmacieService';
@@ -42,17 +43,16 @@ function ContenusEnrichis({ type, donnees, onEnregistre }) {
     Object.fromEntries(config.champs.map(([cle]) => [cle, donnees.contenus[cle] ?? '']))
   );
   const [envoi, setEnvoi] = useState(false);
-  const [message, setMessage] = useState(null);
+  const toast = useToast();
   const [erreur, setErreur] = useState(null);
 
   const enregistrer = async (e) => {
     e.preventDefault();
     setEnvoi(true);
-    setMessage(null);
     setErreur(null);
     try {
       await config.enregistrer(donnees.fiche.acteur_id, valeurs);
-      setMessage('Contenus enregistrés. Votre fiche repasse en vérification par ApSa avant publication.');
+      toast.succes('Contenus enregistrés. Votre fiche repasse en vérification par ApSa avant publication.', { duree: 6000 });
       onEnregistre();
     } catch (err) {
       setErreur(err?.message || 'Enregistrement impossible.');
@@ -88,7 +88,6 @@ function ContenusEnrichis({ type, donnees, onEnregistre }) {
           />
         </div>
       ))}
-      {message && <p className="minimal-note"><i className="fa-solid fa-circle-check" /> {message}</p>}
       {erreur && <p className="status-card-error"><i className="fa-solid fa-circle-exclamation" /> {erreur}</p>}
       <button type="submit" className="btn btn-primary btn-sm-aps" disabled={envoi}>
         {envoi ? <><i className="fa-solid fa-spinner fa-spin" /> Enregistrement…</> : 'Enregistrer'}

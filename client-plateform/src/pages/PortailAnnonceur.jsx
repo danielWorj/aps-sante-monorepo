@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { FactureChargee } from '../components/paiement/FactureRecapitulative';
+import { useConfirmation, useToast } from '../components/feedback';
 import {
   STATUTS_PUBLICITE,
   annulerDemandePublicite,
@@ -62,6 +63,8 @@ function GraphiqueDiffusion({ serie }) {
 }
 
 function DetailPublicite({ id }) {
+  const confirmer = useConfirmation();
+  const toast = useToast();
   const navigate = useNavigate();
   const [pub, setPub] = useState(null);
   const [stats, setStats] = useState(null);
@@ -81,10 +84,17 @@ function DetailPublicite({ id }) {
   }, [id]);
 
   const retirer = async () => {
-    if (!window.confirm('Retirer cette demande ? Elle ne pourra pas être reprise.')) return;
+    const ok = await confirmer({
+      titre: 'Retirer la demande',
+      message: 'Elle ne pourra pas être reprise.',
+      labelConfirmer: 'Retirer',
+      variante: 'danger',
+    });
+    if (!ok) return;
     setOccupe(true);
     try {
       await annulerDemandePublicite(id);
+      toast.succes('Demande retirée.');
       navigate('/portail/annonceur');
     } catch (e) {
       setErreur(e.message);

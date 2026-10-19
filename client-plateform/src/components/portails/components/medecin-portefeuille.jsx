@@ -14,6 +14,7 @@
 // les signale (nombre de consultations + prochaine échéance, déduits de la liste des RDV —
 // aucun montant n'est calculé côté client).
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useToast } from '../../feedback';
 import { useLocation } from 'react-router-dom';
 import { listerMesRetraits, demanderRetrait } from '../../../services/retraitService';
 import { obtenirPortefeuille } from '../../../services/fondsService';
@@ -59,7 +60,7 @@ export default function MedecinPortefeuille({ medecinId, mobileMoneys = [], onSo
   const [mobileMoneyId, setMobileMoneyId] = useState(mobileMoneys[0]?.id || '');
   const [montant, setMontant] = useState('');
   const [envoi, setEnvoi] = useState(false);
-  const [retour, setRetour] = useState(null); // { type: 'succes' | 'erreur', texte }
+  const toast = useToast();
 
   const charger = useCallback(async () => {
     try {
@@ -116,14 +117,13 @@ export default function MedecinPortefeuille({ medecinId, mobileMoneys = [], onSo
     e.preventDefault();
     if (envoi || !montantValide || !mobileMoneyId) return;
     setEnvoi(true);
-    setRetour(null);
     try {
       await demanderRetrait(medecinId, { mobileMoneyId, montant: montantNombre });
       setMontant('');
-      setRetour({ type: 'succes', texte: 'Demande enregistrée. Le montant est réservé ; elle sera traitée après validation.' });
+      toast.succes('Demande enregistrée. Le montant est réservé ; elle sera traitée après validation.', { duree: 6000 });
       await charger();
     } catch (err) {
-      setRetour({ type: 'erreur', texte: err.message || 'La demande a échoué.' });
+      toast.erreur(err.message || 'La demande a échoué.');
     } finally {
       setEnvoi(false);
     }
@@ -195,12 +195,6 @@ export default function MedecinPortefeuille({ medecinId, mobileMoneys = [], onSo
                 </small>
               </div>
             </form>
-          )}
-
-          {retour && (
-            <div className={`alert ${retour.type === 'succes' ? 'alert-success' : 'alert-danger'} mt-3 mb-0`} role="status">
-              {retour.texte}
-            </div>
           )}
 
           <h4 className="h6 text-muted mt-4 mb-2">Mes retraits</h4>
