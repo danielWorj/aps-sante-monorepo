@@ -27,6 +27,8 @@
    <key>LSRequiresIPhoneOS</key>
    <true/>
    <!-- ── Requises par le SDK Jitsi (accès caméra/micro pour la visio) ── -->
+   <key>NSLocationWhenInUseUsageDescription</key>
+   <string>Votre position sert à trouver les professionnels de santé proches de vous.</string>
    <key>NSCameraUsageDescription</key>
    <string>L'application a besoin de la caméra pour les téléconsultations.</string>
    <key>NSMicrophoneUsageDescription</key>

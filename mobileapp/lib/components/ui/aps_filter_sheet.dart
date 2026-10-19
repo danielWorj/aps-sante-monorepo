@@ -103,16 +103,15 @@ class _ApsFilterSheetState<T> extends State<_ApsFilterSheet<T>> {
             const SizedBox(height: 20),
             Row(
               children: [
-                Expanded(
-                  child: ApsButton(
-                    label: 'Réinitialiser',
-                    variant: ApsButtonVariant.ghost,
-                    onPressed: () => setState(() => _brouillon = widget.reset),
-                  ),
+                // Largeur intrinsèque : le libellé n'est jamais tronqué.
+                ApsButton(
+                  label: 'Réinitialiser',
+                  variant: ApsButtonVariant.ghost,
+                  expand: false,
+                  onPressed: () => setState(() => _brouillon = widget.reset),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  flex: 2,
                   child: ApsButton(
                     label: widget.applyLabel,
                     onPressed: () => Navigator.of(context).pop(_brouillon),
