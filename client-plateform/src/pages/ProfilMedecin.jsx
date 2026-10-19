@@ -2,12 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import med1 from '../assets/img/med1.jpg';
-import med2 from '../assets/img/med2.avif';
-import med3 from '../assets/img/med3.jpg';
-import med4 from '../assets/img/med4.jpg';
-import med5 from '../assets/img/med5.jpg';
 
 import {
+  listerMedecins,
   obtenirMedecin,
   listerCreneauxLibres,
   listerDisponibilitesMedecin,
@@ -42,6 +39,9 @@ const TABS = [
 // (GET /medecins/:id/agenda?libres=true). Un clic ouvre la page de prise de
 // rendez-vous avec ce créneau présélectionné (?creneau=<id>).
 const NB_PROCHAINS_CRENEAUX = 6;
+
+// Bas de fiche : autres médecins publiés de la même spécialité.
+const NB_MEDECINS_SIMILAIRES = 4;
 
 // "09:00:00" | ISO "1970-01-01T09:00:00.000Z" -> "09:00" (heure murale du
 // médecin, sans conversion de fuseau : c'est ce qu'il a déclaré).
@@ -144,6 +144,25 @@ export default function ProfilMedecin() {
       annule = true;
     };
   }, [id]);
+
+  // Médecins de la même spécialité (hors médecin affiché).
+  const [similaires, setSimilaires] = useState([]);
+  const specialiteId = medecin?.specialite_id ?? medecin?.specialite?.specialite_id;
+  useEffect(() => {
+    if (!specialiteId) return undefined;
+    let annule = false;
+    listerMedecins({ specialite_id: specialiteId, statut_verification: 'publie' })
+      .then((liste) => {
+        if (annule) return;
+        setSimilaires((liste || []).filter((m) => String(m.medecin_id) !== String(id)).slice(0, NB_MEDECINS_SIMILAIRES));
+      })
+      .catch(() => {
+        if (!annule) setSimilaires([]);
+      });
+    return () => {
+      annule = true;
+    };
+  }, [specialiteId, id]);
 
   const nomComplet = useMemo(() => {
     if (!medecin) return '';
@@ -480,28 +499,35 @@ export default function ProfilMedecin() {
             </div>
           </div>
 
-          {/* Professionnels similaires */}
-          <div className="section-head mt-5">
-            <span className="eyebrow">Vous pourriez aussi consulter</span>
-            <h2 style={{ fontSize: '1.4rem' }}>Professionnels similaires</h2>
-          </div>
-          <div className="row g-3">
-            {[
-              { id: 'chantal-mvondo', name: 'Dr. Chantal Mvondo', specialty: 'Médecine générale', photo: med3 },
-              { id: 'lea-abena', name: 'Dr. Léa Abena', specialty: 'Gynécologue', photo: med5 },
-              { id: 'serge-etoundi', name: 'Dr. Serge Etoundi', specialty: 'Dentiste', photo: med4 },
-              { id: 'bertrand-foka', name: 'Dr. Bertrand Foka', specialty: 'Cardiologue', photo: med2 },
-            ].map((doc) => (
-              <div className="col-6 col-md-3" key={doc.id}>
-                <div className="mini-card">
-                  <div className="avatar-ph"><img src={doc.photo} alt={doc.name} /></div>
-                  <h4>{doc.name}</h4>
-                  <p>{doc.specialty}</p>
-                  <Link to={`/profil/${doc.id}`} className="btn btn-outline-primary btn-sm-aps btn-block-aps">Voir le profil</Link>
-                </div>
+          {/* Professionnels similaires : même spécialité */}
+          {similaires.length > 0 && (
+            <>
+              <div className="section-head mt-5">
+                <span className="eyebrow">Vous pourriez aussi consulter</span>
+                <h2 style={{ fontSize: '1.4rem' }}>
+                  Autres médecins en {medecin.specialite?.nom || 'même spécialité'}
+                </h2>
               </div>
-            ))}
-          </div>
+              <div className="row g-3">
+                {similaires.map((doc) => {
+                  const nom = `Dr. ${doc.utilisateur?.prenom || ''} ${doc.utilisateur?.nom || ''}`.trim();
+                  const lieu = [doc.ville_exercice?.nom, doc.pays_exercice?.nom].filter(Boolean).join(' — ');
+                  return (
+                    <div className="col-6 col-md-3" key={doc.medecin_id}>
+                      <div className="mini-card">
+                        <div className="avatar-ph"><img src={doc.photo_url || PHOTO_PAR_DEFAUT} alt={nom} /></div>
+                        <h4>{nom}</h4>
+                        <p>{lieu || doc.specialite?.nom || ''}</p>
+                        <Link to={`/profil/${doc.medecin_id}`} className="btn btn-outline-primary btn-sm-aps btn-block-aps">
+                          <i className="fa-regular fa-eye" /> Voir le profil
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       </section>
     </>
