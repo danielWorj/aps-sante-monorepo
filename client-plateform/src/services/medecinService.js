@@ -391,14 +391,16 @@ export async function supprimerDisponibiliteMedecin(disponibiliteId) {
  * hebdomadaire en une fois, puis re-synchronise les créneaux à venir.
  * @param {string} medecinId
  * @param {Array<{ jour_semaine: string, horaire_id: string }>} disponibilites
- * @returns {Promise<Array>} le gabarit enregistré
+ * @returns {Promise<{ disponibilites: Array, rdv_maintenus: Array<{ creneau_id, debut, fin }> }>}
+ *   le gabarit enregistré, et les rendez-vous à venir qu'il ne couvre plus
+ *   (maintenus : jamais retirés par le serveur).
  */
 export async function remplacerDisponibilitesMedecin(medecinId, disponibilites) {
   const data = await apiFetch(`/medecins/${medecinId}/disponibilites`, {
     method: 'PUT',
     body: { disponibilites },
   });
-  return data.disponibilites;
+  return { disponibilites: data.disponibilites ?? [], rdv_maintenus: data.rdv_maintenus ?? [] };
 }
 
 /* --- CreneauAgenda (instances concrètes) ---------------------------- */
@@ -513,6 +515,31 @@ export async function modifierCreneauAgenda(id, donnees) {
  */
 export async function supprimerCreneauAgenda(id) {
   return apiFetch(`/creneaux-agenda/${id}`, { method: 'DELETE' });
+}
+
+/**
+ * PUT /medecins/:medecinId/agenda/jours/:date
+ * Exception datée : fixe les horaires ouverts aux patients pour cette date
+ * uniquement (la semaine type n'est pas modifiée). Une liste vide ferme la
+ * journée ; les horaires déjà réservés ne sont jamais fermés.
+ * @param {string} medecinId
+ * @param {string} date AAAA-MM-JJ
+ * @param {string[]} horaireIds
+ * @returns {Promise<{ message, ouverts, fermes, maintenus }>}
+ */
+export async function definirJourAgenda(medecinId, date, horaireIds) {
+  return apiFetch(`/medecins/${medecinId}/agenda/jours/${date}`, {
+    method: 'PUT',
+    body: { horaire_ids: horaireIds },
+  });
+}
+
+/**
+ * DELETE /medecins/:medecinId/agenda/jours/:date
+ * Annule l'exception : la journée reprend les horaires de la semaine type.
+ */
+export async function retablirJourAgenda(medecinId, date) {
+  return apiFetch(`/medecins/${medecinId}/agenda/jours/${date}`, { method: 'DELETE' });
 }
 
 /* ===================================================================

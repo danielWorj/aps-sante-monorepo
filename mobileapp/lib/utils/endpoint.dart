@@ -321,6 +321,11 @@ class ApiRealEndpoints {
   static String creneauAgenda(String creneauId) =>
       '${baseUrl}/creneaux-agenda/$creneauId';
 
+  //   - PUT { horaire_ids } : tranches ouvertes pour UNE date (exception à
+  //     la semaine type) ; DELETE : la date reprend la semaine type.
+  static String agendaJour(String medecinId, String dateIso) =>
+      '${baseUrl}/medecins/$medecinId/agenda/jours/$dateIso';
+
   // ─── Notifications in-app (politique de fonds v2) ─────────────────
   // Voir notification.controller.js : authentifié, toujours scopé à
   // l'utilisateur connecté.

@@ -8,7 +8,7 @@
 //   router.post("/pays", authentifier, autoriser("admin", "superadmin"), creerPays);
 
 export function autoriser(...rolesAutorises) {
-  return (req, res, next) => {
+  const verifier = (req, res, next) => {
     if (!req.utilisateur) {
       return res.status(401).json({ message: "Authentification requise." });
     }
@@ -21,4 +21,8 @@ export function autoriser(...rolesAutorises) {
 
     return next();
   };
+  // Lu par src/tests/droitsRoles.test.js pour retrouver, route par route,
+  // les rôles admis et vérifier que tous les autres sont refusés.
+  verifier.rolesAutorises = rolesAutorises;
+  return verifier;
 }

@@ -141,7 +141,7 @@ class AppAlert extends StatelessWidget {
 
     final decoration = BoxDecoration(
       color: palette.background,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(12),
       border: Border.all(
         color: palette.border,
         width: palette.dashed ? 1 : 1,
@@ -158,7 +158,7 @@ class AppAlert extends StatelessWidget {
       color: palette.border,
       borderRadius: 16,
       child: Container(
-        decoration: BoxDecoration(color: palette.background, borderRadius: BorderRadius.circular(16)),
+        decoration: BoxDecoration(color: palette.background, borderRadius: BorderRadius.circular(12)),
         child: content,
       ),
     );

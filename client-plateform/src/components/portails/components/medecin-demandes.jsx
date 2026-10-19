@@ -18,6 +18,7 @@ import { useConfirmation, useToast } from "../../feedback";
 import { useAuth } from "./../../../context/AuthContext";
 import {
   STATUTS_OFFRE,
+  dateOffreLisible,
   listerOffresMedecin,
   repondreOffre,
   retirerReponse,
@@ -34,15 +35,6 @@ const STATUT_REPONSE = {
   retenue: { label: "Vous avez été retenu", chip: "chip-st-confirme", icone: "fa-user-check" },
 };
 
-const dateLongue = (iso) =>
-  new Date(iso).toLocaleString("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
 export default function MedecinDemandes() {
   const { user, status } = useAuth();
   const estMedecin = status === "authenticated" && user?.role === "medecin";
@@ -51,6 +43,7 @@ export default function MedecinDemandes() {
   const [offres, setOffres] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
+  const [raison, setRaison] = useState(null); // pourquoi aucune demande n'est reçue
   const [actionEnCours, setActionEnCours] = useState(null);
   const [messages, setMessages] = useState({}); // offre_id -> mot au patient
   const toast = useToast();
@@ -59,8 +52,9 @@ export default function MedecinDemandes() {
 
   const charger = useCallback(async (v) => {
     try {
-      const liste = await listerOffresMedecin(v);
-      setOffres(liste);
+      const data = await listerOffresMedecin(v);
+      setOffres(data.offres);
+      setRaison(data.raison);
       setErreur(null);
     } catch (err) {
       setErreur(err.message || "Impossible de charger les demandes.");
@@ -76,9 +70,10 @@ export default function MedecinDemandes() {
     let actif = true;
     const tick = async () => {
       try {
-        const liste = await listerOffresMedecin(vue);
+        const data = await listerOffresMedecin(vue);
         if (actif) {
-          setOffres(liste);
+          setOffres(data.offres);
+          setRaison(data.raison);
           setErreur(null);
         }
       } catch (err) {
@@ -162,7 +157,7 @@ export default function MedecinDemandes() {
         <div className="d-flex justify-content-between align-items-start gap-2 flex-wrap">
           <div>
             <h3 className="mb-1">
-              <i className="fa-regular fa-calendar"></i> {dateLongue(o.date_souhaitee)}
+              <i className="fa-regular fa-calendar"></i> {dateOffreLisible(o)}
             </h3>
             <div className="rdv-meta">
               <span>
@@ -284,6 +279,11 @@ export default function MedecinDemandes() {
                   <div className="spinner-border text-primary" role="status">
                     <span className="visually-hidden">Chargement…</span>
                   </div>
+                </div>
+              ) : raison && vue === "ouvertes" ? (
+                <div className="alert alert-warning d-flex align-items-start gap-2 mt-3 mb-0" role="status">
+                  <i className="fa-solid fa-circle-info mt-1"></i>
+                  <div className="flex-grow-1">{raison}</div>
                 </div>
               ) : offres.length === 0 ? (
                 <div className="aps-empty-state">

@@ -71,14 +71,14 @@ class PatientBottomNavigationBar extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(14),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
           child: Container(
             height: 66,
             decoration: BoxDecoration(
               color: PatientNavColors.card.withOpacity(0.94),
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(color: PatientNavColors.line),
               boxShadow: [
                 BoxShadow(
@@ -126,7 +126,7 @@ class _PatientNavItemWidget extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(10),
       child: SizedBox(
         width: 58,
         child: Column(

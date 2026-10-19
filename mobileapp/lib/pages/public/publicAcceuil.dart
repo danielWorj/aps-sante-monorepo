@@ -664,7 +664,7 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final r = BorderRadius.circular(18);
+    final r = BorderRadius.circular(12);
     return Container(
       height: 56,
       decoration: BoxDecoration(
@@ -694,7 +694,7 @@ class _SearchField extends StatelessWidget {
                   height: 44,
                   decoration: BoxDecoration(
                     color: AppColors.ink,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.tune_rounded, size: 18, color: Colors.white),
                 ),
@@ -716,7 +716,7 @@ class _HeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final r = BorderRadius.circular(24);
+    final r = BorderRadius.circular(14);
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(gradient: AppColors.gradientForest, borderRadius: r),
@@ -1063,7 +1063,7 @@ class _AdSlide extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(10),
             child: SizedBox(
               height: 100,
               width: double.infinity,

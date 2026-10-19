@@ -16,9 +16,49 @@ export const STATUTS_OFFRE = {
   annulee: { label: 'Annulée', chip: 'chip-st-annule', icone: 'fa-ban' },
 };
 
+/**
+ * « mardi 20 octobre à 10:00 » : jour et heure choisis par le patient, dans
+ * le fuseau du pays de la demande (`date_murale`, calculée par le serveur).
+ * Jamais convertie dans le fuseau du navigateur : patient et médecins lisent
+ * la même heure, où qu'ils se trouvent.
+ */
+export function dateOffreLisible(offre) {
+  const m = offre?.date_murale;
+  if (!m) return offre?.date_souhaitee ? new Date(offre.date_souhaitee).toLocaleString('fr-FR') : '';
+  const [a, mo, j] = m.jour.split('-').map(Number);
+  const jour = new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(a, mo - 1, j)));
+  return `${jour} à ${m.heure}`;
+}
+
+/**
+ * Morceaux de la date de l'offre pour un bloc date (« lun. / 19 / oct. »),
+ * dans le fuseau du pays de la demande (`date_murale`). Null si absente.
+ */
+export function partiesDateOffre(offre) {
+  const m = offre?.date_murale;
+  if (!m) return null;
+  const [a, mo, j] = m.jour.split('-').map(Number);
+  const d = new Date(Date.UTC(a, mo - 1, j));
+  const fmt = (opts) => new Intl.DateTimeFormat('fr-FR', { ...opts, timeZone: 'UTC' }).format(d);
+  return {
+    jourSemaine: fmt({ weekday: 'short' }),
+    jour: j,
+    mois: fmt({ month: 'short' }).replace('.', ''),
+    heure: m.heure,
+  };
+}
+
 /* ---------------------------- Patient ---------------------------- */
 
-/** POST /offres-rdv — { specialite_id, ville_id, type_rdv, date_souhaitee (ISO), motif? } */
+/**
+ * POST /offres-rdv — { specialite_id, ville_id, type_rdv, jour (AAAA-MM-JJ),
+ * heure (HH:mm), motif? }. Jour et heure sont ceux de la ville choisie.
+ */
 export function publierOffre(donnees) {
   return apiFetch('/offres-rdv', { method: 'POST', body: donnees });
 }
@@ -44,10 +84,14 @@ export function validerMedecin(offreId, reponseId) {
 
 /* ---------------------------- Médecin ---------------------------- */
 
-/** GET /offres-rdv/medecin?vue=ouvertes|mes_reponses */
+/**
+ * GET /offres-rdv/medecin?vue=ouvertes|mes_reponses
+ * @returns {Promise<{ offres: Array, raison: string|null }>} `raison` : pourquoi
+ *   le médecin ne reçoit aucune demande (fiche non publiée, abonnement…).
+ */
 export async function listerOffresMedecin(vue = 'ouvertes') {
   const data = await apiFetch(`/offres-rdv/medecin?vue=${encodeURIComponent(vue)}`);
-  return data.offres || [];
+  return { offres: data.offres || [], raison: data.raison_ineligibilite || null };
 }
 
 /** POST /offres-rdv/:id/reponse — { message? } */

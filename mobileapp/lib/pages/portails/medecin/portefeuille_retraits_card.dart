@@ -161,7 +161,7 @@ class _PortefeuilleRetraitsCardState
       decoration: BoxDecoration(
         color: AppColors.card,
         border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -520,7 +520,7 @@ class _LigneRetrait extends StatelessWidget {
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(color: c.fond, borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(color: c.fond, borderRadius: BorderRadius.circular(14)),
             child: Text(retrait.statut.libelle,
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: c.texte)),
           ),

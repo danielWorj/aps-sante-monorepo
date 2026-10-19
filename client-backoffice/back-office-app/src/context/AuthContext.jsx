@@ -40,6 +40,7 @@ import {
   setUnauthorizedHandler,
   tenterRefresh,
 } from '../lib/apiClient';
+import { estAdministrateur, MESSAGE_ACCES_REFUSE } from '../utils/roles';
 
 const AuthContext = createContext(null);
 
@@ -83,6 +84,17 @@ export function AuthProvider({ children }) {
         try {
           const data = await apiFetch('/auth/me');
           if (annule) return;
+
+          // Session valide mais pas administrateur (ex. patient connecté
+          // sur la plateforme) : on ne l'adopte pas. Pas d'appel à
+          // /auth/logout : cela fermerait aussi sa session sur la
+          // plateforme publique.
+          if (!estAdministrateur(data.utilisateur)) {
+            setAccessToken(null);
+            setUser(null);
+            setStatus('unauthenticated');
+            return;
+          }
 
           setUser(data.utilisateur);
           setStatus('authenticated');
@@ -128,6 +140,33 @@ export function AuthProvider({ children }) {
       //   refresh_token: "eyJhbGc..." (stocké en httpOnly cookie par le serveur),
       //   utilisateur: { prenom, nom, email, role, ... }
       // }
+
+      // Mot de passe temporaire : le serveur n'ouvre pas de session (pas
+      // d'access_token), le changement se fait depuis la plateforme.
+      if (data?.mot_de_passe_a_changer) {
+        throw Object.assign(new Error('Changement de mot de passe requis'), {
+          data: {
+            message:
+              'Votre mot de passe est temporaire : changez-le avant de vous connecter au back-office.',
+          },
+        });
+      }
+
+      if (!estAdministrateur(data.utilisateur)) {
+        // La session vient d'être ouverte côté serveur pour ce compte non
+        // administrateur : on la révoque aussitôt.
+        setAccessToken(data.access_token);
+        try {
+          await apiFetch('/auth/logout', { method: 'POST', skipAuthRetry: true });
+        } catch {
+          // Révocation au mieux : l'accès reste refusé localement.
+        }
+        setAccessToken(null);
+        throw Object.assign(new Error(MESSAGE_ACCES_REFUSE), {
+          status: 403,
+          data: { message: MESSAGE_ACCES_REFUSE },
+        });
+      }
 
       setAccessToken(data.access_token);
       setUser(data.utilisateur);

@@ -134,6 +134,8 @@ export {
   creerCreneauAgenda,
   modifierCreneauAgenda,
   supprimerCreneauAgenda,
+  definirJourAgenda,
+  retablirJourAgenda,
 } from "./agenda.controller.js";
 
 // Doit rester synchronisé avec l'enum StatutVerificationMedecin du

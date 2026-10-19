@@ -239,7 +239,7 @@ class _Recherche extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final r = BorderRadius.circular(18);
+    final r = BorderRadius.circular(12);
     return Container(
       height: 56,
       decoration: BoxDecoration(
@@ -267,7 +267,7 @@ class _Recherche extends StatelessWidget {
                   height: 44,
                   decoration: BoxDecoration(
                     color: AppColors.ink,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.tune_rounded, size: 18, color: Colors.white),
                 ),
@@ -350,7 +350,7 @@ class _CarteProchainRdv extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         gradient: AppColors.gradientForest,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Material(
         type: MaterialType.transparency,
@@ -393,7 +393,7 @@ class _CarteProchainRdv extends StatelessWidget {
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.16),
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             ApsAvatar.initials(nom),
@@ -490,7 +490,7 @@ class _CarteSansRdv extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         gradient: AppColors.gradientForest,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Material(
         type: MaterialType.transparency,

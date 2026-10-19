@@ -1,0 +1,264 @@
+/* ---------------------------- AGENDA MÉDECIN (medecin-agenda.jsx) ----------------------------
+   Semaine type par périodes (matin / après-midi / soirée) + exceptions datées.
+   Préfixe agd- : n'interfère pas avec l'ancienne grille (.agenda-grid). */
+
+.agd{ display:flex; flex-direction:column; gap:1.25rem; }
+
+.agd-carte{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:14px;
+  box-shadow:var(--shadow-sm);
+  padding:1.25rem;
+}
+.agd-chargement{ color:var(--ink-soft); text-align:center; padding:2.5rem 1rem; }
+
+.agd-carte-tete{
+  display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;
+  margin-bottom:1rem;
+}
+.agd-carte-tete h2{
+  font-family:var(--font-display);
+  font-size:1.15rem; margin:0 0 .25rem; color:var(--ink);
+  display:flex; align-items:center; gap:.5rem;
+}
+.agd-carte-tete h2 i{ color:var(--primary); font-size:1rem; }
+.agd-carte-tete p{ margin:0; color:var(--ink-soft); font-size:.88rem; max-width:560px; }
+
+.agd-lien{
+  background:none; border:0; padding:.25rem 0; cursor:pointer;
+  color:var(--primary-dark); font-weight:600; font-size:.82rem;
+  display:inline-flex; align-items:center; gap:.35rem;
+}
+.agd-lien:hover:not(:disabled){ color:var(--primary); text-decoration:underline; }
+.agd-lien:disabled{ color:var(--ink-faint); cursor:default; }
+
+/* ---------- Semaine type ---------- */
+.agd-semaine{ display:flex; flex-direction:column; }
+
+.agd-jour{
+  display:grid;
+  grid-template-columns:150px 1fr auto;
+  gap:1rem; align-items:start;
+  padding:.9rem 0;
+  border-top:1px solid var(--line);
+}
+.agd-jour:first-child{ border-top:0; padding-top:0; }
+.agd-jour-nom{ display:flex; flex-direction:column; gap:.15rem; padding-top:.55rem; }
+.agd-jour-nom strong{ color:var(--ink); font-size:.95rem; }
+.agd-jour-nom small{ color:var(--primary-dark); font-size:.76rem; line-height:1.3; }
+.agd-jour.is-ferme .agd-jour-nom small{ color:var(--ink-faint); }
+.agd-jour-actions{ position:relative; padding-top:.55rem; }
+
+/* ---------- Sélecteur de périodes ---------- */
+.agd-selecteur{ display:flex; flex-direction:column; gap:.7rem; }
+.agd-periodes{ display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
+
+.agd-periode{
+  display:flex; align-items:center; gap:.6rem;
+  min-width:150px;
+  padding:.5rem .8rem .5rem .6rem;
+  border:1.5px solid var(--line-strong);
+  border-radius:12px;
+  background:var(--surface);
+  cursor:pointer; text-align:left;
+  transition:border-color .15s, background .15s, box-shadow .15s;
+}
+.agd-periode:hover:not(:disabled){ border-color:var(--primary); }
+.agd-periode:focus-visible{ outline:2px solid var(--primary); outline-offset:2px; }
+.agd-periode:disabled{ opacity:.6; cursor:default; }
+.agd-periode.is-complet{ border-color:var(--primary); background:var(--primary-tint); }
+.agd-periode.is-partiel{ border-color:var(--primary); border-style:dashed; background:var(--surface-alt); }
+
+.agd-coche{
+  flex:0 0 20px; width:20px; height:20px;
+  border-radius:6px;
+  border:1.5px solid var(--line-strong);
+  background:var(--surface);
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; font-size:.7rem;
+}
+.agd-periode.is-complet .agd-coche,
+.agd-periode.is-partiel .agd-coche{ background:var(--primary); border-color:var(--primary); }
+
+.agd-periode-texte{ display:flex; flex-direction:column; line-height:1.2; }
+.agd-periode-texte strong{ font-size:.87rem; color:var(--ink); font-weight:600; }
+.agd-periode-texte strong i{ color:var(--primary); font-size:.78rem; margin-right:.15rem; }
+.agd-periode-texte small{ font-size:.74rem; color:var(--ink-soft); font-family:var(--font-mono); }
+.agd-periode.is-vide .agd-periode-texte strong i{ color:var(--ink-faint); }
+
+.agd-affiner{
+  background:none; border:0; cursor:pointer;
+  color:var(--ink-soft); font-size:.8rem; font-weight:600;
+  display:inline-flex; align-items:center; gap:.35rem;
+  padding:.4rem .5rem; border-radius:8px;
+}
+.agd-affiner:hover{ color:var(--primary-dark); background:var(--surface-alt); }
+.agd-affiner i{ font-size:.68rem; }
+
+.agd-heures{
+  display:flex; flex-direction:column; gap:.6rem;
+  padding:.8rem; border-radius:12px;
+  background:var(--surface-alt);
+}
+.agd-heures-groupe{ display:grid; grid-template-columns:90px 1fr; gap:.6rem; align-items:start; }
+.agd-heures-titre{ font-size:.76rem; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; padding-top:.35rem; }
+.agd-chips{ display:flex; flex-wrap:wrap; gap:.35rem; }
+.agd-chip{
+  font-family:var(--font-mono); font-size:.78rem;
+  padding:.3rem .6rem; border-radius:var(--radius-pill);
+  border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-soft);
+  cursor:pointer; display:inline-flex; align-items:center; gap:.3rem;
+}
+.agd-chip:hover:not(:disabled){ border-color:var(--primary); color:var(--primary-dark); }
+.agd-chip.is-actif{ background:var(--primary); border-color:var(--primary); color:#fff; }
+.agd-chip.is-verrou{ background:var(--gold-tint); border-color:var(--gold); color:var(--ink); cursor:not-allowed; }
+.agd-chip.is-verrou i{ font-size:.66rem; color:var(--gold); }
+.agd-chip:disabled:not(.is-verrou){ opacity:.6; cursor:default; }
+
+/* ---------- Copier vers… ---------- */
+.agd-copie{
+  position:absolute; right:0; top:2.2rem; z-index:20;
+  width:250px; padding:.8rem;
+  background:var(--surface); border:1px solid var(--line-strong);
+  border-radius:12px; box-shadow:var(--shadow-lg);
+  display:flex; flex-direction:column; gap:.65rem;
+}
+.agd-copie-raccourcis{ display:flex; gap:.4rem; }
+.agd-copie-raccourcis button{
+  flex:1; border:1px solid var(--line-strong); background:var(--surface-alt);
+  border-radius:8px; padding:.3rem; font-size:.78rem; font-weight:600; color:var(--ink-soft); cursor:pointer;
+}
+.agd-copie-raccourcis button:hover{ border-color:var(--primary); color:var(--primary-dark); }
+.agd-copie-jours{ display:grid; grid-template-columns:repeat(3, 1fr); gap:.35rem; }
+.agd-copie-jours label{
+  display:flex; align-items:center; gap:.35rem; margin:0;
+  border:1px solid var(--line); border-radius:8px; padding:.3rem .45rem;
+  font-size:.8rem; color:var(--ink); cursor:pointer;
+}
+.agd-copie-jours label.is-actif{ border-color:var(--primary); background:var(--primary-tint); }
+.agd-copie-jours input{ accent-color:var(--primary); margin:0; }
+.agd-copie-actions{ display:flex; justify-content:flex-end; gap:.4rem; }
+
+/* ---------- Barre d'enregistrement (collante) ---------- */
+.agd-barre-enregistrer{
+  display:none;
+  position:sticky; bottom:1rem; z-index:10;
+  margin-top:1rem; padding:.7rem .9rem;
+  border-radius:12px;
+  background:var(--ink); color:#fff;
+  box-shadow:var(--shadow-lg);
+  justify-content:space-between; align-items:center; gap:.8rem; flex-wrap:wrap;
+}
+.agd-barre-enregistrer.is-visible{ display:flex; }
+.agd-barre-enregistrer > span{ font-size:.86rem; display:flex; align-items:center; gap:.45rem; }
+.agd-barre-enregistrer > span i{ color:var(--gold); }
+.agd-barre-enregistrer > div{ display:flex; gap:.4rem; }
+.agd-barre-enregistrer .btn-ghost{ color:#fff; }
+.agd-barre-enregistrer .btn-ghost:hover{ background:rgba(255,255,255,.1); color:#fff; }
+
+/* ---------- Prochains jours ---------- */
+.agd-nav-semaine{ display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+.agd-nav-semaine strong{ font-size:.92rem; color:var(--ink); min-width:150px; text-align:center; }
+.agd-nav-btn{
+  width:34px; height:34px; border-radius:10px;
+  border:1px solid var(--line-strong); background:var(--surface); color:var(--primary-dark);
+  display:inline-flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.agd-nav-btn:hover:not(:disabled){ border-color:var(--primary); background:var(--primary-tint); }
+.agd-nav-btn:disabled{ opacity:.4; cursor:default; }
+
+.agd-dates{ display:flex; flex-direction:column; gap:.55rem; transition:opacity .15s; }
+.agd-dates.is-chargement{ opacity:.5; pointer-events:none; }
+
+.agd-date{
+  border:1px solid var(--line); border-radius:12px;
+  padding:.8rem .9rem;
+  background:var(--surface);
+}
+.agd-date.is-today{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary-tint-strong); }
+.agd-date.is-passe{ opacity:.55; }
+.agd-date.is-edition{ border-color:var(--primary); background:var(--surface-alt); }
+
+.agd-date-ligne{ display:flex; gap:.9rem; align-items:flex-start; }
+.agd-date-badge{
+  flex:0 0 52px; height:52px; border-radius:12px;
+  background:var(--primary-tint); color:var(--primary-dark);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.05;
+}
+.agd-date-badge span{ font-size:.7rem; font-weight:700; text-transform:uppercase; }
+.agd-date-badge strong{ font-size:1.25rem; font-family:var(--font-display); }
+.agd-date.is-today .agd-date-badge{ background:var(--primary); color:#fff; }
+
+.agd-date-corps{ flex:1; display:flex; flex-direction:column; gap:.45rem; }
+.agd-date-titre{ display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; font-weight:600; color:var(--ink); font-size:.92rem; }
+.agd-tag{ font-size:.68rem; font-weight:700; padding:.12rem .5rem; border-radius:var(--radius-pill); }
+.agd-tag-today{ background:var(--primary); color:#fff; }
+.agd-tag-perso{ background:var(--gold-tint); color:#9a6a1c; border:1px solid var(--gold); }
+.agd-date-ferme{ font-size:.82rem; color:var(--ink-faint); }
+
+.agd-date-periodes{ display:flex; flex-wrap:wrap; gap:.4rem; }
+.agd-pastille{
+  display:inline-flex; align-items:center; gap:.35rem;
+  font-size:.8rem; font-weight:600; color:var(--ink);
+  background:var(--surface-alt); border:1px solid var(--line);
+  border-radius:var(--radius-pill); padding:.2rem .65rem;
+}
+.agd-pastille i{ color:var(--primary); font-size:.72rem; }
+.agd-pastille em{ font-style:normal; font-weight:500; color:var(--ink-soft); }
+
+.agd-rdvs{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.25rem; }
+.agd-rdvs li{
+  display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
+  font-size:.83rem;
+  padding:.3rem .55rem; border-radius:8px;
+  background:var(--teal-tint); border-left:3px solid var(--teal-dark);
+}
+.agd-rdvs li.is-non-paye{ background:var(--surface-alt); border-left-color:var(--line-strong); color:var(--ink-soft); }
+.agd-rdv-heure{ font-family:var(--font-mono); font-weight:700; color:var(--ink); }
+.agd-rdv-patient{ font-weight:600; color:var(--ink); display:inline-flex; align-items:center; gap:.3rem; }
+.agd-rdv-patient i{ color:var(--teal-dark); font-size:.75rem; }
+.agd-rdvs li.is-non-paye .agd-rdv-patient{ color:var(--ink-soft); font-weight:500; }
+.agd-rdv-type{ color:var(--ink-soft); font-size:.78rem; }
+
+.agd-date-actions{ flex:0 0 auto; }
+
+.agd-date-edition{
+  margin-top:.8rem; padding-top:.8rem;
+  border-top:1px dashed var(--line-strong);
+  display:flex; flex-direction:column; gap:.8rem;
+}
+.agd-date-edition-actions{ display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; }
+.agd-espace{ flex:1; }
+
+/* ---------- Bon à savoir ---------- */
+.agd-bon-a-savoir{
+  border-radius:14px; padding:1rem 1.25rem;
+  background:var(--primary-tint);
+  color:var(--ink);
+}
+.agd-bon-a-savoir h3{ font-size:.95rem; margin:0 0 .5rem; display:flex; align-items:center; gap:.45rem; }
+.agd-bon-a-savoir h3 i{ color:var(--primary); }
+.agd-bon-a-savoir ul{ margin:0; padding-left:1.1rem; font-size:.85rem; color:var(--ink-soft); display:flex; flex-direction:column; gap:.2rem; }
+
+/* ---------- Mobile ---------- */
+@media (max-width: 860px){
+  .agd-jour{ grid-template-columns:1fr; gap:.55rem; }
+  .agd-jour-nom{ flex-direction:row; align-items:baseline; gap:.5rem; padding-top:0; }
+  .agd-jour-actions{ padding-top:0; }
+  .agd-copie{ left:0; right:auto; }
+}
+@media (max-width: 576px){
+  .agd-carte{ padding:1rem; }
+  .agd-periodes{ display:grid; grid-template-columns:1fr 1fr; }
+  .agd-periode{ min-width:0; }
+  .agd-affiner{ grid-column:1 / -1; justify-content:center; }
+  .agd-heures-groupe{ grid-template-columns:1fr; gap:.3rem; }
+  .agd-heures-titre{ padding-top:0; }
+  .agd-date-ligne{ flex-wrap:wrap; }
+  .agd-date-actions{ flex:1 1 100%; }
+  .agd-date-actions .btn{ width:100%; }
+  .agd-nav-semaine{ width:100%; justify-content:space-between; }
+  .agd-nav-semaine strong{ min-width:0; flex:1; }
+  .agd-barre-enregistrer > div{ width:100%; justify-content:flex-end; }
+}

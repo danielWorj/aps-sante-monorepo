@@ -313,7 +313,7 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
               padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
               decoration: BoxDecoration(
                 color: AppColors.primaryLight,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(children: [
                 const Icon(Icons.account_circle_outlined, color: AppColors.primary),
@@ -525,7 +525,7 @@ class _Bloc extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.line),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

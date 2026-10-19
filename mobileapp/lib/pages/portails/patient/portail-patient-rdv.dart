@@ -889,7 +889,7 @@ class _CarteCodeConsultation extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.b0,
         border: Border.all(color: AppColors.b1),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

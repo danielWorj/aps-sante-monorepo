@@ -201,3 +201,22 @@
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(0, 0, 0, .06);
 }
+/* ------------------ BANDEAU « DEMANDE RAPIDE » (RDV aléatoire) ------------------ */
+.demande-rapide-banner{
+  display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+  background:var(--primary-tint);
+  border:1px solid var(--primary-tint-strong);
+  border-radius:var(--radius-lg);
+  padding:1rem 1.15rem;
+  margin-bottom:1rem;
+}
+.demande-rapide-icone{
+  width:42px; height:42px; min-width:42px;
+  border-radius:12px;
+  background:var(--surface); color:var(--primary);
+  display:flex; align-items:center; justify-content:center;
+  font-size:1.05rem;
+}
+.demande-rapide-texte{flex:1; min-width:200px; display:flex; flex-direction:column; gap:.2rem;}
+.demande-rapide-texte strong{color:var(--ink); font-size:.95rem;}
+.demande-rapide-texte span{color:var(--ink-soft); font-size:.82rem;}

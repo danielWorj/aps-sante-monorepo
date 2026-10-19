@@ -280,7 +280,7 @@ class _ProfileHero extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: AppColors.green100,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: (photoUrl != null && photoUrl.isNotEmpty)

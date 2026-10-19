@@ -28,7 +28,12 @@ import prisma from "../lib/prisma.js";
 import { construireUrl } from "../lib/cloudinaryService.js";
 import { genererCodeConsultation } from "../lib/codeConsultation.js";
 import { echeanceConfirmation } from "../lib/delaiConfirmation.js";
-import { caseDepuisInstant } from "../lib/fuseauHoraire.js";
+import {
+  caseDepuisInstant,
+  fuseauOuDefaut,
+  heureMuraleDepuisInstant,
+  instantDepuisHeureMurale,
+} from "../lib/fuseauHoraire.js";
 import {
   droitsPresencePublics,
   filtrerMedecin,
@@ -91,18 +96,46 @@ export class ErreurOffre extends Error {
  * vérifiés ensuite en lot) : même spécialité, pays et ville, fiche en ligne
  * (publiée, ou déjà publiée et en re-modération), compte actif.
  */
+// Fiche en ligne (publiée, ou déjà publiée et en re-modération) et compte actif.
+const FILTRE_FICHE_EN_LIGNE = {
+  utilisateur: { statut_compte: "actif" },
+  OR: [
+    { statut_verification: "publie" },
+    { statut_verification: "en_cours", date_premiere_publication: { not: null } },
+  ],
+};
+
 function filtreMedecinsEligibles(offre) {
   return {
     specialite_id: offre.specialite_id,
     pays_exercice_id: offre.pays_id,
     ville_exercice_id: offre.ville_id,
     ...(offre.type_rdv === "teleconsultation" ? { teleconsultation_activee: true } : {}),
-    utilisateur: { statut_compte: "actif" },
-    OR: [
-      { statut_verification: "publie" },
-      { statut_verification: "en_cours", date_premiere_publication: { not: null } },
-    ],
+    ...FILTRE_FICHE_EN_LIGNE,
   };
+}
+
+/**
+ * Raison pour laquelle ce médecin ne reçoit AUCUNE demande (fiche hors
+ * ligne, profil incomplet, abonnement sans RDV en ligne), ou null. La liste
+ * des demandes ouvertes et le droit de répondre reposent sur les mêmes
+ * règles : un médecin ne voit jamais une demande à laquelle il ne peut pas
+ * répondre.
+ * @returns {Promise<string|null>}
+ */
+async function raisonSansDemandes(medecin, db = prisma) {
+  const enLigne = await db.medecin.count({ where: { medecin_id: medecin.medecin_id, ...FILTRE_FICHE_EN_LIGNE } });
+  if (!enLigne) {
+    return "Votre fiche n'est pas encore publiée : les demandes des patients vous seront signalées dès sa validation.";
+  }
+  if (!medecin.specialite_id || !medecin.pays_exercice_id || !medecin.ville_exercice_id) {
+    return "Renseignez votre spécialité et votre ville d'exercice sur votre profil pour recevoir les demandes des patients.";
+  }
+  const { droits } = await resoudreDroitsPresence("medecin", medecin.medecin_id);
+  if (!droits.prise_rdv_en_ligne) {
+    return "La prise de rendez-vous en ligne n'est pas incluse dans votre abonnement de présence actuel.";
+  }
+  return null;
 }
 
 /**
@@ -110,17 +143,15 @@ function filtreMedecinsEligibles(offre) {
  * @returns {Promise<string|null>}
  */
 async function raisonInegibilite(medecin, offre, db = prisma) {
+  const generale = await raisonSansDemandes(medecin, db);
+  if (generale) return generale;
   const eligible = await db.medecin.count({
     where: { medecin_id: medecin.medecin_id, ...filtreMedecinsEligibles(offre) },
   });
   if (!eligible) {
     return offre.type_rdv === "teleconsultation" && !medecin.teleconsultation_activee
       ? "Cette demande est une téléconsultation : activez la téléconsultation sur votre profil pour y répondre."
-      : "Cette demande ne correspond pas à votre spécialité, à votre ville d'exercice ou à l'état de votre fiche.";
-  }
-  const { droits } = await resoudreDroitsPresence("medecin", medecin.medecin_id);
-  if (!droits.prise_rdv_en_ligne) {
-    return "La prise de rendez-vous en ligne n'est pas incluse dans votre abonnement de présence actuel.";
+      : "Cette demande ne correspond pas à votre spécialité ou à votre ville d'exercice.";
   }
   return null;
 }
@@ -200,9 +231,54 @@ const SELECTION_MEDECIN_REPONSE = {
 const INCLUSION_OFFRE = {
   specialite: { select: { specialite_id: true, nom: true } },
   ville: { select: { ville_id: true, nom: true } },
-  pays: { select: { pays_id: true, nom: true } },
+  pays: { select: { pays_id: true, nom: true, fuseau_horaire: true } },
   rendez_vous: { select: { rdv_id: true, statut: true, medecin_id: true, date_creneau: true } },
 };
+
+const deuxChiffres = (n) => String(n).padStart(2, "0");
+
+/**
+ * Ajoute `date_murale` : le jour et l'heure de l'offre dans le fuseau de son
+ * pays, tels que le patient les a choisis. Les clients affichent ces valeurs
+ * telles quelles, jamais `date_souhaitee` convertie dans le fuseau de
+ * l'appareil (un patient à Paris et un médecin à Douala lisent la même heure).
+ */
+function avecDateMurale(offre) {
+  const fuseau = fuseauOuDefaut(offre.pays?.fuseau_horaire);
+  const m = heureMuraleDepuisInstant(offre.date_souhaitee, fuseau);
+  return {
+    ...offre,
+    date_murale: {
+      jour: `${m.annee}-${deuxChiffres(m.mois)}-${deuxChiffres(m.jour)}`,
+      heure: `${deuxChiffres(m.heures)}:${deuxChiffres(m.minutes)}`,
+      fuseau,
+    },
+  };
+}
+
+const RE_JOUR = /^(\d{4})-(\d{2})-(\d{2})$/;
+const RE_HEURE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/**
+ * Instant souhaité : de préférence `jour` (AAAA-MM-JJ) + `heure` (HH:mm),
+ * heure murale du pays de la ville ; sinon `date_souhaitee` (ISO, ancien
+ * contrat, conservé pour les clients non mis à jour).
+ */
+function instantSouhaite({ jour, heure, date_souhaitee }, fuseau) {
+  if (jour !== undefined || heure !== undefined) {
+    const j = typeof jour === "string" ? RE_JOUR.exec(jour) : null;
+    const h = typeof heure === "string" ? RE_HEURE.exec(heure) : null;
+    if (!j || !h) throw new ErreurOffre("jour (AAAA-MM-JJ) ou heure (HH:mm) invalide.", 400);
+    return instantDepuisHeureMurale(
+      { annee: Number(j[1]), mois: Number(j[2]), jour: Number(j[3]), heures: Number(h[1]), minutes: Number(h[2]) },
+      fuseau
+    );
+  }
+  const date = new Date(date_souhaitee);
+  if (Number.isNaN(date.getTime())) throw new ErreurOffre("date_souhaitee invalide.", 400);
+  date.setUTCSeconds(0, 0);
+  return date;
+}
 
 /** Fiche publique d'un répondant (droits de présence appliqués, URLs construites). */
 function ficheMedecinPublique(m, droits, avis) {
@@ -237,7 +313,7 @@ async function avisParMedecin(ids) {
 
 /** Offre vue par le médecin : jamais l'identité du patient (D8). */
 function offrePourMedecin(offre, maReponse) {
-  const { patient_id: _p, patient: _pa, reponses: _r, rendez_vous: rdv, rdv_id: _id, ...reste } = offre;
+  const { patient_id: _p, patient: _pa, reponses: _r, rendez_vous: rdv, rdv_id: _id, ...reste } = avecDateMurale(offre);
   return {
     ...reste,
     // Le médecin sait seulement si l'offre lui a été attribuée, jamais à qui d'autre.
@@ -273,22 +349,30 @@ function nettoyerTexte(valeur, nom, max) {
 /**
  * Publie une offre et la signale aux médecins éligibles.
  * @param {{ patient_id: string }} patient
- * @param {object} corps { specialite_id, ville_id, type_rdv, date_souhaitee, motif }
+ * @param {object} corps { specialite_id, ville_id, type_rdv, jour + heure (heure murale du pays de la ville) ou date_souhaitee (ISO), motif }
  * @returns {Promise<{ offre: object, medecins_notifies: number }>}
  */
 export async function publierOffre(patient, corps = {}, maintenant = new Date()) {
-  const { specialite_id, ville_id, type_rdv, date_souhaitee } = corps;
-  if (!specialite_id || !ville_id || !type_rdv || !date_souhaitee) {
-    throw new ErreurOffre("Champs requis manquants : specialite_id, ville_id, type_rdv, date_souhaitee.", 400);
+  const { specialite_id, ville_id, type_rdv } = corps;
+  if (!specialite_id || !ville_id || !type_rdv || (!corps.date_souhaitee && !(corps.jour && corps.heure))) {
+    throw new ErreurOffre("Champs requis manquants : specialite_id, ville_id, type_rdv, jour et heure.", 400);
   }
   if (!TYPES_RDV.includes(type_rdv)) {
     throw new ErreurOffre(`type_rdv invalide. Valeurs acceptées : ${TYPES_RDV.join(", ")}.`, 400);
   }
   const motif = nettoyerTexte(corps.motif, "motif", LONGUEUR_MAX_MOTIF);
 
-  const date = new Date(date_souhaitee);
-  if (Number.isNaN(date.getTime())) throw new ErreurOffre("date_souhaitee invalide.", 400);
-  date.setUTCSeconds(0, 0);
+  const [specialite, ville] = await Promise.all([
+    prisma.specialite.findUnique({ where: { specialite_id }, select: { specialite_id: true, nom: true } }),
+    prisma.ville.findUnique({
+      where: { ville_id },
+      select: { ville_id: true, pays_id: true, nom: true, pays: { select: { fuseau_horaire: true } } },
+    }),
+  ]);
+  if (!specialite) throw new ErreurOffre("specialite_id introuvable.", 400);
+  if (!ville) throw new ErreurOffre("ville_id introuvable.", 400);
+
+  const date = instantSouhaite(corps, fuseauOuDefaut(ville.pays?.fuseau_horaire));
   if (date.getTime() < maintenant.getTime() + DELAI_MIN_PUBLICATION_MINUTES * MS_PAR_MINUTE) {
     throw new ErreurOffre(
       `La date souhaitée doit être au moins ${DELAI_MIN_PUBLICATION_MINUTES / 60} h après la publication, ` +
@@ -300,13 +384,6 @@ export async function publierOffre(patient, corps = {}, maintenant = new Date())
   if (date.getTime() > maintenant.getTime() + horizonAgendaJours() * MS_PAR_JOUR) {
     throw new ErreurOffre(`La date souhaitée ne peut pas dépasser ${horizonAgendaJours()} jours.`, 400, "DATE_TROP_LOINTAINE");
   }
-
-  const [specialite, ville] = await Promise.all([
-    prisma.specialite.findUnique({ where: { specialite_id }, select: { specialite_id: true, nom: true } }),
-    prisma.ville.findUnique({ where: { ville_id }, select: { ville_id: true, pays_id: true, nom: true } }),
-  ]);
-  if (!specialite) throw new ErreurOffre("specialite_id introuvable.", 400);
-  if (!ville) throw new ErreurOffre("ville_id introuvable.", 400);
 
   const enCours = await prisma.offreRdv.count({
     where: { patient_id: patient.patient_id, statut: { in: ["ouverte", "attribuee"] }, date_souhaitee: { gt: maintenant } },
@@ -339,7 +416,7 @@ export async function publierOffre(patient, corps = {}, maintenant = new Date())
     // L'offre reste publiée : les médecins la voient dans leur liste.
     console.error(`[offre-rdv] Notification des médecins impossible (offre ${offre.offre_id}) :`, err.message);
   }
-  return { offre: { ...offre, reponses: [] }, medecins_notifies };
+  return { offre: { ...avecDateMurale(offre), reponses: [] }, medecins_notifies };
 }
 
 async function notifierMedecinsEligibles(offre) {
@@ -391,7 +468,7 @@ export async function listerOffresPatient(patient, { statut, offre_id } = {}) {
   const ids = [...new Set(offres.flatMap((o) => o.reponses.map((r) => r.medecin_id)))];
   const [droitsParId, avis] = await Promise.all([resoudreDroitsPresenceEnLot("medecin", ids), avisParMedecin(ids)]);
   return offres.map((o) => ({
-    ...o,
+    ...avecDateMurale(o),
     reponses: o.reponses.map((r) => ({
       reponse_id: r.reponse_id,
       statut: r.statut,
@@ -518,8 +595,11 @@ async function genererCodeUnique() {
 
 /**
  * Offres visibles par le médecin :
- *   - « ouvertes » : offres ouvertes, à venir, auxquelles il est éligible ;
+ *   - « ouvertes » : offres ouvertes, à venir, auxquelles il est éligible
+ *     (mêmes règles que pour répondre) ; s'il ne peut en recevoir aucune,
+ *     `raison` dit pourquoi ;
  *   - « mes_reponses » : offres auxquelles il a répondu (tout statut).
+ * @returns {Promise<{ offres: object[], raison: string|null }>}
  */
 export async function listerOffresMedecin(medecin, { vue = "ouvertes" } = {}, maintenant = new Date()) {
   if (vue === "mes_reponses") {
@@ -528,11 +608,11 @@ export async function listerOffresMedecin(medecin, { vue = "ouvertes" } = {}, ma
       orderBy: { date_creation: "desc" },
       include: { offre: { include: INCLUSION_OFFRE } },
     });
-    return reponses.map((r) => offrePourMedecin(r.offre, r));
+    return { offres: reponses.map((r) => offrePourMedecin(r.offre, r)), raison: null };
   }
 
-  const { droits } = await resoudreDroitsPresence("medecin", medecin.medecin_id);
-  if (!droits.prise_rdv_en_ligne) return [];
+  const raison = await raisonSansDemandes(medecin);
+  if (raison) return { offres: [], raison };
   const offres = await prisma.offreRdv.findMany({
     where: {
       statut: "ouverte",
@@ -549,7 +629,7 @@ export async function listerOffresMedecin(medecin, { vue = "ouvertes" } = {}, ma
       _count: { select: { reponses: { where: { statut: { in: ["proposee", "retenue"] } } } } },
     },
   });
-  return offres.map((o) => offrePourMedecin(o, o.reponses[0] ?? null));
+  return { offres: offres.map((o) => offrePourMedecin(o, o.reponses[0] ?? null)), raison: null };
 }
 
 /**
@@ -757,7 +837,7 @@ export async function listerOffresAdmin({ statut, pays_id, page = 1, limite = 25
 
   const statistiques = Object.fromEntries(STATUTS_OFFRE.map((s) => [s, 0]));
   for (const l of parStatut) statistiques[l.statut] = l._count._all;
-  return { offres, total, page: numero, limite: taille, statistiques };
+  return { offres: offres.map(avecDateMurale), total, page: numero, limite: taille, statistiques };
 }
 
 /** Modération : un admin retire une offre encore ouverte. */

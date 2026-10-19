@@ -16,15 +16,15 @@ class AppColors {
   // ===========================================================
   // VERTS — marque, actions principales, succès
   // ===========================================================
-  static const Color b9 = Color(0xFF062E21);
-  static const Color b8 = Color(0xFF0A4A35);
-  static const Color b7 = Color(0xFF0E6A4A);
-  static const Color b6 = Color(0xFF12865D);
-  static const Color b5 = Color(0xFF19A06F);
-  static const Color b4 = Color(0xFF4CC495);
-  static const Color b2 = Color(0xFFBDEAD6);
-  static const Color b1 = Color(0xFFE1F4EA);
-  static const Color b0 = Color(0xFFF0F9F4);
+  static const Color b9 = Color(0xFF0F5C44);
+  static const Color b8 = Color(0xFF13775A);
+  static const Color b7 = Color(0xFF16996C);
+  static const Color b6 = Color(0xFF1DAE7C);
+  static const Color b5 = Color(0xFF34C38F);
+  static const Color b4 = Color(0xFF74D9B0);
+  static const Color b2 = Color(0xFFC6EFDD);
+  static const Color b1 = Color(0xFFE5F7EF);
+  static const Color b0 = Color(0xFFF3FBF7);
 
   /// Vert menthe utilisé sur fonds sombres (accroches, pastilles).
   static const Color mint = Color(0xFF7FE0B5);
@@ -139,21 +139,21 @@ class AppColors {
   static const LinearGradient gradientForest = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [b7, b9],
+    colors: [b6, b7],
   );
 
   /// Logo et pastille de confirmation.
   static const LinearGradient gradientLogo = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF2CC286), b8],
+    colors: [b5, b7],
   );
 
   /// Bandeau « Demande express ».
   static const LinearGradient gradientViolet = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [violet, Color(0xFF3E31B8)],
+    colors: [Color(0xFF7D70F3), violet],
   );
 
   // ===========================================================
@@ -190,7 +190,7 @@ class AppColors {
   /// Ombre colorée sous le bouton principal.
   static List<BoxShadow> shadowGlow(Color c) => [
         BoxShadow(
-          color: c.withValues(alpha: 0.55),
+          color: c.withValues(alpha: 0.30),
           blurRadius: 24,
           offset: const Offset(0, 12),
           spreadRadius: -12,

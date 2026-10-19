@@ -8,8 +8,8 @@ import 'text_styles.dart';
 ///
 /// Tous les widgets Material (champs, boutons, feuilles, dialogues,
 /// onglets, bascules…) héritent ici de la nouvelle direction visuelle :
-/// surfaces claires, rayons 12 · 16 · 22 · 32, Plus Jakarta Sans en gras,
-/// un seul vert d'action.
+/// surfaces claires, rayons 10 · 12 · 14 · 20, Plus Jakarta Sans en gras,
+/// un seul vert d’action, doux et lumineux.
 class AppTheme {
   AppTheme._();
 
@@ -43,8 +43,8 @@ class AppTheme {
       outlineVariant: AppColors.line,
     );
 
-    const radius16 = BorderRadius.all(Radius.circular(16));
-    const radius18 = BorderRadius.all(Radius.circular(18));
+    const radius16 = BorderRadius.all(Radius.circular(12));
+    const radius18 = BorderRadius.all(Radius.circular(12));
 
     OutlineInputBorder border(Color c, [double w = 1.5]) => OutlineInputBorder(
           borderRadius: radius16,
@@ -109,7 +109,7 @@ class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(14),
           side: const BorderSide(color: AppColors.line),
         ),
       ),
@@ -251,7 +251,7 @@ class AppTheme {
         dragHandleColor: AppColors.lineStrong,
         dragHandleSize: Size(42, 5),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
       ),
       dialogTheme: DialogThemeData(
@@ -259,7 +259,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         barrierColor: const Color(0x8006140F),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         titleTextStyle: AppTextStyles.m,
         contentTextStyle: AppTextStyles.small.copyWith(fontSize: 13.5),
       ),
@@ -268,7 +268,7 @@ class AppTheme {
         backgroundColor: AppColors.ink,
         elevation: 0,
         insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         contentTextStyle: const TextStyle(
           fontFamily: AppTextStyles.fontSans,
           fontSize: 13.5,
@@ -347,7 +347,7 @@ class AppTheme {
             BorderSide(color: AppColors.segment, width: 4),
           ),
           shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
           textStyle: const WidgetStatePropertyAll(
             TextStyle(
@@ -374,14 +374,14 @@ class AppTheme {
           color: AppColors.ink3,
         ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: AppColors.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: AppTextStyles.strong.copyWith(fontSize: 13.5),
       ),
       datePickerTheme: DatePickerThemeData(
@@ -389,7 +389,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         headerBackgroundColor: AppColors.b7,
         headerForegroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         dayShape: WidgetStatePropertyAll(
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
@@ -397,9 +397,9 @@ class AppTheme {
       ),
       timePickerTheme: TimePickerThemeData(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         hourMinuteShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
         ),
         dayPeriodShape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),

@@ -41,7 +41,7 @@ async function medecinCourant(req, res) {
 
 /* ---------------------------- Patient ---------------------------- */
 
-/** POST /api/offres-rdv — { specialite_id, ville_id, type_rdv, date_souhaitee, motif? } */
+/** POST /api/offres-rdv — { specialite_id, ville_id, type_rdv, jour, heure (heure murale du pays), motif? } */
 export async function creerOffre(req, res, next) {
   try {
     const patient = await patientCourant(req, res);
@@ -120,7 +120,9 @@ export async function listerOffresPourMedecin(req, res, next) {
     const medecin = await medecinCourant(req, res);
     if (!medecin) return;
     const vue = req.query.vue === "mes_reponses" ? "mes_reponses" : "ouvertes";
-    return res.status(200).json({ offres: await listerOffresMedecin(medecin, { vue }) });
+    const { offres, raison } = await listerOffresMedecin(medecin, { vue });
+    // `raison_ineligibilite` : pourquoi le médecin ne reçoit aucune demande (fiche non publiée…).
+    return res.status(200).json({ offres, raison_ineligibilite: raison });
   } catch (err) {
     return gererErreur(err, res, next);
   }

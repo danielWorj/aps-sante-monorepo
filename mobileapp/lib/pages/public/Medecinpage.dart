@@ -328,6 +328,8 @@ class _MedecinPageState extends State<MedecinPage> {
                       ),
                       const SizedBox(height: 12),
                       _buildFilterChips(villes),
+                      const SizedBox(height: 12),
+                      const _BandeauDemandeRapide(),
                       _buildResultHeader(resultats.length),
                       if (resultats.isEmpty)
                         _buildEmptyState()
@@ -476,6 +478,77 @@ class _MedecinPageState extends State<MedecinPage> {
 
 /// État de chargement de l'annuaire (premier fetch, sans données
 /// précédentes à afficher).
+/// Accès public au RDV aléatoire (« Demande rapide ») au-dessus de
+/// l'annuaire : le patient publie spécialité, ville, jour et heure, les
+/// médecins disponibles répondent. Connexion demandée au besoin.
+class _BandeauDemandeRapide extends StatelessWidget {
+  const _BandeauDemandeRapide();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => ouvrirDemandeRapide(context),
+          child: Ink(
+            decoration: BoxDecoration(
+              gradient: AppColors.gradientViolet,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.campaign_outlined, color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Pas de médecin précis ?',
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.fontSans,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Publiez une demande rapide : les médecins disponibles vous répondent.',
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.fontSans,
+                          fontSize: 12,
+                          height: 1.35,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white.withValues(alpha: 0.85),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right_rounded, color: Colors.white),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ChargementAnnuaire extends StatelessWidget {
   const _ChargementAnnuaire();
 
@@ -702,7 +775,7 @@ class _ProfilMedecin extends StatelessWidget {
             Container(
               decoration: BoxDecoration(
                 color: AppColors.surface,
-                borderRadius: BorderRadius.circular(26),
+                borderRadius: BorderRadius.circular(16),
                 boxShadow: AppColors.shadowSoft,
               ),
               padding: const EdgeInsets.all(16),
@@ -883,7 +956,7 @@ class _SearchField extends StatelessWidget {
       padding: const EdgeInsets.only(left: 16, right: 6),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: AppColors.shadowCard,
       ),
       child: Row(

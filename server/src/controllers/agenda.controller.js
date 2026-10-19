@@ -40,9 +40,14 @@
 import prisma from "../lib/prisma.js";
 import {
   avecInstants,
+  definirTranchesDuJour,
   fuseauDuMedecin,
+  horizonAgendaJours,
+  rdvHorsGabarit,
+  retablirJourDepuisGabarit,
   synchroniserCreneauxMedecin,
 } from "../services/agendaCreneau.service.js";
+import { dateMuraleDuJour } from "../lib/fuseauHoraire.js";
 
 const JOURS_SEMAINE = [
   "lundi",
@@ -344,7 +349,8 @@ export async function supprimerDisponibiliteMedecin(req, res, next) {
  * Body : { disponibilites: [{ jour_semaine, horaire_id }, ...] } — une liste
  * vide efface le gabarit. Les cases à venir sont re-synchronisées : les
  * tranches ajoutées apparaissent, les tranches retirées disparaissent, sauf
- * celles déjà réservées par un rendez-vous (jamais supprimées).
+ * celles déjà réservées par un rendez-vous (jamais supprimées) : elles sont
+ * renvoyées dans `rdv_maintenus` pour que l'écran prévienne le médecin.
  */
 export async function remplacerDisponibilitesMedecin(req, res, next) {
   try {
@@ -392,17 +398,111 @@ export async function remplacerDisponibilitesMedecin(req, res, next) {
     });
 
     const synchronisation = await synchroniserApresGabarit(medecin_id);
-    const gabarit = await prisma.disponibiliteMedecin.findMany({
-      where: { medecin_id },
-      include: { horaire: { select: { horaire_id: true, heure_debut: true, heure_fin: true } } },
-      orderBy: [{ jour_semaine: "asc" }, { horaire: { heure_debut: "asc" } }],
-    });
+    const [gabarit, maintenus] = await Promise.all([
+      prisma.disponibiliteMedecin.findMany({
+        where: { medecin_id },
+        include: { horaire: { select: { horaire_id: true, heure_debut: true, heure_fin: true } } },
+        orderBy: [{ jour_semaine: "asc" }, { horaire: { heure_debut: "asc" } }],
+      }),
+      rdvHorsGabarit(medecin_id),
+    ]);
 
     return res.status(200).json({
       message: "Horaires de la semaine enregistrés.",
       disponibilites: gabarit,
       synchronisation,
+      rdv_maintenus: maintenus.map((c) => ({ creneau_id: c.creneau_id, debut: c.debut, fin: c.fin })),
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/* ===================================================================
+ * Exceptions datées (une journée précise)
+ * =================================================================== */
+
+/**
+ * Contrôle la date d'une exception (AAAA-MM-JJ) : ni passée, ni au-delà de
+ * l'horizon publié, dans le fuseau du médecin. Écrit la réponse 400 et
+ * renvoie `null` si elle est refusée.
+ */
+async function dateExceptionValide(res, medecin_id, brute) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(brute ?? ""))) {
+    res.status(400).json({ message: "Date invalide (attendu AAAA-MM-JJ)." });
+    return null;
+  }
+  const date = new Date(`${brute}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) {
+    res.status(400).json({ message: "Date invalide (attendu AAAA-MM-JJ)." });
+    return null;
+  }
+  const aujourdhui = dateMuraleDuJour(await fuseauDuMedecin(medecin_id));
+  const limite = new Date(aujourdhui.getTime() + (horizonAgendaJours() - 1) * 86_400_000);
+  if (date < aujourdhui) {
+    res.status(400).json({ message: "Impossible de modifier une journée passée." });
+    return null;
+  }
+  if (date > limite) {
+    res.status(400).json({ message: `Agenda publié sur ${horizonAgendaJours()} jours : choisissez une date plus proche.` });
+    return null;
+  }
+  return date;
+}
+
+/**
+ * PUT /api/medecins/:medecinId/agenda/jours/:date
+ * Médecin propriétaire ou admin/superadmin. Fixe les tranches ouvertes aux
+ * patients pour CETTE date uniquement (la semaine type n'est pas modifiée).
+ * Body : { horaire_ids: [...] } — une liste vide ferme toute la journée.
+ * Les tranches déjà réservées par un rendez-vous ne sont jamais fermées :
+ * elles sont comptées dans `maintenus`.
+ */
+export async function definirJourAgenda(req, res, next) {
+  try {
+    const autorisation = await autoriserGestionAgenda(req, res, req.params.medecinId);
+    if (!autorisation) return;
+
+    const { horaire_ids } = req.body ?? {};
+    if (!Array.isArray(horaire_ids) || horaire_ids.some((id) => typeof id !== "string" || !id)) {
+      return res.status(400).json({ message: "Champ requis : horaire_ids (tableau d'identifiants d'horaires)." });
+    }
+    if (horaire_ids.length > 48) {
+      return res.status(400).json({ message: "Trop d'horaires pour une seule journée." });
+    }
+    const ids = [...new Set(horaire_ids)];
+    if (ids.length && (await prisma.horaire.count({ where: { horaire_id: { in: ids } } })) !== ids.length) {
+      return res.status(400).json({ message: "horaire_id invalide : au moins un horaire est introuvable." });
+    }
+
+    const medecin_id = req.params.medecinId;
+    const date = await dateExceptionValide(res, medecin_id, req.params.date);
+    if (!date) return;
+
+    const bilan = await definirTranchesDuJour({ medecin_id, date, horaire_ids: ids });
+    return res.status(200).json({ message: "Journée enregistrée.", ...bilan });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /api/medecins/:medecinId/agenda/jours/:date
+ * Médecin propriétaire ou admin/superadmin. Annule l'exception de cette
+ * date : la journée reprend les horaires de la semaine type. Les tranches
+ * réservées restent en place.
+ */
+export async function retablirJourAgenda(req, res, next) {
+  try {
+    const autorisation = await autoriserGestionAgenda(req, res, req.params.medecinId);
+    if (!autorisation) return;
+
+    const medecin_id = req.params.medecinId;
+    const date = await dateExceptionValide(res, medecin_id, req.params.date);
+    if (!date) return;
+
+    const bilan = await retablirJourDepuisGabarit({ medecin_id, date });
+    return res.status(200).json({ message: "Journée rétablie selon votre semaine type.", ...bilan });
   } catch (err) {
     next(err);
   }

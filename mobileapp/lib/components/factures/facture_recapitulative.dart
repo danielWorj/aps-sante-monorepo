@@ -111,7 +111,7 @@ class _FactureRecapitulativeState extends State<FactureRecapitulative> {
         decoration: BoxDecoration(
           color: AppColors.card,
           border: Border.all(color: AppColors.lineStrong),
-          borderRadius: compact ? BorderRadius.zero : BorderRadius.circular(14),
+          borderRadius: compact ? BorderRadius.zero : BorderRadius.circular(10),
           boxShadow: compact
               ? null
               : [

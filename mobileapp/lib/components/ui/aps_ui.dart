@@ -47,7 +47,7 @@ _ToneColors _tone(ApsTone t) {
 // Cartes
 // ---------------------------------------------------------------------
 
-/// `.card` — surface blanche, rayon 22, ombre douce.
+/// `.card` — surface blanche, rayon 14, ombre douce.
 /// [flat] : sans ombre, bordure fine (`.card.flat`).
 class ApsCard extends StatelessWidget {
   const ApsCard({
@@ -61,7 +61,7 @@ class ApsCard extends StatelessWidget {
     this.gradient,
     this.borderColor,
     this.borderWidth = 1,
-    this.radius = 22,
+    this.radius = 14,
     this.clip = false,
   });
 
@@ -193,7 +193,7 @@ class ApsButton extends StatelessWidget {
     if (foreground != null) fg = foreground!;
     final disabled = onPressed == null || loading;
     final h = small ? 40.0 : 54.0;
-    final r = BorderRadius.circular(small ? 13 : 18);
+    final r = BorderRadius.circular(small ? 10 : 12);
 
     final child = loading
         ? SizedBox(
@@ -792,7 +792,7 @@ class ApsNote extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: border),
       ),
       child: Row(
@@ -844,7 +844,7 @@ class ApsAvatar extends StatelessWidget {
   final BoxBorder? border;
 
   static const _gradients = <List<Color>>[
-    [Color(0xFF3CC08E), Color(0xFF0E6A4A)],
+    [Color(0xFF5BD3A2), Color(0xFF1DAE7C)],
     [Color(0xFF9C8CFF), Color(0xFF5143D6)],
     [Color(0xFFFF9D7E), Color(0xFFD24F31)],
     [Color(0xFF6FB2FF), Color(0xFF2459C9)],
@@ -1091,7 +1091,7 @@ class ApsDayTile extends StatelessWidget {
     final fg = selected
         ? Colors.white
         : (disabled ? AppColors.ink4 : AppColors.ink);
-    final r = BorderRadius.circular(16);
+    final r = BorderRadius.circular(12);
     return Container(
       decoration: BoxDecoration(
         color: selected ? selectedColor : AppColors.surface,
@@ -1186,7 +1186,7 @@ class ApsDateBlock extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: c.bg,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1237,7 +1237,7 @@ class ApsSegmented<T> extends StatelessWidget {
       padding: EdgeInsets.all(compact ? 3 : 4),
       decoration: BoxDecoration(
         color: background ?? AppColors.segment,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
@@ -1341,7 +1341,7 @@ class ApsMenu extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(14),
         boxShadow: AppColors.shadowCard,
       ),
       child: Column(
@@ -1664,7 +1664,7 @@ class ApsTabBarSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
             color: AppColors.ink.withValues(alpha: 0.6),
@@ -1675,7 +1675,7 @@ class ApsTabBarSurface extends StatelessWidget {
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(14),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
           child: Container(
@@ -1725,7 +1725,7 @@ class ApsTabPill extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 15),
           decoration: BoxDecoration(
             color: active ? Colors.white : Colors.transparent,
-            borderRadius: BorderRadius.circular(17),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Stack(
             clipBehavior: Clip.none,
@@ -1941,7 +1941,7 @@ class ApsSearchField extends StatelessWidget {
       padding: const EdgeInsets.only(left: 16, right: 6),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: AppColors.shadowCard,
       ),
       child: Row(

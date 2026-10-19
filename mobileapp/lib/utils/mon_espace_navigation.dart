@@ -29,7 +29,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../controllers/authentification_controller.dart';
 import '../pages/home_router_for_role.dart';
+import '../pages/public/demande_rapide_page.dart';
 import '../pages/public/login.dart';
+
+/// Ouvre la « Demande rapide » (RDV aléatoire) depuis l'espace public :
+/// écran ouvert à tous, avec création du compte patient ou connexion sur
+/// place (voir [DemandeRapidePage]).
+void ouvrirDemandeRapide(BuildContext context) {
+  Navigator.push(context, MaterialPageRoute(builder: (_) => const DemandeRapidePage()));
+}
 
 /// Ouvre « Mon espace » : l'espace personnel de l'utilisateur (avec sa
 /// propre bottom navigation bar) s'il est déjà connecté, sinon l'écran

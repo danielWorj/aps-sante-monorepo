@@ -22,10 +22,6 @@ import '../../../components/ui/aps_ui.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/offre_rdv_controller.dart';
 import '../../../models/offre_rdv_models.dart';
-import '../../../utils/fonds.dart';
-
-String _dateOffre(DateTime? d) =>
-    d == null ? '' : '${jourLongLocal(d)} à ${heureLocale(d)}';
 
 void _snack(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
@@ -84,8 +80,14 @@ class _PortailMedecinDemandesState extends ConsumerState<PortailMedecinDemandes>
                 actionLabel: 'Réessayer',
                 onAction: () => ref.invalidate(offresRdvMedecinProvider(_mesReponses)),
               ),
-              data: (offres) => offres.isEmpty
-                  ? ApsEmptyState(
+              data: (resultat) => resultat.offres.isEmpty
+                  ? (!_mesReponses && resultat.raison != null)
+                      ? ApsNote.text(
+                          resultat.raison!,
+                          icon: Icons.info_outline_rounded,
+                          tone: ApsTone.amber,
+                        )
+                      : ApsEmptyState(
                       icon: Icons.inbox_outlined,
                       tone: ApsTone.violet,
                       title: _mesReponses ? 'Aucune réponse' : 'Aucune demande ouverte',
@@ -95,7 +97,7 @@ class _PortailMedecinDemandesState extends ConsumerState<PortailMedecinDemandes>
                     )
                   : Column(
                       children: [
-                        for (final o in offres) _CarteDemande(key: ValueKey(o.offreId), offre: o, mesReponses: _mesReponses),
+                        for (final o in resultat.offres) _CarteDemande(key: ValueKey(o.offreId), offre: o, mesReponses: _mesReponses),
                       ],
                     ),
             ),
@@ -189,6 +191,7 @@ class _CarteDemandeState extends ConsumerState<_CarteDemande> {
 
     return ApsCard(
       margin: const EdgeInsets.only(bottom: 10),
+      radius: 10,
       color: ouverte && rep == null ? AppColors.violet100 : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -219,7 +222,7 @@ class _CarteDemandeState extends ConsumerState<_CarteDemande> {
             ],
           ),
           const SizedBox(height: 8),
-          Text('${o.specialite} · ${_dateOffre(o.dateSouhaitee)}', style: AppTextStyles.strong),
+          Text('${o.specialite} · ${o.dateLisible}', style: AppTextStyles.strong),
           const SizedBox(height: 2),
           Text(
             [

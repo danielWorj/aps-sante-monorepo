@@ -14,11 +14,14 @@
 //   authentifié (en mémorisant la page demandée dans `state.from` pour
 //   y revenir après connexion), sinon rend les routes enfants via
 //   <Outlet/>.
+// - Défense en profondeur : AuthContext n'adopte déjà que les sessions
+//   admin/superadmin, mais on revérifie ici le rôle avant tout rendu.
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { estAdministrateur, MESSAGE_ACCES_REFUSE } from '../utils/roles';
 
 export default function RequireAuth() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const location = useLocation();
 
   if (status === 'loading') {
@@ -41,6 +44,10 @@ export default function RequireAuth() {
 
   if (status === 'unauthenticated') {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (!estAdministrateur(user)) {
+    return <Navigate to="/login" replace state={{ erreur: MESSAGE_ACCES_REFUSE }} />;
   }
 
   return <Outlet />;

@@ -456,7 +456,7 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
               decoration: BoxDecoration(
                 color: AppColors.card,
                 border: Border.all(color: AppColors.line),
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(12),
                 boxShadow: AppColors.shadowCard,
               ),
               child: Column(
@@ -543,7 +543,7 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
                   decoration: BoxDecoration(
                     color: AppColors.card,
                     border: Border.all(color: AppColors.line),
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(12),
                     boxShadow: AppColors.shadowCard,
                   ),
                   child: Row(
@@ -641,7 +641,7 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
       decoration: BoxDecoration(
         color: AppColors.card,
         border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: AppColors.shadowCard,
       ),
       child: Column(
@@ -921,7 +921,7 @@ class _InsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.card,
         border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: AppColors.shadowCard,
       ),
       child: Column(
@@ -1036,7 +1036,7 @@ class _InsuranceHero extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.green50,
         border: Border.all(color: AppColors.green100),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1047,7 +1047,7 @@ class _InsuranceHero extends StatelessWidget {
               Container(
                 width: 56,
                 height: 56,
-                decoration: BoxDecoration(color: fondLogo, borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(color: fondLogo, borderRadius: BorderRadius.circular(10)),
                 alignment: Alignment.center,
                 child: Text(
                   sigle,

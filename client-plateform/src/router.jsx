@@ -27,6 +27,7 @@ import CreationCentreSante from './components/centre-sante/creationCentreSante.j
 
 import ProfilMedecin from './pages/ProfilMedecin';
 import RendezVous from './pages/RendezVous';
+import DemandeRapide from './pages/DemandeRapide';
 import Urgences from './pages/Urgence';
 import Login from './pages/Login';
 import ModifPassword from './pages/ModifPassword';
@@ -55,6 +56,7 @@ import OnboardingLayout from './Layouts/OnboardingLayout.jsx';
 
 import MedecinAgenda from './components/portails/components/medecin-agenda';
 import RequireAuth from './routes/RequireAuth';
+import { ROLES_ESPACE } from './utils/roles';
 import MedecinProfil from './components/portails/components/medecin-profil.jsx';
 import MedecinRdv from './components/portails/components/medecin-rdv';
 import MedecinAbonnement from './components/portails/components/medecin-abonnement.jsx';
@@ -118,6 +120,9 @@ export const router = createBrowserRouter([
 
       { path: '/profil/:id', element: <ProfilMedecin /> },
       { path: '/rendez-vous/:id', element: <RendezVous /> },
+      // RDV aléatoire : ouvert aux visiteurs, compte patient créé (ou
+      // connexion) avec la demande, comme pour /rendez-vous/:id.
+      { path: '/demande-rapide', element: <DemandeRapide /> },
       { path: '/urgences', element: <Urgences /> },
       { path: '/pricing', element: <Abonnement /> },
       { path: '/login', element: <Login /> },
@@ -144,20 +149,35 @@ export const router = createBrowserRouter([
       // Réservation publicitaire : ouverte aux visiteurs, le compte annonceur
       // est créé avec la demande (« Rejoindre mon espace » si déjà inscrit).
       { path: '/publicite/reserver', element: <ReserverPublicite /> },
-      // Espace gestionnaire assurance : connexion requise (le serveur vérifie
-      // en plus que l'utilisateur est l'agent de la fiche ou un admin).
+      // Espaces gestionnaire : chaque garde n'admet que le rôle de l'espace
+      // (le serveur vérifie en plus que l'agent gère bien la fiche).
       {
-        element: <RequireAuth />,
+        element: <RequireAuth roles={ROLES_ESPACE.assurance} />,
         children: [
           { path: '/mon-espace-assurance', element: <MonEspaceAssurance /> },
           { path: '/assurances/:id/gestion', element: <GestionAssurance /> },
-          // Espaces gestionnaire pharmacie / centre de santé (abonnement de présence)
+        ],
+      },
+      // Espaces gestionnaire pharmacie / centre de santé (abonnement de présence)
+      {
+        element: <RequireAuth roles={ROLES_ESPACE.pharmacie} />,
+        children: [
           { path: '/mon-espace-pharmacie', element: <MonEspacePresence key="pharmacie" type="pharmacie" /> },
-          { path: '/mon-espace-structure', element: <MonEspacePresence key="structure" type="structure" /> },
           { path: '/pharmacie/:id/gestion', element: <GestionPresence key="pharmacie" type="pharmacie" /> },
+        ],
+      },
+      {
+        element: <RequireAuth roles={ROLES_ESPACE.structure} />,
+        children: [
+          { path: '/mon-espace-structure', element: <MonEspacePresence key="structure" type="structure" /> },
           { path: '/structure-sante/:id/gestion', element: <GestionPresence key="structure" type="structure" /> },
-          // Publicité : compte obligatoire pour payer et suivre ses statistiques
-          // (la réservation, elle, est publique : voir plus haut).
+        ],
+      },
+      // Publicité : compte obligatoire pour payer et suivre ses statistiques
+      // (la réservation, elle, est publique : voir plus haut).
+      {
+        element: <RequireAuth roles={ROLES_ESPACE.publicite} />,
+        children: [
           { path: '/publicite/:id/paiement', element: <PaiementPublicite /> },
           { path: '/portail/annonceur', element: <PortailAnnonceur /> },
           { path: '/portail/annonceur/publicites/:id', element: <PortailAnnonceur /> },
@@ -166,7 +186,7 @@ export const router = createBrowserRouter([
     ],
   },
   {
-    element:<RequireAuth />,
+    element: <RequireAuth roles={ROLES_ESPACE.medecin} />,
     children:[
       {
         element:<PortailLayout />,
@@ -176,21 +196,12 @@ export const router = createBrowserRouter([
           { path: '/portail/medecin-profil', element: <MedecinProfil /> },
           { path: '/portail/medecin-abonnement', element: <MedecinAbonnement /> },
           { path: '/portail/medecin-demandes', element: <MedecinDemandes /> },
-          // { path: '/portail/medecin-rdv', element: <MedecinAgenda /> },
-          // { path: '/portail/medecin-agenda', element: <MedecinAgenda /> },
-          // { path: '/portail/medecin-agenda', element: <MedecinAgenda /> },
         ]
       },
-      // Hors PortailLayout volontairement : page plein écran (pas de
-      // navbar/sidebar/footer) pour l'appel vidéo, tout en restant
-      // protégée par RequireAuth ci-dessus.
-      { path: '/portail/consultation/:id', element: <Teleconsultation /> },
     ],
-
   },
-  ,
   {
-    element:<RequireAuth />,
+    element: <RequireAuth roles={ROLES_ESPACE.patient} />,
     children:[
       {
         element:<PortailParentLayout />,
@@ -198,18 +209,21 @@ export const router = createBrowserRouter([
           { path: '/portail/patient-rdv', element: <PatientRdv /> },
           { path: '/portail/patient-demandes', element: <PatientDemandes /> },
           { path: '/portail/patient-profil', element: <PatientProfil /> },
-          //{ path: '/portail/patient-profil', element: <PatientProfil /> },
         ]
       },
-      // Hors PortailLayout volontairement : page plein écran (pas de
-      // navbar/sidebar/footer) pour l'appel vidéo, tout en restant
-      // protégée par RequireAuth ci-dessus.
+    ],
+  },
+  // Hors des layouts de portail volontairement : page plein écran (pas de
+  // navbar/sidebar/footer) pour l'appel vidéo, ouverte aux deux parties
+  // du rendez-vous (le serveur vérifie l'appartenance au RDV).
+  {
+    element: <RequireAuth roles={ROLES_ESPACE.consultation} />,
+    children: [
       { path: '/portail/consultation/:id', element: <Teleconsultation /> },
     ],
-
   },
   {
-    element: <RequireAuth />,
+    element: <RequireAuth roles={ROLES_ESPACE.assurance} />,
     children: [
       {
         element: <PortailAssuranceLayout />,

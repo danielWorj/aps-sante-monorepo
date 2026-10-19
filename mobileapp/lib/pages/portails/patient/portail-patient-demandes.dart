@@ -31,12 +31,7 @@ import '../../../models/offre_rdv_models.dart';
 import '../../../models/referentiel_models.dart';
 import '../../../utils/fonds.dart';
 
-/// Miroir de OFFRE_RDV_DELAI_MIN_MINUTES (serveur, 2 h par défaut) : le
-/// serveur reste seul juge, ceci ne sert qu'à guider la saisie.
-const Duration _delaiMinimum = Duration(hours: 2);
-
-String _dateOffre(DateTime? d) =>
-    d == null ? '' : '${jourLongLocal(d)} à ${heureLocale(d)}';
+String _deuxChiffres(int n) => n.toString().padLeft(2, '0');
 
 BadgeChipStyle _styleStatut(StatutOffreRdv s) {
   switch (s) {
@@ -73,7 +68,8 @@ class PortailPatientDemandes extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(18, 0, 18, 120),
           children: [
             const _PageHead(),
-            const _FormulaireDemande(),
+            _BandeauExpress(onNouvelleDemande: () => _ouvrirFormulaire(context)),
+            const SizedBox(height: 8),
             const _Titre('Mes demandes en cours'),
             offresAsync.when(
               loading: () => const Padding(
@@ -91,7 +87,10 @@ class PortailPatientDemandes extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (enCours.isEmpty)
-                      const _Vide('Aucune demande en cours.')
+                      _Vide(
+                        'Aucune demande en cours.',
+                        onNouvelleDemande: () => _ouvrirFormulaire(context),
+                      )
                     else
                       ...enCours.map((o) => _CarteOffre(offre: o)),
                     if (terminees.isNotEmpty)
@@ -118,8 +117,44 @@ class PortailPatientDemandes extends ConsumerWidget {
 }
 
 /* ══════════════════════════════════════════════════════════════
- * Formulaire de publication
+ * Formulaire de publication (panneau montant)
  * ══════════════════════════════════════════════════════════════ */
+
+/// Ouvre « Nouvelle demande » dans un panneau qui monte du bas de l'écran,
+/// au-dessus du clavier. Il se ferme de lui-même après la publication.
+Future<void> _ouvrirFormulaire(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: AppColors.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+    ),
+    builder: (sheetContext) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ApsSheetHeader(
+              title: 'Nouvelle demande',
+              onClose: () => Navigator.of(sheetContext).pop(),
+            ),
+            Text(
+              'Les médecins de la spécialité dans cette ville sont prévenus et vous répondent.',
+              style: AppTextStyles.small.copyWith(color: AppColors.ink3),
+            ),
+            const SizedBox(height: 14),
+            const _FormulaireDemande(),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 class _FormulaireDemande extends ConsumerStatefulWidget {
   const _FormulaireDemande();
@@ -144,10 +179,6 @@ class _FormulaireDemandeState extends ConsumerState<_FormulaireDemande> {
     super.dispose();
   }
 
-  DateTime? get _dateSouhaitee {
-    if (_jour == null || _heure == null) return null;
-    return DateTime(_jour!.year, _jour!.month, _jour!.day, _heure!.hour, _heure!.minute);
-  }
 
   Future<void> _choisirJour() async {
     final maintenant = DateTime.now();
@@ -169,16 +200,15 @@ class _FormulaireDemandeState extends ConsumerState<_FormulaireDemande> {
   }
 
   Future<void> _publier() async {
-    final date = _dateSouhaitee;
-    if (_specialiteId == null || _villeId == null || date == null) {
+    final jour = _jour;
+    final heure = _heure;
+    if (_specialiteId == null || _villeId == null || jour == null || heure == null) {
       setState(() => _erreur = "Choisissez la spécialité, la ville, le jour et l'heure.");
       return;
     }
-    if (date.isBefore(DateTime.now().add(_delaiMinimum))) {
-      setState(() => _erreur =
-          "Choisissez une heure au moins 2 h plus tard, pour laisser aux médecins le temps de répondre.");
-      return;
-    }
+    // Jour et heure de la ville choisie, convertis par le serveur dans le
+    // fuseau de son pays (indépendamment du fuseau de l'appareil) ; le
+    // délai minimum (2 h) y est aussi vérifié.
     setState(() {
       _envoi = true;
       _erreur = null;
@@ -191,23 +221,21 @@ class _FormulaireDemandeState extends ConsumerState<_FormulaireDemande> {
               specialiteId: _specialiteId!,
               villeId: _villeId!,
               typeRdv: _type,
-              dateSouhaitee: date,
+              jour: '${jour.year}-${_deuxChiffres(jour.month)}-${_deuxChiffres(jour.day)}',
+              heure: '${_deuxChiffres(heure.hour)}:${_deuxChiffres(heure.minute)}',
               motif: _motif.text,
             ),
           );
       if (!mounted) return;
-      setState(() {
-        _jour = null;
-        _heure = null;
-        _motif.clear();
-      });
       ref.invalidate(mesOffresRdvProvider);
-      _snack(
-        context,
-        notifies > 0
+      // Le message s'affiche sur l'onglet, une fois le panneau fermé.
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.of(context).pop();
+      messenger.showSnackBar(SnackBar(
+        content: Text(notifies > 0
             ? 'Demande publiée : $notifies médecin(s) prévenu(s).'
-            : "Demande publiée. Aucun médecin n'est encore inscrit pour ces critères.",
-      );
+            : "Demande publiée. Aucun médecin n'est encore inscrit pour ces critères."),
+      ));
     } catch (e) {
       if (mounted) setState(() => _erreur = '$e');
     } finally {
@@ -225,8 +253,6 @@ class _FormulaireDemandeState extends ConsumerState<_FormulaireDemande> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _BandeauExpress(),
-        const SizedBox(height: 14),
         Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -338,7 +364,7 @@ class _ChampChoix extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final r = BorderRadius.circular(16);
+    final r = BorderRadius.circular(12);
     return Material(
       color: AppColors.surface,
       shape: RoundedRectangleBorder(
@@ -380,87 +406,99 @@ class _ChampChoix extends StatelessWidget {
 
 /// Bandeau violet « Publiez votre besoin » et ses trois étapes.
 class _BandeauExpress extends StatelessWidget {
-  const _BandeauExpress();
+  const _BandeauExpress({required this.onNouvelleDemande});
+
+  final VoidCallback onNouvelleDemande;
 
   @override
   Widget build(BuildContext context) {
-    Widget etape(String n, String libelle, {bool active = false}) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-          decoration: BoxDecoration(
-            color: active ? Colors.white : Colors.white.withValues(alpha: 0.16),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text.rich(
-            TextSpan(children: [
-              TextSpan(text: '$n  ', style: const TextStyle(fontWeight: FontWeight.w800)),
-              TextSpan(text: libelle),
-            ]),
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontSans,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: active ? AppColors.violet700 : Colors.white,
+    Widget etape(String n, String libelle) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(color: AppColors.violet100, shape: BoxShape.circle),
+              child: Text(
+                n,
+                style: const TextStyle(
+                  fontFamily: AppTextStyles.fontSans,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.violet700,
+                ),
+              ),
             ),
+            const SizedBox(width: 6),
+            Text(
+              libelle,
+              style: AppTextStyles.xs.copyWith(fontWeight: FontWeight.w600, color: AppColors.ink2),
+            ),
+          ],
+        );
+    Widget trait() => Expanded(
+          child: Container(
+            height: 1,
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            color: AppColors.line,
           ),
         );
-    final chevron = Icon(Icons.chevron_right_rounded,
-        size: 14, color: Colors.white.withValues(alpha: 0.5));
 
     return Container(
-      clipBehavior: Clip.antiAlias,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
       decoration: BoxDecoration(
-        gradient: AppColors.gradientViolet,
-        borderRadius: BorderRadius.circular(24),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.line),
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Positioned(
-            right: -14,
-            top: -10,
-            child: Icon(Icons.campaign_outlined,
-                size: 110, color: Colors.white.withValues(alpha: 0.12)),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Publiez votre besoin',
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.fontSans,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                    color: Colors.white,
-                  ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.violet100,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Les médecins disponibles répondent au tarif de leur profil. Vous choisissez.',
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.fontSans,
-                    fontSize: 12.5,
-                    height: 1.45,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white.withValues(alpha: 0.8),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 6,
-                  runSpacing: 6,
+                child: const Icon(Icons.campaign_outlined, color: AppColors.violet700, size: 21),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    etape('1', 'Publier'),
-                    chevron,
-                    etape('2', 'Comparer'),
-                    chevron,
-                    etape('3', 'Valider', active: true),
+                    Text('Publiez votre besoin', style: AppTextStyles.strong.copyWith(fontSize: 15.5)),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Les médecins disponibles répondent au tarif de leur profil. Vous choisissez.',
+                      style: AppTextStyles.small.copyWith(color: AppColors.ink3, height: 1.4),
+                    ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              etape('1', 'Publier'),
+              trait(),
+              etape('2', 'Comparer'),
+              trait(),
+              etape('3', 'Valider'),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ApsButton(
+            label: 'Publier une nouvelle demande',
+            icon: Icons.add_rounded,
+            variant: ApsButtonVariant.violet,
+            onPressed: onNouvelleDemande,
           ),
         ],
       ),
@@ -523,7 +561,7 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
       builder: (c) => AlertDialog(
         title: const Text('Valider ce médecin ?'),
         content: Text(
-          '${m.nomComplet}, ${_dateOffre(widget.offre.dateSouhaitee)}.\n\n'
+          '${m.nomComplet}, ${widget.offre.dateLisible}.\n\n'
           'Le rendez-vous sera créé : vous passerez ensuite au paiement pour le confirmer.',
         ),
         actions: [
@@ -560,12 +598,16 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
     return ApsCard(
       margin: const EdgeInsets.only(bottom: 12),
       padding: EdgeInsets.zero,
+      radius: 10,
       clip: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            color: AppColors.ink,
+            decoration: const BoxDecoration(
+              color: AppColors.b1,
+              border: Border(bottom: BorderSide(color: AppColors.b2)),
+            ),
             padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -578,8 +620,8 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
                             ? '$nbReponses réponses'
                             : (nbReponses == 1 ? '1 réponse' : 'En attente'),
                         dot: true,
-                        background: AppColors.mint.withValues(alpha: 0.16),
-                        foreground: AppColors.mint,
+                        background: Colors.white,
+                        foreground: AppColors.b7,
                       )
                     else
                       BadgeChip(label: o.statut.libelle, style: _styleStatut(o.statut)),
@@ -589,19 +631,19 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
                           ? Icons.videocam_outlined
                           : Icons.local_hospital_outlined,
                       size: 15,
-                      color: Colors.white.withValues(alpha: 0.6),
+                      color: AppColors.b7,
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  '${o.specialite} · ${_dateOffre(o.dateSouhaitee)}',
+                  '${o.specialite} · ${o.dateLisible}',
                   style: const TextStyle(
                     fontFamily: AppTextStyles.fontSans,
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.3,
-                    color: Colors.white,
+                    color: AppColors.ink,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -617,7 +659,7 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
                     fontFamily: AppTextStyles.fontSans,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
-                    color: Colors.white.withValues(alpha: 0.65),
+                    color: AppColors.ink3,
                   ),
                 ),
               ],
@@ -721,9 +763,9 @@ class _CarteRepondant extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: retenue ? AppColors.b0 : AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: retenue ? AppColors.b5 : AppColors.line,
+          color: retenue ? AppColors.b4 : AppColors.line,
           width: retenue ? 2 : 1,
         ),
       ),
@@ -925,8 +967,9 @@ class _Titre extends StatelessWidget {
 
 class _Vide extends StatelessWidget {
   final String texte;
+  final VoidCallback onNouvelleDemande;
 
-  const _Vide(this.texte);
+  const _Vide(this.texte, {required this.onNouvelleDemande});
 
   @override
   Widget build(BuildContext context) => ApsEmptyState(
@@ -934,6 +977,8 @@ class _Vide extends StatelessWidget {
         tone: ApsTone.violet,
         title: texte,
         message: 'Publiez une demande : les médecins disponibles vous répondront.',
+        actionLabel: 'Publier une nouvelle demande',
+        onAction: onNouvelleDemande,
       );
 }
 

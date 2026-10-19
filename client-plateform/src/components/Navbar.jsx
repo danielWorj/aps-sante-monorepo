@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import logoApsa from '../assets/img/logoapsa.jpeg';
 import { useAuth } from '../context/AuthContext';
+import { aUnRole, ROLES_ESPACE } from '../utils/roles';
 
 function navLinkClass({ isActive }) {
   return isActive ? 'active' : undefined;
@@ -126,7 +127,7 @@ export default function Navbar() {
                 </NavLink>
               </li>
             )}
-            {user && (
+            {aUnRole(user, ROLES_ESPACE.publicite) && (
               <li>
                 <NavLink to="/portail/annonceur" className={navLinkClass} onClick={closeAll}>
                   <i className="fa-solid fa-bullhorn" /> Mes publicités

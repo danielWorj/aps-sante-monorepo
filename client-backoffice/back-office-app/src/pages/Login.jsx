@@ -12,7 +12,8 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: '', password: '', remember: true });
   const [errors, setErrors] = useState({});
-  const [serverError, setServerError] = useState('');
+  // Message posé par RequireAuth quand un compte non administrateur a été refusé.
+  const [serverError, setServerError] = useState(location.state?.erreur ?? '');
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {

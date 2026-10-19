@@ -95,7 +95,7 @@ class _SliderPubliciteState extends ConsumerState<SliderPublicite> {
           Container(
             decoration: BoxDecoration(
               color: AppColors.card,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.line),
             ),
             clipBehavior: Clip.antiAlias,
@@ -238,7 +238,7 @@ class _CarteReserver extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.primarySurface,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: AppColors.lineStrong),
         ),
         child: Row(children: [

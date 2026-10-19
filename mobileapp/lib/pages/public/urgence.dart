@@ -206,9 +206,9 @@ class _UrgencePageState extends State<UrgencePage> {
                 const SizedBox(height: 10),
                 Material(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(12),
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(12),
                     onTap: _envoyerPositionContact,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -425,7 +425,7 @@ class _Tuile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final r = BorderRadius.circular(18);
+    final r = BorderRadius.circular(12);
     return Material(
       color: _Urg.tuile,
       shape: RoundedRectangleBorder(

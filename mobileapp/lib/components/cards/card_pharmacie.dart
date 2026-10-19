@@ -63,7 +63,7 @@ class CardPharmacie extends StatelessWidget {
             height: 58,
             decoration: BoxDecoration(
               color: deGarde ? AppColors.b1 : AppColors.bg,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(12),
             ),
             alignment: Alignment.center,
             child: Icon(
