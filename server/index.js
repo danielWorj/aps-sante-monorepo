@@ -71,6 +71,9 @@ app.use(
   cors({
     origin: origines.length > 0 ? origines : true,
     credentials: true,
+    // Lisibles par le front en cross-origin (nom + taille du fichier lors
+    // du téléchargement de l'APK, voir client-plateform/apkService.js).
+    exposedHeaders: ["Content-Disposition", "Content-Length"],
   })
 );
 

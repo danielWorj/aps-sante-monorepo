@@ -87,9 +87,15 @@ export function obtenirUrlTelechargementApk(apk) {
  *   gestionapk.controller.js, ne le fixe pas explicitement mais Express
  *   le déduit automatiquement de la taille du fichier streamé), la
  *   progression n'est signalée qu'une fois à 100 % en fin de réception.
+ * @param {number} [tailleConnue] - taille en octets renvoyée par
+ *   GET /apks/active (`apk.taille`), utilisée si Content-Length manque
+ *   (proxy qui le retire, en-tête non exposé en cross-origin…).
+ * @param {(octetsRecus: number) => void} [onOctets] - appelé avec le
+ *   nombre d'octets reçus, pour afficher une progression en Mo même
+ *   quand aucune taille totale n'est connue.
  * @returns {Promise<{ blob: Blob, nomFichier: string }>}
  */
-export async function telechargerApkAvecProgression(url, onProgress) {
+export async function telechargerApkAvecProgression(url, onProgress, tailleConnue, onOctets) {
   const reponse = await fetch(url);
   if (!reponse.ok) {
     throw new Error(`Échec du téléchargement (HTTP ${reponse.status}).`);
@@ -102,7 +108,8 @@ export async function telechargerApkAvecProgression(url, onProgress) {
   const correspondance = /filename="([^"]+)"/.exec(entete);
   const nomFichier = correspondance ? correspondance[1] : 'ApSa.apk';
 
-  const tailleTotale = Number(reponse.headers.get('Content-Length')) || 0;
+  const tailleTotale =
+    Number(reponse.headers.get('Content-Length')) || Number(tailleConnue) || 0;
   const lecteur = reponse.body?.getReader?.();
 
   // Repli si le navigateur ne supporte pas les flux sur `fetch` (très
@@ -121,6 +128,7 @@ export async function telechargerApkAvecProgression(url, onProgress) {
     if (done) break;
     morceaux.push(value);
     recu += value.length;
+    onOctets?.(recu);
     if (tailleTotale > 0) {
       onProgress?.(Math.min(100, Math.round((recu / tailleTotale) * 100)));
     }
