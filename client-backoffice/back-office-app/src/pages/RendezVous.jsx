@@ -79,6 +79,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useConfirmation, useToast } from '../components/feedback';
 import AnnulationAdminModal from '../components/AnnulationAdminModal';
 import { annulerRendezVousAdmin, forcerLiberation, obtenirFactureRendezVous } from '../services/fondsService';
 import { DELAI_REPROGRAMMATION_H, dateHeure, heuresLisibles, lignesRepartitionPaiement, resumerAnnulation } from '../utils/fonds';
@@ -446,6 +447,8 @@ const FORM_CREATION_VIDE = { medecin_id: '', type_rdv: 'physique', date_creneau:
 const FORM_EDITION_VIDE = { rdv_id: '', statut: '', date_creneau: '', structure_id: '', motif: '' };
 
 export default function RendezVous() {
+  const confirmer = useConfirmation();
+  const toast = useToast();
   const { user, status } = useAuth();
   const role = extraireNomRole(user);
   const estMedecin = role === 'medecin';
@@ -725,7 +728,6 @@ export default function RendezVous() {
   const [rdvAAnnuler, setRdvAAnnuler] = useState(null);
   const [annulationEnCours, setAnnulationEnCours] = useState(false);
   const [erreurAnnulation, setErreurAnnulation] = useState(null);
-  const [messageFonds, setMessageFonds] = useState(null); // { type: 'success'|'danger', texte }
 
   function ouvrirAnnulation(rdv) {
     setErreurAnnulation(null);
@@ -740,7 +742,7 @@ export default function RendezVous() {
       const data = await annulerRendezVousAdmin(rdvAAnnuler.rdv_id, { initiateur, motif, commentaire });
       setRdvAAnnuler(null);
       setModalDetailOuverte(false);
-      setMessageFonds({ type: 'success', texte: resumerAnnulation(data) });
+      toast.succes(resumerAnnulation(data), { duree: 9000 });
       await chargerRendezVous();
     } catch (err) {
       // Message du serveur affiché tel quel (400 motif/initiateur, 409 transition…).
@@ -759,15 +761,20 @@ export default function RendezVous() {
         'Marquer ce rendez-vous comme honoré et libérer les fonds vers le médecin maintenant ? Action définitive.'
       : "Ce rendez-vous n'a pas été clôturé (aucun code validé, aucune visio clôturée) : le délai T est ignoré. " +
         'Marquer ce rendez-vous comme honoré et libérer les fonds vers le médecin maintenant ? Action définitive.';
-    if (!window.confirm(message)) return;
-    setMessageFonds(null);
+    const ok = await confirmer({
+      titre: 'Libérer les fonds',
+      message,
+      labelConfirmer: 'Libérer les fonds',
+      variante: 'avertissement',
+    });
+    if (!ok) return;
     try {
       const rep = await forcerLiberation(rdv.rdv_id);
-      setMessageFonds({ type: 'success', texte: rep?.message || 'Fonds libérés.' });
+      toast.succes(rep?.message || 'Fonds libérés.');
       setModalDetailOuverte(false);
       await chargerRendezVous();
     } catch (err) {
-      setMessageFonds({ type: 'danger', texte: err.message || 'Libération impossible.' }); // 409 : pas d'escrow / déjà traité
+      toast.erreur(err.message || 'Libération impossible.'); // 409 : pas d'escrow / déjà traité
     }
   }
 
@@ -837,13 +844,6 @@ export default function RendezVous() {
             </button>
           )}
         </div>
-
-        {messageFonds && (
-          <div className={`alert alert-${messageFonds.type} alert-dismissible`} role="status">
-            {messageFonds.texte}
-            <button type="button" className="btn-close" aria-label="Fermer" onClick={() => setMessageFonds(null)} />
-          </div>
-        )}
 
         <div className="row g-3 mb-4">
           <div className="col-6 col-lg-3">

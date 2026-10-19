@@ -9,6 +9,7 @@
 //   - pas de prix ici : il vit dans « Tarifs & paramètres » ;
 //   - l'abonnement n'apporte AUCUN avantage de classement.
 import { useCallback, useEffect, useState } from 'react';
+import { useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import FondsModal from '../components/FondsModal';
 import {
@@ -39,7 +40,7 @@ export default function NiveauxAbonnementPresence({ type }) {
   const [niveaux, setNiveaux] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
-  const [message, setMessage] = useState(null);
+  const toast = useToast();
   const [form, setForm] = useState(null);
   const [erreurForm, setErreurForm] = useState(null);
   const [envoi, setEnvoi] = useState(false);
@@ -86,10 +87,10 @@ export default function NiveauxAbonnementPresence({ type }) {
     try {
       if (form.niveau_id) {
         await modifierNiveau(type, form.niveau_id, donnees);
-        setMessage(`Niveau « ${donnees.libelle} » mis à jour.`);
+        toast.succes(`Niveau « ${donnees.libelle} » mis à jour.`);
       } else {
         await creerNiveau(type, donnees);
-        setMessage(`Niveau « ${donnees.libelle} » créé.`);
+        toast.succes(`Niveau « ${donnees.libelle} » créé.`);
       }
       setForm(null);
       await charger();
@@ -126,7 +127,6 @@ export default function NiveauxAbonnementPresence({ type }) {
         {' '}{config.note} Un niveau de rang supérieur doit inclure tous les avantages des rangs inférieurs.
         L&apos;abonnement n&apos;influence jamais le classement des fiches.
       </div>
-      {message && <div className="alert alert-success" role="status">{message}</div>}
       {erreur && <div className="alert alert-danger">{erreur}</div>}
 
       <div className="aps-card">

@@ -78,6 +78,7 @@ import {
   supprimerPublicite,
   obtenirDisponibilites,
   obtenirProfilAnnonceur,
+  reserverAvecCompte,
   accepterPubliciteCtrl,
   rejeterPubliciteCtrl,
   annulerPubliciteCtrl,
@@ -107,6 +108,8 @@ const admin = [authentifier, autoriser("admin", "superadmin")];
 
 // Suivi des impressions/clics : public, donc borné par IP.
 const limiteurEvenements = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: true, legacyHeaders: false });
+// Réservation avec création de compte : publique, donc bornée par IP.
+const limiteurReservationPublique = rateLimit({ windowMs: 60 * 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
 
 // ─── Emplacements publicitaires ─────────────────────────────────
 router.get("/emplacements-publicitaires", listerEmplacementsPublicitaires);
@@ -130,13 +133,16 @@ router.delete("/lignes-forfait-publicitaire/:ligneId", authentifier, autoriser("
 // ─── Publicités ───────────────────────────────────────────────────
 router.get("/publicites", authentifierOptionnel, listerPublicites);
 router.get("/publicites/par-page/:code", authentifierOptionnel, rechercherPublicitesParCodePage);
-router.get("/publicites/disponibilites", authentifier, obtenirDisponibilites);
+// Disponibilités : publiques (aucune donnée d'annonceur), le formulaire
+// de réservation s'ouvre aussi aux visiteurs sans compte.
+router.get("/publicites/disponibilites", obtenirDisponibilites);
 router.get("/publicites/profil-annonceur", authentifier, obtenirProfilAnnonceur);
 router.get("/publicites/mes-publicites", authentifier, listerMesPublicites);
 router.post("/publicites/evenements", limiteurEvenements, enregistrerEvenementsPublicite);
 router.get("/publicites/:id", authentifierOptionnel, obtenirPublicite);
 
 router.post("/publicites", authentifier, gererTeleversementPublicite, creerPublicite);
+router.post("/publicites/reservation-avec-compte", limiteurReservationPublique, gererTeleversementPublicite, reserverAvecCompte);
 router.put("/publicites/:id", authentifier, gererTeleversementPublicite, modifierPublicite);
 router.delete("/publicites/:id", authentifier, supprimerPublicite);
 

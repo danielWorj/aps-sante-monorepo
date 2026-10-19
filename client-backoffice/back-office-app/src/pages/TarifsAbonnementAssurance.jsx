@@ -10,6 +10,7 @@
 // Un changement de prix n'est JAMAIS rétroactif : le prix est figé sur
 // chaque abonnement à sa création.
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useConfirmation, useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import FondsModal from '../components/FondsModal';
 import { listerPays } from '../services/referentielService';
@@ -200,9 +201,10 @@ function Tarifs({ niveaux, pays }) {
 }
 
 function Remises() {
+  const confirmer = useConfirmation();
+  const toast = useToast();
   const [lignes, setLignes] = useState([]);
   const [nouvelle, setNouvelle] = useState({ duree_mois: '', remise_pourcent: '' });
-  const [message, setMessage] = useState(null);
   const [erreur, setErreur] = useState(null);
   const [envoi, setEnvoi] = useState(false);
 
@@ -217,7 +219,6 @@ function Remises() {
 
   const enregistrer = async () => {
     setErreur(null);
-    setMessage(null);
     setEnvoi(true);
     try {
       const aEnvoyer = lignes.map((l) => ({ duree_mois: l.duree_mois, remise_pourcent: Number(l.remise_pourcent) }));
@@ -226,7 +227,7 @@ function Remises() {
       }
       await enregistrerRemises(aEnvoyer);
       setNouvelle({ duree_mois: '', remise_pourcent: '' });
-      setMessage('Remises enregistrées.');
+      toast.succes('Remises enregistrées.');
       await charger();
     } catch (err) {
       setErreur(err.message || 'Enregistrement impossible.');
@@ -236,9 +237,16 @@ function Remises() {
   };
 
   const retirer = async (duree) => {
-    if (!window.confirm(`Retirer la durée de ${duree} mois de la vente ?`)) return;
+    const ok = await confirmer({
+      titre: 'Retirer cette durée',
+      message: `La durée de ${duree} mois ne sera plus proposée à la vente.`,
+      labelConfirmer: 'Retirer',
+      variante: 'danger',
+    });
+    if (!ok) return;
     try {
       await supprimerRemise(duree);
+      toast.succes(`Durée de ${duree} mois retirée de la vente.`);
       await charger();
     } catch (err) {
       setErreur(err.message || 'Suppression impossible.');
@@ -251,7 +259,6 @@ function Remises() {
         <h2 className="h6"><i className="fa-solid fa-percent me-2"></i>Durées proposées et remises</h2>
         <p className="aps-text-muted small">Une durée absente de ce tableau n&apos;est pas proposée à la vente. Proposition : 0 / 5 / 10 / 15 % pour 1 / 3 / 6 / 12 mois (à valider).</p>
         {erreur && <div className="alert alert-danger">{erreur}</div>}
-        {message && <div className="alert alert-success">{message}</div>}
         <table className="table aps-table" style={{ maxWidth: 520 }}>
           <thead><tr><th>Durée (mois)</th><th>Remise (%)</th><th></th></tr></thead>
           <tbody>

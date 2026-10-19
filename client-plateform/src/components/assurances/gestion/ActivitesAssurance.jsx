@@ -5,6 +5,7 @@
 // activité qui porte encore des options (409) : on supprime d'abord ses
 // options, après confirmation. Les activités sont conservées hors droits.
 import { useState } from 'react';
+import { useConfirmation, useToast } from '../../feedback';
 import {
   creerActivite,
   modifierActivite,
@@ -74,6 +75,8 @@ function OptionsActivite({ activite, executer }) {
  * @param {{ serviceId: string, activites: object[], visiblesAuPublic: boolean, onChange: () => void }} props
  */
 export default function ActivitesAssurance({ serviceId, activites, visiblesAuPublic, onChange }) {
+  const confirmer = useConfirmation();
+  const toast = useToast();
   const [form, setForm] = useState(VIDE);
   const [edition, setEdition] = useState(null);
   const [ouverte, setOuverte] = useState(null); // activite_id dont les options sont dépliées
@@ -110,16 +113,22 @@ export default function ActivitesAssurance({ serviceId, activites, visiblesAuPub
     }
   };
 
-  const retirer = (a) => {
+  const retirer = async (a) => {
     const nb = a.options?.length ?? 0;
-    const texte = nb
-      ? `Supprimer « ${a.titre} » et ses ${nb} option(s) ?`
-      : `Supprimer « ${a.titre} » ?`;
-    if (!window.confirm(texte)) return;
-    executer(async () => {
+    const ok = await confirmer({
+      titre: "Supprimer l'activité",
+      message: nb
+        ? `« ${a.titre} » et ses ${nb} option(s) seront supprimées définitivement.`
+        : `« ${a.titre} » sera supprimée définitivement.`,
+      labelConfirmer: 'Supprimer',
+      variante: 'danger',
+    });
+    if (!ok) return;
+    const supprimee = await executer(async () => {
       for (const o of a.options ?? []) await supprimerOptionActivite(o.option_activite_id);
       await supprimerActivite(a.activite_id);
     }, 'Suppression impossible.');
+    if (supprimee) toast.succes('Activité supprimée.');
   };
 
   return (

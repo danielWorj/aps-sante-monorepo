@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useToast } from '../components/feedback';
 import UtilisateurService, {
   ROLES_UTILISATEUR,
   MOT_DE_PASSE_LONGUEUR_MIN,
@@ -86,7 +87,7 @@ export default function Utilisateurs() {
   const [enregistrement, setEnregistrement] = useState(false);
 
   const [actionEnCours, setActionEnCours] = useState(null); // id de l'utilisateur en cours de suspension/réactivation
-  const [banniere, setBanniere] = useState(null); // { type: 'success' | 'error', texte }
+  const toast = useToast();
 
   // Débounce de la recherche texte : on ne déclenche l'appel API
   // qu'après une pause de frappe, pour éviter une requête par lettre.
@@ -225,7 +226,7 @@ export default function Utilisateurs() {
           pays_id: form.pays_id || undefined,
           role: form.role,
         });
-        setBanniere({ type: 'success', texte: 'Utilisateur mis à jour.' });
+        toast.succes('Utilisateur mis à jour.');
       } else {
         await UtilisateurService.creerUtilisateur({
           nom: form.nom,
@@ -236,7 +237,7 @@ export default function Utilisateurs() {
           role: form.role,
           mot_de_passe: form.mot_de_passe,
         });
-        setBanniere({ type: 'success', texte: 'Compte créé avec succès.' });
+        toast.succes('Compte créé avec succès.');
       }
       setShowModal(false);
       await chargerListe();
@@ -254,15 +255,15 @@ export default function Utilisateurs() {
     try {
       if (u.statut_compte === 'actif') {
         await UtilisateurService.suspendreUtilisateur(u.utilisateur_id);
-        setBanniere({ type: 'success', texte: `${u.prenom} ${u.nom} a été suspendu.` });
+        toast.succes(`${u.prenom} ${u.nom} a été suspendu.`);
       } else {
         await UtilisateurService.reactiverUtilisateur(u.utilisateur_id);
-        setBanniere({ type: 'success', texte: `${u.prenom} ${u.nom} a été réactivé.` });
+        toast.succes(`${u.prenom} ${u.nom} a été réactivé.`);
       }
       await chargerListe();
       await chargerStats();
     } catch (err) {
-      setBanniere({ type: 'error', texte: messageErreur(err) });
+      toast.erreur(messageErreur(err));
     } finally {
       setActionEnCours(null);
     }
@@ -287,21 +288,6 @@ export default function Utilisateurs() {
           </div>
         )}
       </div>
-
-      {banniere && (
-        <div
-          className={`alert ${banniere.type === 'success' ? 'alert-success' : 'alert-danger'} d-flex justify-content-between align-items-center`}
-          role="alert"
-        >
-          <span>{banniere.texte}</span>
-          <button
-            type="button"
-            className="btn-close"
-            aria-label="Fermer"
-            onClick={() => setBanniere(null)}
-          />
-        </div>
-      )}
 
       {!peutEcrire && (
         <div className="alert alert-info">

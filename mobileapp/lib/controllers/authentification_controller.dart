@@ -276,6 +276,25 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
   }
 
   // ───────────────────────────────────────────────────────────────
+  // Appel PUBLIC qui crée un compte ET ouvre la session côté serveur
+  // (ex. POST /publicites/reservation-avec-compte) : la réponse porte
+  // access_token + utilisateur, le refresh token arrive en cookie
+  // httpOnly. L'appel DOIT passer par le client à cookies persistants
+  // fourni ici, sinon le cookie est perdu et la session expire avec
+  // l'access token. Renvoie le corps JSON décodé.
+  // ───────────────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> appelOuvrantSession(
+    Future<Map<String, dynamic>> Function(http.Client client) appel,
+  ) async {
+    final corps = await appel(ref.read(_authHttpClientProvider));
+    await _ouvrirSession(SessionUtilisateur(
+      accessToken: corps['access_token'] as String,
+      utilisateur: Utilisateur.fromJson((corps['utilisateur'] as Map).cast<String, dynamic>()),
+    ));
+    return corps;
+  }
+
+  // ───────────────────────────────────────────────────────────────
   // POST /api/auth/refresh
   // Rafraîchissement manuel (rarement utile : le renouvellement est
   // automatique avant expiration, et [appelAuthentifie] rejoue sur 401).

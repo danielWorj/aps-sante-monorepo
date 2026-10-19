@@ -11,6 +11,7 @@
 //      fonctionnalités sans abonnement (photo, biographie, prise de RDV).
 // Un changement de prix n'est JAMAIS rétroactif.
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useConfirmation, useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import FondsModal from '../components/FondsModal';
 import { listerPays } from '../services/referentielService';
@@ -186,9 +187,10 @@ function Tarifs({ type, niveaux, pays }) {
 }
 
 function Remises({ type }) {
+  const confirmer = useConfirmation();
+  const toast = useToast();
   const [lignes, setLignes] = useState([]);
   const [nouvelle, setNouvelle] = useState({ duree_mois: '', remise_pourcent: '' });
-  const [message, setMessage] = useState(null);
   const [erreur, setErreur] = useState(null);
   const [envoi, setEnvoi] = useState(false);
 
@@ -203,7 +205,6 @@ function Remises({ type }) {
 
   const enregistrer = async () => {
     setErreur(null);
-    setMessage(null);
     setEnvoi(true);
     try {
       const aEnvoyer = lignes.map((l) => ({ duree_mois: l.duree_mois, remise_pourcent: Number(l.remise_pourcent) }));
@@ -212,7 +213,7 @@ function Remises({ type }) {
       }
       await enregistrerRemises(type, aEnvoyer);
       setNouvelle({ duree_mois: '', remise_pourcent: '' });
-      setMessage('Remises enregistrées.');
+      toast.succes('Remises enregistrées.');
       await charger();
     } catch (err) {
       setErreur(err.message || 'Enregistrement impossible.');
@@ -222,9 +223,16 @@ function Remises({ type }) {
   };
 
   const retirer = async (duree) => {
-    if (!window.confirm(`Retirer la durée de ${duree} mois de la vente ?`)) return;
+    const ok = await confirmer({
+      titre: 'Retirer cette durée',
+      message: `La durée de ${duree} mois ne sera plus proposée à la vente.`,
+      labelConfirmer: 'Retirer',
+      variante: 'danger',
+    });
+    if (!ok) return;
     try {
       await supprimerRemise(type, duree);
+      toast.succes(`Durée de ${duree} mois retirée de la vente.`);
       await charger();
     } catch (err) {
       setErreur(err.message || 'Suppression impossible.');
@@ -237,7 +245,6 @@ function Remises({ type }) {
         <h2 className="h6"><i className="fa-solid fa-percent me-2"></i>Durées proposées et remises</h2>
         <p className="aps-text-muted small">Durées commercialisées : M1, M3, M6, Y1. Une durée absente de ce tableau n&apos;est pas proposée à la vente.</p>
         {erreur && <div className="alert alert-danger">{erreur}</div>}
-        {message && <div className="alert alert-success">{message}</div>}
         <table className="table aps-table" style={{ maxWidth: 520 }}>
           <thead><tr><th>Durée (mois)</th><th>Remise (%)</th><th></th></tr></thead>
           <tbody>
@@ -269,11 +276,12 @@ function Remises({ type }) {
 }
 
 function ParametresPays({ type, niveaux, pays }) {
+  const confirmer = useConfirmation();
+  const toast = useToast();
   const estMedecin = type === 'medecin';
   const [configs, setConfigs] = useState([]);
   const [form, setForm] = useState(null);
   const [erreur, setErreur] = useState(null);
-  const [message, setMessage] = useState(null);
   const [erreurForm, setErreurForm] = useState(null);
   const [envoi, setEnvoi] = useState(false);
   const [bascule, setBascule] = useState(null); // pays_id en cours de bascule
@@ -325,16 +333,20 @@ function ParametresPays({ type, niveaux, pays }) {
   // Médecins : activer / désactiver l'obligation de souscrire dans un pays.
   const basculerObligation = async (p) => {
     const actuel = parPays.get(p.pays_id)?.abonnement_obligatoire ?? false;
-    const texte = actuel
-      ? `Désactiver l'abonnement obligatoire pour les médecins de ${p.nom} ?\n\nTous les médecins du pays retrouvent immédiatement photo, biographie et prise de rendez-vous en ligne, sans abonnement. Les abonnements en cours restent valides.`
-      : `Activer l'abonnement obligatoire pour les médecins de ${p.nom} ?\n\nLes médecins du pays SANS abonnement actif perdent immédiatement la prise de rendez-vous en ligne, la photo et la biographie publiques (palier Basique). Vérifiez au préalable les tarifs du pays ou la gratuité d'amorçage.`;
-    if (!window.confirm(texte)) return;
+    const ok = await confirmer({
+      titre: actuel ? "Désactiver l'abonnement obligatoire" : "Activer l'abonnement obligatoire",
+      message: actuel
+        ? `Médecins de ${p.nom}.\n\nTous les médecins du pays retrouvent immédiatement photo, biographie et prise de rendez-vous en ligne, sans abonnement. Les abonnements en cours restent valides.`
+        : `Médecins de ${p.nom}.\n\nLes médecins du pays SANS abonnement actif perdent immédiatement la prise de rendez-vous en ligne, la photo et la biographie publiques (palier Basique). Vérifiez au préalable les tarifs du pays ou la gratuité d'amorçage.`,
+      labelConfirmer: actuel ? 'Désactiver' : 'Activer',
+      variante: 'avertissement',
+    });
+    if (!ok) return;
     setErreur(null);
-    setMessage(null);
     setBascule(p.pays_id);
     try {
       await enregistrerConfig(type, p.pays_id, { abonnement_obligatoire: !actuel });
-      setMessage(`Abonnement des médecins ${actuel ? 'désactivé' : 'activé'} pour ${p.nom}.`);
+      toast.succes(`Abonnement des médecins ${actuel ? 'désactivé' : 'activé'} pour ${p.nom}.`);
       await charger();
     } catch (err) {
       setErreur(err.message || 'Modification impossible.');
@@ -362,7 +374,6 @@ function ParametresPays({ type, niveaux, pays }) {
           )}
         </p>
         {erreur && <div className="alert alert-danger">{erreur}</div>}
-        {message && <div className="alert alert-success">{message}</div>}
         <table className="table aps-table">
           <thead>
             <tr>

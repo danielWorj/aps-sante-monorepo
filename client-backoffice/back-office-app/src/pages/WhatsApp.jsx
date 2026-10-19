@@ -14,6 +14,7 @@
 //     payée…) avec variables {nom} ; envoyés en texte libre ou via un modèle
 //     Meta approuvé dont le corps reçoit le texte en {{1}}.
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useConfirmation, useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import FondsModal from '../components/FondsModal';
 import { useAuth } from '../context/AuthContext';
@@ -54,6 +55,8 @@ function resumeContenu(m) {
 }
 
 export default function WhatsApp() {
+  const confirmer = useConfirmation();
+  const toast = useToast();
   const { user } = useAuth();
   const estSuperadmin = user?.role === 'superadmin';
 
@@ -61,7 +64,6 @@ export default function WhatsApp() {
   const [numeros, setNumeros] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
-  const [message, setMessage] = useState(null);
   const [occupeId, setOccupeId] = useState(null); // ligne en cours d'action
 
   // Modale ajout / modification
@@ -106,11 +108,11 @@ export default function WhatsApp() {
       const j = await listerMessagesWhatsapp({ ...filtres, page, taille: TAILLE_PAGE });
       setJournal({ total: j?.total ?? 0, messages: j?.messages ?? [] });
     } catch (err) {
-      setMessage({ type: 'danger', texte: err.message || 'Journal indisponible.' });
+      toast.erreur(err.message || 'Journal indisponible.');
     } finally {
       setChargementJournal(false);
     }
-  }, [filtres, page]);
+  }, [filtres, page, toast]);
 
   const chargerModeles = useCallback(async () => {
     try {
@@ -121,9 +123,9 @@ export default function WhatsApp() {
         texte: m.texte, nom_modele_meta: m.nom_modele_meta ?? '', langue: m.langue, actif: m.actif,
       }])));
     } catch (err) {
-      setMessage({ type: 'danger', texte: err.message || 'Messages indisponibles.' });
+      toast.erreur(err.message || 'Messages indisponibles.');
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => { charger(); }, [charger]);
   useEffect(() => { chargerModeles(); }, [chargerModeles]);
@@ -162,10 +164,10 @@ export default function WhatsApp() {
     try {
       if (edition.numero_whatsapp_id) {
         await modifierNumeroWhatsapp(edition.numero_whatsapp_id, corps);
-        setMessage({ type: 'success', texte: 'Numéro modifié.' });
+        toast.succes('Numéro modifié.');
       } else {
         await creerNumeroWhatsapp({ ...corps, actif: form.actif });
-        setMessage({ type: 'success', texte: form.actif ? 'Numéro enregistré et activé.' : 'Numéro enregistré (inactif).' });
+        toast.succes(form.actif ? 'Numéro enregistré et activé.' : 'Numéro enregistré (inactif).');
       }
       setEdition(null);
       await charger();
@@ -177,22 +179,38 @@ export default function WhatsApp() {
   };
 
   const agir = async (n, action) => {
-    if (action === 'supprimer' && !window.confirm(`Supprimer le numéro ${numeroLisible(n.numero)} ?`)) return;
-    if (action === 'desactiver' && !window.confirm('Plus aucun message WhatsApp ne partira tant qu’aucun numéro n’est actif. Continuer ?')) return;
-    if (action === 'activer' && actif && !window.confirm(`Tous les messages partiront désormais de ${numeroLisible(n.numero)} au lieu de ${numeroLisible(actif.numero)}. Continuer ?`)) return;
+    const confirmation = {
+      supprimer: {
+        titre: 'Supprimer le numéro',
+        message: `Le numéro ${numeroLisible(n.numero)} sera supprimé définitivement.`,
+        labelConfirmer: 'Supprimer',
+        variante: 'danger',
+      },
+      desactiver: {
+        titre: 'Désactiver le numéro',
+        message: 'Plus aucun message WhatsApp ne partira tant qu’aucun numéro n’est actif.',
+        labelConfirmer: 'Désactiver',
+        variante: 'danger',
+      },
+      activer: actif && {
+        titre: 'Changer de numéro actif',
+        message: `Tous les messages partiront désormais de ${numeroLisible(n.numero)} au lieu de ${numeroLisible(actif.numero)}.`,
+        labelConfirmer: 'Activer',
+        variante: 'avertissement',
+      },
+    }[action];
+    if (confirmation && !(await confirmer(confirmation))) return;
 
     setOccupeId(n.numero_whatsapp_id);
-    setMessage(null);
     try {
       if (action === 'verifier') {
         const { verification } = await verifierNumeroWhatsapp(n.numero_whatsapp_id);
         const m = verification.meta ?? {};
-        setMessage({
-          type: verification.correspond ? 'success' : 'warning',
-          texte: verification.correspond
-            ? `Numéro reconnu par Meta : ${m.display_phone_number} — « ${m.verified_name} » (qualité : ${m.quality_rating ?? '—'}).`
-            : `Meta associe ce phone_number_id à ${m.display_phone_number || 'un autre numéro'}, pas à ${numeroLisible(n.numero)}. Corrigez le numéro ou l’identifiant.`,
-        });
+        if (verification.correspond) {
+          toast.succes(`Numéro reconnu par Meta : ${m.display_phone_number} — « ${m.verified_name} » (qualité : ${m.quality_rating ?? '—'}).`);
+        } else {
+          toast.avertissement(`Meta associe ce phone_number_id à ${m.display_phone_number || 'un autre numéro'}, pas à ${numeroLisible(n.numero)}. Corrigez le numéro ou l’identifiant.`, { duree: 9000 });
+        }
         return;
       }
       const r = action === 'activer'
@@ -200,10 +218,10 @@ export default function WhatsApp() {
         : action === 'desactiver'
           ? await desactiverNumeroWhatsapp(n.numero_whatsapp_id)
           : await supprimerNumeroWhatsapp(n.numero_whatsapp_id);
-      setMessage({ type: 'success', texte: r?.message ?? 'Fait.' });
+      toast.succes(r?.message ?? 'Fait.');
       await charger();
     } catch (err) {
-      setMessage({ type: 'danger', texte: err.message || 'Action impossible.' });
+      toast.erreur(err.message || 'Action impossible.');
     } finally {
       setOccupeId(null);
     }
@@ -215,13 +233,12 @@ export default function WhatsApp() {
 
   const enregistrerModele = async (code) => {
     setEnregistrement(code);
-    setMessage(null);
     try {
       const r = await modifierModeleMessageWhatsapp(code, brouillons[code]);
-      setMessage({ type: 'success', texte: r?.message ?? 'Message enregistré.' });
+      toast.succes(r?.message ?? 'Message enregistré.');
       await chargerModeles();
     } catch (err) {
-      setMessage({ type: 'danger', texte: err.message || 'Enregistrement impossible.' });
+      toast.erreur(err.message || 'Enregistrement impossible.');
     } finally {
       setEnregistrement(null);
     }
@@ -259,9 +276,9 @@ export default function WhatsApp() {
     setOccupeId(m.message_whatsapp_id);
     try {
       const r = await renvoyerMessageWhatsapp(m.message_whatsapp_id);
-      setMessage({ type: 'success', texte: r.message });
+      toast.succes(r.message);
     } catch (err) {
-      setMessage({ type: 'danger', texte: err.message || 'Renvoi impossible.' });
+      toast.erreur(err.message || 'Renvoi impossible.');
     } finally {
       setOccupeId(null);
       chargerJournal();
@@ -295,7 +312,6 @@ export default function WhatsApp() {
         dans Meta for Developers &gt; WhatsApp &gt; Configuration de l’API.
       </p>
 
-      {message && <div className={`alert alert-${message.type} mb-3`} role="status">{message.texte}</div>}
       {erreur && <div className="alert alert-danger">{erreur}</div>}
 
       {!chargement && config && !config.jeton_configure && (

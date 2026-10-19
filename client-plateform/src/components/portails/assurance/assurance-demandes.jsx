@@ -8,6 +8,7 @@
 // « en cours » (si le suivi est inclus).
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
+import { useConfirmation, useToast } from '../../feedback';
 import { AssurancePortailPage } from '../layouts/assurance.portail-sidebar';
 import { obtenirGestionServiceAssurance } from '../../../services/abonnementAssuranceService';
 import {
@@ -32,20 +33,20 @@ function ChipStatut({ statut }) {
 }
 
 function DetailDemande({ demande, suiviInclus, onMaj, onSupprimee }) {
+  const confirmer = useConfirmation();
+  const toast = useToast();
   const [note, setNote] = useState(demande.note_interne ?? '');
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState(null);
-  const [info, setInfo] = useState(null);
   const u = demande.utilisateur;
 
   const appliquer = async (modifs, message) => {
     setErreur(null);
-    setInfo(null);
     setEnvoi(true);
     try {
       const d = await suivreDemande(demande.mise_en_relation_id, modifs);
       onMaj(d.mise_en_relation);
-      if (message) setInfo(message);
+      if (message) toast.succes(message);
     } catch (err) {
       setErreur(err?.message || 'Mise à jour impossible.');
     } finally {
@@ -54,10 +55,17 @@ function DetailDemande({ demande, suiviInclus, onMaj, onSupprimee }) {
   };
 
   const supprimer = async () => {
-    if (!window.confirm('Supprimer définitivement cette demande ?')) return;
+    const ok = await confirmer({
+      titre: 'Supprimer la demande',
+      message: 'Cette demande sera supprimée définitivement.',
+      labelConfirmer: 'Supprimer',
+      variante: 'danger',
+    });
+    if (!ok) return;
     try {
       await supprimerDemande(demande.mise_en_relation_id);
       onSupprimee(demande.mise_en_relation_id);
+      toast.succes('Demande supprimée.');
     } catch (err) {
       setErreur(err?.message || 'Suppression impossible.');
     }
@@ -126,7 +134,6 @@ function DetailDemande({ demande, suiviInclus, onMaj, onSupprimee }) {
         </div>
       )}
       {erreur && <p className="status-card-error mt-2 mb-0"><i className="fa-solid fa-circle-exclamation" /> {erreur}</p>}
-      {info && <p className="small text-success mt-2 mb-0"><i className="fa-solid fa-check" /> {info}</p>}
     </div>
   );
 }

@@ -3,6 +3,14 @@
 .pub-page-entete { margin-bottom: 1.8rem; }
 .pub-page-entete h1 { font-family: var(--font-display); font-size: 1.8rem; margin: .3rem 0 .4rem; color: var(--ink); }
 .pub-page-entete p { color: var(--ink-soft); max-width: 62ch; margin: 0; }
+/* Visiteur sans compte : lien vers la connexion (« Rejoindre mon espace »). */
+.pub-compte-existant {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .8rem;
+  margin-top: 1.2rem; padding: .9rem 1.2rem; border-radius: var(--radius-lg, 16px);
+  background: var(--primary-tint); border: 1px solid var(--primary-tint-strong, var(--line));
+}
+.pub-compte-existant p { margin: 0; color: var(--ink); }
+.pub-compte-existant i { color: var(--primary-dark); margin-right: .4rem; }
 .pub-surtitre { font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--primary-dark); }
 
 .pub-form { display: flex; flex-direction: column; gap: 1.2rem; }

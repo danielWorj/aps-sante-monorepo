@@ -122,8 +122,9 @@ class RoleBottomNavigationBar extends StatelessWidget {
         ];
       case RoleUtilisateur.patient:
       case RoleUtilisateur.medecin:
-      // Ces deux rôles ont leur propre barre dédiée (PatientBottomNavigationBar
-      // / MedecinBottomNavigationBar) — cas conservé uniquement pour que le
+      case RoleUtilisateur.annonceur:
+      // Ces rôles ont leur propre écran (PatientBottomNavigationBar,
+      // MedecinBottomNavigationBar, portail annonceur) — cas conservé uniquement pour que le
       // switch soit exhaustif ; ne devrait jamais être atteint via
       // RoleHomeShell (voir HomeRouterForRole).
         return const [

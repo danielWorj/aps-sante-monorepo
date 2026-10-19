@@ -74,6 +74,7 @@ export default function Login() {
         agent_assurance: '/portail/assurance',
         agent_pharmacie: '/mon-espace-pharmacie',
         agent_structure_sante: '/mon-espace-structure',
+        annonceur: '/portail/annonceur',
       };
 
       // Retour à la page qui a demandé la connexion (ex. /pricing), si fournie

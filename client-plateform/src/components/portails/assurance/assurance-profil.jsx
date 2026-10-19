@@ -5,6 +5,7 @@
 // options, ses agences. Les modifications sont publiées aussitôt : la fiche
 // garde son statut de vérification (pas de re-modération).
 import { useCallback, useEffect, useState } from 'react';
+import { useToast } from '../../feedback';
 import { useOutletContext } from 'react-router-dom';
 import { AssurancePortailPage } from '../layouts/assurance.portail-sidebar';
 import AgencesAssurance from '../../assurances/gestion/AgencesAssurance';
@@ -33,7 +34,7 @@ function FormulaireFiche({ fiche, onEnregistre }) {
   const [villes, setVilles] = useState([]);
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState(null);
-  const [succes, setSucces] = useState(null);
+  const toast = useToast();
 
   useEffect(() => {
     listerVilles(fiche.pays_id).then((d) => setVilles(d?.villes || [])).catch(() => setVilles([]));
@@ -52,7 +53,6 @@ function FormulaireFiche({ fiche, onEnregistre }) {
   const enregistrer = async (e) => {
     e.preventDefault();
     setErreur(null);
-    setSucces(null);
     setEnvoi(true);
     try {
       const donnees = { ...form, description: form.description };
@@ -63,7 +63,7 @@ function FormulaireFiche({ fiche, onEnregistre }) {
       if (logo) donnees.image_assurance = logo;
       await modifierServiceAssurance(fiche.service_assurance_id, donnees);
       setLogo(null);
-      setSucces('Fiche enregistrée.');
+      toast.succes('Fiche enregistrée.');
       onEnregistre();
     } catch (err) {
       setErreur(err?.message || 'Enregistrement impossible.');
@@ -136,7 +136,6 @@ function FormulaireFiche({ fiche, onEnregistre }) {
         </div>
       </div>
       {erreur && <div className="alert alert-danger mt-3 mb-0">{erreur}</div>}
-      {succes && <div className="alert alert-success mt-3 mb-0">{succes}</div>}
       <div className="text-end mt-3">
         <button type="submit" className="btn btn-primary btn-sm-aps" disabled={envoi}>
           {envoi ? 'Enregistrement…' : 'Enregistrer la fiche'}

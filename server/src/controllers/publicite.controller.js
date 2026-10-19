@@ -42,6 +42,7 @@
 // diffusion, sans les informations de l'annonceur.
 // Annonceur : ses demandes, statistiques et factures (portail).
 
+import bcrypt from "bcrypt";
 import prisma from "../lib/prisma.js";
 import { televerserFichier, supprimerFichier } from "../lib/cloudinaryService.js";
 import {
@@ -67,6 +68,14 @@ import {
   serieStatistiques,
   totauxParPublicite,
 } from "../services/statistiquesPublicite.service.js";
+import {
+  EMAIL_REGEX,
+  normaliserEmail,
+  ouvrirSession,
+  SALT_ROUNDS,
+  serialiserUtilisateur,
+  validerMotDePasse,
+} from "../services/compte.service.js";
 
 const STATUTS_PUBLICITE = ["en_moderation", "rejetee", "en_attente_paiement", "expiree", "payee", "annulee"];
 // Statuts où l'annonceur n'a encore rien payé : suppression possible.
@@ -829,6 +838,123 @@ export async function creerPublicite(req, res, next) {
     return res.status(201).json({
       message: "Demande envoyée. Vous recevrez la décision par WhatsApp.",
       publicite: vueDetail(publicite),
+    });
+  } catch (err) {
+    repondreErreur(err, res, next);
+  }
+}
+
+// Rôle des comptes créés depuis le formulaire de réservation. Créé à la
+// volée s'il manque (donnée de référence, idempotent) : la réservation ne
+// doit pas échouer parce que la table `role` n'a pas encore été amorcée.
+const LIBELLE_ROLE_ANNONCEUR = "annonceur";
+
+/**
+ * POST /api/publicites/reservation-avec-compte — PUBLIC (multipart/form-data).
+ * Réservation par un visiteur sans compte : crée le compte « annonceur »
+ * ET la demande de publicité dans une seule transaction, puis ouvre la
+ * session (comme un login) pour qu'il suive sa demande dans son espace.
+ * Champs : ceux de POST /api/publicites + compte_prenom, compte_nom,
+ * compte_email, mot_de_passe. Le pays du compte est celui du forfait choisi ;
+ * le téléphone du compte est le WhatsApp de l'annonceur.
+ * Un email déjà utilisé → 409 COMPTE_EXISTANT : l'utilisateur doit se
+ * connecter (« Rejoindre mon espace ») puis réserver depuis son compte.
+ */
+export async function reserverAvecCompte(req, res, next) {
+  try {
+    const prenom = String(req.body.compte_prenom ?? "").trim();
+    const nom = String(req.body.compte_nom ?? "").trim();
+    const emailBrut = String(req.body.compte_email ?? "").trim();
+    if (!prenom || !nom || !emailBrut || !req.body.mot_de_passe) {
+      return res.status(400).json({
+        code: "CHAMPS_REQUIS",
+        message: "Champs requis manquants pour le compte : prénom, nom, email et mot de passe.",
+      });
+    }
+    if (prenom.length > 100 || nom.length > 100) {
+      return res.status(400).json({ code: "CHAMP_TROP_LONG", message: "Nom et prénom : 100 caractères maximum." });
+    }
+    const email = normaliserEmail(emailBrut);
+    if (!EMAIL_REGEX.test(email)) return res.status(400).json({ code: "EMAIL_INVALIDE", message: "Email du compte invalide." });
+    const erreurMotDePasse = validerMotDePasse(req.body.mot_de_passe);
+    if (erreurMotDePasse) return res.status(400).json({ code: "MOT_DE_PASSE_INVALIDE", message: erreurMotDePasse });
+
+    const champs = validerChampsReservation({ ...req.body, annonceur_email: req.body.annonceur_email || email });
+    const fichierVisuel = req.files?.visuel?.[0];
+    if (!fichierVisuel) {
+      return res.status(400).json({ code: "VISUEL_REQUIS", message: "Fichier requis manquant : visuel (flyer ou image)." });
+    }
+
+    const compteExistant = () => res.status(409).json({
+      code: "COMPTE_EXISTANT",
+      message: "Un compte existe déjà avec cet email : cliquez sur « Rejoindre mon espace » pour vous connecter.",
+    });
+    if (await prisma.utilisateur.findUnique({ where: { email }, select: { utilisateur_id: true } })) return compteExistant();
+
+    const { forfait, debut, fin } = await preparerSoumission({
+      forfait_publicitaire_id: req.body.forfait_publicitaire_id,
+      date_debut: req.body.date_debut,
+    });
+    const motDePasseHash = await bcrypt.hash(req.body.mot_de_passe, SALT_ROUNDS);
+    const visuelTeleverse = await televerserFichier(fichierVisuel.buffer, "publicites");
+
+    let utilisateur;
+    let publicite;
+    try {
+      ({ utilisateur, publicite } = await prisma.$transaction(async (tx) => {
+        const role = await tx.role.upsert({
+          where: { libelle: LIBELLE_ROLE_ANNONCEUR },
+          update: {},
+          create: { libelle: LIBELLE_ROLE_ANNONCEUR, description: "Annonceur (réservation d'espaces publicitaires)" },
+        });
+        const compte = await tx.utilisateur.create({
+          data: {
+            nom,
+            prenom,
+            email,
+            telephone: champs.annonceur_telephone,
+            mot_de_passe_hash: motDePasseHash,
+            role_id: role.role_id,
+            pays_id: forfait.pays_id,
+            statut_compte: "actif",
+          },
+          include: { role: true },
+        });
+        const pub = await tx.publicite.create({
+          data: {
+            ...champs,
+            forfait_publicitaire_id: forfait.forfait_publicitaire_id,
+            emplacement_publicitaire_id: forfait.emplacement_publicitaire_id,
+            pays_id: forfait.pays_id,
+            rang: forfait.rang,
+            utilisateur_id: compte.utilisateur_id,
+            visuel_url: visuelTeleverse.nom,
+            date_debut: debut,
+            date_fin: fin,
+            montant: forfait.prix,
+            devise: forfait.devise,
+            statut: "en_moderation",
+            statut_moderation: "en_attente",
+          },
+          include: INCLUDE_DETAIL,
+        });
+        return { utilisateur: compte, publicite: pub };
+      }));
+    } catch (err) {
+      // Course : le même email a été inscrit entre la vérification et la création.
+      if (err?.code === "P2002") return compteExistant();
+      throw err;
+    } finally {
+      // Rien n'a été créé : le visuel téléversé ne doit pas rester orphelin.
+      if (!publicite) await supprimerFichier(visuelTeleverse.nom).catch(() => {});
+    }
+
+    const accessToken = await ouvrirSession(req, res, utilisateur);
+    return res.status(201).json({
+      message: "Compte créé et demande envoyée. Vous recevrez la décision par WhatsApp.",
+      publicite: vueDetail(publicite),
+      access_token: accessToken,
+      utilisateur: serialiserUtilisateur(utilisateur),
     });
   } catch (err) {
     repondreErreur(err, res, next);

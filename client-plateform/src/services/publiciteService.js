@@ -75,6 +75,20 @@ export function reserverEspace(champs, visuel) {
   return apiFetch('/publicites', { method: 'POST', body: fd });
 }
 
+/**
+ * POST /publicites/reservation-avec-compte (public, multipart) : crée le compte
+ * annonceur et la demande, ouvre la session.
+ * -> { publicite, access_token, utilisateur }
+ */
+export function reserverEspaceAvecCompte(champs, visuel) {
+  const fd = new FormData();
+  Object.entries(champs).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') fd.append(k, v);
+  });
+  fd.append('visuel', visuel);
+  return apiFetch('/publicites/reservation-avec-compte', { method: 'POST', body: fd });
+}
+
 /* ----------------------------- Portail annonceur ----------------------------- */
 
 export const listerMesPublicites = () => apiFetch('/publicites/mes-publicites');

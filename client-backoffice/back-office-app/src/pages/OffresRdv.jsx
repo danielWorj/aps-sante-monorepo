@@ -5,6 +5,7 @@
 // médecin validé et RDV issu de la demande. Seule action : retirer une demande
 // encore ouverte (modération). Le serveur reste la source de vérité.
 import { Fragment, useCallback, useEffect, useState } from 'react';
+import { useConfirmation, useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import * as offreRdvService from '../services/offreRdvService';
 import { listerPays } from '../services/referentielService';
@@ -29,6 +30,8 @@ const date = (iso) =>
 const nom = (u, prefixe = '') => (u ? `${prefixe}${u.prenom ?? ''} ${u.nom ?? ''}`.trim() : '—');
 
 export default function OffresRdv() {
+  const confirmer = useConfirmation();
+  const toast = useToast();
   const [filtre, setFiltre] = useState('');
   const [paysId, setPaysId] = useState('');
   const [page, setPage] = useState(1);
@@ -36,7 +39,6 @@ export default function OffresRdv() {
   const [donnees, setDonnees] = useState({ offres: [], total: 0, statistiques: {} });
   const [loading, setLoading] = useState(true);
   const [erreur, setErreur] = useState(null);
-  const [message, setMessage] = useState(null);
   const [ouverte, setOuverte] = useState(null); // offre_id dont le détail est déplié
   const [actionEnCours, setActionEnCours] = useState(null);
 
@@ -81,14 +83,19 @@ export default function OffresRdv() {
   };
 
   const retirer = async (o) => {
-    if (!window.confirm(`Retirer la demande ${o.specialite?.nom} du ${date(o.date_souhaitee)} ? Les médecins ne pourront plus y répondre.`)) return;
+    const ok = await confirmer({
+      titre: 'Retirer la demande',
+      message: `${o.specialite?.nom} du ${date(o.date_souhaitee)}.\nLes médecins ne pourront plus y répondre.`,
+      labelConfirmer: 'Retirer',
+      variante: 'danger',
+    });
+    if (!ok) return;
     setActionEnCours(o.offre_id);
-    setMessage(null);
     try {
       await offreRdvService.retirerOffre(o.offre_id);
-      setMessage({ type: 'info', texte: 'Demande retirée.' });
+      toast.succes('Demande retirée.');
     } catch (err) {
-      setMessage({ type: 'danger', texte: err.message || 'Action impossible.' });
+      toast.erreur(err.message || 'Action impossible.');
     } finally {
       setActionEnCours(null);
       await charger();
@@ -113,13 +120,6 @@ export default function OffresRdv() {
           </button>
         </div>
       </div>
-
-      {message && (
-        <div className={`aps-notice is-${message.type} mb-3`} role="status">
-          <i className="fa-solid fa-circle-info"></i>
-          <div>{message.texte}</div>
-        </div>
-      )}
 
       <div className="row g-3 mb-4">
         {Object.entries(STATUTS).map(([cle, s]) => (

@@ -10,6 +10,7 @@
 //   - note           : nœud affiché sous l'introduction (ex. rappel « 0 % est valide ») ;
 //   - graviteAbsent  : 'warning' (défaut) | 'danger' — niveau de l'alerte « pays sans taux ».
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useToast } from './feedback';
 import './../assets/style/Referentiel.css';
 import { listerPays } from '../services/referentielService';
 import FondsModal from './FondsModal';
@@ -23,7 +24,7 @@ export default function TauxParPays({
   const [lignes, setLignes] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
-  const [message, setMessage] = useState(null);
+  const toast = useToast();
   const [cible, setCible] = useState(null); // pays en cours de paramétrage
   const [form, setForm] = useState({ libelle: '', taux: '' });
   const [erreurForm, setErreurForm] = useState(null);
@@ -69,7 +70,7 @@ export default function TauxParPays({
     setErreurForm(null);
     try {
       await creer({ pays_id: cible.pays_id, libelle: form.libelle.trim(), taux });
-      setMessage({ type: 'success', texte: `Nouveau taux de ${pourcent(taux)} activé pour ${cible.nom}.` });
+      toast.succes(`Nouveau taux de ${pourcent(taux)} activé pour ${cible.nom}.`);
       setCible(null);
       await charger();
     } catch (err) {
@@ -96,7 +97,6 @@ export default function TauxParPays({
       <p className="aps-text-muted">{intro}</p>
       {note}
 
-      {message && <div className={`alert alert-${message.type} mb-3`} role="status">{message.texte}</div>}
       {erreur && <div className="alert alert-danger">{erreur}</div>}
       {!chargement && sansLigne.length > 0 && (
         <div className={`alert alert-${graviteAbsent}`} role="alert">

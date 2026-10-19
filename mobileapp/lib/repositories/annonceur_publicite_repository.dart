@@ -89,7 +89,8 @@ class AnnonceurPubliciteRepository {
         .toList();
   }
 
-  Future<DisponibiliteForfait> disponibilites(String forfaitId, {required String token}) async {
+  /// Publique : le formulaire s'ouvre aussi aux visiteurs sans compte.
+  Future<DisponibiliteForfait> disponibilites(String forfaitId, {String? token}) async {
     final d = await _get('$_base/disponibilites', token: token, query: {'forfait_publicitaire_id': forfaitId});
     return DisponibiliteForfait.fromJson((d as Map).cast<String, dynamic>());
   }
@@ -116,6 +117,29 @@ class AnnonceurPubliciteRepository {
     final reponse = await http.Response.fromStream(await requete.send().timeout(const Duration(seconds: 60)));
     final d = _decoder(reponse);
     return MaPublicite.fromJson((d['publicite'] as Map).cast<String, dynamic>());
+  }
+
+  /// POST /publicites/reservation-avec-compte (public, multipart) : crée le
+  /// compte annonceur et la demande ; le serveur ouvre la session. [client]
+  /// est le client à cookies de la session (SessionController.appelOuvrantSession),
+  /// indispensable pour conserver le cookie du refresh token.
+  /// -> { publicite, access_token, utilisateur }
+  Future<Map<String, dynamic>> reserverAvecCompte({
+    required http.Client client,
+    required Map<String, String> champs,
+    required List<int> visuelOctets,
+    required String visuelNomFichier,
+  }) async {
+    final requete = http.MultipartRequest('POST', Uri.parse('$_base/reservation-avec-compte'));
+    champs.forEach((k, v) {
+      // Le mot de passe est transmis tel quel (espaces compris).
+      final valeur = k == 'mot_de_passe' ? v : v.trim();
+      if (valeur.isNotEmpty) requete.fields[k] = valeur;
+    });
+    requete.files.add(http.MultipartFile.fromBytes('visuel', visuelOctets,
+        filename: visuelNomFichier, contentType: mediaTypeDepuisNom(visuelNomFichier)));
+    final reponse = await http.Response.fromStream(await client.send(requete).timeout(const Duration(seconds: 60)));
+    return (_decoder(reponse) as Map).cast<String, dynamic>();
   }
 
   /* ----------------------------- Portail annonceur ----------------------------- */

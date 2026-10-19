@@ -15,6 +15,7 @@
 // Droits : GET ouvert à admin + superadmin ; POST réservé au SUPERADMIN. Les
 // simples admins ont donc la page en lecture seule (aucun bouton d'édition).
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import FondsModal from '../components/FondsModal';
 import { estRole, useAuth } from '../context/AuthContext';
@@ -41,7 +42,7 @@ export default function ParametreDelaiLiberation() {
   const [lignes, setLignes] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
-  const [message, setMessage] = useState(null);
+  const toast = useToast();
   const [cible, setCible] = useState(null); // pays en cours de paramétrage
   const [form, setForm] = useState({ libelle: '', heures: '' });
   const [erreurForm, setErreurForm] = useState(null);
@@ -98,10 +99,7 @@ export default function ParametreDelaiLiberation() {
         libelle: form.libelle.trim(),
         heures,
       });
-      setMessage({
-        type: 'success',
-        texte: `Nouveau délai de ${heuresLisibles(heures)} activé pour ${cible.nom}. Il ne s’applique qu’aux consultations terminées à partir de maintenant.`,
-      });
+      toast.succes(`Nouveau délai de ${heuresLisibles(heures)} activé pour ${cible.nom}. Il ne s’applique qu’aux consultations terminées à partir de maintenant.`, { duree: 7000 });
       setCible(null);
       await charger();
     } catch (err) {
@@ -140,7 +138,6 @@ export default function ParametreDelaiLiberation() {
         </div>
       )}
 
-      {message && <div className={`alert alert-${message.type} mb-3`} role="status">{message.texte}</div>}
       {erreur && <div className="alert alert-danger">{erreur}</div>}
       {!chargement && !erreur && sansLigne.length > 0 && (
         <div className="alert alert-danger" role="alert">

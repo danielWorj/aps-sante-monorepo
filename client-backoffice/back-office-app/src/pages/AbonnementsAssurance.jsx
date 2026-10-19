@@ -12,6 +12,7 @@
 // Toutes ces actions sont journalisées côté serveur (journal d'audit immuable).
 // Rappel : date_fin est EXCLUSIVE ; on affiche le dernier jour couvert.
 import { useCallback, useEffect, useState } from 'react';
+import { useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import FondsModal from '../components/FondsModal';
 import { listerPays } from '../services/referentielService';
@@ -57,7 +58,7 @@ export default function AbonnementsAssurance() {
   const [pays, setPays] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
-  const [message, setMessage] = useState(null);
+  const toast = useToast();
 
   // Modales : { type: 'nouveau'|'suspendre'|'retablir'|'prolonger'|'encaissement', abonnement? }
   const [action, setAction] = useState(null);
@@ -120,25 +121,25 @@ export default function AbonnementsAssurance() {
           origine: form.origine,
           motif: form.motif.trim() || undefined,
         });
-        setMessage(cree.statut === 'actif'
+        toast.succes(cree.statut === 'actif'
           ? 'Abonnement activé (geste commercial).'
-          : `Abonnement en attente de virement : ${montantDevise(cree.montant_total, cree.devise)} (référence ${cree.abonnement_id}).`);
+          : `Abonnement en attente de virement : ${montantDevise(cree.montant_total, cree.devise)} (référence ${cree.abonnement_id}).`, { duree: 0 });
       } else if (action.type === 'encaissement') {
         const r = await constaterEncaissement(a.abonnement_id, { reference_virement: form.reference_virement.trim() || undefined });
-        setMessage(`Encaissement constaté : abonnement activé${r.facture?.numero ? `, facture ${r.facture.numero}` : ''}.`);
+        toast.succes(`Encaissement constaté : abonnement activé${r.facture?.numero ? `, facture ${r.facture.numero}` : ''}.`);
       } else if (action.type === 'suspendre') {
         await suspendreAbonnement(a.abonnement_id, form.motif.trim() || undefined);
-        setMessage('Abonnement suspendu : la fiche repasse en présence minimale.');
+        toast.succes('Abonnement suspendu : la fiche repasse en présence minimale.');
       } else if (action.type === 'retablir') {
         await retablirAbonnement(a.abonnement_id, form.motif.trim() || undefined);
-        setMessage('Abonnement rétabli (dates inchangées).');
+        toast.succes('Abonnement rétabli (dates inchangées).');
       } else if (action.type === 'prolonger') {
         await prolongerAbonnement(a.abonnement_id, {
           mois: form.mois === '' ? undefined : Number(form.mois),
           jours: form.jours === '' ? undefined : Number(form.jours),
           motif: form.motif.trim(),
         });
-        setMessage('Abonnement prolongé.');
+        toast.succes('Abonnement prolongé.');
       }
       setAction(null);
       await charger();
@@ -172,7 +173,6 @@ export default function AbonnementsAssurance() {
         </div>
       </div>
 
-      {message && <div className="alert alert-success" role="status">{message}</div>}
       {erreur && <div className="alert alert-danger">{erreur}</div>}
 
       {tableau && (

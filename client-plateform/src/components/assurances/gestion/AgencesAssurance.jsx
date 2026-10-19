@@ -4,6 +4,7 @@
 // l'abonnement), modification en place, suppression. Les agences sont
 // conservées hors droits et réapparaissent au public à la réactivation.
 import { useState } from 'react';
+import { useConfirmation, useToast } from '../../feedback';
 import { creerAgence, modifierAgence, supprimerAgence } from '../../../services/assuranceService';
 
 const VIDE = { libelle: '', localisation: '', contact: '' };
@@ -32,6 +33,8 @@ function ChampsAgence({ valeur, onChange }) {
  *   visiblesAuPublic: boolean, onChange: () => void }} props
  */
 export default function AgencesAssurance({ serviceId, agences, quota, visiblesAuPublic, onChange }) {
+  const confirmer = useConfirmation();
+  const toast = useToast();
   const [form, setForm] = useState(VIDE);
   const [edition, setEdition] = useState(null); // { agence_id, libelle, localisation, contact }
   const [erreur, setErreur] = useState(null);
@@ -68,9 +71,15 @@ export default function AgencesAssurance({ serviceId, agences, quota, visiblesAu
     }
   };
 
-  const retirer = (id) => {
-    if (!window.confirm('Supprimer cette agence ?')) return;
-    executer(() => supprimerAgence(id), 'Suppression impossible.');
+  const retirer = async (id) => {
+    const ok = await confirmer({
+      titre: "Supprimer l'agence",
+      message: 'Cette agence sera retirée de votre fiche.',
+      labelConfirmer: 'Supprimer',
+      variante: 'danger',
+    });
+    if (!ok) return;
+    if (await executer(() => supprimerAgence(id), 'Suppression impossible.')) toast.succes('Agence supprimée.');
   };
 
   return (

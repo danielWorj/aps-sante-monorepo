@@ -21,6 +21,7 @@ import PatientPortailSidebar from "./../layouts/patient.portail-sidebar";
 import ChoixMoyenPaiement from "./../../paiement/ChoixMoyenPaiement";
 import PaiementMobileMoney from "./../../paiement/PaiementMobileMoney";
 import { useAuth } from "./../../../context/AuthContext";
+import { useConfirmation, useToast } from "../../feedback";
 import { listerSpecialites } from "./../../../services/medecinService";
 import { listerVilles } from "./../../../services/geoService";
 import {
@@ -83,16 +84,13 @@ export default function PatientDemandes() {
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
   const [actionEnCours, setActionEnCours] = useState(null);
-  const [toast, setToast] = useState(null);
+  const toast = useToast();
+  const confirmer = useConfirmation();
 
   // Paiement juste après « Valider ce médecin ».
   const [choixRdvId, setChoixRdvId] = useState(null);
   const [momoRdvId, setMomoRdvId] = useState(null);
 
-  const afficherToast = (msg, ms = 4000) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), ms);
-  };
 
   const charger = useCallback(async () => {
     try {
@@ -165,7 +163,7 @@ export default function PatientDemandes() {
         motif: motif.trim() || null,
       });
       setForm(FORMULAIRE_VIDE);
-      afficherToast(
+      toast.succes(
         data.medecins_notifies > 0
           ? `Demande publiée : ${data.medecins_notifies} médecin(s) prévenu(s).`
           : "Demande publiée. Aucun médecin n'est encore inscrit pour ces critères : elle reste visible jusqu'à l'heure choisie."
@@ -179,14 +177,20 @@ export default function PatientDemandes() {
   };
 
   const annuler = async (offre) => {
-    if (!window.confirm("Retirer cette demande ? Les médecins ne pourront plus y répondre.")) return;
+    const ok = await confirmer({
+      titre: "Retirer la demande",
+      message: "Les médecins ne pourront plus y répondre.",
+      labelConfirmer: "Retirer",
+      variante: "danger",
+    });
+    if (!ok) return;
     setActionEnCours(offre.offre_id);
     try {
       await annulerOffre(offre.offre_id);
-      afficherToast("Demande retirée.");
+      toast.succes("Demande retirée.");
       charger();
     } catch (err) {
-      afficherToast("Erreur : " + (err.message || "annulation impossible."));
+      toast.erreur(err.message || "Annulation impossible.");
     } finally {
       setActionEnCours(null);
     }
@@ -194,14 +198,19 @@ export default function PatientDemandes() {
 
   const valider = async (offre, reponse) => {
     const nom = nomMedecin(reponse.medecin);
-    if (!window.confirm(`Valider ${nom} pour le ${dateLongue(offre.date_souhaitee)} ? Vous passerez ensuite au paiement.`)) return;
+    const ok = await confirmer({
+      titre: "Valider ce médecin",
+      message: `${nom}, le ${dateLongue(offre.date_souhaitee)}.\nVous passerez ensuite au paiement.`,
+      labelConfirmer: "Valider et payer",
+    });
+    if (!ok) return;
     setActionEnCours(reponse.reponse_id);
     try {
       const data = await validerMedecin(offre.offre_id, reponse.reponse_id);
       await charger();
       setChoixRdvId(data.rendez_vous.rdv_id);
     } catch (err) {
-      afficherToast("Erreur : " + (err.message || "validation impossible."), 6000);
+      toast.erreur(err.message || "Validation impossible.");
       charger();
     } finally {
       setActionEnCours(null);
@@ -467,10 +476,6 @@ export default function PatientDemandes() {
         </div>
       </div>
 
-      <div className={`toast-aps ${toast ? "show" : ""}`} role="status">
-        <i className="fa-solid fa-circle-check"></i>
-        <span>{toast}</span>
-      </div>
 
       {choixRdvId && (
         <ChoixMoyenPaiement

@@ -140,6 +140,17 @@ export function AuthProvider({ children }) {
   );
 
   /**
+   * Adopte une session ouverte par le serveur hors du login (ex.
+   * réservation publicitaire avec création de compte) : la réponse porte
+   * déjà access_token + utilisateur, le refresh token est en cookie.
+   */
+  const ouvrirSession = useCallback(({ access_token, utilisateur }) => {
+    setAccessToken(access_token);
+    setUser(utilisateur);
+    setStatus('authenticated');
+  }, []);
+
+  /**
    * POST /auth/logout puis nettoyage de la session locale, même si
    * l'appel réseau échoue (mieux vaut désynchroniser localement que
    * laisser l'utilisateur "connecté" côté UI alors que l'appel a
@@ -173,10 +184,11 @@ export function AuthProvider({ children }) {
       isAuthenticated: status === 'authenticated',
       connecter,
       changerMotDePasseInitial,
+      ouvrirSession,
       deconnecter,
       rafraichirUtilisateur,
     }),
-    [user, status, connecter, changerMotDePasseInitial, deconnecter, rafraichirUtilisateur]
+    [user, status, connecter, changerMotDePasseInitial, ouvrirSession, deconnecter, rafraichirUtilisateur]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

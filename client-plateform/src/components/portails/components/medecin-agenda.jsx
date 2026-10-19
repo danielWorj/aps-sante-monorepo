@@ -86,12 +86,13 @@
 // paiement », sans nom de patient ni icône de visio. Le médecin n'est de toute
 // façon notifié qu'à la confirmation du paiement.
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import PortailNavbar from "./../layouts/portail-navbar";
 import PortailFooter from "./../layouts/portail-footer";
 import PortailSidebar from "./../layouts/portail-sidebar";
 import { estRdvNonPaye, estConsultationTerminee } from "./../../../utils/rdv";
 import "./medecin-agenda-non-paye.css";
+import { useConfirmation, useToast } from "../../feedback";
 import {
   obtenirMonProfil,
   listerHoraires,
@@ -193,8 +194,8 @@ const MedecinAgenda = () => {
     const j = new Date().getDay(); // 0 = dimanche
     return j === 0 ? 7 : j; // 1 = Lundi ... 7 = Dimanche
   });
-  const [toast, setToast] = useState(null);
-  const toastTimer = useRef(null);
+  const toast = useToast();
+  const confirmer = useConfirmation();
 
   const [medecinId, setMedecinId] = useState(null);
   const [semaineOffset, setSemaineOffset] = useState(0);
@@ -208,11 +209,6 @@ const MedecinAgenda = () => {
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreur, setErreur] = useState(null);
 
-  const showToast = (msg) => {
-    setToast(msg);
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2600);
-  };
 
   useEffect(() => {
     document.body.classList.toggle("block-mode", modeBlocage);
@@ -422,14 +418,24 @@ const MedecinAgenda = () => {
         // Un créneau issu du gabarit n'est pas effacé mais FERMÉ par le
         // serveur (sinon la synchronisation suivante le recréerait).
         const issuDuGabarit = cellule.creneau?.origine === "genere";
-        const confirmation = window.confirm(
+        const confirmation = await confirmer(
           issuDuGabarit
-            ? `Retirer ce créneau de l'agenda ? (${label})\nIl vient de vos horaires de la semaine : il sera fermé pour cette date uniquement.`
-            : `Supprimer définitivement ce créneau ? (${label})\nCette action est irréversible.`
+            ? {
+                titre: "Retirer ce créneau de l'agenda",
+                message: `${label}\nIl vient de vos horaires de la semaine : il sera fermé pour cette date uniquement.`,
+                labelConfirmer: "Retirer",
+                variante: "avertissement",
+              }
+            : {
+                titre: "Supprimer ce créneau",
+                message: `${label}\nCette action est irréversible.`,
+                labelConfirmer: "Supprimer",
+                variante: "danger",
+              }
         );
         if (!confirmation) return;
         const resultat = await supprimerCreneauAgenda(cellule.creneau.creneau_id);
-        showToast(`${resultat?.message || "Créneau supprimé."} — ${label}`);
+        toast.succes(`${resultat?.message || "Créneau supprimé."} — ${label}`);
       } else if (modeAjout) {
         // Mode ajout : uniquement les cases vides ("Non proposé")
         // peuvent devenir un nouveau créneau. On le crée directement
@@ -443,7 +449,7 @@ const MedecinAgenda = () => {
           date: jour.iso,
           statut: "disponible",
         });
-        showToast(`Créneau ajouté et ouvert aux patients — ${label}`);
+        toast.succes(`Créneau ajouté et ouvert aux patients — ${label}`);
       } else {
         // Mode blocage : agit sur des créneaux existants (libre <->
         // bloqué), ou ferme explicitement une case vide pour qu'elle
@@ -451,22 +457,22 @@ const MedecinAgenda = () => {
         // du gabarit).
         if (cellule.statut === "libre") {
           await modifierCreneauAgenda(cellule.creneau.creneau_id, { statut: "bloque" });
-          showToast(`Créneau bloqué — ${label}`);
+          toast.succes(`Créneau bloqué — ${label}`);
         } else if (cellule.statut === "bloque") {
           await modifierCreneauAgenda(cellule.creneau.creneau_id, { statut: "disponible" });
-          showToast("Créneau libéré.");
+          toast.succes("Créneau libéré.");
         } else if (cellule.statut === "ferme") {
           await creerCreneauAgenda(medecinId, {
             horaire_id: ligne.horaire_id,
             date: jour.iso,
             statut: "bloque",
           });
-          showToast(`Créneau fermé — ${label}`);
+          toast.succes(`Créneau fermé — ${label}`);
         }
       }
       await chargerSemaine();
     } catch (err) {
-      showToast(err.message || "Action impossible sur ce créneau.");
+      toast.erreur(err.message || "Action impossible sur ce créneau.");
     } finally {
       setEnregistrement(false);
     }
@@ -480,13 +486,13 @@ const MedecinAgenda = () => {
         date_debut: jours[0].iso,
         date_fin: jours[jours.length - 1].iso,
       });
-      showToast(
+      toast.succes(
         resultat?.message ||
           `${resultat?.nombre_crees ?? 0} créneau(x) régénéré(s) pour cette semaine.`
       );
       await chargerSemaine();
     } catch (err) {
-      showToast(err.message || "Impossible de générer les créneaux de la semaine.");
+      toast.erreur(err.message || "Impossible de générer les créneaux de la semaine.");
     } finally {
       setEnregistrement(false);
     }
@@ -501,19 +507,19 @@ const MedecinAgenda = () => {
     try {
       if (existante) {
         await supprimerDisponibiliteMedecin(existante.disponibilite_id);
-        showToast(`Disponibilité retirée du gabarit — ${formatHeure(horaire.heure_debut)}.`);
+        toast.succes(`Disponibilité retirée du gabarit — ${formatHeure(horaire.heure_debut)}.`);
       } else {
         await creerDisponibiliteMedecin(medecinId, {
           horaire_id: horaire.horaire_id,
           jour_semaine: jourValeur,
         });
-        showToast(`Disponibilité ajoutée au gabarit — ${formatHeure(horaire.heure_debut)}.`);
+        toast.succes(`Disponibilité ajoutée au gabarit — ${formatHeure(horaire.heure_debut)}.`);
       }
       // Le serveur a re-synchronisé les créneaux à venir : on recharge la
       // semaine pour voir aussitôt l'effet sur la grille.
       await chargerSemaine();
     } catch (err) {
-      showToast(err.message || "Action impossible sur cette disponibilité.");
+      toast.erreur(err.message || "Action impossible sur cette disponibilité.");
     } finally {
       setEnregistrement(false);
     }
@@ -525,10 +531,14 @@ const MedecinAgenda = () => {
     if (!medecinId || enregistrement) return;
     const source = disponibilites.filter((d) => d.jour_semaine === jourSource).map((d) => d.horaire_id);
     const libelleSource = JOURS_SEMAINE_AGENDA.find((j) => j.valeur === jourSource)?.libelle ?? jourSource;
-    const confirmation = window.confirm(
-      `Appliquer les horaires du ${libelleSource.toLowerCase()} à tous les jours du lundi au vendredi ?\n` +
-        "Les horaires actuels de ces jours seront remplacés."
-    );
+    const confirmation = await confirmer({
+      titre: "Appliquer à toute la semaine",
+      message:
+        `Les horaires du ${libelleSource.toLowerCase()} seront appliqués du lundi au vendredi.\n` +
+        "Les horaires actuels de ces jours seront remplacés.",
+      labelConfirmer: "Appliquer",
+      variante: "avertissement",
+    });
     if (!confirmation) return;
     const conserves = disponibilites
       .filter((d) => !JOURS_OUVRES.includes(d.jour_semaine))
@@ -537,10 +547,10 @@ const MedecinAgenda = () => {
     setEnregistrement(true);
     try {
       await remplacerDisponibilitesMedecin(medecinId, [...conserves, ...copies]);
-      showToast(`Horaires du ${libelleSource.toLowerCase()} appliqués du lundi au vendredi.`);
+      toast.succes(`Horaires du ${libelleSource.toLowerCase()} appliqués du lundi au vendredi.`);
       await chargerSemaine();
     } catch (err) {
-      showToast(err.message || "Impossible d'appliquer ces horaires.");
+      toast.erreur(err.message || "Impossible d'appliquer ces horaires.");
     } finally {
       setEnregistrement(false);
     }
@@ -876,11 +886,6 @@ const MedecinAgenda = () => {
           {/* ===================== SIDEBAR (droite) ===================== */}
           <PortailSidebar />
         </div>
-      </div>
-
-      <div className={`toast-aps ${toast ? "show" : ""}`} role="status">
-        <i className="fa-solid fa-circle-check"></i>
-        <span>{toast}</span>
       </div>
     </>
   );

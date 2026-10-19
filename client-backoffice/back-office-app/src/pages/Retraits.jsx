@@ -4,6 +4,7 @@
 // Le serveur reste la source de vérité : cette page ne fait que lister, approuver, rejeter
 // et dénouer les cas à issue incertaine (voir server/src/services/retrait.service.js).
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useConfirmation, useSaisie, useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import * as retraitService from '../services/retraitService';
 
@@ -24,12 +25,14 @@ const nomMedecin = (d) => {
 };
 
 export default function Retraits() {
+  const confirmer = useConfirmation();
+  const saisir = useSaisie();
+  const toast = useToast();
   const [filtre, setFiltre] = useState('en_attente_validation');
   const [lignes, setLignes] = useState([]);
   const [soldeCampay, setSoldeCampay] = useState(null); // { total, mtn, orange, devise } | { erreur }
   const [loading, setLoading] = useState(true);
   const [erreur, setErreur] = useState(null);
-  const [message, setMessage] = useState(null); // { type, texte }
   const [actionEnCours, setActionEnCours] = useState(null); // id de la demande en traitement
 
   const charger = useCallback(async () => {
@@ -64,53 +67,79 @@ export default function Retraits() {
   // Exécute une action admin puis recharge ; le message d'erreur du serveur est affiché tel quel.
   const executer = async (id, action, messageSucces) => {
     setActionEnCours(id);
-    setMessage(null);
     try {
       const rep = await action();
-      setMessage({
-        type: rep?.incertain ? 'warning' : 'success',
-        texte: rep?.incertain
-          ? "Issue incertaine : CamPay n'a pas confirmé la réception. Ne PAS renvoyer ; le système vérifie automatiquement (webhook + cron)."
-          : messageSucces,
-      });
+      if (rep?.incertain) {
+        // Reste affiché jusqu'à fermeture : l'admin ne doit surtout pas renvoyer.
+        toast.avertissement(
+          "CamPay n'a pas confirmé la réception. Ne PAS renvoyer ; le système vérifie automatiquement (webhook + cron).",
+          { titre: 'Issue incertaine', duree: 0 },
+        );
+      } else {
+        toast.succes(messageSucces);
+      }
     } catch (err) {
-      setMessage({ type: 'danger', texte: err.message || 'Action impossible.' });
+      toast.erreur(err.message || 'Action impossible.');
     } finally {
       setActionEnCours(null);
       await Promise.all([charger(), chargerSolde()]);
     }
   };
 
-  const approuver = (d) => {
-    const sentence =
-      `Envoyer ${fcfa(d.montant)} à ${d.numero} ?\n\n` +
-      `Titulaire déclaré : ${d.titulaire_declare || '—'}\n` +
-      `Titulaire CamPay : ${d.titulaire_campay || 'non vérifiable'}` +
-      (d.titulaire_concordant === false ? '\n\n⚠ LES NOMS NE CORRESPONDENT PAS.' : '');
-    if (!window.confirm(sentence)) return;
+  const approuver = async (d) => {
+    const discordant = d.titulaire_concordant === false;
+    const ok = await confirmer({
+      titre: `Envoyer ${fcfa(d.montant)} à ${d.numero}`,
+      message:
+        `Titulaire déclaré : ${d.titulaire_declare || '—'}\n` +
+        `Titulaire CamPay : ${d.titulaire_campay || 'non vérifiable'}` +
+        (discordant ? '\n\n⚠ LES NOMS NE CORRESPONDENT PAS.' : ''),
+      labelConfirmer: 'Envoyer',
+      variante: discordant ? 'danger' : 'avertissement',
+      icone: 'fa-money-bill-transfer',
+    });
+    if (!ok) return;
     executer(d.demande_retrait_id, () => retraitService.approuverRetrait(d.demande_retrait_id), 'Retrait envoyé à CamPay.');
   };
 
-  const rejeter = (d) => {
-    const motif = window.prompt(`Motif du rejet du retrait de ${fcfa(d.montant)} (visible par le médecin) :`);
-    if (!motif || !motif.trim()) return;
-    executer(d.demande_retrait_id, () => retraitService.rejeterRetrait(d.demande_retrait_id, motif.trim()), 'Retrait rejeté, montant recrédité.');
+  const rejeter = async (d) => {
+    const motif = await saisir({
+      titre: 'Rejeter le retrait',
+      message: `Retrait de ${fcfa(d.montant)} : le montant sera recrédité au médecin.`,
+      label: 'Motif du rejet (visible par le médecin)',
+      multiligne: true,
+      obligatoire: true,
+      labelConfirmer: 'Rejeter',
+      variante: 'danger',
+    });
+    if (!motif) return;
+    executer(d.demande_retrait_id, () => retraitService.rejeterRetrait(d.demande_retrait_id, motif), 'Retrait rejeté, montant recrédité.');
   };
 
-  const rattacher = (d) => {
-    const reference = window.prompt(
-      `Référence CamPay du décaissement dont external_reference = ${d.demande_retrait_id} :`
-    );
-    if (!reference || !reference.trim()) return;
-    executer(d.demande_retrait_id, () => retraitService.rattacherReference(d.demande_retrait_id, reference.trim()), 'Référence rattachée.');
+  const rattacher = async (d) => {
+    const reference = await saisir({
+      titre: 'Rattacher une référence CamPay',
+      message: `Décaissement dont external_reference = ${d.demande_retrait_id}`,
+      label: 'Référence CamPay',
+      obligatoire: true,
+      labelConfirmer: 'Rattacher',
+    });
+    if (!reference) return;
+    executer(d.demande_retrait_id, () => retraitService.rattacherReference(d.demande_retrait_id, reference), 'Référence rattachée.');
   };
 
-  const marquerEchoue = (d) => {
-    const motif = window.prompt(
-      'ATTENTION : à ne faire qu\'après avoir vérifié dans le tableau de bord CamPay qu\'AUCUN décaissement n\'existe pour cette demande.\n\nMotif :'
-    );
-    if (!motif || !motif.trim()) return;
-    executer(d.demande_retrait_id, () => retraitService.marquerEchoue(d.demande_retrait_id, motif.trim()), 'Retrait marqué échoué, montant recrédité.');
+  const marquerEchoue = async (d) => {
+    const motif = await saisir({
+      titre: 'Marquer le retrait comme échoué',
+      message: 'ATTENTION : à ne faire qu\'après avoir vérifié dans le tableau de bord CamPay qu\'AUCUN décaissement n\'existe pour cette demande.',
+      label: 'Motif',
+      multiligne: true,
+      obligatoire: true,
+      labelConfirmer: 'Marquer échoué',
+      variante: 'danger',
+    });
+    if (!motif) return;
+    executer(d.demande_retrait_id, () => retraitService.marquerEchoue(d.demande_retrait_id, motif), 'Retrait marqué échoué, montant recrédité.');
   };
 
   return (
@@ -128,13 +157,6 @@ export default function Retraits() {
           </button>
         </div>
       </div>
-
-      {message && (
-        <div className={`aps-notice is-${message.type === 'success' ? 'info' : message.type} mb-3`} role="status">
-          <i className="fa-solid fa-circle-info"></i>
-          <div>{message.texte}</div>
-        </div>
-      )}
 
       <div className="row g-3 mb-4">
         <div className="col-md-4">

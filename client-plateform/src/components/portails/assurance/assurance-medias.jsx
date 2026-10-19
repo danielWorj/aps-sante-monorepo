@@ -8,6 +8,7 @@
 // visibles (les autres sont conservées, masquées).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
+import { useConfirmation, useToast } from '../../feedback';
 import { AssurancePortailPage } from '../layouts/assurance.portail-sidebar';
 import {
   ajouterMedia,
@@ -135,6 +136,8 @@ function CarteMedia({ media, index, total, onDeplacer, onSupprimer, onRenommer }
 }
 
 function SectionMedias({ serviceId, type, medias, quota, onChange, setErreur }) {
+  const confirmer = useConfirmation();
+  const toast = useToast();
   const liste = medias.filter((m) => m.type === type);
 
   const deplacer = async (index, sens) => {
@@ -150,10 +153,18 @@ function SectionMedias({ serviceId, type, medias, quota, onChange, setErreur }) 
   };
 
   const supprimer = async (m) => {
-    if (!window.confirm(`Supprimer ${type === 'video' ? 'cette vidéo' : 'cette photo'} ? Cette action est définitive.`)) return;
+    const video = type === 'video';
+    const ok = await confirmer({
+      titre: video ? 'Supprimer la vidéo' : 'Supprimer la photo',
+      message: `${video ? 'Cette vidéo' : 'Cette photo'} sera supprimée définitivement.`,
+      labelConfirmer: 'Supprimer',
+      variante: 'danger',
+    });
+    if (!ok) return;
     try {
       await supprimerMedia(m.media_id);
       onChange();
+      toast.succes(video ? 'Vidéo supprimée.' : 'Photo supprimée.');
     } catch (err) {
       setErreur(err?.message || 'Suppression impossible.');
     }

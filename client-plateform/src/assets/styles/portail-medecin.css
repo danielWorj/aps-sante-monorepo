@@ -481,20 +481,6 @@ body.block-mode .block-hint{ display:flex; }
   margin-top:1.4rem; padding-top:1.4rem; border-top:1px solid var(--line);
 }
 
-/* ---------------------------- TOAST ---------------------------- */
-.toast-aps{
-  position:fixed; bottom:1.5rem; left:50%; z-index:500;
-  transform:translateX(-50%) translateY(20px);
-  display:flex; align-items:center; gap:.6rem;
-  max-width:calc(100vw - 2rem);
-  background:var(--ink); color:#fff; padding:.8rem 1.3rem;
-  border-radius:var(--radius-md); box-shadow:var(--shadow-lg);
-  font-size:.88rem; font-weight:600; opacity:0; pointer-events:none;
-  transition:opacity .25s ease, transform .25s ease;
-}
-.toast-aps i{ color:var(--teal); flex:none; }
-.toast-aps.show{ opacity:1; transform:translateX(-50%) translateY(0); }
-
 /* ---------------------------- FOOTER PORTAIL ---------------------------- */
 /* portail-footer.jsx : carte médecin + nav + statut + portefeuille + mentions.
    Rendu comme <footer> sous le contenu principal (pas dans la grille .portail-shell),
@@ -762,7 +748,6 @@ RESPONSIVE
   .tab-count{ margin-left:.2rem; }
 
   .block-hint{ font-size:.76rem; }
-  .toast-aps{ font-size:.8rem; padding:.7rem 1rem; }
 }
 
 @media (prefers-reduced-motion:reduce){

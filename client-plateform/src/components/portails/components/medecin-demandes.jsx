@@ -14,6 +14,7 @@
 // « Nouveau rendez-vous confirmé », onglet Rendez-vous).
 import { useCallback, useEffect, useState } from "react";
 import PortailSidebar from "./../layouts/portail-sidebar";
+import { useConfirmation, useToast } from "../../feedback";
 import { useAuth } from "./../../../context/AuthContext";
 import {
   STATUTS_OFFRE,
@@ -52,12 +53,9 @@ export default function MedecinDemandes() {
   const [erreur, setErreur] = useState(null);
   const [actionEnCours, setActionEnCours] = useState(null);
   const [messages, setMessages] = useState({}); // offre_id -> mot au patient
-  const [toast, setToast] = useState(null);
+  const toast = useToast();
+  const confirmer = useConfirmation();
 
-  const afficherToast = (msg, ms = 4000) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), ms);
-  };
 
   const charger = useCallback(async (v) => {
     try {
@@ -112,10 +110,10 @@ export default function MedecinDemandes() {
     setActionEnCours(offre.offre_id);
     try {
       await repondreOffre(offre.offre_id, messages[offre.offre_id]?.trim());
-      afficherToast("Réponse envoyée : le patient voit votre profil et votre tarif.");
+      toast.succes("Réponse envoyée : le patient voit votre profil et votre tarif.");
       charger(vue);
     } catch (err) {
-      afficherToast("Erreur : " + (err.message || "réponse impossible."), 6000);
+      toast.erreur(err.message || "Réponse impossible.");
       charger(vue);
     } finally {
       setActionEnCours(null);
@@ -123,14 +121,20 @@ export default function MedecinDemandes() {
   };
 
   const retirer = async (offre) => {
-    if (!window.confirm("Retirer votre réponse ? Le patient ne pourra plus vous choisir pour cette demande.")) return;
+    const ok = await confirmer({
+      titre: "Retirer votre réponse",
+      message: "Le patient ne pourra plus vous choisir pour cette demande.",
+      labelConfirmer: "Retirer",
+      variante: "danger",
+    });
+    if (!ok) return;
     setActionEnCours(offre.offre_id);
     try {
       await retirerReponse(offre.offre_id);
-      afficherToast("Réponse retirée.");
+      toast.succes("Réponse retirée.");
       charger(vue);
     } catch (err) {
-      afficherToast("Erreur : " + (err.message || "retrait impossible."), 6000);
+      toast.erreur(err.message || "Retrait impossible.");
     } finally {
       setActionEnCours(null);
     }
@@ -299,10 +303,6 @@ export default function MedecinDemandes() {
         </div>
       </div>
 
-      <div className={`toast-aps ${toast ? "show" : ""}`} role="status">
-        <i className="fa-solid fa-circle-check"></i>
-        <span>{toast}</span>
-      </div>
     </>
   );
 }

@@ -27,6 +27,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useConfirmation, useToast } from '../components/feedback';
 import {
   listerServicesAssurance,
   obtenirServiceAssurance,
@@ -190,6 +191,8 @@ function Modal({ id, title, isOpen, onClose, children, footer, large }) {
  * =================================================================== */
 
 function ConfigurationModale({ service, onFermer }) {
+  const confirmer = useConfirmation();
+  const toast = useToast();
   const serviceId = service.service_assurance_id;
   const [onglet, setOnglet] = useState('activites'); // 'activites' | 'agences'
 
@@ -320,13 +323,20 @@ function ConfigurationModale({ service, onFermer }) {
   }
 
   async function supprimerActiviteHandler(a) {
-    if (!window.confirm(`Supprimer l'activité « ${a.titre} » ?`)) return;
+    const ok = await confirmer({
+      titre: "Supprimer l'activité",
+      message: `« ${a.titre} » sera supprimée définitivement.`,
+      labelConfirmer: 'Supprimer',
+      variante: 'danger',
+    });
+    if (!ok) return;
     try {
       await supprimerActivite(a.activite_id);
       setRechargerActivites((n) => n + 1);
       if (activiteOuverte === a.activite_id) setActiviteOuverte(null);
+      toast.succes('Activité supprimée.');
     } catch (err) {
-      window.alert(
+      toast.erreur(
         messageErreur(
           err,
           "Impossible de supprimer cette activité : vérifiez qu'aucune option n'y est encore rattachée."
@@ -413,12 +423,19 @@ function ConfigurationModale({ service, onFermer }) {
   }
 
   async function supprimerOptionHandler(activiteId, o) {
-    if (!window.confirm(`Supprimer l'option « ${o.libelle} » ?`)) return;
+    const ok = await confirmer({
+      titre: "Supprimer l'option",
+      message: `« ${o.libelle} » sera supprimée définitivement.`,
+      labelConfirmer: 'Supprimer',
+      variante: 'danger',
+    });
+    if (!ok) return;
     try {
       await supprimerOptionActivite(o.option_activite_id);
       rechargerOptionsActivite(activiteId);
+      toast.succes('Option supprimée.');
     } catch (err) {
-      window.alert(messageErreur(err, "Erreur lors de la suppression de l'option."));
+      toast.erreur(messageErreur(err, "Erreur lors de la suppression de l'option."));
     }
   }
 
@@ -472,12 +489,19 @@ function ConfigurationModale({ service, onFermer }) {
   }
 
   async function supprimerAgenceHandler(a) {
-    if (!window.confirm(`Supprimer l'agence « ${a.libelle} » ?`)) return;
+    const ok = await confirmer({
+      titre: "Supprimer l'agence",
+      message: `« ${a.libelle} » sera supprimée définitivement.`,
+      labelConfirmer: 'Supprimer',
+      variante: 'danger',
+    });
+    if (!ok) return;
     try {
       await supprimerAgence(a.agence_id);
       setRechargerAgences((n) => n + 1);
+      toast.succes('Agence supprimée.');
     } catch (err) {
-      window.alert(messageErreur(err, "Erreur lors de la suppression de l'agence."));
+      toast.erreur(messageErreur(err, "Erreur lors de la suppression de l'agence."));
     }
   }
 
@@ -935,6 +959,8 @@ function ConfigurationModale({ service, onFermer }) {
 
 export default function Assurances() {
   const { user, isAuthenticated, status } = useAuth();
+  const confirmer = useConfirmation();
+  const toast = useToast();
   // `status === 'loading'` le temps que AuthContext restaure la session
   // (montage / rechargement de page) : on traite ça comme "pas encore
   // connecté" pour l'affichage plutôt que de rediriger ou de figer l'UI —
@@ -999,7 +1025,6 @@ export default function Assurances() {
   const [nouveauMessage, setNouveauMessage] = useState('');
   const [envoiMessage, setEnvoiMessage] = useState(false);
   const [erreurEnvoiMessage, setErreurEnvoiMessage] = useState(null);
-  const [succesEnvoiMessage, setSuccesEnvoiMessage] = useState(false);
 
   /* ---------------------------- Chargements ---------------------------- */
 
@@ -1114,7 +1139,6 @@ export default function Assurances() {
     setMisesChargees(false);
     setErreurMises(null);
     setNouveauMessage('');
-    setSuccesEnvoiMessage(false);
     setErreurEnvoiMessage(null);
     try {
       const service = await obtenirServiceAssurance(id);
@@ -1308,8 +1332,7 @@ export default function Assurances() {
         message: nouveauMessage.trim(),
       });
       setNouveauMessage('');
-      setSuccesEnvoiMessage(true);
-      setTimeout(() => setSuccesEnvoiMessage(false), 4000);
+      toast.succes('Votre demande a été envoyée.');
       if (misesChargees) chargerMises();
     } catch (err) {
       setErreurEnvoiMessage(messageErreur(err, "Erreur lors de l'envoi de la demande."));
@@ -1319,12 +1342,19 @@ export default function Assurances() {
   }
 
   async function supprimerMise(id) {
-    if (!window.confirm('Supprimer cette mise en relation ?')) return;
+    const ok = await confirmer({
+      titre: 'Supprimer la mise en relation',
+      message: 'Cette mise en relation sera supprimée définitivement.',
+      labelConfirmer: 'Supprimer',
+      variante: 'danger',
+    });
+    if (!ok) return;
     try {
       await supprimerMiseEnRelationAssurance(id);
       setMisesEnRelation((liste) => liste.filter((m) => m.mise_en_relation_id !== id));
+      toast.succes('Mise en relation supprimée.');
     } catch (err) {
-      window.alert(messageErreur(err, 'Erreur lors de la suppression.'));
+      toast.erreur(messageErreur(err, 'Erreur lors de la suppression.'));
     }
   }
 
@@ -1732,12 +1762,6 @@ export default function Assurances() {
                     <div className="aps-notice is-danger mb-2">
                       <i className="fa-solid fa-circle-exclamation"></i>
                       <div>{erreurEnvoiMessage}</div>
-                    </div>
-                  )}
-                  {succesEnvoiMessage && (
-                    <div className="aps-notice is-success mb-2">
-                      <i className="fa-solid fa-circle-check"></i>
-                      <div>Votre demande a été envoyée.</div>
                     </div>
                   )}
                   <button type="submit" className="btn btn-primary" disabled={envoiMessage}>

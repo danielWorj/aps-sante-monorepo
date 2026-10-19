@@ -1,10 +1,11 @@
 // src/pages/medecin-profil.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import PortailNavbar from "../layouts/portail-navbar";
 import PortailFooter from "../layouts/portail-footer";
 import PortailSidebar from "../layouts/portail-sidebar";
 import { useAuth } from "./../../../context/AuthContext";
+import { useToast } from "../../feedback";
 import * as medecinService from "../../../services/medecinService";
 import MedecinPortefeuille from "./medecin-portefeuille";
 import { listerPays, listerVilles } from "../../../services/geoService";
@@ -23,8 +24,7 @@ const MedecinProfil = () => {
   const { user, rafraichirUtilisateur, status: authStatus } = useAuth();
   const navigate = useNavigate();
 
-  const [toast, setToast] = useState(null);
-  const toastTimer = useRef(null);
+  const toast = useToast();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -55,11 +55,6 @@ const MedecinProfil = () => {
     demanderPosition,
   } = useGeolocation();
 
-  const showToast = (msg, type = "success") => {
-    setToast({ msg, type });
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 3500);
-  };
 
   // Chargement initial des données
   useEffect(() => {
@@ -218,7 +213,7 @@ const MedecinProfil = () => {
       const latRenseignee = profile.latitude !== "";
       const lngRenseignee = profile.longitude !== "";
       if (latRenseignee !== lngRenseignee) {
-        showToast("Latitude et longitude doivent être renseignées ensemble.", "error");
+        toast.erreur("Latitude et longitude doivent être renseignées ensemble.");
         setSubmitting(false);
         return;
       }
@@ -267,10 +262,10 @@ const MedecinProfil = () => {
       const warningVerif = medecinMaj.statut_verification === "en_cours"
         ? " (votre fiche repasse en vérification)"
         : "";
-      showToast(`Modifications enregistrées${warningVerif}.`, "success");
+      toast.succes(`Modifications enregistrées${warningVerif}.`);
     } catch (err) {
       console.error(err);
-      showToast(err.message || "Échec de l'enregistrement.", "error");
+      toast.erreur(err.message || "Échec de l'enregistrement.");
     } finally {
       setSubmitting(false);
     }
@@ -582,10 +577,6 @@ const MedecinProfil = () => {
         </div>
       </div>
 
-      <div className={`toast-aps ${toast ? "show" : ""}`} role="status">
-        <i className={`fa-solid ${toast?.type === "error" ? "fa-circle-xmark text-danger" : "fa-circle-check"}`}></i>
-        <span>{toast?.msg}</span>
-      </div>
     </>
   );
 };

@@ -20,6 +20,7 @@
 // voir adaptateurs.jsx — guide abonnements v3, §2.2.3). Le comportement du RDV
 // est inchangé.
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useToast } from '../feedback';
 import { createPortal } from 'react-dom';
 import { estPaiementEnCours } from '../../services/paiementService';
 import AnnulerPaiementEnCours from './AnnulerPaiementEnCours';
@@ -60,7 +61,7 @@ export default function ChoixMoyenPaiement({
   const [redirection, setRedirection] = useState(false);
   const [erreur, setErreur] = useState(null);
   const [paiementEnCours, setPaiementEnCours] = useState(false); // 409 annulable
-  const [infoAnnulation, setInfoAnnulation] = useState(null);
+  const toast = useToast();
   // Devis par agrégateur : undefined = en cours de calcul, { erreur } = indisponible.
   const [devis, setDevis] = useState({ stripe: undefined, campay: undefined });
   // Moyen dont la facture est affichée (suit le survol / le focus des options ou l'onglet choisi).
@@ -101,7 +102,6 @@ export default function ChoixMoyenPaiement({
   const payerParCarte = async () => {
     if (redirection || !adaptateur) return;
     setErreur(null);
-    setInfoAnnulation(null);
     setPaiementEnCours(false);
     setRedirection(true);
     try {
@@ -142,11 +142,10 @@ export default function ChoixMoyenPaiement({
             onAnnule={() => {
               setErreur(null);
               setPaiementEnCours(false);
-              setInfoAnnulation('Le paiement précédent a été annulé. Vous pouvez choisir un moyen de paiement.');
+              toast.info('Le paiement précédent a été annulé. Vous pouvez choisir un moyen de paiement.');
             }}
           />
         )}
-        {infoAnnulation && <p className="status-card-text">{infoAnnulation}</p>}
 
         {/* Facture détaillée, recalculée par le serveur selon le moyen de paiement */}
         <div className="choix-paiement-facture">

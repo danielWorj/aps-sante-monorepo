@@ -1,7 +1,12 @@
 // src/pages/ReserverPublicite.jsx
 //
 // Réservation d'un espace publicitaire (v9), ouverte depuis la carte
-// « Réserver cet espace » d'une page (?page=PAGE_…). Connexion obligatoire.
+// « Réserver cet espace » d'une page (?page=PAGE_…). Page PUBLIQUE :
+//   - visiteur sans compte : il choisit son pays de diffusion et crée son
+//     compte annonceur dans le même formulaire (étape 4) ; le serveur crée
+//     le compte + la demande et ouvre la session ;
+//   - déjà inscrit : « Rejoindre mon espace » mène à la connexion puis
+//     revient ici, le brouillon (hors visuel et mot de passe) conservé.
 //
 //   1. Position et durée : forfaits de la page, par position dans le slider
 //      (la 1re position, affichée en premier, coûte le plus cher).
@@ -14,7 +19,7 @@
 //
 // Après validation, la demande part en modération : l'annonceur reçoit par
 // WhatsApp le refus motivé, ou l'acceptation avec le lien de paiement.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -24,7 +29,9 @@ import {
   obtenirDisponibilites,
   obtenirProfilAnnonceur,
   reserverEspace,
+  reserverEspaceAvecCompte,
 } from '../services/publiciteService';
+import { listerPays } from '../services/geoService';
 import { montantDevise } from '../utils/fonds';
 import './Publicite.css';
 
@@ -53,35 +60,66 @@ const CHAMPS_VIDES = {
   titre: '', description: '', telephone_contact: '', email_contact: '', localisation: '',
   annonceur_nom: '', annonceur_entreprise: '', annonceur_telephone: '', annonceur_email: '',
 };
+const COMPTE_VIDE = { prenom: '', nom: '', email: '', mot_de_passe: '', confirmation: '' };
+const LONGUEUR_MIN_MOT_DE_PASSE = 8;
+
+// Brouillon conservé le temps d'aller se connecter (« Rejoindre mon espace ») :
+// jamais le visuel ni le mot de passe.
+const CLE_BROUILLON = 'aps.reservation-publicite';
+function lireBrouillon() {
+  try {
+    const brut = sessionStorage.getItem(CLE_BROUILLON);
+    sessionStorage.removeItem(CLE_BROUILLON);
+    return brut ? JSON.parse(brut) : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function ReserverPublicite() {
   const [params, setParams] = useSearchParams();
   const page = params.get('page') || PAGES_PUBLICITE.accueil;
-  const { user } = useAuth();
+  const { user, status, ouvrirSession } = useAuth();
+  const invite = status === 'unauthenticated';
+  const [brouillon] = useState(lireBrouillon);
 
+  const [paysListe, setPaysListe] = useState([]);
+  const [paysId, setPaysId] = useState(brouillon?.paysId ?? '');
+  const paysDiffusion = user?.pays_id ?? paysId;
   const [forfaits, setForfaits] = useState(null);
   const [erreurForfaits, setErreurForfaits] = useState(null);
-  const [forfaitId, setForfaitId] = useState('');
+  const [forfaitId, setForfaitId] = useState(brouillon?.forfaitId ?? '');
   const [dispoChargee, setDispo] = useState(null);
-  const [dateDebut, setDateDebut] = useState('');
-  const [champs, setChamps] = useState(CHAMPS_VIDES);
+  const [dateDebut, setDateDebut] = useState(brouillon?.dateDebut ?? '');
+  const [champs, setChamps] = useState(() => ({ ...CHAMPS_VIDES, ...brouillon?.champs }));
+  const [compte, setCompte] = useState(COMPTE_VIDE);
   const [visuel, setVisuel] = useState(null);
   const [apercu, setApercu] = useState(null);
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState(null);
+  const [compteExistant, setCompteExistant] = useState(false);
   const [succes, setSucces] = useState(null);
+  const [compteCree, setCompteCree] = useState(false);
 
-  // Forfaits de la page (pays du compte).
+  // Visiteur : liste des pays (les offres dépendent du pays de diffusion).
   useEffect(() => {
+    if (!invite) return;
+    listerPays().then((d) => setPaysListe(d.pays || [])).catch(() => setPaysListe([]));
+  }, [invite]);
+
+  // Forfaits de la page (pays du compte, ou pays choisi par le visiteur).
+  useEffect(() => {
+    if (status === 'loading' || !paysDiffusion) return undefined;
     let annule = false;
-    listerForfaitsPage(page, user?.pays_id)
+    listerForfaitsPage(page, paysDiffusion)
       .then((f) => { if (!annule) setForfaits(f); })
       .catch((e) => { if (!annule) { setForfaits([]); setErreurForfaits(e.message); } });
     return () => { annule = true; };
-  }, [page, user?.pays_id]);
+  }, [page, paysDiffusion, status]);
 
-  // Pré-remplissage de l'annonceur.
+  // Pré-remplissage de l'annonceur (compte existant seulement).
   useEffect(() => {
+    if (status !== 'authenticated') return;
     obtenirProfilAnnonceur()
       .then(({ annonceur }) => setChamps((c) => ({
         ...c,
@@ -91,14 +129,21 @@ export default function ReserverPublicite() {
         annonceur_email: c.annonceur_email || annonceur.annonceur_email || '',
       })))
       .catch(() => {});
-  }, []);
+  }, [status]);
 
-  // Disponibilité de la position choisie.
+  // Disponibilité de la position choisie (la date d'un brouillon restauré
+  // est gardée une fois ; ensuite, la prochaine date libre est proposée).
+  const dateRestauree = useRef(Boolean(brouillon?.dateDebut));
   useEffect(() => {
     if (!forfaitId) return undefined;
     let annule = false;
     obtenirDisponibilites(forfaitId)
-      .then((d) => { if (!annule) { setDispo(d); setDateDebut(d.prochaine_date_libre); } })
+      .then((d) => {
+        if (annule) return;
+        setDispo(d);
+        if (dateRestauree.current) dateRestauree.current = false;
+        else setDateDebut(d.prochaine_date_libre);
+      })
       .catch(() => { if (!annule) setDispo(null); });
     return () => { annule = true; };
   }, [forfaitId]);
@@ -122,6 +167,17 @@ export default function ReserverPublicite() {
   }, [dispo, dateDebut, forfait]);
 
   const majChamp = (k) => (e) => setChamps((c) => ({ ...c, [k]: e.target.value }));
+  const majCompte = (k) => (e) => setCompte((c) => ({ ...c, [k]: e.target.value }));
+
+  const sauverBrouillon = () => {
+    try {
+      sessionStorage.setItem(CLE_BROUILLON, JSON.stringify({ paysId, forfaitId, dateDebut, champs }));
+    } catch {
+      // Stockage indisponible (navigation privée…) : la connexion reste possible.
+    }
+  };
+  const lienConnexion = { pathname: '/login' };
+  const etatConnexion = { from: `/publicite/reserver?page=${encodeURIComponent(page)}` };
 
   const choisirVisuel = (fichier) => {
     setErreur(null);
@@ -137,16 +193,47 @@ export default function ReserverPublicite() {
   const soumettre = async (e) => {
     e.preventDefault();
     setErreur(null);
+    setCompteExistant(false);
     if (!forfait) return setErreur('Choisissez une position et une durée.');
     if (!dateDebut) return setErreur('Choisissez la date de début de diffusion.');
     if (conflit) return setErreur('Cette position est déjà réservée sur la période choisie.');
     if (!visuel) return setErreur('Ajoutez le flyer ou l’image de votre publicité.');
+    if (invite) {
+      if (!compte.prenom.trim() || !compte.nom.trim()) return setErreur('Indiquez votre prénom et votre nom.');
+      if (!compte.email.trim()) return setErreur('Indiquez votre e-mail : il servira d’identifiant de connexion.');
+      if (compte.mot_de_passe.length < LONGUEUR_MIN_MOT_DE_PASSE) {
+        return setErreur(`Le mot de passe doit contenir au moins ${LONGUEUR_MIN_MOT_DE_PASSE} caractères.`);
+      }
+      if (compte.mot_de_passe !== compte.confirmation) return setErreur('Les deux mots de passe ne correspondent pas.');
+    }
     setEnvoi(true);
     try {
-      const r = await reserverEspace({ ...champs, forfait_publicitaire_id: forfait.forfait_publicitaire_id, date_debut: dateDebut }, visuel);
+      const reservation = { ...champs, forfait_publicitaire_id: forfait.forfait_publicitaire_id, date_debut: dateDebut };
+      let r;
+      if (invite) {
+        // Le nom et l'e-mail de l'annonceur sont ceux du compte créé.
+        r = await reserverEspaceAvecCompte({
+          ...reservation,
+          annonceur_nom: `${compte.prenom.trim()} ${compte.nom.trim()}`,
+          annonceur_email: compte.email.trim(),
+          compte_prenom: compte.prenom.trim(),
+          compte_nom: compte.nom.trim(),
+          compte_email: compte.email.trim(),
+          mot_de_passe: compte.mot_de_passe,
+        }, visuel);
+        ouvrirSession(r);
+        setCompteCree(true);
+      } else {
+        r = await reserverEspace(reservation, visuel);
+      }
       setSucces(r.publicite);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
+      if (err.data?.code === 'COMPTE_EXISTANT') {
+        setCompteExistant(true);
+        setErreur(err.message);
+        return;
+      }
       const libre = err.data?.details?.prochaine_date_libre;
       setErreur(`${err.message}${libre ? ` Prochaine date libre : ${formatJour(libre)}.` : ''}`);
       if (libre) setDateDebut(libre);
@@ -167,6 +254,11 @@ export default function ReserverPublicite() {
             <strong>{succes.annonceur_telephone}</strong> : en cas d’acceptation, le message contient le lien pour
             payer et programmer la diffusion.
           </p>
+          {compteCree && (
+            <p className="status-card-text">
+              Votre compte annonceur est créé et vous êtes connecté : retrouvez vos demandes dans « Mes publicités ».
+            </p>
+          )}
           <div className="status-card-actions">
             <Link to={`/portail/annonceur/publicites/${succes.publicite_id}`} className="btn btn-primary btn-lg-aps">
               Suivre ma demande
@@ -188,12 +280,38 @@ export default function ReserverPublicite() {
             Votre publicité s’affiche dans le carrousel de la page choisie. Chaque position est exclusive pendant
             votre période : la 1re position apparaît en premier.
           </p>
+          {invite && (
+            <div className="pub-compte-existant">
+              <p><i className="fa-solid fa-circle-user" />Vous avez déjà un compte annonceur ?</p>
+              <Link to={lienConnexion} state={etatConnexion} onClick={sauverBrouillon} className="btn btn-outline-primary btn-sm-aps">
+                <i className="fa-solid fa-right-to-bracket" /> Rejoindre mon espace
+              </Link>
+            </div>
+          )}
         </header>
 
+        {status === 'loading' ? (
+          <div className="text-center py-5"><div className="spinner-border text-primary" role="status" /></div>
+        ) : (
         <form onSubmit={soumettre} className="pub-form" noValidate>
           {/* 1. Page, position et durée */}
           <fieldset className="pub-bloc">
             <legend><span className="pub-etape">1</span> Page, position et durée</legend>
+            {invite && (
+              <>
+                <label className="form-label-aps" htmlFor="pub-pays">Pays de diffusion<span className="required-mark">*</span></label>
+                <select id="pub-pays" className="form-select mb-3" value={paysId} required
+                  onChange={(e) => {
+                    setForfaits(null);
+                    setForfaitId('');
+                    setErreurForfaits(null);
+                    setPaysId(e.target.value);
+                  }}>
+                  <option value="">— Choisir un pays —</option>
+                  {paysListe.map((p) => <option key={p.pays_id} value={p.pays_id}>{p.nom}</option>)}
+                </select>
+              </>
+            )}
             <label className="form-label-aps" htmlFor="pub-page">Page</label>
             <select id="pub-page" className="form-select mb-3" value={page}
               onChange={(e) => {
@@ -205,7 +323,8 @@ export default function ReserverPublicite() {
               {Object.entries(NOMS_PAGES).map(([code, nom]) => <option key={code} value={code}>{nom}</option>)}
             </select>
 
-            {forfaits === null && <p className="form-hint">Chargement des offres…</p>}
+            {!paysDiffusion && <p className="form-hint">Choisissez votre pays pour voir les offres.</p>}
+            {paysDiffusion && forfaits === null && <p className="form-hint">Chargement des offres…</p>}
             {erreurForfaits && <div className="alert alert-danger">{erreurForfaits}</div>}
             {forfaits?.length === 0 && !erreurForfaits && (
               <p className="form-hint">Aucune offre n’est encore proposée pour cette page dans votre pays.</p>
@@ -309,7 +428,55 @@ export default function ReserverPublicite() {
             </div>
           </fieldset>
 
-          {/* 4. L'annonceur */}
+          {/* 4. L'annonceur : visiteur → création du compte annonceur */}
+          {invite ? (
+          <fieldset className="pub-bloc">
+            <legend><span className="pub-etape">4</span> Vos informations et votre compte</legend>
+            <p className="form-hint mt-0">
+              Votre compte annonceur vous permet de suivre votre demande, de payer et de consulter les statistiques de diffusion.
+            </p>
+            <div className="row g-3">
+              <div className="col-md-6">
+                <label className="form-label-aps" htmlFor="cpt-prenom">Prénom<span className="required-mark">*</span></label>
+                <input id="cpt-prenom" className="form-control" maxLength={100} autoComplete="given-name"
+                  value={compte.prenom} onChange={majCompte('prenom')} required />
+              </div>
+              <div className="col-md-6">
+                <label className="form-label-aps" htmlFor="cpt-nom">Nom<span className="required-mark">*</span></label>
+                <input id="cpt-nom" className="form-control" maxLength={100} autoComplete="family-name"
+                  value={compte.nom} onChange={majCompte('nom')} required />
+              </div>
+              <div className="col-md-6">
+                <label className="form-label-aps" htmlFor="pub-ent">Entreprise</label>
+                <input id="pub-ent" className="form-control" maxLength={150} autoComplete="organization"
+                  value={champs.annonceur_entreprise} onChange={majChamp('annonceur_entreprise')} />
+              </div>
+              <div className="col-md-6">
+                <label className="form-label-aps" htmlFor="pub-wa">Numéro WhatsApp<span className="required-mark">*</span></label>
+                <input id="pub-wa" className="form-control" inputMode="tel" autoComplete="tel" value={champs.annonceur_telephone}
+                  onChange={majChamp('annonceur_telephone')} required />
+                <p className="form-hint">La décision et le lien de paiement vous seront envoyés sur ce numéro.</p>
+              </div>
+              <div className="col-md-12">
+                <label className="form-label-aps" htmlFor="cpt-email">E-mail<span className="required-mark">*</span></label>
+                <input id="cpt-email" type="email" className="form-control" autoComplete="email"
+                  value={compte.email} onChange={majCompte('email')} required />
+                <p className="form-hint">Il servira d’identifiant pour vous connecter à votre espace.</p>
+              </div>
+              <div className="col-md-6">
+                <label className="form-label-aps" htmlFor="cpt-mdp">Mot de passe<span className="required-mark">*</span></label>
+                <input id="cpt-mdp" type="password" className="form-control" autoComplete="new-password"
+                  minLength={LONGUEUR_MIN_MOT_DE_PASSE} value={compte.mot_de_passe} onChange={majCompte('mot_de_passe')} required />
+                <p className="form-hint">{LONGUEUR_MIN_MOT_DE_PASSE} caractères minimum.</p>
+              </div>
+              <div className="col-md-6">
+                <label className="form-label-aps" htmlFor="cpt-mdp2">Confirmer le mot de passe<span className="required-mark">*</span></label>
+                <input id="cpt-mdp2" type="password" className="form-control" autoComplete="new-password"
+                  value={compte.confirmation} onChange={majCompte('confirmation')} required />
+              </div>
+            </div>
+          </fieldset>
+          ) : (
           <fieldset className="pub-bloc">
             <legend><span className="pub-etape">4</span> Vos informations</legend>
             <div className="row g-3">
@@ -333,8 +500,20 @@ export default function ReserverPublicite() {
               </div>
             </div>
           </fieldset>
+          )}
 
-          {erreur && <div className="alert alert-danger" role="alert">{erreur}</div>}
+          {erreur && (
+            <div className="alert alert-danger" role="alert">
+              {erreur}
+              {compteExistant && (
+                <div className="mt-2">
+                  <Link to={lienConnexion} state={etatConnexion} onClick={sauverBrouillon} className="btn btn-primary btn-sm-aps">
+                    <i className="fa-solid fa-right-to-bracket" /> Rejoindre mon espace
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="pub-form-pied">
             {forfait && (
@@ -344,11 +523,12 @@ export default function ReserverPublicite() {
                 <small>Payable seulement après acceptation (frais de paiement en sus).</small>
               </div>
             )}
-            <button type="submit" className="btn btn-primary btn-lg-aps" disabled={envoi || !forfait}>
+            <button type="submit" className="btn btn-primary btn-lg-aps" disabled={envoi}>
               {envoi && <span className="spinner-border spinner-border-sm me-2" />}Valider ma demande
             </button>
           </div>
         </form>
+        )}
       </div>
     </section>
   );

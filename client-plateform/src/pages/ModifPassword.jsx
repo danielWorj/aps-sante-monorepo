@@ -1,5 +1,6 @@
 // src/pages/ModifPassword.jsx
 import { useEffect, useState } from 'react';
+import { useToast } from '../components/feedback';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import med7 from '../assets/img/med7.jpg';
 import { useAuth } from '../context/AuthContext';
@@ -24,7 +25,7 @@ export default function ModifPassword() {
   const [form, setForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const toast = useToast();
 
   // Accès direct à l'écran en mode forcé sans token valable (lien
   // partagé, navigation manuelle, retour arrière après redirection) :
@@ -105,8 +106,8 @@ export default function ModifPassword() {
         // exactement comme connecter() — rien à refaire ici.
         await changerMotDePasseInitial(navState.token, form.newPassword);
         setLoading(false);
-        setSuccess(true);
-        setTimeout(() => navigate('/portail/medecin-agenda', { replace: true }), 1400);
+        toast.succes('Mot de passe mis à jour avec succès.');
+        navigate('/portail/medecin-agenda', { replace: true });
       } catch (err) {
         setLoading(false);
         // Token expiré/déjà utilisé/invalide côté serveur : impossible
@@ -131,8 +132,8 @@ export default function ModifPassword() {
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      setSuccess(true);
-      setTimeout(() => navigate('/portail/medecin-agenda'), 1400);
+      toast.succes('Mot de passe mis à jour avec succès.');
+      navigate('/portail/medecin-agenda');
     }, 900);
   };
 
@@ -271,27 +272,6 @@ export default function ModifPassword() {
                 </div>
               )}
 
-              {/* Bandeau de succès */}
-              {success && (
-                <div
-                  style={{
-                    background: 'var(--primary-tint)',
-                    border: '1px solid var(--primary)',
-                    color: 'var(--primary-dark)',
-                    padding: '.8rem 1rem',
-                    borderRadius: 'var(--radius-md)',
-                    fontSize: '.86rem',
-                    fontWeight: 600,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '.6rem',
-                    marginBottom: '1.2rem',
-                  }}
-                >
-                  <i className="fa-solid fa-circle-check" /> Mot de passe mis à jour avec succès.
-                  Redirection…
-                </div>
-              )}
 
               <form onSubmit={handleSubmit} noValidate>
                 {/* ------------------ ANCIEN MOT DE PASSE ------------------ */}
