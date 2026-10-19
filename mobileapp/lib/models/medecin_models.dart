@@ -339,13 +339,29 @@ class MedecinFiltres {
   final String? paysExerciceId;
   final String? recherche;
 
+  /// Recherche « Autour de moi » : envoyée seulement si [latitude] et
+  /// [longitude] sont renseignées (rayon par défaut serveur : 10 km).
+  final double? latitude;
+  final double? longitude;
+  final int? rayonKm;
+
+  /// `publie` pour ne garder que les fiches vérifiées (comme le web en
+  /// mode proximité).
+  final String? statutVerification;
+
   const MedecinFiltres({
     this.specialiteId,
     this.specialite,
     this.villeExerciceId,
     this.paysExerciceId,
     this.recherche,
+    this.latitude,
+    this.longitude,
+    this.rayonKm,
+    this.statutVerification,
   });
+
+  bool get autourDeMoi => latitude != null && longitude != null;
 
   Map<String, dynamic>? toQuery() {
     final query = <String, dynamic>{
@@ -359,6 +375,13 @@ class MedecinFiltres {
         'pays_exercice_id': paysExerciceId,
       if (recherche != null && recherche!.trim().isNotEmpty)
         'recherche': recherche,
+      if (autourDeMoi) ...{
+        'lat': latitude,
+        'lng': longitude,
+        if (rayonKm != null) 'rayon_km': rayonKm,
+      },
+      if (statutVerification != null && statutVerification!.isNotEmpty)
+        'statut_verification': statutVerification,
     };
     return query.isEmpty ? null : query;
   }
@@ -376,6 +399,10 @@ class MedecinFiltres {
       villeExerciceId: villeExerciceId ?? this.villeExerciceId,
       paysExerciceId: paysExerciceId ?? this.paysExerciceId,
       recherche: recherche ?? this.recherche,
+      latitude: latitude,
+      longitude: longitude,
+      rayonKm: rayonKm,
+      statutVerification: statutVerification,
     );
   }
 }
@@ -559,6 +586,10 @@ class Medecin {
   final double? noteMoyenne;
   final int nombreAvis;
 
+  /// Distance au point de recherche (km), renvoyée uniquement par une
+  /// recherche « Autour de moi » (`distance_km`).
+  final double? distanceKm;
+
   const Medecin({
     required this.medecinId,
     required this.utilisateurId,
@@ -584,6 +615,7 @@ class Medecin {
     this.contactTelephone,
     this.noteMoyenne,
     this.nombreAvis = 0,
+    this.distanceKm,
   });
 
   bool get estPublie => statutVerification == StatutVerificationMedecin.publie;
@@ -630,6 +662,7 @@ class Medecin {
       contactTelephone: _lire<String>(json, 'contact_telephone'),
       noteMoyenne: json['note_moyenne'] == null ? null : _lireDecimal(json['note_moyenne']),
       nombreAvis: json['nombre_avis'] is num ? (json['nombre_avis'] as num).toInt() : 0,
+      distanceKm: json['distance_km'] is num ? (json['distance_km'] as num).toDouble() : null,
     );
   }
 
@@ -714,6 +747,9 @@ class Medecin {
       paysExercice: paysExercice ?? this.paysExercice,
       priseRdvEnLigne: priseRdvEnLigne ?? this.priseRdvEnLigne,
       contactTelephone: contactTelephone ?? this.contactTelephone,
+      noteMoyenne: noteMoyenne,
+      nombreAvis: nombreAvis,
+      distanceKm: distanceKm,
     );
   }
 

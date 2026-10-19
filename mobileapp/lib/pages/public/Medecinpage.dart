@@ -10,6 +10,9 @@ import 'package:url_launcher/url_launcher.dart';
 // remplacez les lignes ci-dessous par les équivalents package:aps/...
 import '../../components/components.dart';
 import '../../controllers/medecin_controller.dart';
+import '../../controllers/referentiel_controller.dart';
+import '../../models/referentiel_models.dart';
+import '../../utils/position_utilisateur.dart';
 import '../../models/medecin_models.dart';
 import '../../utils/mon_espace_navigation.dart';
 import 'publicAcceuil.dart';
@@ -157,12 +160,26 @@ class _MedecinPageState extends State<MedecinPage> {
   /// Index de la rubrique active dans [AppBottomNav] (1 = Médecin).
   int _navIndex = 1;
 
-  // Filtres appliqués côté client sur les résultats déjà renvoyés par
-  // l'API (la recherche texte, elle, est envoyée au backend — voir
-  // _onSearchChanged).
-  String _selectedVille = 'Toutes les villes';
+  // Spécialité, pays, ville et « Autour de moi » sont envoyés au
+  // backend via [filtresMedecinsProvider] (voir _ouvrirFiltres). Les
+  // filtres ci-dessous et le tri s'appliquent côté client sur la liste
+  // renvoyée.
   bool _filtreVerifie = false;
   bool _filtreTele = false;
+  String _tri = 'pertinence';
+
+  /// Rayon de la recherche « Autour de moi » (km), conservé pour la
+  /// réouverture de la feuille.
+  int _rayonKm = 10;
+
+  // Référentiels de la feuille de filtres (chargés à l'ouverture de
+  // l'écran, servent aussi aux libellés des puces actives).
+  List<Specialite> _specialites = const [];
+  List<Pays> _pays = const [];
+  final Map<String, List<Ville>> _villesParPays = {};
+
+  MedecinFiltres get _filtresServeur =>
+      _container.read(filtresMedecinsProvider) ?? const MedecinFiltres();
 
   @override
   void initState() {
@@ -185,6 +202,38 @@ class _MedecinPageState extends State<MedecinPage> {
       });
     }
 
+    _chargerReferentiels();
+  }
+
+  Future<void> _chargerReferentiels() async {
+    try {
+      final specialites =
+          await _container.read(listeSpecialitesControllerProvider.future);
+      if (mounted) setState(() => _specialites = specialites);
+    } catch (_) {}
+    try {
+      final pays = await _container.read(listePaysProvider.future);
+      if (mounted) {
+        setState(() => _pays = pays
+            .where((p) => p.statutActivation != StatutActivationPays.inactif)
+            .toList());
+      }
+    } catch (_) {}
+    final paysId = _filtresServeur.paysExerciceId;
+    if (paysId != null && paysId.isNotEmpty) {
+      try {
+        await _villesDe(paysId);
+      } catch (_) {}
+    }
+  }
+
+  /// Villes d'un pays, mises en cache (feuille + libellés des puces).
+  Future<List<Ville>> _villesDe(String paysId) async {
+    final enCache = _villesParPays[paysId];
+    if (enCache != null) return enCache;
+    final villes = await _container.read(villesParPaysProvider(paysId).future);
+    if (mounted) setState(() => _villesParPays[paysId] = villes);
+    return villes;
   }
 
   @override
@@ -212,36 +261,58 @@ class _MedecinPageState extends State<MedecinPage> {
     _debounce?.cancel();
     _searchController.clear();
     setState(() {
-      _selectedVille = 'Toutes les villes';
       _filtreVerifie = false;
       _filtreTele = false;
+      _tri = 'pertinence';
     });
     _container.read(filtresMedecinsProvider.notifier).state = null;
   }
 
-  /// Villes disponibles pour le filtre, déduites des résultats
-  /// actuellement chargés (pas de référentiel villes public branché ici
-  /// — voir referentiel_models.dart pour un futur module dédié).
-  List<String> _villesDepuis(List<Medecin> medecins) {
-    final villes = medecins
-        .map((m) => m.villeExercice?.nom)
-        .whereType<String>()
-        .toSet()
-        .toList()
-      ..sort();
-    return ['Toutes les villes', ...villes];
-  }
-
-  /// Applique les filtres client (ville, téléconsultation, vérification
-  /// ONMC) sur les résultats déjà remontés par l'API.
+  /// Filtres client (vérification, téléconsultation) puis tri. Sans tri
+  /// explicite, l'ordre serveur est conservé (distance croissante en
+  /// mode « Autour de moi »).
   List<Medecin> _filtrer(List<Medecin> medecins) {
-    return medecins.where((m) {
-      final matchVille = _selectedVille == 'Toutes les villes' ||
-          m.villeExercice?.nom == _selectedVille;
+    final liste = medecins.where((m) {
       final matchTele = !_filtreTele || m.teleconsultationActivee;
       final matchVerifie = !_filtreVerifie || m.estPublie;
-      return matchVille && matchTele && matchVerifie;
+      return matchTele && matchVerifie;
     }).toList();
+    switch (_tri) {
+      case 'note':
+        liste.sort((a, b) {
+          final parNote = (b.noteMoyenne ?? -1).compareTo(a.noteMoyenne ?? -1);
+          return parNote != 0 ? parNote : b.nombreAvis.compareTo(a.nombreAvis);
+        });
+      case 'prix_asc':
+        liste.sort((a, b) => a.tarifIndicatif.compareTo(b.tarifIndicatif));
+      case 'prix_desc':
+        liste.sort((a, b) => b.tarifIndicatif.compareTo(a.tarifIndicatif));
+    }
+    return liste;
+  }
+
+  String? _nomSpecialite(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final sp in _specialites) {
+      if (sp.specialiteId == id) return sp.nom;
+    }
+    return 'Spécialité';
+  }
+
+  String? _nomPays(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final p in _pays) {
+      if (p.paysId == id) return p.nom;
+    }
+    return 'Pays';
+  }
+
+  String? _nomVille(String? paysId, String? villeId) {
+    if (villeId == null || villeId.isEmpty) return null;
+    for (final v in _villesParPays[paysId] ?? const <Ville>[]) {
+      if (v.villeId == villeId) return v.nom;
+    }
+    return 'Ville';
   }
 
   void _voirProfil(Medecin medecin) {
@@ -319,11 +390,6 @@ class _MedecinPageState extends State<MedecinPage> {
                 ),
                 data: (medecins) {
                   final resultats = _filtrer(medecins);
-                  final villes = _villesDepuis(medecins);
-                  if (_selectedVille != 'Toutes les villes' &&
-                      !villes.contains(_selectedVille)) {
-                    villes.add(_selectedVille);
-                  }
 
                   return ListView(
                     padding: EdgeInsets.fromLTRB(18, 6, 18, basBarre),
@@ -335,7 +401,7 @@ class _MedecinPageState extends State<MedecinPage> {
                         onChanged: _onSearchChanged,
                       ),
                       const SizedBox(height: 12),
-                      _buildFilterChips(villes),
+                      _buildFilterChips(),
                       const SizedBox(height: 12),
                       const _BandeauDemandeRapide(),
                       _buildResultHeader(resultats.length),
@@ -379,7 +445,10 @@ class _MedecinPageState extends State<MedecinPage> {
     return CardMedecin(
       nom: 'Dr ${m.utilisateur?.prenom ?? ''} ${m.utilisateur?.nom ?? ''}'.trim(),
       specialite: m.specialite?.nom ?? '',
-      ville: m.villeExercice?.nom ?? '',
+      ville: [
+        if ((m.villeExercice?.nom ?? '').isNotEmpty) m.villeExercice!.nom,
+        if (m.distanceKm != null) '${decimalFr(m.distanceKm)} km',
+      ].join(' · '),
       photoUrl: m.photoUrl,
       prixFcfa: m.tarifIndicatif.round(),
       verifieOrdre: m.estPublie,
@@ -411,7 +480,11 @@ class _MedecinPageState extends State<MedecinPage> {
       showBack: peutRevenir,
       leading: peutRevenir ? null : const SizedBox.shrink(),
       title: 'Médecins',
-      overline: _selectedVille == 'Toutes les villes' ? 'Toutes les villes' : _selectedVille,
+      overline: _filtresServeur.autourDeMoi
+          ? 'Autour de moi · $_rayonKm km'
+          : (_nomVille(_filtresServeur.paysExerciceId, _filtresServeur.villeExerciceId) ??
+              _nomPays(_filtresServeur.paysExerciceId) ??
+              'Toutes les villes'),
       trailing: widget.onDevenirMedecin != null
           ? ApsIconButton(
               icon: Icons.person_add_alt_rounded,
@@ -422,15 +495,80 @@ class _MedecinPageState extends State<MedecinPage> {
     );
   }
 
-  Widget _buildFilterChips(List<String> villes) {
+  /// Remplace les filtres serveur en gardant la recherche texte.
+  void _appliquerFiltresServeur({
+    String? specialiteId,
+    String? paysId,
+    String? villeId,
+    ({double latitude, double longitude})? position,
+  }) {
+    _container.read(filtresMedecinsProvider.notifier).state = MedecinFiltres(
+      specialiteId: specialiteId,
+      paysExerciceId: paysId,
+      villeExerciceId: villeId,
+      recherche: _filtresServeur.recherche,
+      latitude: position?.latitude,
+      longitude: position?.longitude,
+      rayonKm: position == null ? null : _rayonKm,
+      // Comme le web : en proximité, uniquement les fiches publiées.
+      statutVerification: position == null ? null : 'publie',
+    );
+    setState(() {});
+  }
+
+  ({double latitude, double longitude})? get _positionActuelle {
+    final f = _filtresServeur;
+    return f.autourDeMoi ? (latitude: f.latitude!, longitude: f.longitude!) : null;
+  }
+
+  static const _libellesTri = {
+    'pertinence': 'Pertinence',
+    'note': 'Mieux notés',
+    'prix_asc': 'Tarif croissant',
+    'prix_desc': 'Tarif décroissant',
+  };
+
+  Widget _buildFilterChips() {
+    final f = _filtresServeur;
+    final specialite = _nomSpecialite(f.specialiteId);
+    final pays = _nomPays(f.paysExerciceId);
+    final ville = _nomVille(f.paysExerciceId, f.villeExerciceId);
     return ApsFilterBar(
-      onOpen: () => _ouvrirFiltres(villes),
+      onOpen: _ouvrirFiltres,
       actifs: [
-        if (_selectedVille != 'Toutes les villes')
+        if (f.autourDeMoi)
           (
-            label: _selectedVille,
+            label: 'À $_rayonKm km',
+            icon: Icons.my_location_rounded,
+            onRemove: () => _appliquerFiltresServeur(
+                specialiteId: f.specialiteId,
+                paysId: f.paysExerciceId,
+                villeId: f.villeExerciceId),
+          ),
+        if (specialite != null)
+          (
+            label: specialite,
+            icon: Icons.medical_services_outlined,
+            onRemove: () => _appliquerFiltresServeur(
+                paysId: f.paysExerciceId,
+                villeId: f.villeExerciceId,
+                position: _positionActuelle),
+          ),
+        if (pays != null)
+          (
+            label: pays,
+            icon: Icons.public_rounded,
+            onRemove: () => _appliquerFiltresServeur(
+                specialiteId: f.specialiteId, position: _positionActuelle),
+          ),
+        if (ville != null)
+          (
+            label: ville,
             icon: Icons.location_on_outlined,
-            onRemove: () => setState(() => _selectedVille = 'Toutes les villes'),
+            onRemove: () => _appliquerFiltresServeur(
+                specialiteId: f.specialiteId,
+                paysId: f.paysExerciceId,
+                position: _positionActuelle),
           ),
         if (_filtreVerifie)
           (
@@ -444,51 +582,176 @@ class _MedecinPageState extends State<MedecinPage> {
             icon: Icons.videocam_outlined,
             onRemove: () => setState(() => _filtreTele = false),
           ),
+        if (_tri != 'pertinence')
+          (
+            label: _libellesTri[_tri]!,
+            icon: Icons.swap_vert_rounded,
+            onRemove: () => setState(() => _tri = 'pertinence'),
+          ),
       ],
     );
   }
 
-  Future<void> _ouvrirFiltres(List<String> villes) async {
-    final choix = await showApsFilterSheet<({String ville, bool verifie, bool tele})>(
+  Future<void> _ouvrirFiltres() async {
+    final f = _filtresServeur;
+    final choix = await showApsFilterSheet<_FiltresMedecinSheet>(
       context: context,
-      initial: (ville: _selectedVille, verifie: _filtreVerifie, tele: _filtreTele),
-      reset: (ville: 'Toutes les villes', verifie: false, tele: false),
-      builder: (f, maj) => [
-        ApsFilterSection(
-          title: 'Ville',
-          child: ApsFilterChoices<String>(
-            value: f.ville,
-            onChanged: (v) => maj((ville: v, verifie: f.verifie, tele: f.tele)),
-            options: [
-              for (final v in villes)
-                ApsFilterOption(v, v,
-                    icon: v == 'Toutes les villes' ? null : Icons.location_on_outlined),
-            ],
-          ),
+      initial: (
+        specialiteId: f.specialiteId,
+        paysId: f.paysExerciceId,
+        villeId: f.villeExerciceId,
+        autour: f.autourDeMoi,
+        rayon: _rayonKm,
+        verifie: _filtreVerifie,
+        tele: _filtreTele,
+        tri: _tri,
+      ),
+      reset: (
+        specialiteId: null,
+        paysId: null,
+        villeId: null,
+        autour: false,
+        rayon: 10,
+        verifie: false,
+        tele: false,
+        tri: 'pertinence',
+      ),
+      builder: (c, maj) => [
+        ApsFilterSwitch(
+          label: 'Autour de moi',
+          subtitle: 'Médecins proches de votre position',
+          icon: Icons.my_location_rounded,
+          value: c.autour,
+          onChanged: (v) => maj(_avec(c, autour: v)),
         ),
+        if (c.autour)
+          ApsFilterSection(
+            title: 'Distance maximale',
+            child: ApsFilterChoices<int>(
+              value: c.rayon,
+              onChanged: (v) => maj(_avec(c, rayon: v)),
+              options: [
+                for (final km in const [5, 10, 25, 50]) ApsFilterOption(km, '$km km'),
+              ],
+            ),
+          ),
+        ApsFilterSection(
+          title: 'Spécialité',
+          child: _specialites.isEmpty
+              ? Text('Spécialités indisponibles pour le moment.', style: AppTextStyles.xs)
+              : ApsFilterChoices<String?>(
+                  value: c.specialiteId,
+                  onChanged: (v) => maj(_avec(c, specialiteId: () => v)),
+                  options: [
+                    const ApsFilterOption(null, 'Toutes'),
+                    for (final sp in _specialites) ApsFilterOption(sp.specialiteId, sp.nom),
+                  ],
+                ),
+        ),
+        if (_pays.isNotEmpty)
+          ApsFilterSection(
+            title: 'Pays',
+            child: ApsFilterChoices<String?>(
+              value: c.paysId,
+              // Changer de pays invalide la ville choisie.
+              onChanged: (v) => maj(_avec(c, paysId: () => v, villeId: () => null)),
+              options: [
+                const ApsFilterOption(null, 'Tous'),
+                for (final p in _pays)
+                  ApsFilterOption(p.paysId, p.nom, icon: Icons.public_rounded),
+              ],
+            ),
+          ),
+        if (c.paysId != null)
+          ApsFilterSection(
+            title: 'Ville',
+            child: _VillesFiltre(
+              key: ValueKey(c.paysId),
+              villes: _villesDe(c.paysId!),
+              value: c.villeId,
+              onChanged: (v) => maj(_avec(c, villeId: () => v)),
+            ),
+          ),
         ApsFilterSwitch(
           label: 'Vérifiés uniquement',
           subtitle: 'Profils vérifiés par APS Santé',
           icon: Icons.verified_outlined,
-          value: f.verifie,
-          onChanged: (v) => maj((ville: f.ville, verifie: v, tele: f.tele)),
+          value: c.verifie,
+          onChanged: (v) => maj(_avec(c, verifie: v)),
         ),
         ApsFilterSwitch(
           label: 'Téléconsultation',
           subtitle: 'Consultation en vidéo possible',
           icon: Icons.videocam_outlined,
-          value: f.tele,
-          onChanged: (v) => maj((ville: f.ville, verifie: f.verifie, tele: v)),
+          value: c.tele,
+          onChanged: (v) => maj(_avec(c, tele: v)),
+        ),
+        ApsFilterSection(
+          title: 'Trier par',
+          child: ApsFilterChoices<String>(
+            value: c.tri,
+            onChanged: (v) => maj(_avec(c, tri: v)),
+            options: [
+              for (final e in _libellesTri.entries)
+                ApsFilterOption(
+                    e.key, e.key == 'pertinence' && c.autour ? 'Plus proches' : e.value),
+            ],
+          ),
         ),
       ],
     );
     if (choix == null || !mounted) return;
+
+    // Position demandée seulement à la validation, puis réutilisée tant
+    // que le mode reste actif.
+    var position = choix.autour ? _positionActuelle : null;
+    if (choix.autour && position == null) {
+      final messenger = ScaffoldMessenger.of(context);
+      try {
+        position = await obtenirPositionUtilisateur();
+      } on PositionIndisponible catch (e) {
+        messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      }
+      if (!mounted) return;
+    }
+
     setState(() {
-      _selectedVille = choix.ville;
       _filtreVerifie = choix.verifie;
       _filtreTele = choix.tele;
+      _tri = choix.tri;
+      _rayonKm = choix.rayon;
     });
+    _appliquerFiltresServeur(
+      specialiteId: choix.specialiteId,
+      paysId: choix.paysId,
+      villeId: choix.villeId,
+      position: position,
+    );
   }
+
+  /// Copie du brouillon de la feuille (les champs nullables passent par
+  /// une fonction pour pouvoir être remis à `null`).
+  _FiltresMedecinSheet _avec(
+    _FiltresMedecinSheet c, {
+    String? Function()? specialiteId,
+    String? Function()? paysId,
+    String? Function()? villeId,
+    bool? autour,
+    int? rayon,
+    bool? verifie,
+    bool? tele,
+    String? tri,
+  }) =>
+      (
+        specialiteId: specialiteId != null ? specialiteId() : c.specialiteId,
+        paysId: paysId != null ? paysId() : c.paysId,
+        villeId: villeId != null ? villeId() : c.villeId,
+        autour: autour ?? c.autour,
+        rayon: rayon ?? c.rayon,
+        verifie: verifie ?? c.verifie,
+        tele: tele ?? c.tele,
+        tri: tri ?? c.tri,
+      );
 
   Widget _buildResultHeader(int count) {
     return Padding(
@@ -513,6 +776,60 @@ class _MedecinPageState extends State<MedecinPage> {
       message: 'Aucun médecin ne correspond à votre recherche.',
       actionLabel: 'Réinitialiser les filtres',
       onAction: _reinitialiserFiltres,
+    );
+  }
+}
+
+/// Brouillon de la feuille de filtres de [MedecinPage].
+typedef _FiltresMedecinSheet = ({
+  String? specialiteId,
+  String? paysId,
+  String? villeId,
+  bool autour,
+  int rayon,
+  bool verifie,
+  bool tele,
+  String tri,
+});
+
+/// Choix de la ville dans la feuille, chargées pour le pays choisi.
+class _VillesFiltre extends StatelessWidget {
+  const _VillesFiltre({
+    super.key,
+    required this.villes,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final Future<List<Ville>> villes;
+  final String? value;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Ville>>(
+      future: villes,
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return Text('Villes indisponibles pour le moment.', style: AppTextStyles.xs);
+        }
+        if (!snap.hasData) {
+          return const Align(
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+                width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+        return ApsFilterChoices<String?>(
+          value: value,
+          onChanged: onChanged,
+          options: [
+            const ApsFilterOption(null, 'Toutes les villes'),
+            for (final v in snap.data!)
+              ApsFilterOption(v.villeId, v.nom, icon: Icons.location_on_outlined),
+          ],
+        );
+      },
     );
   }
 }
