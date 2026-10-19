@@ -452,29 +452,44 @@ export default function Medecin() {
                         </div>
                         <div className="practitioner-actions">
                           {m.tarif_indicatif !== undefined && m.tarif_indicatif !== null && (
-                            <span className="price">{Number(m.tarif_indicatif).toLocaleString('fr-FR')} FCFA</span>
+                            <span className="price">
+                              <span className="price-label">Tarif :</span> {Number(m.tarif_indicatif).toLocaleString('fr-FR')} FCFA
+                            </span>
                           )}
-                          <Link to={`/profil/${m.medecin_id}`} className="btn btn-outline-primary btn-sm-aps">Voir le profil</Link>
-                          {/* Abonnement de présence : RDV en ligne fermé si le serveur le refuse. */}
-                          {m.droits?.prise_rdv_en_ligne !== false && (
-                            <Link to={`/rendez-vous/${m.medecin_id}`} className="btn btn-primary btn-sm-aps">Prendre RDV</Link>
-                          )}
-                          {hrefItineraire && (
-                            <a
-                              href={hrefItineraire}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="btn btn-outline-primary btn-sm-aps"
-                              onClick={() => {
-                                // Sans position utilisateur, ce clic s'ouvre sans
-                                // origine (Google Maps la demandera) ; on la
-                                // demande pour les clics suivants.
-                                if (!positionActuelle) demanderPosition();
-                              }}
+                          <div className="practitioner-btns">
+                            <Link
+                              to={`/profil/${m.medecin_id}`}
+                              className="btn-icon-aps"
+                              title="Voir le profil"
+                              aria-label="Voir le profil"
                             >
-                              <i className="fa-solid fa-diamond-turn-right" /> Itinéraire
-                            </a>
-                          )}
+                              <i className="fa-regular fa-eye" />
+                            </Link>
+                            {hrefItineraire && (
+                              <a
+                                href={hrefItineraire}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn-icon-aps btn-icon-route"
+                                title="Itinéraire"
+                                aria-label="Itinéraire"
+                                onClick={() => {
+                                  // Sans position utilisateur, ce clic s'ouvre sans
+                                  // origine (Google Maps la demandera) ; on la
+                                  // demande pour les clics suivants.
+                                  if (!positionActuelle) demanderPosition();
+                                }}
+                              >
+                                <i className="fa-solid fa-diamond-turn-right" />
+                              </a>
+                            )}
+                            {/* Abonnement de présence : RDV en ligne fermé si le serveur le refuse. */}
+                            {m.droits?.prise_rdv_en_ligne !== false && (
+                              <Link to={`/rendez-vous/${m.medecin_id}`} className="btn-rdv-aps">
+                                <i className="fa-regular fa-calendar-check" /> Prendre rendez-vous
+                              </Link>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
