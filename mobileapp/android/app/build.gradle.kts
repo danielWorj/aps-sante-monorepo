@@ -26,6 +26,12 @@ android {
         versionName = flutter.versionName
     }
 
+    // Le lint "vital" de release analyse aussi les plugins : celui de stripe_android
+    // réclame play-services-tapandpay (dépôt privé Google, introuvable) et fait échouer le build.
+    lint {
+        checkReleaseBuilds = false
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.

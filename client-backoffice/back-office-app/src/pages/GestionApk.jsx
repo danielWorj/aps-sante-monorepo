@@ -48,6 +48,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAuth, estRole } from '../context/AuthContext';
+import { useConfirmation, useToast } from '../components/feedback';
 // ⚠️ Le vrai service existant côté front est gestionapkService.js (calqué
 // sur medecinService.js, branché sur gestionapk.controller.js / routes
 // /api/apks…) — apkService.js n'existe pas, c'était une hypothèse
@@ -159,6 +160,8 @@ const FORM_VIDE = { apk_id: '', libelle: '', description: '', status: true, fich
 export default function GestionApk() {
   const { user, status: statusAuth } = useAuth();
   const estSuperadmin = estRole(user, 'superadmin');
+  const confirmer = useConfirmation();
+  const toast = useToast();
 
   /* ─── Chargement des données ─────────────────────────────────── */
 
@@ -220,6 +223,37 @@ export default function GestionApk() {
     });
     return base;
   }, [apks]);
+
+  /* ─── Activation exclusive : une seule APK active à la fois ─────── */
+
+  // Le serveur désactive les autres APK quand on en active une (voir
+  // gestionapk.controller.js) : on reflète ce changement dans la liste.
+  function appliquerApk(apk, { nouvelle = false } = {}) {
+    setApks((prev) => {
+      const liste = prev.map((a) => {
+        if (a.id === apk.id) return apk;
+        return apk.status && a.status ? { ...a, status: false } : a;
+      });
+      return nouvelle ? [apk, ...liste] : liste;
+    });
+  }
+
+  // Demande confirmation avant d'activer `apk` (ou une nouvelle APK si
+  // apk est null) lorsque cela désactivera d'autres versions.
+  async function confirmerActivation(apk) {
+    const actives = apks.filter((a) => a.status && a.id !== apk?.id);
+    return confirmer({
+      titre: 'Activer cette version',
+      message:
+        actives.length > 0
+          ? `« ${apk?.libelle ?? formulaire.libelle.trim()} » deviendra la seule version téléchargeable. ` +
+            `${actives.length > 1 ? 'Les versions' : 'La version'} ${actives.map((a) => `« ${a.libelle} »`).join(', ')} ` +
+            `${actives.length > 1 ? 'seront désactivées' : 'sera désactivée'} automatiquement.`
+          : `« ${apk?.libelle ?? formulaire.libelle.trim()} » deviendra la version téléchargeable par les utilisateurs.`,
+      labelConfirmer: 'Activer',
+      variante: 'avertissement',
+    });
+  }
 
   /* ─── Modale création / édition ─────────────────────────────────── */
 
@@ -294,6 +328,12 @@ export default function GestionApk() {
       return;
     }
 
+    // Confirmation si l'enregistrement active une version alors qu'elle
+    // ne l'était pas (création active, ou passage inactif → actif).
+    if (formulaire.status && (enCreation || !apkExistant?.status)) {
+      if (!(await confirmerActivation(enCreation ? null : apkExistant))) return;
+    }
+
     setEnregistrementEnCours(true);
     // 0 plutôt que null dès le lancement : affiche la barre à 0% tout de
     // suite (le premier évènement de progression XHR peut mettre un
@@ -318,10 +358,10 @@ export default function GestionApk() {
 
       if (enCreation) {
         const cree = await creerApk(donnees, setProgressionUpload);
-        setApks((prev) => [cree, ...prev]);
+        appliquerApk(cree, { nouvelle: true });
       } else {
         const misAJour = await modifierApk(formulaire.apk_id, donnees, setProgressionUpload);
-        setApks((prev) => prev.map((a) => (a.id === misAJour.id ? misAJour : a)));
+        appliquerApk(misAJour);
       }
       setModalFormOuverte(false);
     } catch (err) {
@@ -337,13 +377,15 @@ export default function GestionApk() {
   const [apkEnBascule, setApkEnBascule] = useState(null);
 
   async function basculerStatut(apk) {
-    setErreurChargement(null);
+    const activation = !apk.status;
+    if (activation && !(await confirmerActivation(apk))) return;
     setApkEnBascule(apk.id);
     try {
-      const misAJour = await modifierApk(apk.id, { status: !apk.status });
-      setApks((prev) => prev.map((a) => (a.id === misAJour.id ? misAJour : a)));
+      const misAJour = await modifierApk(apk.id, { status: activation });
+      appliquerApk(misAJour);
+      toast.succes(activation ? `« ${apk.libelle} » est maintenant la version active.` : `« ${apk.libelle} » a été désactivée.`);
     } catch (err) {
-      setErreurChargement(err.message || 'Impossible de changer le statut de cet APK.');
+      toast.erreur(err.message || 'Impossible de changer le statut de cet APK.');
     } finally {
       setApkEnBascule(null);
     }
@@ -727,6 +769,9 @@ export default function GestionApk() {
             <label className="form-check-label" htmlFor="apkStatutActif">
               Actif (visible / téléchargeable par l'application mobile)
             </label>
+            <div className="aps-text-muted mt-1" style={{ fontSize: 11 }}>
+              Une seule version peut être active : l'activer désactive automatiquement les autres.
+            </div>
           </div>
         </form>
       </Modal>

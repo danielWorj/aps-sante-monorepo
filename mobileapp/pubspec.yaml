@@ -63,6 +63,15 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
+# Copie locale de stripe_android 14.1.0 : ses adaptateurs React Native
+# (com.facebook.react.*) sont renommés en com.flutter.stripe.rnshim.* pour ne plus
+# entrer en collision avec le vrai React Native embarqué par jitsi_meet_flutter_sdk
+# (sinon R8 échoue en release : « Type ... is defined multiple times »).
+# À refaire si flutter_stripe est mis à jour.
+dependency_overrides:
+  stripe_android:
+    path: packages/stripe_android
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 

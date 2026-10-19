@@ -53,6 +53,19 @@ async function initierStockageApks() {
 }
 
 /**
+ * Interprète un statut reçu du client. En multipart (FormData) tout
+ * arrive en chaîne : `Boolean("false")` vaut true, d'où l'impossibilité
+ * de désactiver une APK. Retourne true/false, ou null si invalide.
+ */
+function lireStatut(valeur) {
+  if (typeof valeur === "boolean") return valeur;
+  const s = String(valeur).trim().toLowerCase();
+  if (s === "true" || s === "1") return true;
+  if (s === "false" || s === "0") return false;
+  return null;
+}
+
+/**
  * Valide le fichier APK : type MIME et taille.
  * Retourne un objet { valide: boolean, erreur: string | null }
  */
@@ -171,6 +184,11 @@ export async function creerApk(req, res, next) {
       return res.status(400).json({ message: validation.erreur });
     }
 
+    const statutLu = status !== undefined ? lireStatut(status) : true;
+    if (statutLu === null) {
+      return res.status(400).json({ message: "Le 'status' doit valoir true ou false." });
+    }
+
     // Générer un nom de fichier sécurisé et unique
     const nomFichierSecurise = genererNomFichierSecurise(fichier.originalname);
     const cheminFichier = path.join(APK_STORAGE_DIR, nomFichierSecurise);
@@ -188,13 +206,19 @@ export async function creerApk(req, res, next) {
     // Créer l'enregistrement en base de données
     let apkCreee;
     try {
-      apkCreee = await prisma.mobileApk.create({
-        data: {
-          libelle: String(libelle).trim(),
-          description: description ? String(description).trim() : null,
-          file_url: nomFichierSecurise,
-          status: status !== undefined ? Boolean(status) : true,
-        },
+      // Une seule APK active à la fois : activer celle-ci désactive les autres.
+      apkCreee = await prisma.$transaction(async (tx) => {
+        if (statutLu) {
+          await tx.mobileApk.updateMany({ where: { status: true }, data: { status: false } });
+        }
+        return tx.mobileApk.create({
+          data: {
+            libelle: String(libelle).trim(),
+            description: description ? String(description).trim() : null,
+            file_url: nomFichierSecurise,
+            status: statutLu,
+          },
+        });
       });
     } catch (errDb) {
       // Nettoyage best-effort : supprimer le fichier si la BD échoue
@@ -433,7 +457,11 @@ export async function modifierApk(req, res, next) {
     }
 
     if (status !== undefined) {
-      miseAJour.status = Boolean(status);
+      const statutLu = lireStatut(status);
+      if (statutLu === null) {
+        return res.status(400).json({ message: "Le 'status' doit valoir true ou false." });
+      }
+      miseAJour.status = statutLu;
     }
 
     // Si un nouveau fichier est fourni, le valider et le traiter
@@ -469,9 +497,15 @@ export async function modifierApk(req, res, next) {
     // Mettre à jour en base de données
     let apkModifiee;
     try {
-      apkModifiee = await prisma.mobileApk.update({
-        where: { id },
-        data: miseAJour,
+      // Une seule APK active à la fois : activer celle-ci désactive les autres.
+      apkModifiee = await prisma.$transaction(async (tx) => {
+        if (miseAJour.status === true) {
+          await tx.mobileApk.updateMany({
+            where: { status: true, id: { not: id } },
+            data: { status: false },
+          });
+        }
+        return tx.mobileApk.update({ where: { id }, data: miseAJour });
       });
     } catch (errDb) {
       // Nettoyage best-effort : supprimer le nouveau fichier si la BD échoue
