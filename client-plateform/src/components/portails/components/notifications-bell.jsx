@@ -29,6 +29,10 @@ const ICONES = {
   mise_en_relation_recue: 'fa-inbox',
   abonnement_assurance_active: 'fa-id-card',
   abonnement_assurance_echeance: 'fa-hourglass-half',
+  // Réputation médecin : invitation à noter (patient), avis publié (médecin), réponse du médecin (patient).
+  avis_medecin_invitation: 'fa-star',
+  avis_medecin_publie: 'fa-star-half-stroke',
+  avis_medecin_reponse: 'fa-reply',
 };
 // Date du créneau (ISO dans `donnees`), affichée dans le fuseau du navigateur.
 const dateRdv = (iso) => new Date(iso).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });

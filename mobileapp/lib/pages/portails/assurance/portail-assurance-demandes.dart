@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../components/style/colors.dart';
+import '../../../components/ui/aps_filter_sheet.dart';
 import '../../../components/style/text_styles.dart';
 import '../../../controllers/portail_assurance_controller.dart';
 import '../../../models/portail_assurance_models.dart';
@@ -43,6 +44,35 @@ class _PortailAssuranceDemandesState extends ConsumerState<PortailAssuranceDeman
     ref.invalidate(nouvellesDemandesAssuranceProvider);
   }
 
+  Future<void> _ouvrirFiltres(Map<String, int>? compteurs, int? total) async {
+    String libelle(String s) {
+      final base = s.isEmpty ? 'Toutes' : libelleStatutDemande(s);
+      if (compteurs == null) return base;
+      return '$base (${s.isEmpty ? (total ?? 0) : (compteurs[s] ?? 0)})';
+    }
+
+    final choix = await showApsFilterSheet<String>(
+      context: context,
+      initial: _statut,
+      reset: '',
+      builder: (statut, maj) => [
+        ApsFilterSection(
+          title: 'Statut',
+          child: ApsFilterChoices<String>(
+            value: statut,
+            onChanged: maj,
+            options: [for (final s in ['', ...statutsDemande]) ApsFilterOption(s, libelle(s))],
+          ),
+        ),
+      ],
+    );
+    if (choix == null || !mounted) return;
+    setState(() {
+      _statut = choix;
+      _page = 1;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final page = ref.watch(demandesAssuranceProvider(_filtre));
@@ -60,27 +90,19 @@ class _PortailAssuranceDemandesState extends ConsumerState<PortailAssuranceDeman
               titre: 'Demandes',
               description: 'Les personnes qui ont demandé à être mises en relation avec vous depuis votre fiche.',
             ),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final s in ['', ...statutsDemande])
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: ChoiceChip(
-                        label: Text(
-                          '${s.isEmpty ? 'Toutes' : libelleStatutDemande(s)}'
-                          '${compteurs == null ? '' : ' (${s.isEmpty ? page.value!.totalGlobal : (compteurs[s] ?? 0)})'}',
-                        ),
-                        selected: _statut == s,
-                        onSelected: (_) => setState(() {
-                          _statut = s;
-                          _page = 1;
-                        }),
-                      ),
-                    ),
-                ],
-              ),
+            ApsFilterBar(
+              onOpen: () => _ouvrirFiltres(compteurs, page.value?.totalGlobal),
+              actifs: [
+                if (_statut.isNotEmpty)
+                  (
+                    label: libelleStatutDemande(_statut),
+                    icon: null,
+                    onRemove: () => setState(() {
+                      _statut = '';
+                      _page = 1;
+                    }),
+                  ),
+              ],
             ),
             const SizedBox(height: 8),
             TextField(

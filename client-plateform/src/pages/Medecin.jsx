@@ -13,6 +13,7 @@ import {
 import { listerPays, listerVilles } from '../services/geoService';
 import { useGeolocation } from '../hooks/useGeolocation';
 import GoogleMapListe from '../components/maps/GoogleMapListe';
+import { Etoiles } from '../components/avis/Etoiles';
 import './../assets/styles/medecin.css';
 
 const RESULTATS_PAR_PAGE = 3;
@@ -432,6 +433,13 @@ export default function Medecin() {
                               </>
                             )}
                           </div>
+                          {m.nombre_avis > 0 && (
+                            <Link to={`/profil/${m.medecin_id}?onglet=avis`} className="profil-note">
+                              <Etoiles valeur={Number(m.note_moyenne)} taille="sm" />
+                              <strong>{Number(m.note_moyenne).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong>
+                              <span>({m.nombre_avis} avis)</span>
+                            </Link>
+                          )}
                           {tags.length > 0 && (
                             <div className="practitioner-tags">
                               {tags.map((t) => (

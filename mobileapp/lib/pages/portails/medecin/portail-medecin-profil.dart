@@ -9,6 +9,7 @@ import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/medecin_controller.dart';
 import '../../../models/medecin_models.dart';
 import '../../../repositories/medecin_repository.dart' show ApiException;
+import 'portail-medecin-activite.dart' show PageMesAvisMedecin;
 import 'portefeuille_retraits_card.dart';
 
 /// ============================================================
@@ -835,10 +836,9 @@ class _PanelHoraires extends StatelessWidget {
 }
 
 /// ------------------------------------------------------------
-/// Panneau "Avis" — équivalent de `#p-avis`. Seules la note moyenne
-/// et le nombre total d'avis publiés sont exposés par
-/// GET /medecins/mon-profil ; la liste détaillée des avis relève d'un
-/// module Avis médecin non encore branché ici.
+/// Panneau "Avis" — équivalent de `#p-avis` : note moyenne et nombre
+/// d'avis publiés (GET /medecins/mon-profil), puis accès à l'espace
+/// « Avis & notes » (liste, réponse, signalement).
 /// ------------------------------------------------------------
 class _PanelAvis extends StatelessWidget {
   final StatistiquesAvisMedecin statistiques;
@@ -895,12 +895,13 @@ class _PanelAvis extends StatelessWidget {
             ],
           ),
         ),
-        const _EtatVide(
-          message: "Le détail des avis (commentaires, notes par patient) "
-              "n'est pas encore disponible dans cet espace. Il "
-              "apparaîtra ici une fois le module Avis médecin branché.",
-          // TODO: brancher un futur AvisMedecinRepository pour lister
-          // les avis individuels (auteur, note, commentaire).
+        ApsButton(
+          label: 'Lire et répondre aux avis',
+          icon: Icons.reviews_outlined,
+          variant: ApsButtonVariant.soft,
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const PageMesAvisMedecin()),
+          ),
         ),
       ],
     );

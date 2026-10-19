@@ -34,6 +34,8 @@ class CardMedecin extends StatelessWidget {
     this.verifieOrdre = false,
     this.teleconsultation = false,
     this.disponibleAujourdhui = false,
+    this.noteMoyenne,
+    this.nombreAvis = 0,
     required this.onVoirProfil,
     this.onPrendreRdv,
     this.onTap,
@@ -47,6 +49,10 @@ class CardMedecin extends StatelessWidget {
   final bool verifieOrdre;
   final bool teleconsultation;
   final bool disponibleAujourdhui;
+
+  /// Réputation : affichée seulement s'il y a au moins un avis publié.
+  final double? noteMoyenne;
+  final int nombreAvis;
   final VoidCallback onVoirProfil;
 
   /// null = prise de RDV en ligne indisponible (bouton masqué).
@@ -96,6 +102,10 @@ class CardMedecin extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.xs,
                     ),
+                    if (nombreAvis > 0 && noteMoyenne != null) ...[
+                      const SizedBox(height: 4),
+                      ApsStars(noteMoyenne!, count: nombreAvis),
+                    ],
                     const SizedBox(height: 8),
                     Row(
                       children: [

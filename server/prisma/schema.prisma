@@ -237,6 +237,11 @@ enum TypeNotification {
   // Portail assurance : nouvelle demande de mise en relation reçue par une
   // fiche. Destinataires : les agents de la fiche.
   mise_en_relation_recue
+  // Réputation médecin : invitation du PATIENT à noter une consultation
+  // terminée ; avis publié (MÉDECIN) ; réponse du médecin (PATIENT).
+  avis_medecin_invitation
+  avis_medecin_publie
+  avis_medecin_reponse
 }
 
 // Motif d'annulation d'un rendez-vous — liste fermée exigée par la
@@ -575,6 +580,13 @@ model Medecin {
   // que cni_url / attestation_url ci-dessus.
   photo_url String? @db.VarChar(255)
 
+  // Réputation : moyenne des notes globales des avis PUBLIÉS et leur
+  // nombre, recalculées à chaque modération / suppression (voir
+  // recalculerNoteMedecin, services/avisMedecin.service.js). Dénormalisées
+  // pour l'annuaire (cartes, tri) ; NULL / 0 tant qu'aucun avis publié.
+  note_moyenne Decimal? @db.Decimal(3, 2)
+  nombre_avis  Int      @default(0)
+
   date_creation DateTime @default(now())
 
   utilisateur    Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
@@ -621,6 +633,8 @@ model Medecin {
   abonnements_presence AbonnementPresence[]
   // RDV aléatoire : réponses de ce médecin aux offres des patients.
   reponses_offre_rdv   ReponseOffreRdv[]
+  // Tableau de bord : interactions des visiteurs avec la fiche publique.
+  engagements          EngagementMedecin[]
 
   @@index([specialite_id])
   @@index([pays_exercice_id])
@@ -2009,11 +2023,40 @@ model AvisMedecin {
   statut_moderation StatutModerationAvis @default(en_attente)
   date_creation     DateTime             @default(now())
 
+  // Réputation médecin (19/10) — un avis est déposé par un PATIENT au
+  // titre d'une consultation réellement terminée (rendez_vous.termine_le),
+  // au plus un avis par RDV. NULL = avis antérieur à cette règle (affiché,
+  // mais sans le badge « patient vérifié »). Voir services/avisMedecin.service.js.
+  rdv_id String? @unique @db.Uuid
+
+  // Critères facultatifs (1 à 5) et recommandation : la note globale
+  // reste la seule note obligatoire et la seule qui entre dans la moyenne.
+  note_ponctualite  Int?     @db.SmallInt
+  note_ecoute       Int?     @db.SmallInt
+  note_explications Int?     @db.SmallInt
+  recommande        Boolean?
+  // Le patient choisit d'apparaître sous la mention « Patient vérifié »
+  // plutôt que « Prénom N. ».
+  anonyme           Boolean  @default(false)
+  date_moderation   DateTime?
+
+  // Réponse publique du médecin (une seule, modifiable), visible sous
+  // l'avis publié.
+  reponse_medecin String?   @db.Text
+  date_reponse    DateTime?
+
+  // Signalement par le médecin (contenu abusif, faux patient...) : remonte
+  // au back-office, l'avis reste en ligne tant qu'un admin n'a pas tranché.
+  signale_le        DateTime?
+  motif_signalement String?   @db.Text
+
   utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
   medecin     Medecin     @relation(fields: [medecin_id], references: [medecin_id])
+  rendez_vous RendezVous? @relation(fields: [rdv_id], references: [rdv_id])
 
   @@index([utilisateur_id])
   @@index([medecin_id])
+  @@index([medecin_id, statut_moderation, date_creation])
   @@map("avis_medecin")
 }
 
@@ -2202,6 +2245,9 @@ model RendezVous {
 
   // Étape 6 : notifications in-app liées à ce RDV (reprogrammation).
   notifications Notification[]
+
+  // Avis laissé par le patient au titre de ce RDV (au plus un).
+  avis_medecin AvisMedecin?
 
   // Politique de fonds v2 §6 : un index unique PARTIEL sur
   // (medecin_id, date_creneau) pour les RDV actifs (statuts cree,
@@ -2894,6 +2940,46 @@ model VueFicheVisiteur {
   @@id([type_acteur, acteur_id, jour, empreinte])
   @@index([jour])
   @@map("vue_fiche_visiteur")
+}
+
+// ---------------------------------------------------------------------
+// Engagements sur la fiche publique d'un médecin (tableau de bord du
+// portail médecin) : clic « Prendre rendez-vous », contact, itinéraire,
+// partage, lecture des avis. Même principe que VueFiche : agrégat par
+// jour UTC, chaque visiteur compte au plus UNE fois par jour et par type
+// (empreinte HMAC non réversible, purgée chaque nuit). Voir
+// services/engagementMedecin.service.js.
+// ---------------------------------------------------------------------
+enum TypeEngagementMedecin {
+  clic_rdv
+  clic_contact
+  clic_itineraire
+  partage
+  lecture_avis
+}
+
+model EngagementMedecin {
+  medecin_id String                @db.Uuid
+  jour       DateTime              @db.Date
+  type       TypeEngagementMedecin
+  nombre     Int                   @default(0)
+
+  medecin Medecin @relation(fields: [medecin_id], references: [medecin_id], onDelete: Cascade)
+
+  @@id([medecin_id, jour, type])
+  @@index([jour])
+  @@map("engagement_medecin")
+}
+
+model EngagementMedecinVisiteur {
+  medecin_id String                @db.Uuid
+  jour       DateTime              @db.Date
+  type       TypeEngagementMedecin
+  empreinte  String                @db.VarChar(64)
+
+  @@id([medecin_id, jour, type, empreinte])
+  @@index([jour])
+  @@map("engagement_medecin_visiteur")
 }
 
 // ===========================================================================

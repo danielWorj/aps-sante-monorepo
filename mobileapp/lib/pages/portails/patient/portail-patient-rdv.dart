@@ -9,6 +9,7 @@ import '../../../components/dialogs/avertissement_annulation.dart';
 import '../../../components/dialogs/dialogue_motif_annulation.dart';
 import '../../../components/factures/facture_recapitulative.dart';
 import '../../../components/panels/panneau_reprogrammation.dart';
+import '../../../components/reputation/notation_patient.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/rendez_vous_models.dart';
@@ -99,6 +100,8 @@ class _PortailPatientRdvState extends ConsumerState<PortailPatientRdv>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const _PageHead(),
+            // Consultations terminées à noter (rien s'il n'y en a aucune).
+            const ConsultationsANoter(),
             _SegmentedTabs(controller: _tabController),
             const SizedBox(height: 16),
             SizedBox(

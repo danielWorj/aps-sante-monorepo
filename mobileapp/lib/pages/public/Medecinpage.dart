@@ -20,6 +20,13 @@ import 'Assurancepage.dart';
 // ('../../../') — ils ne sont donc a priori PAS dans le même dossier.
 // Exemple si Rendezvous.dart vit dans un sous-dossier `rendezvous/` :
 import './utils/Rendezvous.dart';
+import '../../components/reputation/avis_publics.dart';
+import '../../components/reputation/reputation_ui.dart' show decimalFr;
+import '../../repositories/reputation_medecin_repository.dart';
+
+/// Engagements des visiteurs sur la fiche (statistiques du médecin) :
+/// envoyés sans attendre, jamais bloquants.
+final _reputation = ReputationMedecinRepository();
 
 /// Container Riverpod utilisé par ce module.
 ///
@@ -56,6 +63,7 @@ void _pousserRendezVous(
       required String? token,
       required Medecin medecin,
     }) {
+  _reputation.signalerEngagement(medecin.medecinId, 'clic_rdv', token: token);
   Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => RendezVousPage(
@@ -376,6 +384,8 @@ class _MedecinPageState extends State<MedecinPage> {
       prixFcfa: m.tarifIndicatif.round(),
       verifieOrdre: m.estPublie,
       teleconsultation: m.teleconsultationActivee,
+      noteMoyenne: m.noteMoyenne,
+      nombreAvis: m.nombreAvis,
       // TODO(agenda): brancher la disponibilité du jour dès que le module
       // Agenda/Créneau est exposé sur la fiche Medecin.
       disponibleAujourdhui: false,
@@ -413,40 +423,71 @@ class _MedecinPageState extends State<MedecinPage> {
   }
 
   Widget _buildFilterChips(List<String> villes) {
-    final nbFiltres = (_filtreVerifie ? 1 : 0) +
-        (_filtreTele ? 1 : 0) +
-        (_selectedVille != 'Toutes les villes' ? 1 : 0);
-    return ApsChipRow(
-      children: [
-        ApsChip(
-          'Filtres',
-          icon: Icons.tune_rounded,
-          selected: nbFiltres > 0,
-          count: nbFiltres,
-          onTap: nbFiltres > 0 ? _reinitialiserFiltres : null,
-        ),
-        ApsChip(
-          'Vérifiés',
-          icon: Icons.verified_outlined,
-          soft: _filtreVerifie,
-          onTap: () => setState(() => _filtreVerifie = !_filtreVerifie),
-        ),
-        ApsChip(
-          'Vidéo',
-          icon: Icons.videocam_outlined,
-          soft: _filtreTele,
-          onTap: () => setState(() => _filtreTele = !_filtreTele),
-        ),
-        for (final ville in villes.skip(1))
-          ApsChip(
-            ville,
+    return ApsFilterBar(
+      onOpen: () => _ouvrirFiltres(villes),
+      actifs: [
+        if (_selectedVille != 'Toutes les villes')
+          (
+            label: _selectedVille,
             icon: Icons.location_on_outlined,
-            soft: _selectedVille == ville,
-            onTap: () => setState(() => _selectedVille =
-                _selectedVille == ville ? 'Toutes les villes' : ville),
+            onRemove: () => setState(() => _selectedVille = 'Toutes les villes'),
+          ),
+        if (_filtreVerifie)
+          (
+            label: 'Vérifiés',
+            icon: Icons.verified_outlined,
+            onRemove: () => setState(() => _filtreVerifie = false),
+          ),
+        if (_filtreTele)
+          (
+            label: 'Vidéo',
+            icon: Icons.videocam_outlined,
+            onRemove: () => setState(() => _filtreTele = false),
           ),
       ],
     );
+  }
+
+  Future<void> _ouvrirFiltres(List<String> villes) async {
+    final choix = await showApsFilterSheet<({String ville, bool verifie, bool tele})>(
+      context: context,
+      initial: (ville: _selectedVille, verifie: _filtreVerifie, tele: _filtreTele),
+      reset: (ville: 'Toutes les villes', verifie: false, tele: false),
+      builder: (f, maj) => [
+        ApsFilterSection(
+          title: 'Ville',
+          child: ApsFilterChoices<String>(
+            value: f.ville,
+            onChanged: (v) => maj((ville: v, verifie: f.verifie, tele: f.tele)),
+            options: [
+              for (final v in villes)
+                ApsFilterOption(v, v,
+                    icon: v == 'Toutes les villes' ? null : Icons.location_on_outlined),
+            ],
+          ),
+        ),
+        ApsFilterSwitch(
+          label: 'Vérifiés uniquement',
+          subtitle: 'Profils vérifiés par APS Santé',
+          icon: Icons.verified_outlined,
+          value: f.verifie,
+          onChanged: (v) => maj((ville: f.ville, verifie: v, tele: f.tele)),
+        ),
+        ApsFilterSwitch(
+          label: 'Téléconsultation',
+          subtitle: 'Consultation en vidéo possible',
+          icon: Icons.videocam_outlined,
+          value: f.tele,
+          onChanged: (v) => maj((ville: f.ville, verifie: f.verifie, tele: v)),
+        ),
+      ],
+    );
+    if (choix == null || !mounted) return;
+    setState(() {
+      _selectedVille = choix.ville;
+      _filtreVerifie = choix.verifie;
+      _filtreTele = choix.tele;
+    });
   }
 
   Widget _buildResultHeader(int count) {
@@ -683,8 +724,10 @@ class _MedecinDetailPageState extends State<_MedecinDetailPage> {
                           label: 'Appeler le cabinet',
                           icon: Icons.call_rounded,
                           variant: ApsButtonVariant.dark,
-                          onPressed: () => launchUrl(
-                              Uri.parse('tel:${medecin.contactTelephone}')),
+                          onPressed: () {
+                            _reputation.signalerEngagement(medecin.medecinId, 'clic_contact', token: widget.token);
+                            launchUrl(Uri.parse('tel:${medecin.contactTelephone}'));
+                          },
                         )
                       : const ApsButton(
                           label: 'RDV en ligne indisponible',
@@ -716,15 +759,16 @@ class _MedecinDetailPageState extends State<_MedecinDetailPage> {
             ],
           ),
         ),
-        data: (medecin) => _ProfilMedecin(medecin: medecin),
+        data: (medecin) => _ProfilMedecin(medecin: medecin, token: widget.token),
       ),
     );
   }
 }
 
 class _ProfilMedecin extends StatelessWidget {
-  const _ProfilMedecin({required this.medecin});
+  const _ProfilMedecin({required this.medecin, this.token});
   final Medecin medecin;
+  final String? token;
 
   @override
   Widget build(BuildContext context) {
@@ -766,8 +810,10 @@ class _ProfilMedecin extends StatelessWidget {
                       icon: Icons.call_outlined,
                       glass: true,
                       tooltip: 'Appeler',
-                      onPressed: () =>
-                          launchUrl(Uri.parse('tel:${medecin.contactTelephone}')),
+                      onPressed: () {
+                        _reputation.signalerEngagement(medecin.medecinId, 'clic_contact', token: token);
+                        launchUrl(Uri.parse('tel:${medecin.contactTelephone}'));
+                      },
                     )
                   : null,
             ),
@@ -841,10 +887,15 @@ class _ProfilMedecin extends StatelessWidget {
                     child: IntrinsicHeight(
                       child: Row(
                         children: [
-                          _Stat(
-                            valeur: medecin.estPublie ? 'Vérifié' : '—',
-                            libelle: 'Ordre',
-                          ),
+                          medecin.nombreAvis > 0
+                              ? _Stat(
+                                  valeur: '★ ${decimalFr(medecin.noteMoyenne)}',
+                                  libelle: '${medecin.nombreAvis} avis',
+                                )
+                              : _Stat(
+                                  valeur: medecin.estPublie ? 'Vérifié' : '—',
+                                  libelle: 'Ordre',
+                                ),
                           const VerticalDivider(color: AppColors.line, width: 1),
                           _Stat(
                             valeur: medecin.villeExercice?.nom ?? '—',
@@ -906,6 +957,8 @@ class _ProfilMedecin extends StatelessWidget {
               const SizedBox(height: 6),
               Text(medecin.biographie, style: AppTextStyles.small),
             ],
+            const SizedBox(height: 20),
+            SectionAvisPublics(medecinId: medecin.medecinId, nomMedecin: nom, token: token),
           ],
         ),
       ],

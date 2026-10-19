@@ -65,6 +65,7 @@ import {
   lieuAPreciser,
 } from "./../../../utils/rdv";
 import ContestationRdv from "./contestation-rdv";
+import AvisAFaire from "../../avis/AvisAFaire";
 import PaiementMobileMoney from "./../../paiement/PaiementMobileMoney";
 import ChoixMoyenPaiement from "./../../paiement/ChoixMoyenPaiement";
 import { FactureRdv } from "./../../paiement/FactureRecapitulative";
@@ -823,6 +824,9 @@ const PatientRdv = () => {
                 </div>
               ))}
             </div>
+
+            {/* Consultations terminées à noter (masqué s'il n'y en a aucune) */}
+            <AvisAFaire />
 
             {/* Bandeau : RDV à reprogrammer (visible sans ouvrir le détail) */}
             {rdvParCategorie.avenir.some((r) => r.statut === "a_reprogrammer") && (

@@ -23,6 +23,7 @@ const FORMAT_LANGUE = /^[a-z]{2,3}(_[A-Z]{2})?$/;
 
 // Variables disponibles par modèle : affichées au back-office.
 export const VARIABLES_MODELES = {
+  publicite_soumise: ["annonceur", "titre", "emplacement", "position", "date_debut", "date_fin", "montant"],
   publicite_acceptee: ["annonceur", "titre", "emplacement", "position", "date_debut", "date_fin", "montant", "date_limite_paiement", "lien_paiement"],
   publicite_rejetee: ["annonceur", "titre", "emplacement", "motif"],
   publicite_payee: ["annonceur", "titre", "emplacement", "position", "date_debut", "date_fin", "numero_facture", "montant_initial", "frais_agregateur", "total_paye", "recapitulatif", "lien_facture"],

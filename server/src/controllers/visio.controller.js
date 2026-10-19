@@ -17,6 +17,7 @@ import { ErreurParametreDelai } from "../services/parametreDelaiLiberation.servi
 import { verifierSignatureWebhookVisio } from "../lib/jitsiWebhookService.js";
 import { enregistrerPresence } from "../services/presence.service.js";
 import { partieDepuisParticipant } from "../services/reglesPresenceReprogrammation.service.js";
+import { inviterAvisPatient } from "../services/avisMedecin.service.js";
 
 const STATUTS_AUTORISES_VISIO = ["confirme", "en_attente_presence"];
 // Doit rester identique au roomName généré dans obtenirTokenVisio
@@ -235,6 +236,9 @@ export async function traiterFinSessionVisio(req, res, next) {
       console.warn(`[visio] rdv ${rdv_id} : fin de consultation non constatée (${fin.erreur.code}) — ${fin.erreur.message}`);
       return res.status(200).json({ ignore: true, raison: fin.erreur.code });
     }
+
+    // Consultation terminée : le patient est invité à donner son avis (sans attendre, ne lève jamais).
+    if (!fin.deja_constate) inviterAvisPatient(rdv_id);
 
     return res.status(200).json({ traite: true, deja_constate: fin.deja_constate });
   } catch (err) {

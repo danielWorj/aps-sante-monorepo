@@ -113,6 +113,32 @@ const STYLE_PAGE = `
 `;
 
 /**
+ * Réputation médecin (19/10) : le serveur renvoie désormais, pour un
+ * admin, l'auteur (utilisateur), le médecin, le RDV, la réponse du médecin
+ * et le signalement (signale_le / motif_signalement). On les ramène ici aux
+ * noms de champs historiques de cette page.
+ */
+function normaliserAvis(a) {
+  const u = a.utilisateur;
+  const m = a.medecin?.utilisateur;
+  return {
+    ...a,
+    signale: Boolean(a.signale_le),
+    auteur_nom: u ? [u.prenom, u.nom].filter(Boolean).join(" ") : null,
+    auteur_verifie: Boolean(a.rdv_id),
+    created_at: a.date_creation,
+    medecin_nom: m ? `Dr. ${[m.prenom, m.nom].filter(Boolean).join(" ")}` : null,
+    medecin_specialite: a.medecin?.specialite?.nom ?? null,
+  };
+}
+
+const CRITERES = [
+  ["note_ponctualite", "Ponctualité"],
+  ["note_ecoute", "Écoute"],
+  ["note_explications", "Explications"],
+];
+
+/**
  * Extrait un nom de rôle (en minuscules) depuis un objet utilisateur —
  * même logique que dans avisPharmacie.jsx / Pharmacie.jsx, dupliquée
  * ici pour ne pas introduire de dépendance croisée entre composants.
@@ -290,7 +316,7 @@ export default function AvisMedecin() {
     setErreur(null);
     try {
       const resultat = await listerAvisMedecin(filtresAppliques);
-      setAvis(resultat);
+      setAvis(resultat.map(normaliserAvis));
       setPage(1);
     } catch (err) {
       setErreur(err.message || "Impossible de charger les avis.");
@@ -406,6 +432,7 @@ export default function AvisMedecin() {
       commentaire: unAvis.commentaire ?? "",
       statut_moderation: unAvis.statut_moderation ?? "en_attente",
       note: Number(unAvis.note) || NOTE_MIN,
+      signalement_traite: false,
     });
     setErreurFormulaire(null);
     setModaleEditerOuverte(true);
@@ -422,10 +449,7 @@ export default function AvisMedecin() {
 
   async function enregistrerEdition() {
     if (!avisEnEdition) return;
-    if (!formulaire.commentaire.trim()) {
-      setErreurFormulaire("Le commentaire ne peut pas être vide.");
-      return;
-    }
+    // Un avis peut être une note seule : le commentaire n'est plus obligatoire.
     setEnvoiEnCours(true);
     setErreurFormulaire(null);
     try {
@@ -434,11 +458,12 @@ export default function AvisMedecin() {
       // pour un admin/superadmin, pour rester conforme à ce qu'accepte
       // le serveur côté auteur ({ note?, commentaire? } uniquement).
       const editeParAdmin = peutModererTout;
+      // L'administration modère (statut, signalement) mais ne réécrit jamais
+      // le contenu d'un patient : le serveur ignore note/commentaire d'un admin.
       const donnees = editeParAdmin
         ? {
-            commentaire: formulaire.commentaire,
             statut_moderation: formulaire.statut_moderation,
-            note: Number(formulaire.note),
+            ...(formulaire.signalement_traite ? { signalement_traite: true } : {}),
           }
         : {
             commentaire: formulaire.commentaire,
@@ -602,7 +627,10 @@ export default function AvisMedecin() {
             {/* ============ CARTES AVIS ============ */}
             {avisPage.map((unAvis) => {
               const meta = STATUTS_MODERATION_AVIS_MEDECIN.find((s) => s.valeur === unAvis.statut_moderation) || {};
-              const { nom: nomMedecin, specialite, localisation } = infosMedecin(unAvis.medecin_id);
+              const infos = infosMedecin(unAvis.medecin_id);
+              const nomMedecin = unAvis.medecin_nom ?? infos.nom;
+              const specialite = unAvis.medecin_specialite ?? infos.specialite;
+              const { localisation } = infos;
               const editable = peutModifierAvis(unAvis);
               const supprimable = peutSupprimerAvis(unAvis);
               return (
@@ -623,12 +651,31 @@ export default function AvisMedecin() {
                         )}
                       </div>
                     </div>
-                    <p className="avis-card__message">« {unAvis.commentaire} »</p>
+                    {unAvis.commentaire
+                      ? <p className="avis-card__message">« {unAvis.commentaire} »</p>
+                      : <p className="avis-card__message aps-text-muted"><em>Note sans commentaire.</em></p>}
+                    {(CRITERES.some(([c]) => unAvis[c]) || unAvis.recommande !== null && unAvis.recommande !== undefined) && (
+                      <p className="cell-sub mb-2">
+                        {CRITERES.filter(([c]) => unAvis[c]).map(([c, l]) => `${l} ${unAvis[c]}/5`).join(" · ")}
+                        {unAvis.recommande === true && " · Recommande"}
+                        {unAvis.recommande === false && " · Ne recommande pas"}
+                      </p>
+                    )}
+                    {unAvis.signale && (
+                      <div className="aps-notice is-danger mb-2"><i className="fa-solid fa-flag"></i><div><strong>Signalé par le médecin :</strong> {unAvis.motif_signalement}</div></div>
+                    )}
+                    {unAvis.reponse_medecin && (
+                      <div className="aps-notice is-info mb-3"><i className="fa-solid fa-reply"></i><div><strong>Réponse du médecin :</strong> {unAvis.reponse_medecin}</div></div>
+                    )}
                     <div className="avis-card__foot">
                       <div className="aps-avatar-cell">
                         <img src={unAvis.auteur_avatar_url || "https://i.pravatar.cc/64"} alt="" />
                         <div className="name">{unAvis.auteur_nom || "Anonyme"}</div>
                       </div>
+                      {unAvis.auteur_verifie && (
+                        <span className="aps-badge is-success"><i className="fa-solid fa-circle-check"></i>Consultation vérifiée</span>
+                      )}
+                      {unAvis.anonyme && <span className="avis-card__meta"><i className="fa-solid fa-user-shield"></i>Publié anonymement</span>}
                       <span className="avis-card__meta"><i className="fa-regular fa-clock"></i>{formaterDateHeure(unAvis.created_at)}</span>
                       <div className="ms-auto d-flex gap-2">
                         {editable && (
@@ -787,6 +834,20 @@ export default function AvisMedecin() {
                       <div><strong>Signalement :</strong> {avisEnEdition.motif_signalement || "avis signalé."}</div>
                     </div>
                   )}
+                  {avisEnEdition.signale && peutModererTout && (
+                    <div className="form-check mb-3">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="mSignalementTraite"
+                        checked={formulaire.signalement_traite}
+                        onChange={(e) => modifierChampFormulaire("signalement_traite", e.target.checked)}
+                      />
+                      <label className="form-check-label" htmlFor="mSignalementTraite">
+                        Signalement traité (l&apos;avis reste en ligne si son statut est « Publié »)
+                      </label>
+                    </div>
+                  )}
 
                   {erreurFormulaire && (
                     <div className="aps-notice is-danger mb-3"><i className="fa-solid fa-circle-exclamation"></i><div>{erreurFormulaire}</div></div>
@@ -799,7 +860,11 @@ export default function AvisMedecin() {
                     rows={4}
                     value={formulaire.commentaire}
                     onChange={(e) => modifierChampFormulaire("commentaire", e.target.value)}
+                    readOnly={peutModererTout}
                   />
+                  {peutModererTout && (
+                    <div className="cell-sub mt-1">Le contenu d&apos;un avis patient n&apos;est pas modifiable par l&apos;administration : publiez-le ou rejetez-le.</div>
+                  )}
                   <div className="row g-3 mt-1">
                     {peutModererTout && (
                       <div className="col-md-6">
@@ -821,6 +886,7 @@ export default function AvisMedecin() {
                         id="mNoteSelect"
                         value={formulaire.note}
                         onChange={(e) => modifierChampFormulaire("note", Number(e.target.value))}
+                        disabled={peutModererTout}
                       >
                         {Array.from({ length: NOTE_MAX - NOTE_MIN + 1 }, (_, i) => NOTE_MIN + i).map((n) => (
                           <option key={n} value={n}>{n}</option>

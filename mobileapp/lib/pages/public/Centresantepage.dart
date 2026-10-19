@@ -365,35 +365,21 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
 
   Widget _buildFilterChips(List<CentreSante> centresBruts) {
     final villesDisponibles = _villesDisponibles(centresBruts);
-    final filtres = (_selectedType != null ? 1 : 0) + (_selectedVilleId != null ? 1 : 0);
-    return ApsChipRow(
-      children: [
-        ApsChip(
-          'Filtres',
-          icon: Icons.tune_rounded,
-          selected: filtres > 0,
-          count: filtres,
-          onTap: filtres > 0
-              ? () => setState(() {
-                    _selectedType = null;
-                    _selectedVilleId = null;
-                  })
-              : null,
-        ),
-        ApsChip(
-          _typeLabel,
-          icon: Icons.local_hospital_outlined,
-          soft: _selectedType != null,
-          onTap: _pickType,
-        ),
-        ApsChip(
-          _selectedVilleId == null
-              ? 'Toutes les villes'
-              : (villesDisponibles[_selectedVilleId!] ?? 'Toutes les villes'),
-          icon: Icons.location_on_outlined,
-          soft: _selectedVilleId != null,
-          onTap: () => _pickVille(centresBruts),
-        ),
+    return ApsFilterBar(
+      onOpen: () => _ouvrirFiltres(villesDisponibles),
+      actifs: [
+        if (_selectedType != null)
+          (
+            label: _typeLabel,
+            icon: Icons.local_hospital_outlined,
+            onRemove: () => setState(() => _selectedType = null),
+          ),
+        if (_selectedVilleId != null)
+          (
+            label: villesDisponibles[_selectedVilleId!] ?? 'Ville',
+            icon: Icons.location_on_outlined,
+            onRemove: () => setState(() => _selectedVilleId = null),
+          ),
       ],
     );
   }
@@ -468,67 +454,46 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
   // Sélection des filtres
   // ---------------------------------------------------------------------
 
-  Future<void> _pickType() async {
-    final options = <TypeStructure?>[null, ...TypeStructure.values];
-    final labels = <String>[
-      'Tous les types',
-      ...TypeStructure.values.map((t) => t.libelle),
-    ];
-
-    final selected = await showModalBottomSheet<_Sentinel<TypeStructure?>>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: ListView.builder(
-          shrinkWrap: true,
-          itemCount: options.length,
-          itemBuilder: (ctx, i) {
-            final value = options[i];
-            return ListTile(
-              title: Text(labels[i]),
-              trailing:
-              _selectedType == value ? const Icon(Icons.check_rounded, color: AppColors.b6) : null,
-              onTap: () => Navigator.pop(ctx, _Sentinel(value)),
-            );
-          },
-        ),
-      ),
-    );
-
-    if (selected != null) {
-      setState(() => _selectedType = selected.value);
-    }
-  }
-
-  Future<void> _pickVille(List<CentreSante> centresBruts) async {
-    final villesMap = _villesDisponibles(centresBruts);
-    final entries = villesMap.entries.toList()
+  Future<void> _ouvrirFiltres(Map<String, String> villesDisponibles) async {
+    final villes = villesDisponibles.entries.toList()
       ..sort((a, b) => a.value.compareTo(b.value));
-    final ids = <String?>[null, ...entries.map((e) => e.key)];
-    final labels = <String>['Toutes les villes', ...entries.map((e) => e.value)];
 
-    final selected = await showModalBottomSheet<_Sentinel<String?>>(
+    final choix = await showApsFilterSheet<({TypeStructure? type, String? villeId})>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: ListView.builder(
-          shrinkWrap: true,
-          itemCount: ids.length,
-          itemBuilder: (ctx, i) {
-            final value = ids[i];
-            return ListTile(
-              title: Text(labels[i]),
-              trailing: _selectedVilleId == value
-                  ? const Icon(Icons.check_rounded, color: AppColors.b6)
-                  : null,
-              onTap: () => Navigator.pop(ctx, _Sentinel(value)),
-            );
-          },
+      initial: (type: _selectedType, villeId: _selectedVilleId),
+      reset: (type: null, villeId: null),
+      builder: (f, maj) => [
+        ApsFilterSection(
+          title: 'Type de structure',
+          child: ApsFilterChoices<TypeStructure?>(
+            value: f.type,
+            onChanged: (v) => maj((type: v, villeId: f.villeId)),
+            options: [
+              const ApsFilterOption(null, 'Tous les types'),
+              for (final t in TypeStructure.values)
+                ApsFilterOption(t, t.libelle, icon: Icons.local_hospital_outlined),
+            ],
+          ),
         ),
-      ),
+        ApsFilterSection(
+          title: 'Ville',
+          child: ApsFilterChoices<String?>(
+            value: f.villeId,
+            onChanged: (v) => maj((type: f.type, villeId: v)),
+            options: [
+              const ApsFilterOption(null, 'Toutes les villes'),
+              for (final v in villes)
+                ApsFilterOption(v.key, v.value, icon: Icons.location_on_outlined),
+            ],
+          ),
+        ),
+      ],
     );
-
-    if (selected != null) {
-      setState(() => _selectedVilleId = selected.value);
-    }
+    if (choix == null || !mounted) return;
+    setState(() {
+      _selectedType = choix.type;
+      _selectedVilleId = choix.villeId;
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -575,10 +540,4 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
   }
 }
 
-/// Petit wrapper pour distinguer « aucune sélection » (bottom sheet fermée
-/// sans choix) de « sélection explicite de null » (ex : « Toutes les villes »).
-class _Sentinel<T> {
-  const _Sentinel(this.value);
-  final T value;
-}
 

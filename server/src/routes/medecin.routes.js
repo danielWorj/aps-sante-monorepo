@@ -122,6 +122,18 @@ import {
   definirJourAgenda,
   retablirJourAgenda,
 } from "../controllers/medecin.controller.js";
+// Réputation médecin : tableau de bord, espace avis, avis publics, engagements.
+import {
+  obtenirTableauDeBordMedecin,
+  listerMesAvis,
+  repondreAvis,
+  supprimerReponseAvis,
+  signalerAvis,
+  listerAvisPublicsMedecin,
+  enregistrerEngagement,
+  listerConsultationsANoter,
+  listerAvisDonnes,
+} from "../controllers/reputationMedecin.controller.js";
 // Politique de fonds v2 §5 (étape 6) : reprogrammation « deux absents ».
 import {
   proposerReprogrammation,
@@ -170,6 +182,14 @@ router.get("/medecins", authentifierOptionnel, listerMedecins);
 // pas un UUID valide).
 router.get("/medecins/mon-profil", authentifier, obtenirMonProfil);
 
+// Portail médecin — même contrainte d'ordre que /mon-profil. Médecin
+// connecté (ou admin/superadmin avec ?medecin_id=), vérifié dans le
+// contrôleur (un compte sans fiche médecin reçoit 404) :
+//   - tableau de bord : ?du=AAAA-MM-JJ&au=AAAA-MM-JJ&granularite=jour|semaine|mois
+//   - avis publiés + synthèse : ?note=&reponse=avec|sans&commentaire=avec&tri=&page=
+router.get("/medecins/mon-espace/tableau-de-bord", authentifier, obtenirTableauDeBordMedecin);
+router.get("/medecins/mon-espace/avis", authentifier, listerMesAvis);
+
 router.get("/medecins/:id", authentifierOptionnel, obtenirMedecin);
 
 // Le médecin propriétaire (utilisateur_id déduit du token) ou
@@ -200,6 +220,22 @@ router.patch("/medecins/:id/reactiver", authentifier, autoriser("admin", "supera
 // Volontairement PUBLIQUE (pas de authentifier) : utile en amont de
 // POST /medecins, avant même la création d'un compte.
 router.post("/medecins/verifier-ordre", verifierAppartenanceOrdre);
+
+// PUBLIQUE — avis publiés d'une fiche + synthèse des notes (sans
+// identifiant d'auteur). ?note=1..5&tri=recent|ancien|note_haute|note_basse&commentaire=avec&page=
+router.get("/medecins/:id/avis", listerAvisPublicsMedecin);
+
+// PUBLIQUE, authentification optionnelle — engagement d'un visiteur sur la
+// fiche (Body : { type }). Dédoublonné par visiteur et par jour côté
+// service ; le limiteur ne protège que la base.
+const limiteurEngagement = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Trop de requêtes, réessayez plus tard." },
+});
+router.post("/medecins/:id/engagements", limiteurEngagement, authentifierOptionnel, enregistrerEngagement);
 
 /* ===================================================================
  * Agenda du médecin
@@ -259,10 +295,23 @@ router.delete("/medecins/:medecinId/agenda/jours/:date", authentifier, retablirJ
 // avis en attente/rejeté, admin/superadmin voit tout) — d'où l'auth
 // optionnelle plutôt qu'absente ou obligatoire.
 router.get("/avis-medecin", authentifierOptionnel, listerAvisMedecin);
+
+// Patient connecté — DOIVENT précéder /avis-medecin/:id :
+//   - consultations terminées encore à noter ;
+//   - avis déjà donnés (tous statuts de modération).
+router.get("/avis-medecin/a-donner", authentifier, listerConsultationsANoter);
+router.get("/avis-medecin/mes-avis", authentifier, listerAvisDonnes);
 router.get("/avis-medecin/:id", authentifierOptionnel, obtenirAvisMedecin);
 
-// Dépôt d'avis réservé aux utilisateurs authentifiés (patient inclus).
+// Dépôt d'avis : patient d'une consultation terminée (rdv_id obligatoire,
+// vérifié dans le contrôleur).
 router.post("/avis-medecin", authentifier, creerAvisMedecin);
+
+// Médecin concerné (vérifié dans le contrôleur, 403 sinon), avis publié :
+// réponse publique (créer / corriger / retirer) et signalement au back-office.
+router.put("/avis-medecin/:id/reponse", authentifier, repondreAvis);
+router.delete("/avis-medecin/:id/reponse", authentifier, supprimerReponseAvis);
+router.post("/avis-medecin/:id/signaler", authentifier, signalerAvis);
 
 // Auteur (tant que "en_attente") ou admin/superadmin (statut_moderation).
 router.put("/avis-medecin/:id", authentifier, modifierAvisMedecin);

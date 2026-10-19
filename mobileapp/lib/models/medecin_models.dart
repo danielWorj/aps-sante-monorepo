@@ -554,6 +554,11 @@ class Medecin {
   /// direct » de son abonnement (jamais `utilisateur.telephone`).
   final String? contactTelephone;
 
+  /// Réputation : moyenne des avis publiés (null sans avis) et leur nombre,
+  /// tenues à jour par le serveur à chaque modération.
+  final double? noteMoyenne;
+  final int nombreAvis;
+
   const Medecin({
     required this.medecinId,
     required this.utilisateurId,
@@ -577,6 +582,8 @@ class Medecin {
     this.paysExercice,
     this.priseRdvEnLigne = true,
     this.contactTelephone,
+    this.noteMoyenne,
+    this.nombreAvis = 0,
   });
 
   bool get estPublie => statutVerification == StatutVerificationMedecin.publie;
@@ -621,6 +628,8 @@ class Medecin {
           ? (json['droits'] as Map<String, dynamic>)['prise_rdv_en_ligne'] != false
           : true,
       contactTelephone: _lire<String>(json, 'contact_telephone'),
+      noteMoyenne: json['note_moyenne'] == null ? null : _lireDecimal(json['note_moyenne']),
+      nombreAvis: json['nombre_avis'] is num ? (json['nombre_avis'] as num).toInt() : 0,
     );
   }
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import med1 from '../assets/img/med1.jpg';
 import med2 from '../assets/img/med2.avif';
@@ -15,6 +15,10 @@ import {
 } from '../services/medecinService';
 import { dateHeureLisible, grouperParJour, heureLocale, plageRecherche } from '../utils/creneaux';
 import GoogleMapView from '../components/maps/GoogleMapView';
+import AvisPublicsMedecin from '../components/avis/AvisPublicsMedecin';
+import { Etoiles } from '../components/avis/Etoiles';
+import { signalerEngagement } from '../services/reputationMedecinService';
+import { useToast } from '../components/feedback';
 // La prise de rendez-vous (créneau, motif, inscription patient,
 // POST /rendez-vous...) ne se fait plus dans une modale sur cette
 // page : elle vit désormais entièrement dans src/pages/RendezVous.jsx,
@@ -75,7 +79,15 @@ export default function ProfilMedecin() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState('presentation');
+  const [searchParams] = useSearchParams();
+  const toast = useToast();
+  // ?onglet=avis : lien des notifications « le médecin a répondu à votre avis ».
+  const [tab, setTabBrut] = useState(() => (TABS.some((t) => t.id === searchParams.get('onglet')) ? searchParams.get('onglet') : 'presentation'));
+  // Engagements (statistiques du médecin) : envoyés sans attendre, une fois par onglet du navigateur.
+  const setTab = (t) => {
+    if (t === 'avis') signalerEngagement(id, 'lecture_avis');
+    setTabBrut(t);
+  };
 
   const [medecin, setMedecin] = useState(null);
   const [chargement, setChargement] = useState(true);
@@ -152,9 +164,23 @@ export default function ProfilMedecin() {
   // l'étape 1 si besoin (non fait par défaut, la page démarre sinon
   // avec ses valeurs par défaut : type "physique", aucun jour/heure).
   function allerVersRendezVous(type, creneauId) {
+    signalerEngagement(id, 'clic_rdv');
     const params = new URLSearchParams({ type });
     if (creneauId) params.set('creneau', creneauId);
     navigate(`/rendez-vous/${id}?${params.toString()}`);
+  }
+
+  async function partager() {
+    signalerEngagement(id, 'partage');
+    const url = window.location.href.split('?')[0];
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: nomComplet, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.succes('Lien de la fiche copié.');
+      }
+    } catch { /* partage annulé par l'utilisateur */ }
   }
 
   /* ------------------------------ États de chargement / erreur ------------------------------ */
@@ -233,6 +259,13 @@ export default function ProfilMedecin() {
                   <span className="chip chip-dispo"><i className="fa-solid fa-circle" /> Téléconsultation disponible</span>
                 )}
               </div>
+              {medecin.nombre_avis > 0 && (
+                <button type="button" className="profil-note" onClick={() => setTab('avis')}>
+                  <Etoiles valeur={Number(medecin.note_moyenne)} taille="sm" />
+                  <strong>{Number(medecin.note_moyenne).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong>
+                  <span>({medecin.nombre_avis} avis)</span>
+                </button>
+              )}
             </div>
             <div className="profile-actions">
               {rdvEnLigne && (
@@ -246,8 +279,13 @@ export default function ProfilMedecin() {
                 </button>
               )}
               {telephone && (
-                <a href={`tel:${telephone}`} className="btn btn-ghost"><i className="fa-solid fa-phone" /></a>
+                <a href={`tel:${telephone}`} className="btn btn-ghost" aria-label="Appeler" onClick={() => signalerEngagement(id, 'clic_contact')}>
+                  <i className="fa-solid fa-phone" />
+                </a>
               )}
+              <button type="button" className="btn btn-ghost" aria-label="Partager la fiche" onClick={partager}>
+                <i className="fa-solid fa-share-nodes" />
+              </button>
             </div>
           </div>
         </div>
@@ -269,6 +307,7 @@ export default function ProfilMedecin() {
                     onClick={() => setTab(t.id)}
                   >
                     {t.label}
+                    {t.id === 'avis' && medecin.nombre_avis > 0 && <span className="tab-count">{medecin.nombre_avis}</span>}
                   </button>
                 ))}
               </div>
@@ -333,7 +372,18 @@ export default function ProfilMedecin() {
                       <h3><i className="fa-solid fa-location-dot" /> Localisation</h3>
                       <p style={{ fontSize: '.9rem' }}>{localisation || 'Localisation non renseignée'}</p>
                       {aUneLocalisation ? (
-                        <GoogleMapView latitude={lat} longitude={lng} nom={nomComplet} />
+                        <>
+                          <GoogleMapView latitude={lat} longitude={lng} nom={nomComplet} />
+                          <a
+                            className="btn btn-outline-primary btn-sm-aps mt-2"
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => signalerEngagement(id, 'clic_itineraire')}
+                          >
+                            <i className="fa-solid fa-route" /> Itinéraire
+                          </a>
+                        </>
                       ) : (
                         <div
                           style={{
@@ -354,12 +404,7 @@ export default function ProfilMedecin() {
                 {/* Avis */}
                 {tab === 'avis' && (
                   <div className="tab-panel active">
-                    <div className="info-card">
-                      <p style={{ fontSize: '.88rem', color: 'var(--ink-soft)' }}>
-                        Les avis patients ne sont pas encore exposés par l&apos;API — cette section sera
-                        alimentée dès qu&apos;un endpoint dédié existera côté service.
-                      </p>
-                    </div>
+                    <AvisPublicsMedecin medecinId={id} nomMedecin={nomComplet} />
                   </div>
                 )}
 
