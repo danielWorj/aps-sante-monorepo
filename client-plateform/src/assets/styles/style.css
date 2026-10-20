@@ -63,6 +63,15 @@
   --info:#2F80ED;
   --info-tint:#E8F1FD;
 
+  /* Bleu santé (téléconsultation) : déclinaison posée du bleu info,
+     ni trop foncé ni trop vif. */
+  --bleu-sante:#2E6FB7;
+  --bleu-sante-fonce:#1D4F8A;
+  --bleu-sante-vif:#4A8FDB;
+  --bleu-sante-clair:#EEF4FB;
+  --bleu-sante-ligne:#D5E3F3;
+  --bleu-nuit:#0F2236;
+
   /* Notation */
   --gold:#F5B400;
   --gold-tint:#FCF3E1;

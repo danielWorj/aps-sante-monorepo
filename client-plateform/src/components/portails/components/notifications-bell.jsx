@@ -25,6 +25,11 @@ const ICONES = {
   offre_rdv_nouvelle: 'fa-bullhorn',
   offre_rdv_reponse: 'fa-user-doctor',
   offre_rdv_expiree: 'fa-hourglass-end',
+  // RDV aléatoire : candidature du médecin retenue / non retenue par le patient.
+  offre_rdv_candidature_retenue: 'fa-handshake',
+  offre_rdv_candidature_non_retenue: 'fa-circle-xmark',
+  // Rappels de RDV : J-3, J-1, H-3, à l'heure.
+  rdv_rappel: 'fa-bell',
   // Portail assurance : nouvelle demande de mise en relation, abonnement de la fiche.
   mise_en_relation_recue: 'fa-inbox',
   abonnement_assurance_active: 'fa-id-card',

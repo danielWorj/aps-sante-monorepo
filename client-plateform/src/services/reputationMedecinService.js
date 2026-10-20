@@ -51,7 +51,7 @@ export function listerMesAvisMedecin(filtres = {}) {
 
 /** PUT /avis-medecin/:id/reponse */
 export function repondreAvis(avisId, reponse) {
-  return apiFetch(`/avis-medecin/${avisId}/reponse`, { method: 'PUT', body: JSON.stringify({ reponse }) });
+  return apiFetch(`/avis-medecin/${avisId}/reponse`, { method: 'PUT', body: { reponse } });
 }
 
 /** DELETE /avis-medecin/:id/reponse */
@@ -61,7 +61,7 @@ export function supprimerReponseAvis(avisId) {
 
 /** POST /avis-medecin/:id/signaler */
 export function signalerAvis(avisId, motif) {
-  return apiFetch(`/avis-medecin/${avisId}/signaler`, { method: 'POST', body: JSON.stringify({ motif }) });
+  return apiFetch(`/avis-medecin/${avisId}/signaler`, { method: 'POST', body: { motif } });
 }
 
 /* --------------------------------- Public --------------------------------- */
@@ -83,7 +83,7 @@ export function signalerEngagement(medecinId, type) {
   const cle = `${medecinId}:${type}`;
   if (!medecinId || dejaSignales.has(cle)) return;
   dejaSignales.add(cle);
-  apiFetch(`/medecins/${medecinId}/engagements`, { method: 'POST', body: JSON.stringify({ type }) }).catch(() => {});
+  apiFetch(`/medecins/${medecinId}/engagements`, { method: 'POST', body: { type } }).catch(() => {});
 }
 
 /* --------------------------------- Patient --------------------------------- */
@@ -100,5 +100,5 @@ export function listerMesAvisDonnes() {
 
 /** POST /avis-medecin */
 export function deposerAvisMedecin(donnees) {
-  return apiFetch('/avis-medecin', { method: 'POST', body: JSON.stringify(donnees) });
+  return apiFetch('/avis-medecin', { method: 'POST', body: donnees });
 }

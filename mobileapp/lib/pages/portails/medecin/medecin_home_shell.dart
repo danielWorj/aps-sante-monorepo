@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../components/cards/notifications_bell.dart';
 import '../../../components/navigation/medecin-bottom-navigation-bar.dart';
 import '../../../controllers/notification_controller.dart';
+import '../../../utils/navigation_push.dart';
 import 'portail-medecin-activite.dart';
 import 'portail-medecin-agenda.dart';
 import 'portail-medecin-demandes.dart';
@@ -24,14 +25,17 @@ import 'portail-medecin-profil.dart';
 /// pastille de l'item « Rendez-vous » de la barre basse. Un appui sur une
 /// notification bascule sur l'onglet « Rendez-vous ».
 class MedecinHomeShell extends ConsumerStatefulWidget {
-  const MedecinHomeShell({super.key});
+  const MedecinHomeShell({super.key, this.ongletInitial = 0});
+
+  /// Onglet ouvert à l'arrivée (ex. notification push touchée).
+  final int ongletInitial;
 
   @override
   ConsumerState<MedecinHomeShell> createState() => _MedecinHomeShellState();
 }
 
 class _MedecinHomeShellState extends ConsumerState<MedecinHomeShell> {
-  int _index = 0;
+  late int _index = widget.ongletInitial;
 
   /// Index de l'onglet « Rendez-vous » dans [_pages].
   static const int _indexRendezVous = 0;
@@ -49,6 +53,41 @@ class _MedecinHomeShellState extends ConsumerState<MedecinHomeShell> {
     PortailMedecinProfil(),
     PortailMedecinActivite(),
   ];
+
+  // Notification push touchée : bascule sur l'onglet demandé.
+  @override
+  void initState() {
+    super.initState();
+    if (widget.ongletInitial == _indexActivite) vueActiviteMedecin.value = 1;
+    demandeOngletPush.addListener(_surDemandePush);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _route = ModalRoute.of(context);
+    if (_route != null) routesShellsPush[EspacePush.medecin] = _route!;
+  }
+
+  Route<dynamic>? _route;
+
+  @override
+  void dispose() {
+    demandeOngletPush.removeListener(_surDemandePush);
+    if (routesShellsPush[EspacePush.medecin] == _route) {
+      routesShellsPush.remove(EspacePush.medecin);
+    }
+    super.dispose();
+  }
+
+  void _surDemandePush() {
+    final demande = demandeOngletPush.value;
+    if (demande == null || demande.espace != EspacePush.medecin) return;
+    demandeOngletPush.value = null;
+    final onglet = ongletMedecinPush(demande.cible);
+    if (onglet == _indexActivite) vueActiviteMedecin.value = 1;
+    setState(() => _index = onglet);
+  }
 
   @override
   Widget build(BuildContext context) {

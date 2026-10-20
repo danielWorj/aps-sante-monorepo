@@ -1178,6 +1178,11 @@ enum TypeNotification {
   avisMedecinInvitation('avis_medecin_invitation'),
   avisMedecinPublie('avis_medecin_publie'),
   avisMedecinReponse('avis_medecin_reponse'),
+  // Rappels de RDV confirmé (J-3, J-1, H-3, à l'heure), médecin et patient.
+  rdvRappel('rdv_rappel'),
+  // RDV aléatoire : candidature du MÉDECIN retenue / non retenue.
+  offreRdvCandidatureRetenue('offre_rdv_candidature_retenue'),
+  offreRdvCandidatureNonRetenue('offre_rdv_candidature_non_retenue'),
   inconnu('');
 
   const TypeNotification(this.valeurApi);

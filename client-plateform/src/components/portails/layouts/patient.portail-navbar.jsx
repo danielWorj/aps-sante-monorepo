@@ -1,21 +1,16 @@
 // patient.portail-navbar.jsx — barre du portail patient : bouton Menu +
-// panneau vertical (voir portail-topbar.jsx).
+// panneau vertical (voir portail-topbar.jsx). Les rubriques sont partagées
+// avec la sidebar (patient.portail-sidebar.jsx) via patient.liens.js.
 import PortailTopbar from "./portail-topbar";
+import { LIENS_PORTAIL_PATIENT } from "./patient.liens";
 import { useAnnoncesNonLues } from "../../annonces/annoncesVues";
-
-const LIENS = [
-  { label: "Mes rendez-vous", to: "/portail/patient-rdv", icon: "fa-calendar-check" },
-  { label: "Demandes express", to: "/portail/patient-demandes", icon: "fa-bullhorn" },
-  { label: "Annonces", to: "/portail/patient-annonces", icon: "fa-bell", badge: "annonces" },
-  { label: "Profil", to: "/portail/patient-profil", icon: "fa-user" },
-];
 
 // eslint-disable-next-line no-unused-vars
 const PatientPortailNavbar = ({ activePage }) => (
   <PortailTopbar
     espace="Espace patient"
     accueil="/portail/patient-rdv"
-    liens={LIENS}
+    liens={LIENS_PORTAIL_PATIENT}
     badges={{ annonces: useAnnoncesNonLues() }}
     cheminNotifications="/portail/patient-rdv"
   />

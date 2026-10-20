@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'components/style/app_theme.dart';
 import 'controllers/authentification_controller.dart';
+import 'pages/pilote_push.dart';
 import 'pages/public/onboarding/onboarding_accueil_page.dart';
 import 'pages/verrou/veille_connexion_web.dart';
 import 'pages/verrou/verrou_application.dart';
+import 'services/push_service.dart';
 import 'utils/identifiant_installation.dart';
 
 Future<void> main() async {
@@ -13,6 +15,8 @@ Future<void> main() async {
   // Identifiant d'installation (statistiques de vues des fiches) : lu une
   // fois, avant le premier appel réseau. Ne lève jamais.
   await IdentifiantInstallation.charger();
+  // Notifications push (Firebase) : sans configuration, simplement désactivées.
+  await PushService.initialiser();
   runApp(
     // ProviderScope DOIT envelopper toute l'app dès la racine : tous les
     // écrans Riverpod (AssurancePage, PharmaciePage, CentreSantePage,
@@ -63,6 +67,10 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       title: 'APS Santé',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      // Clés globales : le pilote des notifications push ouvre la page des
+      // rendez-vous et affiche ses bandeaux hors de tout BuildContext.
+      navigatorKey: cleNavigateurApp,
+      scaffoldMessengerKey: cleMessagerApp,
       // L'application démarre sur l'écran de choix de l'onboarding
       // (Écran 1, portage de OnboardingAccueil.jsx) plutôt que
       // directement sur l'accueil public : un nouvel arrivant est
@@ -73,7 +81,9 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       // Au-dessus de tous les écrans : verrouillage par code PIN / empreinte,
       // et validation des connexions web demandées depuis un ordinateur.
       builder: (context, child) => VerrouApplication(
-        child: VeilleConnexionWeb(child: child ?? const SizedBox.shrink()),
+        child: VeilleConnexionWeb(
+          child: PilotePush(child: child ?? const SizedBox.shrink()),
+        ),
       ),
     );
   }

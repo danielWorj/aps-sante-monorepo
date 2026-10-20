@@ -1,8 +1,9 @@
 /* src/assets/styles/teleconsultation.css
-   Styles de la page Teleconsultation.jsx — utilise les tokens définis
-   dans assets/styles/style.css (--primary, --ink, --surface, --line,
-   --radius-*, --shadow-*). Voir ce fichier pour les valeurs. */
+   Téléconsultation : page plein écran (Teleconsultation.jsx), salle
+   d'attente et carte de fin de consultation (ClotureConsultation.jsx).
+   Palette bleu santé (--bleu-sante-*, définie dans style.css). */
 
+/* ---------- États plein écran & salle d'attente ---------- */
 .tc-etat-plein-ecran,
 .tc-salle-attente {
   min-height: 100vh;
@@ -11,8 +12,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  background: var(--surface-alt, #F6F8F7);
+  padding: 24px 16px;
+  background: var(--bleu-sante-clair, #EEF4FB);
   font-family: var(--font-body, "Inter", sans-serif);
   color: var(--ink, #0F1C17);
   text-align: center;
@@ -20,12 +21,12 @@
 
 .tc-etat-icone {
   font-size: 40px;
-  color: var(--primary, #16996C);
+  color: var(--bleu-sante, #2E6FB7);
   margin-bottom: 16px;
 }
 
 .tc-etat-icone-succes {
-  color: var(--teal-dark, #13845D);
+  color: var(--bleu-sante, #2E6FB7);
 }
 
 .tc-etat-message {
@@ -35,62 +36,497 @@
 }
 
 .tc-carte {
+  position: relative;
   background: var(--surface, #fff);
-  border: 1px solid var(--line, #E5ECE8);
-  border-radius: var(--radius-lg, 10px);
-  box-shadow: var(--shadow-md, 0 10px 26px rgba(22, 153, 108, 0.11));
-  padding: 40px 32px;
-  max-width: 440px;
+  border: 1px solid var(--bleu-sante-ligne, #D5E3F3);
+  border-radius: 18px;
+  box-shadow: 0 18px 44px rgba(15, 34, 54, 0.1);
+  padding: 0;
+  max-width: 460px;
   width: 100%;
+  overflow: hidden;
+  text-align: left;
+}
+
+.tc-carte-bandeau {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 26px;
+  background: var(--bleu-sante, #2E6FB7);
+  color: #fff;
 }
 
 .tc-avatar {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 16px;
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex: none;
   border-radius: 999px;
-  background: var(--primary-tint, #E7F6EE);
-  color: var(--primary-dark, #0F6B4C);
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
   font-family: var(--font-display, "Manrope", sans-serif);
-  font-weight: 700;
-  font-size: 20px;
+  font-weight: 800;
+  font-size: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+.tc-surtitre {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
 .tc-titre {
   font-family: var(--font-display, "Manrope", sans-serif);
-  font-size: 20px;
-  margin-bottom: 8px;
+  font-size: 19px;
+  font-weight: 800;
+  margin: 2px 0 0;
+  color: #fff;
 }
 
-.tc-creneau {
-  color: var(--ink-soft, #51625B);
-  margin-bottom: 4px;
+.tc-carte-corps {
+  padding: 22px 26px 24px;
 }
 
-.tc-motif {
+.tc-infos {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.tc-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bleu-sante-clair, #EEF4FB);
+  color: var(--ink, #0F1C17);
+  font-size: 14px;
+}
+
+.tc-info i {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--surface, #fff);
+  color: var(--bleu-sante, #2E6FB7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.tc-info span {
+  min-width: 0;
+}
+
+.tc-info.is-motif span {
   font-style: italic;
   color: var(--ink-soft, #51625B);
-  margin-bottom: 16px;
 }
 
-.tc-note {
-  font-size: 14px;
-  color: var(--ink-faint, #8A9992);
-  margin: 16px 0 24px;
+.tc-verifs {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-soft, #51625B);
+}
+
+.tc-verifs li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.tc-verifs i {
+  color: var(--bleu-sante, #2E6FB7);
+  width: 16px;
+  text-align: center;
 }
 
 .tc-actions {
   display: flex;
-  gap: 12px;
-  justify-content: center;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.tc-securite {
+  margin: 16px 0 0;
+  font-size: 12px;
+  color: var(--bleu-sante-fonce, #1D4F8A);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .tc-session {
   position: fixed;
   inset: 0;
-  background: #000;
+  background: var(--bleu-nuit, #0F2236);
   z-index: 1050;
+}
+
+.tc-room-erreur {
+  color: var(--urgence, #E5484D);
+}
+
+/* ---------- Boutons bleu santé (salle d'attente + clôture) ---------- */
+.tcc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 12px;
+  border: 1px solid var(--bleu-sante, #2E6FB7);
+  background: var(--bleu-sante, #2E6FB7);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.tcc-btn:hover:not(:disabled) {
+  background: var(--bleu-sante-fonce, #1D4F8A);
+  border-color: var(--bleu-sante-fonce, #1D4F8A);
+}
+
+.tcc-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tcc-btn.is-secondaire {
+  background: var(--surface, #fff);
+  border-color: var(--bleu-sante-ligne, #D5E3F3);
+  color: var(--bleu-sante-fonce, #1D4F8A);
+}
+
+.tcc-btn.is-secondaire:hover:not(:disabled) {
+  background: var(--bleu-sante-clair, #EEF4FB);
+  border-color: var(--bleu-sante-ligne, #D5E3F3);
+}
+
+.tcc-btn.is-alerte {
+  background: var(--urgence, #E5484D);
+  border-color: var(--urgence, #E5484D);
+}
+
+.tcc-btn.is-alerte:hover:not(:disabled) {
+  background: var(--urgence-dark, #C53A3F);
+  border-color: var(--urgence-dark, #C53A3F);
+}
+
+.tcc-btn.is-plein {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.tcc-btn:focus-visible,
+.tcc-lien:focus-visible {
+  outline: 3px solid rgba(46, 111, 183, 0.35);
+  outline-offset: 2px;
+}
+
+/* ---------- Carte de fin de consultation ---------- */
+.tcc-voile {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 28px 16px;
+  background: var(--bleu-nuit, #0F2236);
+}
+
+.tc-session .tcc-voile,
+.tc-etat-plein-ecran .tcc-voile {
+  position: fixed;
+  z-index: 1060;
+}
+
+.tcc-carte {
+  margin: auto 0;
+  width: 100%;
+  max-width: 480px;
+  background: var(--surface, #fff);
+  border-radius: 18px;
+  border: 1px solid var(--bleu-sante-ligne, #D5E3F3);
+  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.28);
+  padding: 30px 28px 26px;
+  text-align: center;
+  color: var(--ink, #0F1C17);
+  animation: tccEntree 0.24s ease;
+}
+
+.tcc-attente {
+  padding: 24px 0;
+  color: var(--ink-soft, #51625B);
+}
+
+.tcc-attente p {
+  color: var(--ink-soft, #51625B) !important;
+  margin: 14px 0 0;
+  font-weight: 600;
+}
+
+.tcc-spinner {
+  display: inline-block;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--bleu-sante-clair, #EEF4FB);
+  border-top-color: var(--bleu-sante, #2E6FB7);
+  animation: tccTour 0.8s linear infinite;
+}
+
+.tcc-pastille {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: var(--bleu-sante-clair, #EEF4FB);
+  border: 1px solid var(--bleu-sante-ligne, #D5E3F3);
+  color: var(--bleu-sante, #2E6FB7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.tcc-pastille.is-neutre {
+  color: var(--ink-soft, #51625B);
+  background: var(--surface-alt, #F6F8F7);
+  border-color: var(--line, #E5ECE8);
+}
+
+.tcc-pastille.is-alerte {
+  color: var(--urgence-dark, #C53A3F);
+  background: var(--urgence-tint, #FDECEC);
+  border-color: var(--urgence-tint, #FDECEC);
+}
+
+.tcc-titre {
+  font-family: var(--font-display, "Manrope", sans-serif);
+  font-size: 21px;
+  font-weight: 800;
+  margin: 0 0 8px;
+  color: var(--ink, #0F1C17);
+}
+
+.tcc-texte {
+  color: var(--ink-soft, #51625B) !important;
+  font-size: 14.5px;
+  line-height: 1.55;
+  margin: 0 0 18px !important;
+}
+
+.tcc-texte strong {
+  color: var(--ink, #0F1C17);
+}
+
+.tcc-texte-discret {
+  color: var(--ink-faint, #8A9992) !important;
+  font-size: 13px;
+  margin: -6px 0 18px !important;
+}
+
+.tcc-encart {
+  display: flex;
+  gap: 14px;
+  text-align: left;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  border-radius: 14px;
+  background: var(--bleu-sante-clair, #EEF4FB);
+  border: 1px solid var(--bleu-sante-ligne, #D5E3F3);
+}
+
+.tcc-encart > i {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--bleu-sante, #2E6FB7);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.tcc-encart > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13.5px;
+  color: var(--ink-soft, #51625B);
+}
+
+.tcc-encart strong {
+  color: var(--bleu-sante-fonce, #1D4F8A);
+  font-size: 15px;
+}
+
+.tcc-encart-note {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink-faint, #8A9992);
+}
+
+.tcc-encart.is-neutre {
+  background: var(--surface-alt, #F6F8F7);
+  border-color: var(--line, #E5ECE8);
+}
+
+.tcc-encart.is-neutre > i {
+  background: var(--surface, #fff);
+  color: var(--ink-soft, #51625B);
+  border: 1px solid var(--line, #E5ECE8);
+}
+
+.tcc-avis {
+  text-align: left;
+  padding: 16px;
+  margin-bottom: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--bleu-sante-ligne, #D5E3F3);
+}
+
+.tcc-etoiles {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.tcc-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink, #0F1C17);
+  margin-bottom: 6px;
+}
+
+.tcc-label span {
+  font-weight: 500;
+  color: var(--ink-faint, #8A9992);
+}
+
+.tcc-avis .form-control {
+  border-radius: 10px;
+  border-color: var(--bleu-sante-ligne, #D5E3F3);
+  font-size: 14px;
+}
+
+.tcc-avis .form-control:focus {
+  border-color: var(--bleu-sante, #2E6FB7);
+  box-shadow: 0 0 0 3px rgba(46, 111, 183, 0.15);
+}
+
+.tcc-avis .form-check-input:checked {
+  background-color: var(--bleu-sante, #2E6FB7);
+  border-color: var(--bleu-sante, #2E6FB7);
+}
+
+.tcc-avis .form-check-label {
+  font-size: 13px;
+  color: var(--ink-soft, #51625B);
+}
+
+.tcc-erreur {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--urgence-tint, #FDECEC);
+  color: var(--urgence-dark, #C53A3F);
+  font-size: 13px;
+  text-align: left;
+}
+
+.tcc-litige {
+  text-align: left;
+  margin-bottom: 18px;
+  font-size: 13px;
+  color: var(--ink-soft, #51625B);
+}
+
+.tcc-litige p {
+  color: var(--ink-soft, #51625B) !important;
+  margin: 0 0 10px !important;
+}
+
+.tcc-litige.is-declare {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--urgence-tint, #FDECEC);
+  color: var(--urgence-dark, #C53A3F);
+}
+
+.tcc-lien {
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  color: var(--ink-soft, #51625B);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tcc-lien:hover {
+  color: var(--urgence-dark, #C53A3F);
+}
+
+.tcc-lien i {
+  margin-right: 6px;
+}
+
+.tcc-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.tcc-actions.is-gauche {
+  justify-content: flex-start;
+}
+
+@keyframes tccEntree {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes tccTour {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 480px) {
+  .tcc-carte { padding: 24px 18px 20px; }
+  .tc-carte-bandeau, .tc-carte-corps { padding-left: 18px; padding-right: 18px; }
+  .tc-actions .tcc-btn, .tcc-actions .tcc-btn { flex: 1 1 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tcc-carte, .tcc-spinner { animation: none; }
 }

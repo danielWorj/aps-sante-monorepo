@@ -485,13 +485,76 @@ export async function obtenirOffrePatient(patient, offre_id) {
   return offre;
 }
 
+/**
+ * Candidatures (réponses actives) d'une offre qui vient d'être tranchée :
+ * le médecin retenu apprend que le patient l'a choisi ; les autres que leur
+ * candidature n'est pas retenue (autre médecin choisi, demande annulée ou
+ * expirée). Ne lève jamais : journalise.
+ * @param {string} offre_id
+ * Appelée une seule fois par issue (chaque appelant a gagné sa mise à jour
+ * conditionnelle) : l'instant dans la clé distingue une nouvelle attribution
+ * après réouverture de l'offre.
+ * @param {{ issue: "attribuee"|"annulee"|"expiree", reponseRetenueId?: string, maintenant?: Date }} p
+ */
+async function notifierCandidats(offre_id, { issue, reponseRetenueId = null, maintenant = new Date() }) {
+  try {
+    const offre = await prisma.offreRdv.findUnique({
+      where: { offre_id },
+      select: {
+        offre_id: true,
+        date_souhaitee: true,
+        type_rdv: true,
+        specialite: { select: { nom: true } },
+        ville: { select: { nom: true } },
+        reponses: {
+          where: { statut: { in: ["proposee", "retenue"] } },
+          select: { reponse_id: true, statut: true, medecin: { select: { utilisateur_id: true } } },
+        },
+      },
+    });
+    if (!offre?.reponses.length) return;
+
+    const contexte = `${offre.specialite.nom}, ${offre.ville.nom}`;
+    const raisons = {
+      attribuee: "Le patient a choisi un autre médecin pour cette demande.",
+      annulee: "Le patient a annulé cette demande.",
+      expiree: "Cette demande a expiré sans que le patient ne choisisse de médecin.",
+    };
+    await creerNotifications(
+      offre.reponses.map((r) => {
+        const retenue = r.reponse_id === reponseRetenueId;
+        return {
+          utilisateur_id: r.medecin.utilisateur_id,
+          type: retenue ? "offre_rdv_candidature_retenue" : "offre_rdv_candidature_non_retenue",
+          titre: retenue ? "Votre candidature est retenue" : "Candidature non retenue",
+          message: retenue
+            ? `Le patient vous a choisi pour sa demande (${contexte}). Le rendez-vous sera confirmé dès son paiement : vous en serez prévenu.`
+            : `${raisons[issue]} (${contexte}). Merci pour votre disponibilité.`,
+          donnees: {
+            offre_id: offre.offre_id,
+            date_souhaitee: offre.date_souhaitee.toISOString(),
+            type_rdv: offre.type_rdv,
+            lien: LIEN_DEMANDES_MEDECIN,
+          },
+          cle: `offre_rdv_candidature:${offre.offre_id}:${issue}:${maintenant.toISOString()}:${r.reponse_id}`,
+        };
+      })
+    );
+  } catch (err) {
+    console.error(`[offre-rdv] Notification des candidats impossible (offre ${offre_id}) :`, err.message);
+  }
+}
+
 /** Le patient retire son offre (seulement tant qu'aucun médecin n'est validé). */
 export async function annulerOffre(patient, offre_id, maintenant = new Date()) {
   const { count } = await prisma.offreRdv.updateMany({
     where: { offre_id, patient_id: patient.patient_id, statut: "ouverte" },
     data: { statut: "annulee", date_annulation: maintenant },
   });
-  if (count === 1) return;
+  if (count === 1) {
+    await notifierCandidats(offre_id, { issue: "annulee", maintenant });
+    return;
+  }
   const offre = await prisma.offreRdv.findFirst({ where: { offre_id, patient_id: patient.patient_id } });
   if (!offre) throw new ErreurOffre("Offre introuvable.", 404);
   throw new ErreurOffre(
@@ -577,6 +640,7 @@ export async function validerMedecin(patient, offre_id, reponse_id, maintenant =
     throw err;
   }
 
+  await notifierCandidats(offre_id, { issue: "attribuee", reponseRetenueId: reponse_id, maintenant });
   return { rdv, delai, echeance: echeanceConfirmation(rdv) };
 }
 
@@ -772,6 +836,8 @@ export async function expirerOffresEchues({ maintenant = new Date() } = {}) {
     });
     if (count !== 1) continue;
     expirees += 1;
+    // eslint-disable-next-line no-await-in-loop
+    await notifierCandidats(o.offre_id, { issue: "expiree", maintenant });
     try {
       // eslint-disable-next-line no-await-in-loop
       await creerNotifications([

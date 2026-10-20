@@ -90,4 +90,21 @@ class NotificationRepository {
         .timeout(_timeout);
     _decoder(reponse);
   }
+
+  /// POST /notifications/appareils — rattache le jeton push (FCM) de ce
+  /// téléphone au compte connecté. Rejouable sans risque (upsert).
+  Future<void> enregistrerAppareil({
+    required String jeton,
+    required String plateforme,
+    required String token,
+  }) async {
+    final reponse = await http
+        .post(
+          Uri.parse(ApiRealEndpoints.notificationsAppareils),
+          headers: {..._entetes(token), 'Content-Type': 'application/json'},
+          body: jsonEncode({'jeton': jeton, 'plateforme': plateforme}),
+        )
+        .timeout(_timeout);
+    _decoder(reponse);
+  }
 }

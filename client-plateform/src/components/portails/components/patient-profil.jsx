@@ -39,7 +39,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import PortailSidebar from "../layouts/portail-sidebar";
+import PatientPortailSidebar from "../layouts/patient.portail-sidebar";
 import { useAuth } from "./../../../context/AuthContext";
 import * as patientService from "../../../services/patientService";
 import {
@@ -161,7 +161,7 @@ const PatientProfil = () => {
               <div>Chargement de votre profil…</div>
             </div>
           </main>
-          <PortailSidebar />
+          <PatientPortailSidebar />
         </div>
       </div>
     );
@@ -177,7 +177,7 @@ const PatientProfil = () => {
               {error || "Profil introuvable."}
             </div>
           </main>
-          <PortailSidebar />
+          <PatientPortailSidebar />
         </div>
       </div>
     );
@@ -335,7 +335,7 @@ const PatientProfil = () => {
             )}
           </div>
         </main>
-        <PortailSidebar />
+        <PatientPortailSidebar />
       </div>
     </div>
   );

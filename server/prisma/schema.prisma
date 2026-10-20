@@ -242,6 +242,13 @@ enum TypeNotification {
   avis_medecin_invitation
   avis_medecin_publie
   avis_medecin_reponse
+  // Rappels de RDV confirmé (MÉDECIN et PATIENT) : J-3, J-1, H-3 et à
+  // l'heure du rendez-vous (palier dans `donnees.palier`).
+  rdv_rappel
+  // RDV aléatoire : le patient a retenu le MÉDECIN (candidature acceptée),
+  // ou en a retenu un autre / laissé expirer la demande (non retenue).
+  offre_rdv_candidature_retenue
+  offre_rdv_candidature_non_retenue
 }
 
 // Motif d'annulation d'un rendez-vous — liste fermée exigée par la
@@ -503,6 +510,7 @@ model Utilisateur {
 
   // Étape 6 : notifications in-app reçues.
   notifications          Notification[]
+  appareils_push         AppareilPush[]
   // Messages WhatsApp qui lui ont été adressés (journal d'envoi).
   messages_whatsapp      MessageWhatsapp[]
   // SMS qui lui ont été adressés (journal d'envoi, Twilio).
@@ -2342,6 +2350,9 @@ model Notification {
 
   lue_le        DateTime?
   date_creation DateTime  @default(now())
+  // Push mobile (FCM) : posé quand l'envoi a été pris en charge — une
+  // notification n'est poussée qu'une fois, même si sa clé est rejouée.
+  push_envoye_le DateTime?
 
   utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
   rendez_vous RendezVous? @relation(fields: [rdv_id], references: [rdv_id])
@@ -2349,6 +2360,27 @@ model Notification {
   @@index([utilisateur_id, lue_le, date_creation])
   @@index([rdv_id])
   @@map("notification")
+}
+
+// -----------------------------------------------------------------
+// Push mobile : jeton FCM d'une installation de l'application, rattaché
+// au compte connecté (enregistré à la connexion, retiré à la
+// déconnexion ou quand FCM le déclare invalide). Un jeton n'appartient
+// qu'à un compte à la fois : une reconnexion avec un autre compte sur le
+// même téléphone le réattribue.
+// -----------------------------------------------------------------
+model AppareilPush {
+  appareil_push_id String   @id @default(uuid()) @db.Uuid
+  utilisateur_id   String   @db.Uuid
+  jeton            String   @unique @db.VarChar(512)
+  plateforme       String   @db.VarChar(20)
+  date_creation    DateTime @default(now())
+  date_maj         DateTime @updatedAt
+
+  utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id], onDelete: Cascade)
+
+  @@index([utilisateur_id])
+  @@map("appareil_push")
 }
 
 // -----------------------------------------------------------------

@@ -356,6 +356,9 @@ class ApiRealEndpoints {
       '${baseUrl}/notifications/$id/lue';
   static const String notificationsToutesLues =
       '${baseUrl}/notifications/lues';
+  // Push mobile : POST { jeton, plateforme } à la connexion (jeton FCM).
+  static const String notificationsAppareils =
+      '${baseUrl}/notifications/appareils';
 
   // ─── Réputation médecin (reputationMedecin.controller.js) ─────────
   //   Médecin : tableau de bord et avis publiés (+ réponse, signalement).
@@ -403,4 +406,6 @@ class ApiRealEndpoints {
   // Voir visio.routes.js / visio.controller.js : authentifié, réservé
   // au médecin ou au patient du rendez-vous concerné.
   static const String visioToken = '${baseUrl}/visio/token';
+  // Fin d'appel : POST (le médecin clôt la consultation) / GET (bilan seul).
+  static String visioCloture(String rdvId) => '${baseUrl}/visio/$rdvId/cloture';
 }
