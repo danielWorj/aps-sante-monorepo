@@ -1,0 +1,52 @@
+/* Portail médecin — « Moyens de paiement » (medecin-paiements.jsx).
+   Charte 2026 : aplats, bordures fines, rayons 10/14, pas d'ombre. */
+
+.moyens-paiement .mp-section{ margin-bottom:1.25rem; }
+.mp-section-tete{
+  display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;
+  margin-bottom:1rem;
+}
+.mp-section-tete h3{ margin-bottom:.3rem; }
+.mp-aide{ margin:0; font-size:.88rem; color:var(--ink-soft); max-width:560px; }
+
+.mp-liste{ list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:.6rem; }
+.mp-ligne{
+  display:flex; align-items:center; gap:.85rem; flex-wrap:wrap;
+  padding:.8rem .9rem; border:1px solid var(--line); border-radius:10px; background:var(--surface);
+}
+.mp-ligne.is-actif{ border-color:var(--primary); background:var(--primary-tint); }
+.mp-ligne-ic{
+  flex:none; width:38px; height:38px; border-radius:10px;
+  display:grid; place-items:center; background:var(--primary-tint); color:var(--primary-dark);
+}
+.mp-ligne.is-actif .mp-ligne-ic{ background:var(--primary); color:#fff; }
+.mp-ligne-txt{ flex:1 1 180px; min-width:0; display:flex; flex-direction:column; line-height:1.35; }
+.mp-ligne-txt strong{ font-size:.98rem; color:var(--ink); letter-spacing:.01em; }
+.mp-ligne-txt span{ font-size:.83rem; color:var(--ink-soft); }
+.mp-ligne .form-switch .form-check-input{ width:2.4em; height:1.25em; cursor:pointer; }
+.mp-ligne-actions{ display:flex; gap:.2rem; }
+.chip.chip-neutre{ background:var(--surface-sunk, #F1F4F2); color:var(--ink-soft); }
+
+.mp-formulaire{
+  padding:1rem; margin-bottom:1rem;
+  border:1px solid var(--line); border-radius:10px; background:var(--surface-alt, #F6F8F7);
+}
+.mp-formulaire h4{ font-size:1rem; margin-bottom:.8rem; }
+.mp-formulaire-actions{ display:flex; justify-content:flex-end; flex-wrap:wrap; gap:.5rem; margin-top:1rem; }
+
+.mp-vide{
+  display:flex; flex-direction:column; align-items:center; text-align:center; gap:.4rem;
+  padding:1.6rem 1rem; border:1px dashed var(--line); border-radius:10px; color:var(--ink-soft);
+}
+.mp-vide i{ font-size:1.6rem; color:var(--primary-soft); }
+.mp-vide p{ margin:0; font-size:.9rem; max-width:420px; }
+
+.mp-stripe-vide{ display:flex; flex-direction:column; align-items:flex-start; gap:1rem; }
+.mp-etapes{ margin:0; padding-left:1.2rem; font-size:.9rem; color:var(--ink-soft); }
+.mp-etapes li + li{ margin-top:.3rem; }
+.mp-ligne.is-carte .mp-ligne-ic{ background:#635BFF; color:#fff; }
+
+@media (max-width:576px){
+  .mp-ligne-actions{ margin-left:auto; }
+  .mp-formulaire-actions .btn{ flex:1 1 auto; }
+}

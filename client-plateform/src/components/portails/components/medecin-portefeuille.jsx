@@ -15,7 +15,7 @@
 // aucun montant n'est calculé côté client).
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '../../feedback';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { listerMesRetraits, demanderRetrait } from '../../../services/retraitService';
 import { obtenirPortefeuille } from '../../../services/fondsService';
 import { listerRendezVousMedecinConnecte } from '../../../services/medecinService';
@@ -57,7 +57,9 @@ export default function MedecinPortefeuille({ medecinId, mobileMoneys = [], onSo
   const [ledger, setLedger] = useState(null); // { solde, mouvements, amendes_en_attente }
   const [fondsEnAttente, setFondsEnAttente] = useState(null); // { nombre, prochaineLiberation } | null
   const [erreurChargement, setErreurChargement] = useState(null);
-  const [mobileMoneyId, setMobileMoneyId] = useState(mobileMoneys[0]?.id || '');
+  // Les retraits partent vers le numéro ACTIF (choisi dans « Moyens de paiement »).
+  const numeroActif = mobileMoneys.find((mm) => mm.actif) || null;
+  const mobileMoneyId = numeroActif?.id || '';
   const [montant, setMontant] = useState('');
   const [envoi, setEnvoi] = useState(false);
   const toast = useToast();
@@ -87,10 +89,6 @@ export default function MedecinPortefeuille({ medecinId, mobileMoneys = [], onSo
     const id = setInterval(() => { if (!document.hidden) charger(); }, 60000);
     return () => clearInterval(id);
   }, [charger]);
-
-  useEffect(() => {
-    if (!mobileMoneyId && mobileMoneys[0]?.id) setMobileMoneyId(mobileMoneys[0].id);
-  }, [mobileMoneys, mobileMoneyId]);
 
   // Ancre #portefeuille : la section apparaît après le chargement asynchrone du profil.
   useEffect(() => {
@@ -159,23 +157,21 @@ export default function MedecinPortefeuille({ medecinId, mobileMoneys = [], onSo
             </div>
           )}
 
-          {mobileMoneys.length === 0 ? (
+          {!numeroActif ? (
             <div className="note-box">
               <i className="fa-solid fa-circle-info"></i>
-              <span>Aucun numéro Mobile Money configuré : contactez l'administration ApSa pour pouvoir retirer vos honoraires.</span>
+              <span>
+                {mobileMoneys.length === 0 ? 'Aucun numéro Mobile Money enregistré' : 'Aucun numéro Mobile Money actif'} :{' '}
+                <Link to="/portail/medecin-paiements">gérez vos moyens de paiement</Link> pour pouvoir retirer vos honoraires.
+              </span>
             </div>
           ) : (
             <form onSubmit={soumettre} className="row g-3 align-items-end">
               <div className="col-md-5">
-                <label className="form-label" htmlFor="retrait-numero">Envoyer vers</label>
-                <select id="retrait-numero" className="form-select" value={mobileMoneyId}
-                  onChange={(e) => setMobileMoneyId(e.target.value)} disabled={envoi}>
-                  {mobileMoneys.map((mm) => (
-                    <option key={mm.id} value={mm.id}>
-                      {mm.type_mobile_money?.libelle || 'Mobile Money'} — {mm.numero} ({mm.titulaire})
-                    </option>
-                  ))}
-                </select>
+                <label className="form-label" htmlFor="retrait-numero">Envoyer vers (numéro actif)</label>
+                <input id="retrait-numero" className="form-control" readOnly
+                  value={`${numeroActif.type_mobile_money?.libelle || 'Mobile Money'} — ${numeroActif.numero} (${numeroActif.titulaire})`} />
+                <Link to="/portail/medecin-paiements" className="small">Changer de numéro</Link>
               </div>
               <div className="col-md-4">
                 <label className="form-label" htmlFor="retrait-montant">Montant (FCFA)</label>

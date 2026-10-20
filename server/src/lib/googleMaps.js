@@ -1,14 +1,14 @@
 // src/lib/googleMaps.js
 //
 // Point d'accès UNIQUE aux API Google Maps côté serveur : Geocoding API
-// et Directions API. Utilise GOOGLE_MAPS_API_KEY (variable serveur,
+// et Routes API (itinéraires). Utilise GOOGLE_MAPS_API_KEY (variable serveur,
 // jamais envoyée au client — voir client-plateform pour la clé
 // publique séparée VITE_GOOGLE_MAPS_API_KEY, restreinte par referrer
 // HTTP, dédiée à Maps JavaScript API).
 //
 // Pourquoi passer par le backend plutôt que d'appeler Google
 // directement depuis le navigateur pour le géocodage :
-//   - la clé Geocoding/Directions n'a pas vocation à être publique
+//   - la clé Geocoding/Routes n'a pas vocation à être publique
 //     (contrairement à la clé Maps JavaScript, dont la restriction
 //     HTTP referrer suffit) ;
 //   - permet de logger/limiter la consommation (facturée par Google)
@@ -20,45 +20,65 @@
 // pour lib/geo.js (PostGIS) déjà en place dans ce dépôt.
 
 const GEOCODING_URL = "https://maps.googleapis.com/maps/api/geocode/json";
-const DIRECTIONS_URL = "https://maps.googleapis.com/maps/api/directions/json";
+// Routes API (remplace l'ancienne Directions API, « legacy » et non
+// activable sur les nouveaux projets Google Cloud).
+const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
 
 const DELAI_TIMEOUT_MS = 8000;
+
+/**
+ * Erreur côté fournisseur Google (clé absente, API non activée sur le
+ * projet, quota dépassé, panne réseau…). Le contrôleur la traduit en
+ * 503 avec un message lisible ; `detail` (message brut de Google) part
+ * uniquement dans les logs serveur.
+ */
+export class GoogleMapsError extends Error {
+  constructor(message, detail = "") {
+    super(message);
+    this.name = "GoogleMapsError";
+    this.status = 503;
+    this.detail = detail;
+  }
+}
 
 function cleApi() {
   const cle = process.env.GOOGLE_MAPS_API_KEY;
   if (!cle) {
-    throw new Error(
-      "googleMaps.js : GOOGLE_MAPS_API_KEY manquante dans l'environnement serveur."
+    throw new GoogleMapsError(
+      "Service de cartographie non configuré.",
+      "GOOGLE_MAPS_API_KEY manquante dans l'environnement serveur."
     );
   }
   return cle;
 }
 
-/**
- * Appelle une URL Google Maps avec un timeout, et lève une erreur
- * explicite en cas de statut HTTP ou de statut métier Google non-OK
- * (Google renvoie toujours 200 même en cas d'erreur, avec un champ
- * `status` dans le corps : "ZERO_RESULTS", "OVER_QUERY_LIMIT",
- * "REQUEST_DENIED", "INVALID_REQUEST"...).
- */
-async function appelerGoogle(url) {
+/** fetch avec timeout ; toute panne réseau devient une GoogleMapsError. */
+async function fetchGoogle(url, options = {}) {
   const controleur = new AbortController();
   const timeoutId = setTimeout(() => controleur.abort(), DELAI_TIMEOUT_MS);
-
-  let reponse;
   try {
-    reponse = await fetch(url, { signal: controleur.signal });
+    return await fetch(url, { ...options, signal: controleur.signal });
   } catch (err) {
-    if (err.name === "AbortError") {
-      throw new Error("googleMaps.js : délai dépassé en contactant Google Maps.");
-    }
-    throw new Error(`googleMaps.js : échec réseau vers Google Maps (${err.message}).`);
+    throw new GoogleMapsError(
+      "Service de cartographie momentanément injoignable.",
+      err.name === "AbortError" ? "délai dépassé en contactant Google Maps" : err.message
+    );
   } finally {
     clearTimeout(timeoutId);
   }
+}
 
+/**
+ * Appelle une URL Google Maps « classique » (Geocoding) et lève une
+ * GoogleMapsError en cas de statut HTTP ou de statut métier Google non-OK
+ * (Google renvoie toujours 200 même en cas d'erreur, avec un champ
+ * `status` dans le corps : "OVER_QUERY_LIMIT", "REQUEST_DENIED" — API non
+ * activée sur le projet ou clé restreinte —, "INVALID_REQUEST"...).
+ */
+async function appelerGoogle(url) {
+  const reponse = await fetchGoogle(url);
   if (!reponse.ok) {
-    throw new Error(`googleMaps.js : Google Maps a répondu HTTP ${reponse.status}.`);
+    throw new GoogleMapsError("Service de cartographie indisponible.", `HTTP ${reponse.status}`);
   }
 
   const donnees = await reponse.json();
@@ -67,8 +87,10 @@ async function appelerGoogle(url) {
   // vide légitime, laissé à l'appelant (geocoderAdresse /
   // reverseGeocoder renvoient alors `null`, pas une exception).
   if (donnees.status !== "OK" && donnees.status !== "ZERO_RESULTS") {
-    const detail = donnees.error_message ? ` (${donnees.error_message})` : "";
-    throw new Error(`googleMaps.js : statut Google Maps "${donnees.status}"${detail}.`);
+    throw new GoogleMapsError(
+      "Service de cartographie indisponible.",
+      `statut "${donnees.status}"${donnees.error_message ? ` (${donnees.error_message})` : ""}`
+    );
   }
 
   return donnees;
@@ -149,13 +171,24 @@ export async function reverseGeocoder(latitude, longitude) {
 }
 
 /* ===================================================================
- * Directions API
+ * Routes API (itinéraires)
  * =================================================================== */
 
-const MODES_DEPLACEMENT_VALIDES = new Set(["driving", "walking", "bicycling", "transit"]);
+// Modes historiques (Directions API) conservés dans le contrat de l'endpoint.
+const MODES_ROUTES = { driving: "DRIVE", walking: "WALK", bicycling: "BICYCLE", transit: "TRANSIT" };
+const MODES_DEPLACEMENT_VALIDES = new Set(Object.keys(MODES_ROUTES));
+
+const CHAMPS_ROUTES = [
+  "routes.distanceMeters",
+  "routes.duration",
+  "routes.polyline.encodedPolyline",
+  "routes.localizedValues",
+  "routes.legs.steps.navigationInstruction",
+  "routes.legs.steps.localizedValues",
+].join(",");
 
 /**
- * Calcule un itinéraire entre deux points via Directions API.
+ * Calcule un itinéraire entre deux points via Routes API (computeRoutes).
  * @param {object} params
  * @param {number} params.origineLat
  * @param {number} params.origineLng
@@ -169,7 +202,7 @@ const MODES_DEPLACEMENT_VALIDES = new Set(["driving", "walking", "bicycling", "t
  *   dureeTexte: string,
  *   polylineEncodee: string,
  *   etapes: Array<{ instruction: string, distanceTexte: string, dureeTexte: string }>
- * } | null>} `null` si aucun itinéraire trouvé (ZERO_RESULTS).
+ * } | null>} `null` si aucun itinéraire trouvé.
  */
 export async function calculerItineraire({
   origineLat,
@@ -189,33 +222,48 @@ export async function calculerItineraire({
     );
   }
 
-  const params = new URLSearchParams({
-    origin: `${origineLat},${origineLng}`,
-    destination: `${destinationLat},${destinationLng}`,
-    mode,
-    key: cleApi(),
+  const point = (latitude, longitude) => ({ location: { latLng: { latitude, longitude } } });
+  const reponse = await fetchGoogle(ROUTES_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": cleApi(),
+      "X-Goog-FieldMask": CHAMPS_ROUTES,
+    },
+    body: JSON.stringify({
+      origin: point(origineLat, origineLng),
+      destination: point(destinationLat, destinationLng),
+      travelMode: MODES_ROUTES[mode],
+      languageCode: "fr",
+      units: "METRIC",
+    }),
   });
 
-  const donnees = await appelerGoogle(`${DIRECTIONS_URL}?${params.toString()}`);
-  if (donnees.status === "ZERO_RESULTS" || !donnees.routes?.length) return null;
+  const donnees = await reponse.json().catch(() => ({}));
+  if (!reponse.ok) {
+    throw new GoogleMapsError(
+      "Calcul d'itinéraire indisponible.",
+      `Routes API HTTP ${reponse.status}${donnees?.error?.message ? ` (${donnees.error.message})` : ""}`
+    );
+  }
 
-  const route = donnees.routes[0];
-  const jambe = route.legs?.[0];
-  if (!jambe) return null;
+  // Aucun itinéraire possible : Routes API renvoie un objet vide.
+  const route = donnees.routes?.[0];
+  if (!route) return null;
+
+  const etapes = (route.legs?.[0]?.steps || []).map((etape) => ({
+    instruction: etape.navigationInstruction?.instructions ?? "",
+    distanceTexte: etape.localizedValues?.distance?.text ?? null,
+    dureeTexte: etape.localizedValues?.staticDuration?.text ?? null,
+  }));
 
   return {
-    distanceMetres: jambe.distance?.value ?? null,
-    distanceTexte: jambe.distance?.text ?? null,
-    dureeSecondes: jambe.duration?.value ?? null,
-    dureeTexte: jambe.duration?.text ?? null,
-    polylineEncodee: route.overview_polyline?.points ?? null,
-    etapes: (jambe.steps || []).map((etape) => ({
-      // html_instructions contient des balises <b>/<div> Google : on
-      // les retire pour renvoyer du texte brut exploitable tel quel
-      // par n'importe quel client (web ou mobile).
-      instruction: (etape.html_instructions || "").replace(/<[^>]+>/g, ""),
-      distanceTexte: etape.distance?.text ?? null,
-      dureeTexte: etape.duration?.text ?? null,
-    })),
+    distanceMetres: route.distanceMeters ?? null,
+    distanceTexte: route.localizedValues?.distance?.text ?? null,
+    // Routes API exprime les durées en chaîne "1234s".
+    dureeSecondes: route.duration ? Number.parseInt(route.duration, 10) : null,
+    dureeTexte: route.localizedValues?.duration?.text ?? null,
+    polylineEncodee: route.polyline?.encodedPolyline ?? null,
+    etapes,
   };
 }

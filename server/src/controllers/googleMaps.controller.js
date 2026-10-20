@@ -10,7 +10,20 @@
 // (googleMaps.routes.js) est la protection principale contre l'abus,
 // chaque appel étant facturé par Google.
 
-import { geocoderAdresse, reverseGeocoder, calculerItineraire } from "../lib/googleMaps.js";
+import { geocoderAdresse, reverseGeocoder, calculerItineraire, GoogleMapsError } from "../lib/googleMaps.js";
+
+/**
+ * Panne / mauvaise configuration Google (API non activée sur le projet,
+ * clé absente, quota…) : 503 lisible pour le client, détail brut dans les
+ * logs. Le reste part au gestionnaire d'erreurs central.
+ */
+function transmettreErreur(err, res, next, contexte) {
+  if (err instanceof GoogleMapsError) {
+    console.error(`[google-maps] ${contexte} : ${err.message} — ${err.detail}`);
+    return res.status(503).json({ code: "CARTOGRAPHIE_INDISPONIBLE", message: err.message });
+  }
+  return next(err);
+}
 
 /**
  * GET /api/google-maps/geocodage?adresse=...&region=cm
@@ -39,7 +52,7 @@ export async function geocoder(req, res, next) {
 
     return res.status(200).json(resultat);
   } catch (err) {
-    next(err);
+    transmettreErreur(err, res, next, "géocodage");
   }
 }
 
@@ -66,7 +79,7 @@ export async function geocoderInverse(req, res, next) {
 
     return res.status(200).json(resultat);
   } catch (err) {
-    next(err);
+    transmettreErreur(err, res, next, "géocodage inverse");
   }
 }
 
@@ -108,6 +121,6 @@ export async function itineraire(req, res, next) {
 
     return res.status(200).json(resultat);
   } catch (err) {
-    next(err);
+    transmettreErreur(err, res, next, "itinéraire");
   }
 }

@@ -17,6 +17,7 @@ import urgencesRoutes from "./src/routes/urgences.routes.js";
 import medecinRoutes from "./src/routes/medecin.routes.js";
 import patientRoutes from "./src/routes/patient.routes.js";
 import moyenPaiementRoutes from "./src/routes/moyenPaiement.routes.js";
+import contactRoutes from "./src/routes/contact.routes.js";
 import visioRoutes from "./src/routes/visio.routes.js";
 import utilisateursRoutes from "./src/routes/utilisateurs.routes.js";
 import gestionApkRoutes from "./src/routes/gestionapk.routes.js"; // Importer les routes de gestion des APKs
@@ -164,6 +165,8 @@ app.use("/api", urgencesRoutes);
 app.use("/api", medecinRoutes);
 app.use("/api", patientRoutes);
 app.use("/api", moyenPaiementRoutes);
+// Formulaire public « Contactez-nous » et boîte de réception admin.
+app.use("/api", contactRoutes);
 app.use("/api", visioRoutes);
 app.use("/api/utilisateurs", utilisateursRoutes);
 app.use("/api/apks", gestionApkRoutes);

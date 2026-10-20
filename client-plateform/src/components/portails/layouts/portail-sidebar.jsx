@@ -38,6 +38,7 @@ const LIENS = [
   { to: "/portail/medecin-annonces", icone: "fa-bell", label: "Annonces", badgeKey: "annoncesBadge" },
   { to: "/portail/medecin-profil", icone: "fa-user-doctor", label: "Profil" },
   { to: "/portail/medecin-agenda", icone: "fa-calendar-days", label: "Agenda" },
+  { to: "/portail/medecin-paiements", icone: "fa-wallet", label: "Moyens de paiement" },
   { to: "/portail/medecin-abonnement", icone: "fa-id-card-clip", label: "Abonnement" },
 ];
 

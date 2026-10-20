@@ -2,6 +2,8 @@ import { createBrowserRouter } from 'react-router-dom';
 import App from './App';
 import Home from './pages/Home';
 import Medecin from './pages/Medecin';
+import APropos from './pages/APropos';
+import Contact from './pages/Contact';
 import CreerPatient from './components/patient/creerPatient.jsx'
 import CreationMedecin from './components/medecin/creationMedecin';
 import InscriptionPortail from './pages/inscriptionportail.jsx';
@@ -65,6 +67,7 @@ import MedecinDemandes from './components/portails/components/medecin-demandes.j
 // Réputation : tableau de bord (métriques) et avis & notes
 import MedecinTableauDeBord from './components/portails/components/medecin-tableau-de-bord.jsx';
 import MedecinAvis from './components/portails/components/medecin-avis.jsx';
+import MedecinPaiements from './components/portails/components/medecin-paiements.jsx';
 import PatientDemandes from './components/portails/components/patient-demandes.jsx';
 import Teleconsultation from './pages/Teleconsultation';
 
@@ -112,6 +115,8 @@ export const router = createBrowserRouter([
     element: <App />, // Layout commun : Navbar + <Outlet /> + Footer
     children: [
       { path: '/home', element: <Home /> },
+      { path: '/a-propos', element: <APropos /> },
+      { path: '/contact', element: <Contact /> },
       { path: '/inscription', element: <InscriptionPortail /> },
       { path: '/medecin', element: <Medecin /> },
       { path: '/devenir-medecin', element: <CreationMedecin /> },
@@ -220,6 +225,7 @@ export const router = createBrowserRouter([
           { path: '/portail/medecin-demandes', element: <MedecinDemandes /> },
           { path: '/portail/medecin-tableau-de-bord', element: <MedecinTableauDeBord /> },
           { path: '/portail/medecin-avis', element: <MedecinAvis /> },
+          { path: '/portail/medecin-paiements', element: <MedecinPaiements /> },
           { path: '/portail/medecin-annonces', element: <MedecinAnnonces /> },
         ]
       },

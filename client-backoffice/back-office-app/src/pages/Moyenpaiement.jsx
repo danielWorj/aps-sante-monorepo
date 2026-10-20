@@ -8,6 +8,7 @@ import * as referentielService from '../services/referentielService';
 // medecinService.js expose une API différente (ex. listerMedecins,
 // rechercherMedecins, obtenirMedecin…).
 import * as medecinService from '../services/medecinService';
+import MoyensPaiementEnsemble from '../components/MoyensPaiementEnsemble';
 // Sidebar et Navbar sont déjà rendus par App.jsx (route layout) et
 // admin.css est déjà importé globalement dans main.jsx : on ne les
 // réimporte pas ici pour éviter la double mise en page. On réutilise
@@ -97,7 +98,7 @@ export default function MoyenPaiement() {
     chargerDonnees();
   }, [chargerDonnees]);
 
-  const [activeTab, setActiveTab] = useState('operateurs'); // 'operateurs' | 'medecin'
+  const [activeTab, setActiveTab] = useState('ensemble'); // 'ensemble' | 'operateurs' | 'medecin'
 
   // =====================================================================
   // Onglet « Opérateurs Mobile Money » (référentiel TypeMobileMoney)
@@ -286,7 +287,16 @@ export default function MoyenPaiement() {
   const [cbDeleteSaving, setCbDeleteSaving] = useState(false);
   const [cbDeleteError, setCbDeleteError] = useState(null);
 
+  // --- Carte bancaire (Stripe Connect) du médecin sélectionné : lecture seule ---
+  const [compteStripe, setCompteStripe] = useState(undefined); // undefined = chargement
+  const [mmBascule, setMmBascule] = useState(null);
+
   const chargerMoyensPaiementMedecin = useCallback(async (medecinId) => {
+    setCompteStripe(undefined);
+    moyenPaiementService
+      .obtenirCompteStripe(medecinId)
+      .then(setCompteStripe)
+      .catch(() => setCompteStripe(null));
     setMmLoading(true);
     setCbLoading(true);
     setMmError(null);
@@ -315,6 +325,20 @@ export default function MoyenPaiement() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [medecinSelectionne?.medecin_id, chargerMoyensPaiementMedecin]);
+
+  // Un seul numéro actif par médecin : le serveur désactive les autres.
+  async function basculerMobileMoneyActif(m) {
+    setMmBascule(m.id);
+    setMmError(null);
+    try {
+      const reponse = await moyenPaiementService.definirMobileMoneyActif(m.id, !m.actif);
+      setMobileMoneys(reponse.mobileMoneys || []);
+    } catch (err) {
+      setMmError(err.message || 'Modification impossible.');
+    } finally {
+      setMmBascule(null);
+    }
+  }
 
   function resetMobileMoneyForm() {
     setMmFormError(null);
@@ -582,6 +606,12 @@ export default function MoyenPaiement() {
             <div className="aps-card">
               <div className="aps-tabs px-2 pt-1">
                 <button
+                  className={activeTab === 'ensemble' ? 'is-active' : ''}
+                  onClick={() => setActiveTab('ensemble')}
+                >
+                  <i className="fa-solid fa-table-list"></i>Vue d'ensemble
+                </button>
+                <button
                   className={activeTab === 'operateurs' ? 'is-active' : ''}
                   onClick={() => setActiveTab('operateurs')}
                 >
@@ -594,6 +624,16 @@ export default function MoyenPaiement() {
                   <i className="fa-solid fa-user-doctor"></i>Moyens de paiement d'un médecin
                 </button>
               </div>
+
+              {/* ===================== VUE D'ENSEMBLE ===================== */}
+              {activeTab === 'ensemble' && (
+                <MoyensPaiementEnsemble
+                  onOuvrirMedecin={(m) => {
+                    choisirMedecin(m);
+                    setActiveTab('medecin');
+                  }}
+                />
+              )}
 
               {/* ===================== OPÉRATEURS MOBILE MONEY ===================== */}
               {activeTab === 'operateurs' && (
@@ -961,13 +1001,14 @@ export default function MoyenPaiement() {
                                     <th>Opérateur</th>
                                     <th>Numéro</th>
                                     <th>Titulaire</th>
+                                    <th>Statut</th>
                                     <th className="text-end">Actions</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {mmLoading ? (
                                     <tr>
-                                      <td colSpan={4}>
+                                      <td colSpan={5}>
                                         <div className="aps-empty-mini py-3 text-center">
                                           <i className="fa-solid fa-spinner fa-spin d-block mb-2"></i>
                                           Chargement…
@@ -976,7 +1017,7 @@ export default function MoyenPaiement() {
                                     </tr>
                                   ) : mobileMoneys.length === 0 ? (
                                     <tr>
-                                      <td colSpan={4}>
+                                      <td colSpan={5}>
                                         <div className="aps-empty-mini">Aucun Mobile Money enregistré.</div>
                                       </td>
                                     </tr>
@@ -995,8 +1036,25 @@ export default function MoyenPaiement() {
                                         </td>
                                         <td>{m.numero}</td>
                                         <td>{m.titulaire}</td>
+                                        <td>
+                                          <span className={`aps-badge ${m.actif ? 'is-success' : 'is-neutral'}`}>
+                                            {m.actif ? 'Actif' : 'Inactif'}
+                                          </span>
+                                        </td>
                                         <td className="text-end">
                                           <div className="aps-row-actions">
+                                            <button
+                                              className="btn btn-sm btn-light"
+                                              title={m.actif ? 'Désactiver' : 'Activer (désactive les autres numéros)'}
+                                              disabled={mmBascule !== null}
+                                              onClick={() => basculerMobileMoneyActif(m)}
+                                            >
+                                              {mmBascule === m.id ? (
+                                                <i className="fa-solid fa-spinner fa-spin"></i>
+                                              ) : (
+                                                <i className={`fa-solid ${m.actif ? 'fa-toggle-on text-success' : 'fa-toggle-off'}`}></i>
+                                              )}
+                                            </button>
                                             <button
                                               className="btn btn-sm btn-outline-primary"
                                               onClick={() => openEditMobileMoney(m)}
@@ -1017,6 +1075,42 @@ export default function MoyenPaiement() {
                                 </tbody>
                               </table>
                             </div>
+                          </div>
+                        </div>
+
+                        {/* -------- Carte bancaire (Stripe Connect), lecture seule -------- */}
+                        <div className="col-12">
+                          <div className="aps-card p-3">
+                            <h6 className="mb-2">
+                              <i className="fa-regular fa-credit-card me-2"></i>Carte bancaire (Stripe)
+                            </h6>
+                            {compteStripe === undefined ? (
+                              <div className="aps-text-muted"><i className="fa-solid fa-spinner fa-spin me-1"></i>Chargement…</div>
+                            ) : !compteStripe ? (
+                              <div className="aps-text-muted">
+                                Aucun compte Stripe associé. Le médecin l'ajoute lui-même depuis son espace (page « Moyens de paiement »).
+                              </div>
+                            ) : (
+                              <div className="d-flex flex-wrap gap-3 align-items-center">
+                                {compteStripe.virements_actives ? (
+                                  <span className="aps-badge is-success">Actif</span>
+                                ) : compteStripe.details_soumis ? (
+                                  <span className="aps-badge is-warning">En vérification</span>
+                                ) : (
+                                  <span className="aps-badge is-neutral">Inscription incomplète</span>
+                                )}
+                                <span>
+                                  {compteStripe.derniers_chiffres
+                                    ? `${compteStripe.type_externe === 'card' ? 'Carte' : 'Compte'} ${(compteStripe.marque_externe || '').toUpperCase()} •••• ${compteStripe.derniers_chiffres}${compteStripe.devise ? ` · ${compteStripe.devise}` : ''}`
+                                    : 'Aucun moyen de réception enregistré chez Stripe'}
+                                </span>
+                                <span className="aps-text-muted" style={{ fontSize: 12 }}>
+                                  {compteStripe.stripe_account_id}
+                                  {compteStripe.exigences_en_attente > 0 && ` · ${compteStripe.exigences_en_attente} élément(s) demandé(s) par Stripe`}
+                                  {compteStripe.date_synchro && ` · synchronisé le ${new Date(compteStripe.date_synchro).toLocaleString('fr-FR')}`}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
 

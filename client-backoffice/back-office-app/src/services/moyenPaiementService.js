@@ -250,6 +250,35 @@ export function supprimerCompteBancaire(id) {
   return apiFetch(`/comptes-bancaires/${id}`, { method: 'DELETE' });
 }
 
+/**
+ * PUT /api/mobile-moneys/:id/actif — un seul numéro actif par médecin
+ * (activer l'un désactive les autres). Renvoie { message, mobileMoneys }.
+ */
+export function definirMobileMoneyActif(id, actif) {
+  return apiFetch(`/mobile-moneys/${id}/actif`, { method: 'PUT', body: { actif } });
+}
+
+/**
+ * GET /api/medecins/:medecin_id/stripe-connect — compte Stripe Connect
+ * (réception par carte), resynchronisé depuis Stripe. null si aucun.
+ */
+export function obtenirCompteStripe(medecinId) {
+  return apiFetch(`/medecins/${medecinId}/stripe-connect`).then((d) => d.compteStripe ?? null);
+}
+
+/**
+ * GET /api/admin/moyens-paiement?recherche=&filtre=
+ * Vue d'ensemble : médecins ayant au moins un moyen de paiement.
+ * filtre : '' | 'mobile_money' | 'stripe' | 'sans_actif'
+ */
+export function listerMoyensPaiementMedecins({ recherche = '', filtre = '' } = {}) {
+  const params = new URLSearchParams();
+  if (recherche.trim()) params.set('recherche', recherche.trim());
+  if (filtre) params.set('filtre', filtre);
+  const qs = params.toString();
+  return apiFetch(`/admin/moyens-paiement${qs ? `?${qs}` : ''}`).then((d) => d.medecins ?? []);
+}
+
 const MoyenPaiementService = {
   // TypeMobileMoney (référentiel)
   listerTypesMobileMoney,
@@ -263,6 +292,10 @@ const MoyenPaiementService = {
   creerMobileMoney,
   modifierMobileMoney,
   supprimerMobileMoney,
+  definirMobileMoneyActif,
+  // Stripe Connect / vue d'ensemble
+  obtenirCompteStripe,
+  listerMoyensPaiementMedecins,
   // CompteBancaire
   listerComptesBancairesMedecin,
   obtenirCompteBancaire,

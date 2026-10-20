@@ -502,25 +502,25 @@ model Utilisateur {
   pays Pays @relation(fields: [pays_id], references: [pays_id])
 
   // Étape 6 : notifications in-app reçues.
-  notifications Notification[]
+  notifications          Notification[]
   // Messages WhatsApp qui lui ont été adressés (journal d'envoi).
-  messages_whatsapp MessageWhatsapp[]
+  messages_whatsapp      MessageWhatsapp[]
   // SMS qui lui ont été adressés (journal d'envoi, Twilio).
-  messages_sms      MessageSms[]
+  messages_sms           MessageSms[]
   // Connexions web à valider depuis l'application mobile.
   demandes_connexion_web DemandeConnexionWeb[]
 
-  medecin               Medecin?
-  patient               Patient?
-  refresh_tokens        RefreshToken[]
-  jetons_revoques       JetonRevoque[]
+  medecin                Medecin?
+  patient                Patient?
+  refresh_tokens         RefreshToken[]
+  jetons_revoques        JetonRevoque[]
   // Rattachements d'agent : plusieurs fiches possibles par compte (espaces).
   agents_structure_sante AgentStructureSante[]
   agents_pompes_funebres AgentPompesFunebres[]
   agents_assurance       AgentAssurance[]
   agents_pharmacie       AgentPharmacie[]
   agents_ambulance       AgentAmbulance[]
-  avis_pharmacie        AvisPharmacie[]
+  avis_pharmacie         AvisPharmacie[]
 
   // Module transverse Gestion des médecins — voir plus bas dans ce fichier.
   avis_medecin AvisMedecin[]
@@ -633,6 +633,7 @@ model Medecin {
   // Module transverse : Moyens de paiement du médecin
   mobile_moneys     MobileMoney[]
   comptes_bancaires CompteBancaire[]
+  compte_stripe     CompteStripeConnect?
 
   // Module transverse : Agenda du médecin — voir plus bas dans ce
   // fichier. disponibilites porte le gabarit récurrent (jour de la
@@ -753,10 +754,10 @@ model AgentStructureSante {
   utilisateur Utilisateur    @relation(fields: [utilisateur_id], references: [utilisateur_id])
   structure   StructureSante @relation(fields: [structure_id], references: [structure_id])
 
-  @@index([structure_id])
   // Option A (espaces multiples) : un compte peut gérer plusieurs fiches,
   // une seule ligne par couple compte / fiche.
   @@unique([utilisateur_id, structure_id])
+  @@index([structure_id])
   @@index([utilisateur_id])
   @@map("agent_structure_sante")
 }
@@ -771,10 +772,10 @@ model AgentPompesFunebres {
   utilisateur     Utilisateur    @relation(fields: [utilisateur_id], references: [utilisateur_id])
   pompes_funebres PompesFunebres @relation(fields: [pompes_funebres_id], references: [pompes_funebres_id])
 
-  @@index([pompes_funebres_id])
   // Option A (espaces multiples) : un compte peut gérer plusieurs fiches,
   // une seule ligne par couple compte / fiche.
   @@unique([utilisateur_id, pompes_funebres_id])
+  @@index([pompes_funebres_id])
   @@index([utilisateur_id])
   @@map("agent_pompes_funebres")
 }
@@ -789,10 +790,10 @@ model AgentAssurance {
   utilisateur       Utilisateur      @relation(fields: [utilisateur_id], references: [utilisateur_id])
   service_assurance ServiceAssurance @relation(fields: [service_assurance_id], references: [service_assurance_id])
 
-  @@index([service_assurance_id])
   // Option A (espaces multiples) : un compte peut gérer plusieurs fiches,
   // une seule ligne par couple compte / fiche.
   @@unique([utilisateur_id, service_assurance_id])
+  @@index([service_assurance_id])
   @@index([utilisateur_id])
   @@map("agent_assurance")
 }
@@ -807,10 +808,10 @@ model AgentPharmacie {
   utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
   pharmacie   Pharmacie   @relation(fields: [pharmacie_id], references: [pharmacie_id])
 
-  @@index([pharmacie_id])
   // Option A (espaces multiples) : un compte peut gérer plusieurs fiches,
   // une seule ligne par couple compte / fiche.
   @@unique([utilisateur_id, pharmacie_id])
+  @@index([pharmacie_id])
   @@index([utilisateur_id])
   @@map("agent_pharmacie")
 }
@@ -825,10 +826,10 @@ model AgentAmbulance {
   utilisateur       Utilisateur      @relation(fields: [utilisateur_id], references: [utilisateur_id])
   service_ambulance ServiceAmbulance @relation(fields: [service_ambulance_id], references: [service_ambulance_id])
 
-  @@index([service_ambulance_id])
   // Option A (espaces multiples) : un compte peut gérer plusieurs fiches,
   // une seule ligne par couple compte / fiche.
   @@unique([utilisateur_id, service_ambulance_id])
+  @@index([service_ambulance_id])
   @@index([utilisateur_id])
   @@map("agent_ambulance")
 }
@@ -2079,13 +2080,13 @@ model AvisMedecin {
 
   // Critères facultatifs (1 à 5) et recommandation : la note globale
   // reste la seule note obligatoire et la seule qui entre dans la moyenne.
-  note_ponctualite  Int?     @db.SmallInt
-  note_ecoute       Int?     @db.SmallInt
-  note_explications Int?     @db.SmallInt
+  note_ponctualite  Int?      @db.SmallInt
+  note_ecoute       Int?      @db.SmallInt
+  note_explications Int?      @db.SmallInt
   recommande        Boolean?
   // Le patient choisit d'apparaître sous la mention « Patient vérifié »
   // plutôt que « Prénom N. ».
-  anonyme           Boolean  @default(false)
+  anonyme           Boolean   @default(false)
   date_moderation   DateTime?
 
   // Réponse publique du médecin (une seule, modifiable), visible sous
@@ -2532,6 +2533,12 @@ model MobileMoney {
   numero    String @db.VarChar(50)
   titulaire String @db.VarChar(255)
 
+  // Numéro de réception actif : un seul par médecin (activer un numéro
+  // désactive les autres, voir moyenPaiement.controller.js). Les retraits
+  // partent vers ce numéro.
+  actif         Boolean  @default(false)
+  date_creation DateTime @default(now())
+
   type_mobile_money TypeMobileMoney @relation(fields: [type_mobile_money_id], references: [id])
   medecin           Medecin         @relation(fields: [medecin_id], references: [medecin_id])
 
@@ -2557,6 +2564,41 @@ model CompteBancaire {
 
   @@index([medecin_id])
   @@map("compte_bancaire")
+}
+
+// -----------------------------------------------------------------
+// CompteStripeConnect : compte Stripe Connect (Express) d'un médecin,
+// pour recevoir ses paiements par carte bancaire / compte bancaire.
+// Les coordonnées (numéro de carte, IBAN) sont saisies sur la page
+// hébergée de Stripe et ne transitent jamais par ApSa (PCI-DSS) : on ne
+// conserve que l'identifiant du compte et un résumé affichable.
+// -----------------------------------------------------------------
+model CompteStripeConnect {
+  id String @id @default(uuid()) @db.Uuid
+
+  medecin_id        String @unique @db.Uuid
+  stripe_account_id String @unique @db.VarChar(255)
+
+  // Miroir des drapeaux Stripe (resynchronisés à chaque consultation).
+  details_soumis       Boolean @default(false)
+  paiements_actives    Boolean @default(false) // charges_enabled
+  virements_actives    Boolean @default(false) // payouts_enabled
+  exigences_en_attente Int     @default(0) // requirements.currently_due.length
+
+  // Résumé du moyen de réception enregistré chez Stripe (jamais complet).
+  type_externe      String? @db.VarChar(20) // "card" | "bank_account"
+  marque_externe    String? @db.VarChar(100) // marque de carte ou nom de banque
+  derniers_chiffres String? @db.VarChar(4)
+  devise            String? @db.VarChar(3)
+  pays              String? @db.VarChar(2)
+
+  date_creation    DateTime  @default(now())
+  date_mise_a_jour DateTime  @updatedAt
+  date_synchro     DateTime?
+
+  medecin Medecin @relation(fields: [medecin_id], references: [medecin_id], onDelete: Cascade)
+
+  @@map("compte_stripe_connect")
 }
 
 // GESTION DES APKS DE L'APPLICATION MOBILE 
@@ -3192,24 +3234,24 @@ model MessageWhatsapp {
   message_whatsapp_id String @id @default(uuid()) @db.Uuid
 
   // Idempotence (ex. « rdv_accepte:<rdv_id>:<utilisateur_id> »).
-  cle                String?               @unique @db.VarChar(200)
+  cle                     String?               @unique @db.VarChar(200)
   // Service émetteur (ex. « rdv_accepte », « test_back_office »).
-  origine            String                @db.VarChar(60)
+  origine                 String                @db.VarChar(60)
   // Numéro expéditeur réellement utilisé (null si aucun n'était actif).
-  numero_whatsapp_id String?               @db.Uuid
+  numero_whatsapp_id      String?               @db.Uuid
   // Destinataire, format international sans « + ».
-  destinataire       String                @db.VarChar(20)
-  utilisateur_id     String?               @db.Uuid
-  type               TypeMessageWhatsapp
+  destinataire            String                @db.VarChar(20)
+  utilisateur_id          String?               @db.Uuid
+  type                    TypeMessageWhatsapp
   // texte : { texte } ; modele : { nom, langue, composants }
-  contenu            Json
-  statut             StatutMessageWhatsapp @default(en_attente)
+  contenu                 Json
+  statut                  StatutMessageWhatsapp @default(en_attente)
   // Identifiant Meta du message (wamid…).
-  identifiant_fournisseur String?           @db.VarChar(128)
-  erreur_code        String?               @db.VarChar(40)
-  erreur             String?               @db.Text
-  relancable         Boolean               @default(false)
-  tentatives         Int                   @default(0)
+  identifiant_fournisseur String?               @db.VarChar(128)
+  erreur_code             String?               @db.VarChar(40)
+  erreur                  String?               @db.Text
+  relancable              Boolean               @default(false)
+  tentatives              Int                   @default(0)
 
   date_creation DateTime  @default(now())
   date_envoi    DateTime?
@@ -3222,7 +3264,6 @@ model MessageWhatsapp {
   @@index([date_creation])
   @@map("message_whatsapp")
 }
-
 
 // =====================================================================
 // SMS (Twilio) — socle d'envoi et codes de vérification
@@ -3244,23 +3285,23 @@ model MessageSms {
   message_sms_id String @id @default(uuid()) @db.Uuid
 
   // Idempotence (ex. « rdv_rappel:<rdv_id>:<utilisateur_id> »).
-  cle            String?          @unique @db.VarChar(200)
+  cle                     String?          @unique @db.VarChar(200)
   // Service émetteur (ex. « code_verification », « test_back_office »).
-  origine        String           @db.VarChar(60)
+  origine                 String           @db.VarChar(60)
   // Destinataire, format international sans « + ».
-  destinataire   String           @db.VarChar(20)
-  utilisateur_id String?          @db.Uuid
+  destinataire            String           @db.VarChar(20)
+  utilisateur_id          String?          @db.Uuid
   // Texte envoyé. Pour un code de vérification, le code est MASQUÉ ici.
-  texte          String           @db.Text
-  statut         StatutMessageSms @default(en_attente)
+  texte                   String           @db.Text
+  statut                  StatutMessageSms @default(en_attente)
   // Identifiant Twilio du message (SM…), pour le rappel de statut.
-  identifiant_fournisseur String? @unique @db.VarChar(64)
+  identifiant_fournisseur String?          @unique @db.VarChar(64)
   // Nombre de segments facturés (160 caractères GSM-7, 70 en Unicode).
-  segments       Int?
-  erreur_code    String?          @db.VarChar(40)
-  erreur         String?          @db.Text
-  relancable     Boolean          @default(false)
-  tentatives     Int              @default(0)
+  segments                Int?
+  erreur_code             String?          @db.VarChar(40)
+  erreur                  String?          @db.Text
+  relancable              Boolean          @default(false)
+  tentatives              Int              @default(0)
 
   date_creation DateTime  @default(now())
   date_envoi    DateTime?
@@ -3353,4 +3394,39 @@ model DemandeConnexionWeb {
   @@index([utilisateur_id, statut, expire_le])
   @@index([date_creation])
   @@map("demande_connexion_web")
+}
+
+// -----------------------------------------------------------------
+// MessageContact : messages reçus via le formulaire public
+// « Contactez-nous » (site web), traités depuis le back-office.
+// -----------------------------------------------------------------
+enum StatutMessageContact {
+  nouveau
+  en_cours
+  traite
+}
+
+model MessageContact {
+  message_contact_id String @id @default(uuid()) @db.Uuid
+
+  nom       String  @db.VarChar(150)
+  email     String? @db.VarChar(255)
+  telephone String? @db.VarChar(30)
+  // patient | professionnel | structure | pharmacie | assurance | annonceur | autre
+  profil    String  @db.VarChar(30)
+  // question | rendez_vous | paiement | partenariat | publicite | technique | donnees | autre
+  sujet     String  @db.VarChar(30)
+  message   String  @db.Text
+
+  // Compte connecté au moment de l'envoi (facultatif).
+  utilisateur_id String? @db.Uuid
+
+  statut          StatutMessageContact @default(nouveau)
+  note_interne    String?              @db.Text
+  traite_par_id   String?              @db.Uuid
+  date_creation   DateTime             @default(now())
+  date_traitement DateTime?
+
+  @@index([statut, date_creation])
+  @@map("message_contact")
 }

@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import ApsSelect from '../components/ui/ApsSelect';
@@ -14,6 +15,8 @@ import {
 import { listerPays, listerVilles } from '../services/geoService';
 import { useGeolocation } from '../hooks/useGeolocation';
 import GoogleMapListe from '../components/maps/GoogleMapListe';
+import BanniereExpress from '../components/medecin/BanniereExpress';
+import { aUnTarif, libelleTarif } from '../utils/tarif';
 import './../assets/styles/medecin.css';
 import './../assets/styles/annuaire-2026.css';
 
@@ -376,6 +379,9 @@ export default function Medecin() {
 
           <div className="annuaire26-grille">
           <div className="annuaire26-resultats">
+            {/* RDV aléatoire : spécialité, pays et ville filtrés sont transmis à /demande-rapide. */}
+            <BanniereExpress lien={lienDemandeRapide} />
+
             <div className="annuaire26-barre">
               <div className="d-flex flex-wrap gap-2">
                 {nomSpecialite && (
@@ -404,10 +410,6 @@ export default function Medecin() {
                 )}
               </div>
               <div className="d-flex align-items-center gap-2 ms-auto">
-                {/* RDV aléatoire : spécialité, pays et ville filtrés sont transmis à /demande-rapide. */}
-                <Link to={lienDemandeRapide} className="btn btn-primary btn-sm-aps">
-                  <i className="fa-solid fa-bullhorn" /> Demande express
-                </Link>
                 <Link to="/devenir-medecin" className="btn btn-outline-primary btn-sm-aps">
                   <i className="fa-solid fa-user-doctor" /> Devenir médecin
                 </Link>
@@ -512,8 +514,8 @@ export default function Medecin() {
                             ) : (
                               <span className="aps-t-xs">Nouveau</span>
                             )}
-                            {m.tarif_indicatif !== undefined && m.tarif_indicatif !== null && (
-                              <span>{Number(m.tarif_indicatif).toLocaleString('fr-FR')} F</span>
+                            {aUnTarif(m.tarif_indicatif) && (
+                              <span className="aps-dc-tarif">{libelleTarif(m.tarif_indicatif)}</span>
                             )}
                             <Link
                               to={rdvOuvert ? `/rendez-vous/${m.medecin_id}` : `/profil/${m.medecin_id}`}

@@ -22,7 +22,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { GoogleMap, Marker } from "@react-google-maps/api";
-import { useGoogleMapsLoader } from "../../lib/googleMapsLoader";
+import { useGoogleMapsLoader, googleMapsUtilisable } from "../../lib/googleMapsLoader";
 import { geocoderAdresse } from "../../services/googleMapsService";
 
 const HAUTEUR_PAR_DEFAUT = "320px";
@@ -82,6 +82,41 @@ export default function GoogleMapPicker({ latitude, longitude, onPositionChange,
     onPositionChange(lat, lng);
   }
 
+  // Géocodage dans le navigateur (Maps JavaScript API, clé publique
+  // restreinte par referrer) : fonctionne même si la clé serveur est
+  // absente ou inutilisable. Renvoie null si aucun résultat.
+  function geocoderNavigateur(adresse) {
+    return new Promise((resolve, reject) => {
+      const geocodeur = new window.google.maps.Geocoder();
+      const requete = { address: adresse, language: "fr" };
+      if (region) requete.region = region;
+      geocodeur.geocode(requete, (resultats, statut) => {
+        if (statut === "OK" && resultats?.length) {
+          const loc = resultats[0].geometry.location;
+          resolve({ latitude: loc.lat(), longitude: loc.lng() });
+        } else if (statut === "ZERO_RESULTS") {
+          resolve(null);
+        } else {
+          reject(new Error(`Géocodage navigateur : ${statut}`));
+        }
+      });
+    });
+  }
+
+  // Navigateur d'abord, serveur en secours (et inversement le 404 du
+  // serveur signifie « aucune adresse »).
+  async function geocoder(adresse) {
+    if (googleMapsUtilisable()) {
+      try {
+        const resultat = await geocoderNavigateur(adresse);
+        if (resultat) return resultat;
+      } catch (err) {
+        console.warn(err.message);
+      }
+    }
+    return geocoderAdresse(adresse, region);
+  }
+
   async function gererRecherche(e) {
     if (e && typeof e.preventDefault === "function") e.preventDefault();
     if (!texteRecherche.trim() || rechercheEnCours) return;
@@ -89,7 +124,7 @@ export default function GoogleMapPicker({ latitude, longitude, onPositionChange,
     setRechercheEnCours(true);
     setErreurRecherche("");
     try {
-      const resultat = await geocoderAdresse(texteRecherche.trim(), region);
+      const resultat = await geocoder(texteRecherche.trim());
       onPositionChange(resultat.latitude, resultat.longitude);
       recentrer(resultat.latitude, resultat.longitude);
     } catch (err) {
@@ -106,9 +141,14 @@ export default function GoogleMapPicker({ latitude, longitude, onPositionChange,
   if (loadError) {
     return (
       <div className="alert alert-warning mb-0">
-        La carte Google Maps n'a pas pu être chargée. Vous pouvez tout de même indiquer manuellement la
-        localisation en cliquant ci-dessous une fois la page rechargée, ou contacter le support si le
-        problème persiste.
+        <i className="fa-solid fa-triangle-exclamation me-1" /> La carte n'est pas disponible pour le moment :
+        vous pourrez préciser la localisation plus tard depuis votre espace.
+        {positionConnue && (
+          <>
+            {" "}
+            Position enregistrée : {latitude.toFixed(5)}, {longitude.toFixed(5)}.
+          </>
+        )}
       </div>
     );
   }

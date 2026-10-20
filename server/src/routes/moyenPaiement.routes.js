@@ -39,6 +39,7 @@ import {
   creerMobileMoney,
   modifierMobileMoney,
   supprimerMobileMoney,
+  definirMobileMoneyActif,
   // Coordonnées CompteBancaire
   listerComptesBancairesMedecin,
   obtenirCompteBancaire,
@@ -46,6 +47,13 @@ import {
   modifierCompteBancaire,
   supprimerCompteBancaire,
 } from "../controllers/moyenPaiement.controller.js";
+import {
+  consulterCompteStripe,
+  lienInscriptionStripe,
+  lienTableauDeBordStripe,
+  dissocierCompteStripe,
+  vueEnsembleMoyensPaiement,
+} from "../controllers/stripeConnect.controller.js";
 
 const router = Router();
 
@@ -108,6 +116,8 @@ router.get("/mobile-moneys/:id", authentifier, obtenirMobileMoney);
 router.post("/mobile-moneys", authentifier, exigerPinRecent, creerMobileMoney);
 router.put("/mobile-moneys/:id", authentifier, exigerPinRecent, modifierMobileMoney);
 router.delete("/mobile-moneys/:id", authentifier, exigerPinRecent, supprimerMobileMoney);
+// Numéro actif (un seul par médecin : activer l'un désactive les autres).
+router.put("/mobile-moneys/:id/actif", authentifier, exigerPinRecent, definirMobileMoneyActif);
 
 /* ===================================================================
 CompteBancaire (Coordonnées bancaires d'un médecin)
@@ -126,5 +136,36 @@ router.get("/comptes-bancaires/:id", authentifier, obtenirCompteBancaire);
 router.post("/comptes-bancaires", authentifier, exigerPinRecent, creerCompteBancaire);
 router.put("/comptes-bancaires/:id", authentifier, exigerPinRecent, modifierCompteBancaire);
 router.delete("/comptes-bancaires/:id", authentifier, exigerPinRecent, supprimerCompteBancaire);
+
+/* ===================================================================
+Stripe Connect (réception des paiements par carte / compte bancaire)
+=================================================================== */
+// Les coordonnées sont saisies sur la page hébergée de Stripe : ApSa ne
+// reçoit jamais de numéro de carte. Inscription et tableau de bord sont
+// réservés au médecin titulaire (contrôle dans le contrôleur).
+router.get("/medecins/:medecin_id/stripe-connect", authentifier, consulterCompteStripe);
+router.post(
+  "/medecins/:medecin_id/stripe-connect/inscription",
+  authentifier,
+  exigerPinRecent,
+  lienInscriptionStripe
+);
+router.post(
+  "/medecins/:medecin_id/stripe-connect/tableau-de-bord",
+  authentifier,
+  exigerPinRecent,
+  lienTableauDeBordStripe
+);
+router.delete("/medecins/:medecin_id/stripe-connect", authentifier, exigerPinRecent, dissocierCompteStripe);
+
+/* ===================================================================
+Back-office : vue d'ensemble des moyens de paiement des médecins
+=================================================================== */
+router.get(
+  "/admin/moyens-paiement",
+  authentifier,
+  autoriser("admin", "superadmin"),
+  vueEnsembleMoyensPaiement
+);
 
 export default router;

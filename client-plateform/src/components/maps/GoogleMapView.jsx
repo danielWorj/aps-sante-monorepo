@@ -6,22 +6,27 @@
 // (URL non documentée, sans contrôle réel) par la véritable Maps
 // JavaScript API.
 //
-// Ajoute le calcul d'itinéraire réel (Directions API, via le backend —
-// voir googleMapsService.calculerItineraire) : distance et durée
-// affichées directement sur la fiche, sans quitter la plateforme. Le
+// Ajoute le calcul d'itinéraire réel (Routes API, via le backend —
+// voir googleMapsService.calculerItineraire) : distance, durée et tracé
+// (polyline renvoyée par le serveur) affichés directement sur la fiche,
+// sans quitter la plateforme. Plus de DirectionsService côté navigateur
+// (déprécié, et dépendant de l'ancienne Directions API). Le
 // lien "Ouvrir dans Google Maps" reste proposé à côté pour la
 // navigation turn-by-turn proprement dite (l'appli Google Maps native
 // fait ça mieux qu'un widget web).
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { GoogleMap, Marker, DirectionsRenderer } from "@react-google-maps/api";
+import { GoogleMap, Marker, Polyline } from "@react-google-maps/api";
 import { useGoogleMapsLoader } from "../../lib/googleMapsLoader";
+import { decoderPolyline } from "../../lib/polyline";
 import { useGeolocation } from "../../hooks/useGeolocation";
 import { calculerItineraire } from "../../services/googleMapsService";
+import CarteIndisponible from "./CarteIndisponible";
 
 const HAUTEUR_CARTE = "320px";
 const ZOOM_PAR_DEFAUT = 15;
 const OPTIONS_CARTE = { streetViewControl: false, mapTypeControl: false };
+const OPTIONS_TRACE = { strokeColor: "#16996C", strokeOpacity: 0.9, strokeWeight: 5 };
 
 /**
  * @param {object} props
@@ -34,10 +39,10 @@ export default function GoogleMapView({ latitude, longitude, nom }) {
   const { position: positionUtilisateur, loading: chargementPosition, error: erreurPosition, demanderPosition } =
     useGeolocation();
 
-  const [itineraire, setItineraire] = useState(null); // { distanceTexte, dureeTexte, trajetGoogle }
+  const [itineraire, setItineraire] = useState(null); // { distanceTexte, dureeTexte, trace, origine }
   const [calculEnCours, setCalculEnCours] = useState(false);
   const [erreurItineraire, setErreurItineraire] = useState("");
-  const [directionsService, setDirectionsService] = useState(null);
+  const carteRef = useRef(null);
   // `demanderPosition` (useGeolocation) est asynchrone côté navigateur :
   // quand la position n'est pas encore connue, obtenirItineraire() la
   // demande puis pose ce drapeau pour reprendre le calcul dès qu'elle
@@ -45,53 +50,44 @@ export default function GoogleMapView({ latitude, longitude, nom }) {
   // à recliquer une seconde fois sur le bouton.
   const calculEnAttentePositionRef = useRef(false);
 
-  const onLoadCarte = useCallback(() => {
-    // DirectionsService fait partie de la lib "core", toujours
-    // disponible dès que window.google.maps existe (isLoaded true) —
-    // pas besoin de charger la lib "places" pour ce composant.
-    if (window.google?.maps) {
-      setDirectionsService(new window.google.maps.DirectionsService());
-    }
+  const onLoadCarte = useCallback((carte) => {
+    carteRef.current = carte;
   }, []);
 
   const lancerCalcul = useCallback(async (position) => {
     setCalculEnCours(true);
     try {
-      // 1) Résumé distance/durée via le backend (clé Directions non
-      //    exposée au client — voir server/src/lib/googleMaps.js).
       const resume = await calculerItineraire({
         origineLat: position.latitude,
         origineLng: position.longitude,
         destinationLat: latitude,
         destinationLng: longitude,
       });
+      const trace = decoderPolyline(resume.polylineEncodee);
+      setItineraire({
+        distanceTexte: resume.distanceTexte,
+        dureeTexte: resume.dureeTexte,
+        trace,
+        origine: { lat: position.latitude, lng: position.longitude },
+      });
 
-      // 2) Tracé affiché sur la carte : DirectionsRenderer a besoin
-      //    d'un objet DirectionsResult natif Google (pas juste
-      //    distance/durée) — on le redemande directement au navigateur
-      //    via DirectionsService (clé Maps JavaScript API, publique,
-      //    déjà chargée pour l'affichage de la carte elle-même).
-      let trajetGoogle = null;
-      if (directionsService) {
-        trajetGoogle = await new Promise((resolve) => {
-          directionsService.route(
-            {
-              origin: { lat: position.latitude, lng: position.longitude },
-              destination: { lat: latitude, lng: longitude },
-              travelMode: window.google.maps.TravelMode.DRIVING,
-            },
-            (resultat, statut) => resolve(statut === "OK" ? resultat : null)
-          );
-        });
+      // Cadre la carte sur le trajet complet.
+      const carte = carteRef.current;
+      if (carte && trace.length > 1 && window.google?.maps) {
+        const limites = new window.google.maps.LatLngBounds();
+        trace.forEach((p) => limites.extend(p));
+        carte.fitBounds(limites, 40);
       }
-
-      setItineraire({ distanceTexte: resume.distanceTexte, dureeTexte: resume.dureeTexte, trajetGoogle });
-    } catch {
-      setErreurItineraire("Impossible de calculer l'itinéraire pour le moment.");
+    } catch (err) {
+      setErreurItineraire(
+        err?.status === 404
+          ? "Aucun itinéraire routier trouvé depuis votre position."
+          : "Impossible de calculer l'itinéraire pour le moment. Utilisez « Ouvrir dans Google Maps »."
+      );
     } finally {
       setCalculEnCours(false);
     }
-  }, [directionsService, latitude, longitude]);
+  }, [latitude, longitude]);
 
   // Reprend automatiquement le calcul dès que la position navigateur,
   // demandée par obtenirItineraire() ci-dessous, devient disponible.
@@ -114,11 +110,17 @@ export default function GoogleMapView({ latitude, longitude, nom }) {
 
   const lienGoogleMapsDirection = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
 
+  // Clé absente / refusée : intégration publique (le lieu reste visible)
+  // et lien Google Maps pour l'itinéraire.
   if (loadError) {
     return (
-      <div className="gmap-empty">
-        <i className="fa-solid fa-map-location-dot" />
-        <span>La carte n'a pas pu être chargée.</span>
+      <div>
+        <CarteIndisponible latitude={latitude} longitude={longitude} nom={nom} hauteur={HAUTEUR_CARTE} />
+        <div className="d-flex flex-wrap gap-2 mt-3">
+          <a href={lienGoogleMapsDirection} target="_blank" rel="noreferrer" className="btn btn-outline-primary btn-sm-aps">
+            <i className="fa-solid fa-diamond-turn-right" /> Itinéraire dans Google Maps
+          </a>
+        </div>
       </div>
     );
   }
@@ -141,10 +143,12 @@ export default function GoogleMapView({ latitude, longitude, nom }) {
         options={OPTIONS_CARTE}
         onLoad={onLoadCarte}
       >
-        {itineraire?.trajetGoogle ? (
-          <DirectionsRenderer directions={itineraire.trajetGoogle} options={{ suppressMarkers: false }} />
-        ) : (
-          <Marker position={{ lat: latitude, lng: longitude }} title={nom} />
+        <Marker position={{ lat: latitude, lng: longitude }} title={nom} />
+        {itineraire?.trace?.length > 1 && (
+          <>
+            <Polyline path={itineraire.trace} options={OPTIONS_TRACE} />
+            <Marker position={itineraire.origine} title="Votre position" label={{ text: "A", color: "#fff" }} />
+          </>
         )}
       </GoogleMap>
 

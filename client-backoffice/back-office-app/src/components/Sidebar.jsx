@@ -113,7 +113,8 @@ const APS_MENU = [
       // }
     ],
     items: [
-      { key: "utilisateurs", label: "Utilisateurs", icon: "fa-solid fa-users", to: "/utilisateurs" }
+      { key: "utilisateurs", label: "Utilisateurs", icon: "fa-solid fa-users", to: "/utilisateurs" },
+      { key: "messages-contact", label: "Messages de contact", icon: "fa-solid fa-envelope-open-text", to: "/messages-contact" }
     ]
   },
    {

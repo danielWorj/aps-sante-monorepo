@@ -523,35 +523,24 @@ const MedecinProfil = () => {
                 </div>
               </div>
 
-              {/* Moyens de paiement (lecture seule) */}
+              {/* Moyens de paiement : gérés sur leur propre page */}
               <div className="info-card">
                 <h3><i className="fa-solid fa-wallet"></i> Moyens de paiement</h3>
-                {profile.mobile_moneys.length > 0 && (
-                  <div className="mb-3">
-                    <h4 className="h6 text-muted mb-2">Mobile Money</h4>
-                    {profile.mobile_moneys.map((mm) => (
-                      <div key={mm.id} className="p-2 border rounded mb-2">
-                        <strong>{mm.type_mobile_money?.libelle}</strong> — {mm.numero} ({mm.titulaire})
-                      </div>
-                    ))}
+                {profile.mobile_moneys.filter((mm) => mm.actif).map((mm) => (
+                  <div key={mm.id} className="p-2 border rounded mb-2">
+                    <span className="chip chip-verifie me-2">Actif</span>
+                    <strong>{mm.type_mobile_money?.libelle}</strong> — {mm.numero} ({mm.titulaire})
                   </div>
-                )}
-                {profile.comptes_bancaires.length > 0 && (
-                  <div>
-                    <h4 className="h6 text-muted mb-2">Comptes bancaires</h4>
-                    {profile.comptes_bancaires.map((cb) => (
-                      <div key={cb.id} className="p-2 border rounded mb-2">
-                        <strong>{cb.nom_banque}</strong> — {cb.iban} ({cb.titulaire})
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {profile.mobile_moneys.length === 0 && profile.comptes_bancaires.length === 0 && (
-                  <div className="note-box">
+                ))}
+                {!profile.mobile_moneys.some((mm) => mm.actif) && (
+                  <div className="note-box mb-2">
                     <i className="fa-solid fa-circle-info"></i>
-                    <span>Aucun moyen de paiement configuré. Contactez l'administration ApSa.</span>
+                    <span>Aucun numéro Mobile Money actif.</span>
                   </div>
                 )}
+                <Link to="/portail/medecin-paiements" className="btn btn-outline-primary btn-sm-aps">
+                  <i className="fa-solid fa-pen"></i> Gérer mes moyens de paiement
+                </Link>
               </div>
 
               <div className="save-bar">

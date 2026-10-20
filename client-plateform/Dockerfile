@@ -5,16 +5,22 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 
-# Injectée au build : baked dans le bundle JS par Vite
+# Injectées au build : baked dans le bundle JS par Vite.
+# VITE_GOOGLE_MAPS_API_KEY : clé publique Maps JavaScript API (restreinte
+# par HTTP referrer côté Google Cloud Console). Ne JAMAIS y mettre la clé
+# serveur Geocoding/Routes (GOOGLE_MAPS_API_KEY, côté server/.env).
+#
+# Pas de `ENV X=${X}` : un argument vide (variable absente du .env racine
+# lu par docker compose) deviendrait une variable d'environnement VIDE,
+# prioritaire pour Vite sur le fichier client-plateform/.env — la carte
+# partait alors en production sans clé (« NoApiKeys »). Ici, un argument
+# vide est retiré de l'environnement : le .env du dossier sert de repli.
 ARG VITE_API_URL
-ENV VITE_API_URL=${VITE_API_URL}
-# Clé publique Maps JavaScript API (restreinte par HTTP referrer côté
-# Google Cloud Console — voir client-plateform/.env.example). Ne JAMAIS
-# y mettre la clé serveur Geocoding/Directions (GOOGLE_MAPS_API_KEY,
-# côté server/.env), qui elle n'a pas vocation à être publique.
 ARG VITE_GOOGLE_MAPS_API_KEY
-ENV VITE_GOOGLE_MAPS_API_KEY=${VITE_GOOGLE_MAPS_API_KEY}
-RUN npm run build
+RUN for v in VITE_API_URL VITE_GOOGLE_MAPS_API_KEY; do \
+      eval "val=\${$v}"; [ -n "$val" ] || unset "$v"; \
+    done; \
+    npm run build
 
 # Étape 2 : serveur statique
 FROM nginx:alpine
