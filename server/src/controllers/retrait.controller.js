@@ -70,10 +70,11 @@ export async function listerMesRetraits(req, res, next) {
     const [retraits, solde, mobileMoneys] = await Promise.all([
       listerRetraitsMedecin(medecin.medecin_id),
       soldePortefeuille(medecin.medecin_id),
-      // Numéros proposables comme destination (évite un second appel côté mobile).
+      // Destination proposable (évite un second appel côté mobile) : le seul
+      // numéro ACTIF — le médecin en change depuis « Moyens de paiement ».
       prisma.mobileMoney.findMany({
-        where: { medecin_id: medecin.medecin_id },
-        select: { id: true, numero: true, titulaire: true, type_mobile_money: { select: { libelle: true } } },
+        where: { medecin_id: medecin.medecin_id, actif: true },
+        select: { id: true, numero: true, titulaire: true, actif: true, type_mobile_money: { select: { libelle: true } } },
       }),
     ]);
     return res.status(200).json({

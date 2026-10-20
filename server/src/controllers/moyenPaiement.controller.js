@@ -26,6 +26,19 @@ const SELECTION_PAYS_PUBLIC = {
   select: { pays_id: true, nom: true },
 };
 
+/** « +237 6 99-12-34-56 » → « +237699123456 » (seuls le + initial et les chiffres sont gardés). */
+function normaliserNumero(numero) {
+  const brut = String(numero ?? "").trim();
+  const chiffres = brut.replace(/\D/g, "");
+  return brut.startsWith("+") ? `+${chiffres}` : chiffres;
+}
+
+function numeroValide(numero) {
+  return /^\+?\d{8,15}$/.test(numero);
+}
+
+const ORDRE_MOBILE_MONEY = [{ actif: "desc" }, { date_creation: "desc" }];
+
 function estAdmin(utilisateur) {
   return utilisateur?.role === "admin" || utilisateur?.role === "superadmin";
 }
@@ -206,6 +219,7 @@ export async function listerMobileMoneyMedecin(req, res, next) {
           include: { pays: SELECTION_PAYS_PUBLIC },
         },
       },
+      orderBy: ORDRE_MOBILE_MONEY,
     });
     return res.status(200).json({ mobileMoneys });
   } catch (err) {
@@ -273,8 +287,30 @@ export async function creerMobileMoney(req, res, next) {
       return res.status(400).json({ message: "type_mobile_money_id invalide : opérateur introuvable." });
     }
 
+    const numeroNet = normaliserNumero(numero);
+    const titulaireNet = String(titulaire).trim();
+    if (!numeroValide(numeroNet)) {
+      return res.status(400).json({ message: "Numéro de téléphone invalide (8 à 15 chiffres, indicatif facultatif)." });
+    }
+    if (!titulaireNet) {
+      return res.status(400).json({ message: "Le nom du compte est obligatoire." });
+    }
+
+    const existants = await prisma.mobileMoney.findMany({ where: { medecin_id }, select: { numero: true } });
+    if (existants.some((e) => normaliserNumero(e.numero) === numeroNet)) {
+      return res.status(409).json({ message: "Ce numéro est déjà enregistré." });
+    }
+
+    // Le premier numéro enregistré devient automatiquement le numéro actif.
     const mm = await prisma.mobileMoney.create({
-      data: { medecin_id, type_mobile_money_id, numero, titulaire },
+      data: {
+        medecin_id,
+        type_mobile_money_id,
+        numero: numeroNet,
+        titulaire: titulaireNet,
+        actif: existants.length === 0,
+      },
+      include: { type_mobile_money: { include: { pays: SELECTION_PAYS_PUBLIC } } },
     });
     return res.status(201).json({ message: "Moyen de paiement Mobile Money ajouté.", mobileMoney: mm });
   } catch (err) {
@@ -303,8 +339,25 @@ export async function modifierMobileMoney(req, res, next) {
     }
 
     const donnees = {};
-    if (req.body.numero !== undefined) donnees.numero = req.body.numero;
-    if (req.body.titulaire !== undefined) donnees.titulaire = req.body.titulaire;
+    if (req.body.numero !== undefined) {
+      const numeroNet = normaliserNumero(req.body.numero);
+      if (!numeroValide(numeroNet)) {
+        return res.status(400).json({ message: "Numéro de téléphone invalide (8 à 15 chiffres, indicatif facultatif)." });
+      }
+      const autres = await prisma.mobileMoney.findMany({
+        where: { medecin_id: mm.medecin_id, NOT: { id: mm.id } },
+        select: { numero: true },
+      });
+      if (autres.some((e) => normaliserNumero(e.numero) === numeroNet)) {
+        return res.status(409).json({ message: "Ce numéro est déjà enregistré." });
+      }
+      donnees.numero = numeroNet;
+    }
+    if (req.body.titulaire !== undefined) {
+      const titulaireNet = String(req.body.titulaire).trim();
+      if (!titulaireNet) return res.status(400).json({ message: "Le nom du compte est obligatoire." });
+      donnees.titulaire = titulaireNet;
+    }
     if (req.body.type_mobile_money_id !== undefined) {
       const typeMM = await prisma.typeMobileMoney.findUnique({ where: { id: req.body.type_mobile_money_id } });
       if (!typeMM) return res.status(400).json({ message: "type_mobile_money_id invalide : opérateur introuvable." });
@@ -318,6 +371,7 @@ export async function modifierMobileMoney(req, res, next) {
     const mmMisAJour = await prisma.mobileMoney.update({
       where: { id: req.params.id },
       data: donnees,
+      include: { type_mobile_money: { include: { pays: SELECTION_PAYS_PUBLIC } } },
     });
     return res.status(200).json({ message: "Moyen de paiement Mobile Money mis à jour.", mobileMoney: mmMisAJour });
   } catch (err) {
@@ -345,8 +399,75 @@ export async function supprimerMobileMoney(req, res, next) {
       return res.status(403).json({ message: "Accès refusé." });
     }
 
-    await prisma.mobileMoney.delete({ where: { id: req.params.id } });
-    return res.status(200).json({ message: "Moyen de paiement Mobile Money supprimé." });
+    // Supprimer le numéro actif : le plus récent des autres prend le relais,
+    // pour que les retraits restent possibles.
+    const remplacant = await prisma.$transaction(async (tx) => {
+      await tx.mobileMoney.delete({ where: { id: mm.id } });
+      if (!mm.actif) return null;
+      const suivant = await tx.mobileMoney.findFirst({
+        where: { medecin_id: mm.medecin_id },
+        orderBy: { date_creation: "desc" },
+      });
+      if (!suivant) return null;
+      return tx.mobileMoney.update({ where: { id: suivant.id }, data: { actif: true } });
+    });
+    return res.status(200).json({
+      message: remplacant
+        ? `Numéro supprimé. Le ${remplacant.numero} est désormais votre numéro actif.`
+        : "Moyen de paiement Mobile Money supprimé.",
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PUT /api/mobile-moneys/:id/actif   { actif: boolean }
+ * Réservé au médecin propriétaire ou admin/superadmin.
+ * Un seul numéro actif par médecin : activer un numéro désactive les
+ * autres dans la même transaction (l'index unique partiel
+ * mobile_money_un_actif_par_medecin le garantit aussi en base).
+ */
+export async function definirMobileMoneyActif(req, res, next) {
+  try {
+    if (typeof req.body?.actif !== "boolean") {
+      return res.status(400).json({ message: "Le champ actif (booléen) est obligatoire." });
+    }
+    const mm = await prisma.mobileMoney.findUnique({
+      where: { id: req.params.id },
+      include: { medecin: { select: { utilisateur_id: true } } },
+    });
+    if (!mm) {
+      return res.status(404).json({ message: "Moyen de paiement Mobile Money introuvable." });
+    }
+
+    const estAdministrateur = estAdmin(req.utilisateur);
+    const estProprietaire = req.utilisateur?.utilisateur_id === mm.medecin.utilisateur_id;
+    if (!estAdministrateur && !estProprietaire) {
+      return res.status(403).json({ message: "Accès refusé." });
+    }
+
+    const mobileMoneys = await prisma.$transaction(async (tx) => {
+      if (req.body.actif) {
+        await tx.mobileMoney.updateMany({
+          where: { medecin_id: mm.medecin_id, actif: true, NOT: { id: mm.id } },
+          data: { actif: false },
+        });
+      }
+      await tx.mobileMoney.update({ where: { id: mm.id }, data: { actif: req.body.actif } });
+      return tx.mobileMoney.findMany({
+        where: { medecin_id: mm.medecin_id },
+        include: { type_mobile_money: { include: { pays: SELECTION_PAYS_PUBLIC } } },
+        orderBy: ORDRE_MOBILE_MONEY,
+      });
+    });
+
+    return res.status(200).json({
+      message: req.body.actif
+        ? "Numéro activé : vos paiements Mobile Money seront versés sur ce numéro."
+        : "Numéro désactivé.",
+      mobileMoneys,
+    });
   } catch (err) {
     next(err);
   }

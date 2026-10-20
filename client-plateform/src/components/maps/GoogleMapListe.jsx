@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GoogleMap, Marker, InfoWindow } from "@react-google-maps/api";
 import { Link } from "react-router-dom";
 import { useGoogleMapsLoader } from "../../lib/googleMapsLoader";
+import CarteIndisponible from "./CarteIndisponible";
 
 const HAUTEUR_PAR_DEFAUT = "420px";
 
@@ -103,14 +104,17 @@ export default function GoogleMapListe({ points = [], hauteur = HAUTEUR_PAR_DEFA
   }, [cadrer]);
 
   if (loadError) {
+    // Un seul point : intégration publique ; sinon simple message (la
+    // vue grille reste disponible).
+    const unique = pointsValides.length === 1 ? pointsValides[0] : null;
     return (
-      <div
-        className="d-flex flex-column align-items-center justify-content-center border rounded text-center text-muted p-3"
-        style={{ height: hauteur }}
-      >
-        <i className="fa-solid fa-map-location-dot mb-2" style={{ fontSize: "1.6rem" }} />
-        <span>La carte n'a pas pu être chargée.</span>
-      </div>
+      <CarteIndisponible
+        latitude={unique?.latitude}
+        longitude={unique?.longitude}
+        nom={unique?.titre}
+        hauteur={hauteur}
+        message="La carte n'est pas disponible pour le moment. Utilisez l'affichage en grille."
+      />
     );
   }
 

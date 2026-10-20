@@ -11,6 +11,7 @@ import mobileApp from '../assets/img/mobileapp.png';
 import { useTelechargementApk } from '../hooks/useTelechargementApk';
 import { listerMedecins, listerSpecialites } from '../services/medecinService';
 import '../assets/styles/home-2026.css';
+import { aUnTarif, libelleTarif } from '../utils/tarif';
 
 // Accueil public — refonte UI web 2026 (mobile/new-web-ui.html, écran 01) :
 // bloc d'accroche sur fond vert très clair avec barre de recherche, services,
@@ -115,8 +116,8 @@ function CarteMedecin({ m }) {
           ) : (
             <span className="aps-t-xs">Nouveau</span>
           )}
-          {m.tarif_indicatif != null && (
-            <span>{Number(m.tarif_indicatif).toLocaleString('fr-FR')} F</span>
+          {aUnTarif(m.tarif_indicatif) && (
+            <span className="aps-dc-tarif">{libelleTarif(m.tarif_indicatif)}</span>
           )}
           <span className="aps-dc-go"><i className="fa-solid fa-arrow-right" /></span>
         </div>

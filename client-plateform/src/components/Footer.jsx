@@ -66,6 +66,15 @@ export default function Footer() {
           </div>
 
           <div>
+            <h5>ApSa</h5>
+            <ul className="footer-links">
+              <li><Link to="/a-propos">À propos</Link></li>
+              <li><Link to="/contact">Contactez-nous</Link></li>
+              <li><Link to="/contact#faq">Questions fréquentes</Link></li>
+            </ul>
+          </div>
+
+          <div>
             <h5>Application mobile</h5>
             <button
               type="button"

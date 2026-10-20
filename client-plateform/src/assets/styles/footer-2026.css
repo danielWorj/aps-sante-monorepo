@@ -12,7 +12,7 @@
 }
 .aps-footer-grid{
   display:grid;
-  grid-template-columns:1.6fr 1fr 1fr 1fr 1.25fr;
+  grid-template-columns:1.5fr repeat(4, 1fr) 1.25fr;
   gap:2.2rem;
 }
 .aps-footer-pitch{ font-size:.96rem; line-height:1.6; color:var(--ink-soft); max-width:290px; margin:.9rem 0 0; }
@@ -54,6 +54,10 @@
   padding:.3rem .5rem; font-size:.84rem; font-weight:600;
 }
 
+@media (max-width:1199px){
+  .aps-footer-grid{ grid-template-columns:repeat(3, 1fr); }
+  .aps-footer-marque{ grid-column:1 / -1; }
+}
 @media (max-width:991px){
   .aps-footer-grid{ grid-template-columns:1fr 1fr; }
   .aps-footer-marque{ grid-column:1 / -1; }

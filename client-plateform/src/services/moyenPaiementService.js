@@ -161,6 +161,51 @@ export async function supprimerMobileMoney(id) {
   return apiFetch(`/mobile-moneys/${id}`, { method: 'DELETE' });
 }
 
+/**
+ * PUT /mobile-moneys/:id/actif
+ * Un seul numéro actif par médecin : activer un numéro désactive les
+ * autres. Renvoie la liste à jour des numéros du médecin.
+ * @param {string} id
+ * @param {boolean} actif
+ */
+export async function definirMobileMoneyActif(id, actif) {
+  return apiFetch(`/mobile-moneys/${id}/actif`, {
+    method: 'PUT',
+    body: { actif },
+  });
+}
+
+/* ===================================================================
+ * Stripe Connect (réception des paiements par carte / compte bancaire)
+ *
+ * Les coordonnées de carte sont saisies sur la page hébergée de Stripe :
+ * le serveur ne renvoie qu'une URL de redirection et un résumé
+ * (marque, 4 derniers chiffres, statut).
+ * =================================================================== */
+
+/** GET /medecins/:medecin_id/stripe-connect → compte (ou null). */
+export async function obtenirCompteStripe(medecinId) {
+  const data = await apiFetch(`/medecins/${medecinId}/stripe-connect`);
+  return data.compteStripe;
+}
+
+/** POST /medecins/:medecin_id/stripe-connect/inscription → URL Stripe. */
+export async function lienInscriptionStripe(medecinId) {
+  const data = await apiFetch(`/medecins/${medecinId}/stripe-connect/inscription`, { method: 'POST' });
+  return data.url;
+}
+
+/** POST /medecins/:medecin_id/stripe-connect/tableau-de-bord → URL Stripe Express. */
+export async function lienTableauDeBordStripe(medecinId) {
+  const data = await apiFetch(`/medecins/${medecinId}/stripe-connect/tableau-de-bord`, { method: 'POST' });
+  return data.url;
+}
+
+/** DELETE /medecins/:medecin_id/stripe-connect */
+export async function dissocierCompteStripe(medecinId) {
+  return apiFetch(`/medecins/${medecinId}/stripe-connect`, { method: 'DELETE' });
+}
+
 /* ===================================================================
  * CompteBancaire (coordonnées bancaires d'un médecin)
  *
@@ -239,6 +284,12 @@ export default {
   creerMobileMoney,
   modifierMobileMoney,
   supprimerMobileMoney,
+  definirMobileMoneyActif,
+  // Stripe Connect
+  obtenirCompteStripe,
+  lienInscriptionStripe,
+  lienTableauDeBordStripe,
+  dissocierCompteStripe,
   // CompteBancaire
   listerComptesBancairesMedecin,
   obtenirCompteBancaire,

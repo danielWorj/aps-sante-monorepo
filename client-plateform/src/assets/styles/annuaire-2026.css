@@ -101,3 +101,69 @@ section.annuaire26-corps{ padding:1.6rem 0 4rem; }
 .annuaire26-cartes.is-larges{ grid-template-columns:repeat(2, minmax(0,1fr)); }
 @media (max-width:520px){ .annuaire26-cartes.is-larges{ grid-template-columns:1fr; } }
 .annuaire26-cote .ad-col{ margin:0; position:static; }
+
+/* ----- Bannière « Rendez-vous express » (au-dessus de la liste des médecins) -----
+   Aplat vert, sans dégradé (charte 2026) ; motif décoratif en cercles. */
+.express26{
+  position:relative; overflow:hidden;
+  display:flex; align-items:center; justify-content:space-between; gap:1.5rem 2rem;
+  margin-bottom:1.3rem; padding:1.6rem 1.8rem;
+  background:var(--primary); color:#fff; border-radius:14px;
+}
+.express26::before, .express26::after{
+  content:""; position:absolute; border-radius:50%; pointer-events:none;
+  border:28px solid rgba(255,255,255,.07);
+}
+.express26::before{ width:260px; height:260px; right:-70px; top:-120px; }
+.express26::after{ width:160px; height:160px; right:210px; bottom:-110px; border-width:20px; }
+.express26-corps, .express26-action{ position:relative; z-index:1; }
+.express26-corps{ flex:1 1 auto; min-width:0; }
+.express26-eyebrow{
+  display:inline-flex; align-items:center; gap:.4rem;
+  padding:.28rem .7rem; border-radius:999px;
+  background:rgba(255,255,255,.16); font-size:.78rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+}
+.express26-eyebrow i{ color:#FFD166; }
+.express26 h2{ color:#fff; font-size:1.42rem; line-height:1.3; margin:.7rem 0 .4rem; letter-spacing:-.02em; }
+.express26 p{ color:rgba(255,255,255,.88); margin:0; max-width:620px; font-size:.95rem; }
+.express26-etapes{
+  list-style:none; padding:0; margin:1rem 0 0;
+  display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:.6rem;
+}
+.express26-etapes li{
+  display:flex; align-items:flex-start; gap:.55rem;
+  padding:.6rem .7rem; border-radius:10px; background:rgba(255,255,255,.1);
+  font-size:.83rem; font-weight:600; line-height:1.35;
+}
+.express26-num{
+  flex:none; width:22px; height:22px; border-radius:50%;
+  display:grid; place-items:center; background:#fff; color:var(--primary-dark); font-size:.75rem; font-weight:800;
+}
+.express26-action{ flex:none; display:flex; flex-direction:column; align-items:center; gap:.55rem; }
+.express26-btn{
+  display:inline-flex; align-items:center; gap:.6rem;
+  padding:.95rem 1.4rem; border-radius:12px;
+  background:#fff; color:var(--primary-dark); font-weight:800; font-size:1rem; white-space:nowrap;
+  box-shadow:0 6px 18px rgba(8,40,28,.18); transition:transform .15s ease, box-shadow .15s ease;
+}
+.express26-btn .fa-bolt{ color:#F2A900; }
+.express26-btn .fa-arrow-right{ transition:transform .15s ease; }
+.express26-btn:hover, .express26-btn:focus-visible{
+  color:var(--primary-dark); transform:translateY(-1px); box-shadow:0 10px 24px rgba(8,40,28,.24);
+}
+.express26-btn:hover .fa-arrow-right{ transform:translateX(3px); }
+.express26-btn:focus-visible{ outline:3px solid #FFD166; outline-offset:2px; }
+.express26-note{ font-size:.78rem; color:rgba(255,255,255,.85); }
+
+@media (max-width:1100px){
+  .express26{ flex-direction:column; align-items:stretch; }
+  .express26-action{ align-items:stretch; }
+  .express26-btn{ justify-content:center; }
+  .express26-note{ text-align:center; }
+}
+@media (max-width:640px){
+  .express26{ padding:1.2rem 1.1rem; }
+  .express26 h2{ font-size:1.18rem; }
+  .express26-etapes{ grid-template-columns:1fr; }
+  .express26-btn{ white-space:normal; }
+}

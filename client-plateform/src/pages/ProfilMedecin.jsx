@@ -16,6 +16,7 @@ import AvisPublicsMedecin from '../components/avis/AvisPublicsMedecin';
 import { Etoiles } from '../components/avis/Etoiles';
 import { signalerEngagement } from '../services/reputationMedecinService';
 import { useToast } from '../components/feedback';
+import { aUnTarif, libelleTarif, montantTarif } from '../utils/tarif';
 // La prise de rendez-vous (créneau, motif, inscription patient,
 // POST /rendez-vous...) ne se fait plus dans une modale sur cette
 // page : elle vit désormais entièrement dans src/pages/RendezVous.jsx,
@@ -277,6 +278,9 @@ export default function ProfilMedecin() {
                 {medecin.teleconsultation_activee && (
                   <span className="chip chip-dispo"><i className="fa-solid fa-circle" /> Téléconsultation disponible</span>
                 )}
+                {aUnTarif(medecin.tarif_indicatif) && (
+                  <span className="chip chip-tarif"><i className="fa-solid fa-money-bill-wave" /> {libelleTarif(medecin.tarif_indicatif)}</span>
+                )}
               </div>
               {medecin.nombre_avis > 0 && (
                 <button type="button" className="profil-note" onClick={() => setTab('avis')}>
@@ -432,12 +436,12 @@ export default function ProfilMedecin() {
                   <div className="tab-panel active">
                     <div className="info-card">
                       <h3><i className="fa-solid fa-money-bill-wave" /> Tarifs</h3>
-                      {medecin.tarif_indicatif !== undefined && medecin.tarif_indicatif !== null ? (
+                      {aUnTarif(medecin.tarif_indicatif) ? (
                         <table className="hours-table">
                           <tbody>
                             <tr>
                               <td>Consultation (tarif indicatif)</td>
-                              <td>{Number(medecin.tarif_indicatif).toLocaleString('fr-FR')} FCFA</td>
+                              <td>{montantTarif(medecin.tarif_indicatif)}</td>
                             </tr>
                           </tbody>
                         </table>
@@ -518,6 +522,7 @@ export default function ProfilMedecin() {
                         <div className="avatar-ph"><img src={doc.photo_url || PHOTO_PAR_DEFAUT} alt={nom} /></div>
                         <h4>{nom}</h4>
                         <p>{lieu || doc.specialite?.nom || ''}</p>
+                        {aUnTarif(doc.tarif_indicatif) && <p className="mini-card-tarif">{libelleTarif(doc.tarif_indicatif)}</p>}
                         <Link to={`/profil/${doc.medecin_id}`} className="btn btn-outline-primary btn-sm-aps btn-block-aps">
                           <i className="fa-regular fa-eye" /> Voir le profil
                         </Link>

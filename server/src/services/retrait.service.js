@@ -16,7 +16,7 @@
 //     (risque de double décaissement). La demande reste `en_cours` ; webhook / cron / admin tranchent.
 //  4. Le recrédit (`credit_annulation_retrait`) n'a lieu que dans une transition d'état atomique
 //     (en_attente_validation|en_cours -> rejetee|echouee) et est idempotent (reference_idempotence).
-//  5. Le numéro de destination vient TOUJOURS de la fiche MobileMoney du médecin, jamais d'une saisie libre.
+//  5. Le numéro de destination vient TOUJOURS de la fiche MobileMoney ACTIVE du médecin, jamais d'une saisie libre.
 
 import prisma from "../lib/prisma.js";
 import {
@@ -97,8 +97,14 @@ const tronquer = (texte, max = 500) => (texte ? String(texte).slice(0, max) : nu
 export async function creerDemandeRetrait({ medecin_id, mobile_money_id, montant }) {
   const montantXaf = validerMontantRetrait(montant);
 
-  const mm = await prisma.mobileMoney.findFirst({ where: { id: mobile_money_id ?? "", medecin_id } });
+  // Sans identifiant explicite : le numéro actif du médecin.
+  const mm = await prisma.mobileMoney.findFirst({
+    where: mobile_money_id ? { id: mobile_money_id, medecin_id } : { medecin_id, actif: true },
+  });
   if (!mm) throw new RetraitError("Numéro Mobile Money introuvable dans votre profil.", 404);
+  if (!mm.actif) {
+    throw new RetraitError("Ce numéro est désactivé : activez-le dans « Moyens de paiement » avant de retirer.", 409);
+  }
 
   let numero;
   try {

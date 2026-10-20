@@ -15,7 +15,8 @@ const LIENS = [
   { to: '/pharmacie', label: 'Pharmacies' },
   { to: '/structure-sante', label: 'Structures' },
   { to: '/assurance', label: 'Assurances' },
-  { to: '/demande-rapide', label: 'Demande express' },
+  { to: '/a-propos', label: 'À propos' },
+  { to: '/contact', label: 'Contactez-nous' },
 ];
 
 function navLinkClass({ isActive }) {
