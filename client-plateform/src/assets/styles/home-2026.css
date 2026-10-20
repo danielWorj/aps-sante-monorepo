@@ -1,0 +1,132 @@
+/* Accueil public — refonte UI web 2026 (mobile/new-web-ui.html, écran 01). */
+
+.home26 section{ padding:0; }
+.home26-sec{ padding-top:5.5rem !important; }
+.home26-sec-last{ padding-bottom:5.5rem !important; }
+
+/* ----- Accroche ----- */
+.home26-hero-wrap{ padding-top:2rem !important; }
+.home26-hero{
+  background:var(--surface-sunk);
+  border:1px solid var(--primary-tint-strong);
+  border-radius:var(--radius-xl);
+  padding:3.6rem 3.6rem 0;
+  display:grid; grid-template-columns:1.05fr 1fr; gap:2.8rem;
+  /* pas d'overflow:hidden : la liste déroulante de la recherche doit pouvoir déborder */
+}
+.home26-hero-txt{ padding-bottom:3.6rem; position:relative; z-index:2; }
+.home26-badge{ background:#fff; border:1px solid var(--primary-tint-strong); padding:.4rem .85rem; }
+.home26-badge .d{ background:var(--primary); }
+.home26-hero h1{ margin-top:1.4rem; }
+.home26-accent{ color:var(--primary); }
+.home26-lead{ font-size:1.12rem; max-width:470px; margin:1.1rem 0 0; }
+.home26-sbar{ margin-top:2.2rem; margin-right:-6.5rem; position:relative; z-index:3; }
+.home26-populaires{ display:flex; align-items:center; flex-wrap:wrap; gap:.5rem; margin-top:1.1rem; }
+.home26-urgence{ margin-top:2rem; }
+.home26-urgence-lnk{
+  display:inline-flex; align-items:center; gap:.5rem;
+  font-weight:700; font-size:.96rem; color:var(--urgence);
+}
+.home26-urgence-lnk:hover{ color:var(--urgence-dark); }
+
+.home26-hero-visuel{ position:relative; min-height:500px; }
+.home26-hero-photo{
+  position:absolute; left:30px; right:0; top:0; bottom:0;
+  border-radius:16px 16px 19px 0;
+  background:#CFE3D8 center/cover no-repeat;
+}
+.home26-flot{ position:absolute; padding:1rem; }
+.home26-flot-t{ font-size:.93rem; font-weight:700; letter-spacing:-.01em; color:var(--ink); }
+.home26-flot-1{ left:-10px; top:60px; width:270px; }
+.home26-flot-2{ right:20px; top:250px; width:240px; }
+.home26-flot-3{ left:0; bottom:40px; width:265px; }
+
+.home26-garanties{
+  display:grid; grid-template-columns:repeat(4, minmax(0,1fr));
+  margin-top:2.6rem;
+  border:1px solid var(--line); border-radius:var(--radius-lg); background:var(--surface);
+}
+.home26-garantie{ display:flex; align-items:center; gap:.85rem; padding:1.4rem 1.6rem; border-right:1px solid var(--line); }
+.home26-garantie:last-child{ border-right:0; }
+.home26-garantie b{ display:block; font-size:1rem; letter-spacing:-.02em; color:var(--ink); }
+
+/* ----- Services ----- */
+.home26-service-txt{ margin:.5rem 0 1.25rem; }
+
+/* ----- Parcours ----- */
+.home26-parcours{ display:grid; grid-template-columns:1fr 1fr; gap:3.4rem; align-items:center; }
+.home26-parcours-photo{
+  position:relative; height:440px; border-radius:var(--radius-lg);
+  background:#CFE3D8 center/cover no-repeat;
+}
+.home26-sequestre{ position:absolute; right:20px; bottom:20px; width:270px; padding:1.1rem; }
+.home26-sequestre-montant{ display:block; font-size:1.7rem; letter-spacing:-.03em; color:var(--ink); }
+.home26-etapes{ list-style:none; padding:0; margin:2.2rem 0 0; display:flex; flex-direction:column; }
+.home26-etapes li{ display:flex; align-items:flex-start; gap:1.1rem; padding:1.15rem 0; }
+.home26-etapes li + li{ border-top:1px solid var(--line); margin-left:0; }
+.home26-etape-num{
+  width:44px; height:44px; border-radius:10px; flex:none;
+  display:grid; place-items:center;
+  font-family:var(--font-mono); font-size:.95rem;
+  background:var(--primary-tint); color:var(--primary-dark);
+}
+.home26-etape-num.is-on{ background:var(--primary); color:#fff; }
+
+/* ----- Application ----- */
+.home26-app{
+  display:grid; grid-template-columns:1.1fr .9fr; gap:3rem; align-items:center;
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-xl);
+  padding:3rem 3.4rem;
+}
+.home26-app-liste{ list-style:none; padding:0; margin:1.5rem 0 1.8rem; display:flex; flex-direction:column; gap:.65rem; }
+.home26-app-liste li{ display:flex; align-items:center; gap:.65rem; font-weight:600; color:var(--ink); }
+.home26-app-liste i{
+  width:22px; height:22px; border-radius:50%; flex:none; display:grid; place-items:center;
+  background:var(--primary-tint); color:var(--primary-hover); font-size:.7rem;
+}
+.home26-app-visuel{ position:relative; display:flex; justify-content:center; padding:1rem 0; }
+
+/* ----- Bandeau pro ----- */
+.home26-pro{
+  background:var(--primary); border-radius:var(--radius-xl); color:#fff;
+  padding:3.4rem 4rem;
+  display:grid; grid-template-columns:1.2fr 1fr; gap:2.8rem; align-items:center;
+}
+.home26-pro-txt{ font-size:1.07rem; line-height:1.6; color:rgba(255,255,255,.86); margin:.9rem 0 0; }
+.home26-pro-liens{ display:flex; flex-direction:column; gap:.55rem; }
+.home26-pro-liens a{
+  display:flex; align-items:center; gap:.8rem;
+  background:rgba(255,255,255,.12); border-radius:12px; padding:.85rem 1rem;
+  color:#fff; transition:background .15s ease;
+}
+.home26-pro-liens a:hover{ background:rgba(255,255,255,.2); color:#fff; }
+.home26-pro-liens b{ flex:1; font-size:1rem; }
+
+/* ----- Responsive ----- */
+@media (max-width:1100px){
+  .home26-sbar{ margin-right:0; }
+}
+@media (max-width:991px){
+  .home26-hero{ grid-template-columns:1fr; padding:2.4rem 1.6rem 0; }
+  .home26-hero-txt{ padding-bottom:0; }
+  .home26-hero-visuel{ min-height:380px; }
+  .home26-hero-photo{ left:0; }
+  .home26-flot-2{ display:none; }
+  .home26-garanties{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+  .home26-garantie:nth-child(2){ border-right:0; }
+  .home26-garantie:nth-child(-n+2){ border-bottom:1px solid var(--line); }
+  .home26-parcours, .home26-app, .home26-pro{ grid-template-columns:1fr; }
+  .home26-app{ padding:2.2rem 1.6rem; }
+  .home26-pro{ padding:2.4rem 1.6rem; }
+  .home26-sec{ padding-top:4rem !important; }
+}
+@media (max-width:560px){
+  .home26-hero{ padding:1.8rem 1.1rem 0; border-radius:var(--radius-lg); }
+  .home26-hero-visuel{ min-height:300px; }
+  .home26-flot-1{ left:8px; top:24px; width:240px; }
+  .home26-flot-3{ display:none; }
+  .home26-garanties{ grid-template-columns:1fr; }
+  .home26-garantie{ border-right:0; border-bottom:1px solid var(--line); }
+  .home26-garantie:last-child{ border-bottom:0; }
+  .home26-parcours-photo{ height:320px; }
+}

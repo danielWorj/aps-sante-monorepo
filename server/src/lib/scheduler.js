@@ -27,6 +27,7 @@ import { purgerVisiteursEngagement } from "../services/engagementMedecin.service
 import { relancerMessagesWhatsapp } from "../services/whatsapp.service.js";
 import { relancerMessagesSms } from "../services/sms.service.js";
 import { purgerCodesVerification } from "../services/verificationTelephone.service.js";
+import { purgerDemandesConnexion } from "../services/connexionApplication.service.js";
 import { expirerPublicitesNonPayees } from "../services/publicite.service.js";
 
 // Fréquence non précisée par le cahier des charges ni par le plan
@@ -214,6 +215,9 @@ export function demarrerScheduler() {
     () => {
       purgerCodesVerification().catch((err) => {
         console.error("[scheduler] Échec purge des codes de vérification :", err);
+      });
+      purgerDemandesConnexion().catch((err) => {
+        console.error("[scheduler] Échec purge des demandes de connexion web :", err);
       });
     },
     { timezone: "UTC" }

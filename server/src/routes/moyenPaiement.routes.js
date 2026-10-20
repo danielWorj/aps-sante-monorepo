@@ -24,6 +24,7 @@
 // contrôleur — le routeur se contente ici d'exiger l'authentification.
 import { Router } from "express";
 import { authentifier } from "../middlewares/auth.middleware.js";
+import { exigerPinRecent } from "../middlewares/pin.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
 import {
   // Référentiel TypeMobileMoney (opérateurs par pays)
@@ -103,9 +104,10 @@ router.get(
 router.get("/mobile-moneys", authentifier, listerMobileMoneyMedecin);
 
 router.get("/mobile-moneys/:id", authentifier, obtenirMobileMoney);
-router.post("/mobile-moneys", authentifier, creerMobileMoney);
-router.put("/mobile-moneys/:id", authentifier, modifierMobileMoney);
-router.delete("/mobile-moneys/:id", authentifier, supprimerMobileMoney);
+// Coordonnées de paiement : code PIN récent exigé (voir pin.middleware.js).
+router.post("/mobile-moneys", authentifier, exigerPinRecent, creerMobileMoney);
+router.put("/mobile-moneys/:id", authentifier, exigerPinRecent, modifierMobileMoney);
+router.delete("/mobile-moneys/:id", authentifier, exigerPinRecent, supprimerMobileMoney);
 
 /* ===================================================================
 CompteBancaire (Coordonnées bancaires d'un médecin)
@@ -121,8 +123,8 @@ router.get(
 router.get("/comptes-bancaires", authentifier, listerComptesBancairesMedecin);
 
 router.get("/comptes-bancaires/:id", authentifier, obtenirCompteBancaire);
-router.post("/comptes-bancaires", authentifier, creerCompteBancaire);
-router.put("/comptes-bancaires/:id", authentifier, modifierCompteBancaire);
-router.delete("/comptes-bancaires/:id", authentifier, supprimerCompteBancaire);
+router.post("/comptes-bancaires", authentifier, exigerPinRecent, creerCompteBancaire);
+router.put("/comptes-bancaires/:id", authentifier, exigerPinRecent, modifierCompteBancaire);
+router.delete("/comptes-bancaires/:id", authentifier, exigerPinRecent, supprimerCompteBancaire);
 
 export default router;

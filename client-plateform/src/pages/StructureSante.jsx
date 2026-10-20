@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import ApsSelect from "../components/ui/ApsSelect";
 import structure1 from "../assets/img/structure1.jpg";
 import SliderPublicite from '../components/publicite/SliderPublicite';
 import { PAGES_PUBLICITE } from '../services/publiciteService';
 import "./../assets/styles/StructureSante.css";
+import "./../assets/styles/annuaire-2026.css";
 // Services réels — voir src/services/structureSanteService.js (annuaire
 // "structure_sante" : cliniques, hôpitaux, centres médicaux,
 // dispensaires, laboratoires) et src/services/geoService.js
@@ -18,7 +20,8 @@ import { useGeolocation } from "../hooks/useGeolocation";
 
 // Page "Structures de santé" — annuaire des hôpitaux, cliniques et
 // centres de santé, avec leurs services et l'itinéraire.
-const RESULTATS_PAR_PAGE = 4;
+// Grille de cartes photo : 2 ou 3 colonnes selon la largeur.
+const RESULTATS_PAR_PAGE = 6;
 
 // Rayons proposés pour le filtre "Autour de moi" (voir
 // server/src/lib/geo.js : rayon par défaut 10 km si non précisé).
@@ -61,7 +64,6 @@ function lienItineraire(destLat, destLng, origine) {
 }
 
 function StructureCard({ structure, positionActuelle, demanderPosition }) {
-  const navigate = useNavigate();
   const meta = TYPE_META[structure.type_structure] || { cls: "is-centre", icon: "fa-hospital" };
   const ville = structure.ville?.nom;
   const pays = structure.pays?.nom;
@@ -72,76 +74,30 @@ function StructureCard({ structure, positionActuelle, demanderPosition }) {
   const destLat = structure.geolocalisation?.latitude;
   const destLng = structure.geolocalisation?.longitude;
   const hrefItineraire = lienItineraire(destLat, destLng, positionActuelle);
-
-  // Ouvre la fiche détaillée de la structure (route /structure-sante/:id).
-  function ouvrirFiche() {
-    if (structureId != null) navigate(`/structure-sante/${structureId}`);
-  }
+  const lieu = [
+    [ville, pays].filter(Boolean).join(", "),
+    typeof structure.distance_km === "number" ? `${structure.distance_km.toFixed(1)} km` : null,
+  ].filter(Boolean).join(" · ");
 
   return (
-    <div
-      className="structure-card"
-      role="button"
-      tabIndex={0}
-      style={{ cursor: "pointer" }}
-      onClick={ouvrirFiche}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          ouvrirFiche();
-        }
-      }}
-    >
-      <div className="structure-photo">
-        <img src={structure.image_url || PHOTO_PAR_DEFAUT} alt={structure.nom} />
-      </div>
-      <div>
-        <div className="structure-card-top">
-          <span className={`structure-type ${meta.cls}`}>
-            <i className={`fa-solid ${meta.icon}`} /> {libelleType(structure.type_structure)}
-          </span>
-          {structure.statut_verification === "publie" && (
-            <span className="chip chip-verifie">
-              <i className="fa-solid fa-circle" /> Structure vérifiée
-            </span>
-          )}
-        </div>
-        <h3>{structure.nom}</h3>
-        <div className="practitioner-meta">
-          {(ville || pays) && (
-            <span>
-              <i className="fa-solid fa-location-dot" /> {[ville, pays].filter(Boolean).join(" — ")}
-            </span>
-          )}
-          {typeof structure.distance_km === "number" && (
-            <>
-              <span>&middot;</span>
-              <span>
-                <i className="fa-solid fa-route" /> {structure.distance_km.toFixed(1)} km
-              </span>
-            </>
-          )}
-        </div>
-      </div>
-      {/* stopPropagation : ces boutons ont leur propre action (appel,
-          itinéraire externe) et ne doivent pas déclencher l'ouverture
-          de la fiche en plus. */}
-      <div
-        className="practitioner-actions"
-        style={{ marginLeft: "auto" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {structure.telephone && (
-          <a href={`tel:${structure.telephone}`} className="btn btn-urgence btn-sm-aps">
-            <i className="fa-solid fa-phone" /> Appeler
-          </a>
-        )}
+    <article className="aps-dc is-wide">
+      <img src={structure.image_url || PHOTO_PAR_DEFAUT} alt="" loading="lazy" />
+      {/* Zone cliquable : ouvre la fiche détaillée (route /structure-sante/:id). */}
+      {structureId != null && (
+        <Link to={`/structure-sante/${structureId}`} className="aps-dc-lien" aria-label={`Voir la fiche de ${structure.nom}`} />
+      )}
+      <div className="aps-dc-top">
+        <span className="aps-pill is-white">
+          <i className={`fa-solid ${meta.icon}`} style={{ color: "var(--primary)" }} /> {libelleType(structure.type_structure)}
+        </span>
         {hrefItineraire && (
           <a
             href={hrefItineraire}
             target="_blank"
             rel="noreferrer"
-            className="btn btn-outline-primary btn-sm-aps"
+            className="aps-dc-fav"
+            title="Itinéraire"
+            aria-label="Itinéraire"
             onClick={() => {
               // Si on n'a pas encore la position de l'utilisateur, on la
               // demande pour les prochains clics (celui-ci s'ouvre sans
@@ -149,11 +105,31 @@ function StructureCard({ structure, positionActuelle, demanderPosition }) {
               if (!positionActuelle) demanderPosition();
             }}
           >
-            <i className="fa-solid fa-diamond-turn-right" /> Itinéraire
+            <i className="fa-solid fa-diamond-turn-right" />
           </a>
         )}
       </div>
-    </div>
+      <div className="aps-dc-info">
+        <div className="d-flex align-items-center gap-2">
+          <div className="flex-grow-1" style={{ minWidth: 0 }}>
+            <div className="aps-dc-nm text-truncate">
+              {structure.nom}
+              {structure.statut_verification === "publie" && (
+                <i className="fa-solid fa-circle-check verif" title="Structure vérifiée" />
+              )}
+            </div>
+            <div className="aps-dc-sp text-truncate">{lieu || "Localisation non renseignée"}</div>
+          </div>
+          {structure.telephone ? (
+            <a href={`tel:${structure.telephone}`} className="aps-dc-go" title="Appeler" aria-label={`Appeler ${structure.nom}`}>
+              <i className="fa-solid fa-phone" />
+            </a>
+          ) : (
+            <span className="aps-dc-go"><i className="fa-solid fa-arrow-right" /></span>
+          )}
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -255,168 +231,187 @@ export default function StructureSante() {
     [structures, page]
   );
 
+  const nomType = TYPES_STRUCTURE.find((t) => t.valeur === filtres.type_structure)?.libelle;
+  const nomVille = villesFiltre.find((v) => String(v.ville_id) === String(filtres.ville_id))?.nom;
+  const nbFiltresActifs = [filtres.pays_id, filtres.type_structure, filtres.recherche, autourDeMoi].filter(Boolean).length;
+
+  function reinitialiserFiltres() {
+    setFiltres({ pays_id: "", ville_id: "", type_structure: "", recherche: "" });
+    setAutourDeMoi(false);
+  }
+
   return (
     <>
-      {/* ============================ EN-TÊTE PAGE ============================ */}
-      <section style={{ padding: "2.5rem 0 0" }}>
+      {/* ============================ EN-TÊTE + RECHERCHE ============================ */}
+      <div className="annuaire26-tete">
         <div className="container-aps">
-          <span className="eyebrow">Annuaire</span>
-          <h1 style={{ fontSize: "1.9rem", marginTop: ".5rem" }}>
-            Trouver une structure de santé
-          </h1>
-          <p className="mt-2" style={{ maxWidth: 620 }}>
-            Hôpitaux, cliniques et centres de santé près de chez vous, avec
-            leurs coordonnées, l'appel direct et l'itinéraire.
-          </p>
+          <div className="aps-t-xs">
+            <Link to="/home" className="annuaire26-fil">Accueil</Link> / Structures de santé
+          </div>
+          <div className="annuaire26-titre">
+            <h1 className="aps-h3">{nomType || "Structures de santé"}{nomVille ? ` à ${nomVille}` : ""}</h1>
+            {!chargement && !erreur && (
+              <span className="aps-t-s">
+                <b style={{ color: "var(--primary-hover)" }}>{structures.length}</b>{" "}
+                {structures.length > 1 ? "structures trouvées" : "structure trouvée"}
+              </span>
+            )}
+          </div>
+          <form className="aps-sbar annuaire26-sbar" onSubmit={soumettreFiltres}>
+            <div className="aps-sbar-f">
+              <i className="fa-solid fa-hospital" />
+              <div>
+                <label htmlFor="f-type">Type de structure</label>
+                <ApsSelect variante="nu"
+                  id="f-type"
+                  value={filtres.type_structure}
+                  onChange={(e) => setFiltres((f) => ({ ...f, type_structure: e.target.value }))}
+                >
+                  <option value="">Tous les types</option>
+                  {TYPES_STRUCTURE.map((t) => (
+                    <option key={t.valeur} value={t.valeur}>{t.libelle}</option>
+                  ))}
+                </ApsSelect>
+              </div>
+            </div>
+            <div className="aps-sbar-f">
+              <i className="fa-solid fa-magnifying-glass" />
+              <div>
+                <label htmlFor="f-recherche">Nom de la structure</label>
+                <input
+                  type="text"
+                  id="f-recherche"
+                  placeholder="Ex. Hôpital Général"
+                  value={filtres.recherche}
+                  onChange={(e) => setFiltres((f) => ({ ...f, recherche: e.target.value }))}
+                />
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary btn-lg-aps">
+              <i className="fa-solid fa-magnifying-glass" /> Rechercher
+            </button>
+          </form>
         </div>
-      </section>
+      </div>
 
-      {/* ============================ FILTRES + RÉSULTATS + PUBLICITÉ ============================ */}
-      <section style={{ paddingTop: "1.5rem" }}>
+      {/* ============================ FILTRES + RÉSULTATS ============================ */}
+      <section className="annuaire26-corps">
         <div className="container-aps">
-          <div className="row g-4">
-            {/* Colonne filtres */}
-            <div className="col-md-3">
-              <div className="filter-bar filter-sidebar">
-                <h3 style={{ marginBottom: "1rem" }}>
-                  <i className="fa-solid fa-sliders" /> Filtrer
-                </h3>
-                <form onSubmit={soumettreFiltres}>
-                  <div className="mb-3">
-                    <label className="form-label-aps" htmlFor="f-type">Type de structure</label>
-                    <select
-                      className="form-select"
-                      id="f-type"
-                      value={filtres.type_structure}
-                      onChange={(e) => setFiltres((f) => ({ ...f, type_structure: e.target.value }))}
-                    >
-                      <option value="">Tous les types</option>
-                      {TYPES_STRUCTURE.map((t) => (
-                        <option key={t.valeur} value={t.valeur}>{t.libelle}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label-aps" htmlFor="f-pays">Pays</label>
-                    <select
-                      className="form-select"
-                      id="f-pays"
-                      value={filtres.pays_id}
-                      onChange={(e) => setFiltres((f) => ({ ...f, pays_id: e.target.value, ville_id: "" }))}
-                    >
-                      <option value="">Tous les pays</option>
-                      {pays.map((p) => (
-                        <option key={p.pays_id} value={p.pays_id}>{p.nom}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label-aps" htmlFor="f-ville">Ville</label>
-                    <select
-                      className="form-select"
-                      id="f-ville"
-                      value={filtres.ville_id}
-                      onChange={(e) => setFiltres((f) => ({ ...f, ville_id: e.target.value }))}
-                      disabled={!filtres.pays_id}
-                    >
-                      <option value="">Toutes les villes</option>
-                      {villesFiltre.map((v) => (
-                        <option key={v.ville_id} value={v.ville_id}>{v.nom}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label-aps" htmlFor="f-recherche">Nom de la structure</label>
-                    {/* form-control : input texte SANS chevron */}
-                    <input
-                      type="text"
-                      className="form-control"
-                      id="f-recherche"
-                      placeholder="Ex. Hôpital Général"
-                      value={filtres.recherche}
-                      onChange={(e) => setFiltres((f) => ({ ...f, recherche: e.target.value }))}
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="chip chip-verifie" style={{ cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={autourDeMoi}
-                        onChange={(e) => handleToggleAutourDeMoi(e.target.checked)}
-                        style={{ marginRight: ".35rem" }}
-                      />
-                      <i className="fa-solid fa-location-crosshairs" /> Autour de
-                      moi
-                    </label>
-                  </div>
-                  {autourDeMoi && (
-                    <div className="mb-3">
-                      <label className="form-label-aps" htmlFor="f-rayon">
-                        Rayon de recherche
-                      </label>
-                      <select
-                        className="form-select"
-                        id="f-rayon"
-                        value={rayonKm}
-                        onChange={(e) => setRayonKm(Number(e.target.value))}
-                      >
-                        {RAYONS_KM.map((km) => (
-                          <option key={km} value={km}>
-                            {km} km
-                          </option>
-                        ))}
-                      </select>
-                      {geoEnCours && (
-                        <p className="minimal-note mt-2">Localisation en cours…</p>
-                      )}
-                      {geoErreur && (
-                        <p className="minimal-note mt-2">
-                          <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  <button type="submit" className="btn btn-primary btn-block-aps">
-                    <i className="fa-solid fa-magnifying-glass" /> Rechercher
+            <div className="aps-card annuaire26-filtres is-horizontal">
+              <div className="d-flex justify-content-between align-items-center">
+                <h2 className="aps-h4" style={{ fontSize: "1.07rem" }}>Filtres</h2>
+                {nbFiltresActifs > 0 && (
+                  <button type="button" className="aps-reset" onClick={reinitialiserFiltres}>
+                    <i className="fa-solid fa-rotate-left" /> Réinitialiser
                   </button>
-                </form>
+                )}
+              </div>
+              <div className="annuaire26-filtre">
+                <label className="form-label-aps" htmlFor="f-pays">Pays</label>
+                <ApsSelect
+                  id="f-pays"
+                  value={filtres.pays_id}
+                  onChange={(e) => setFiltres((f) => ({ ...f, pays_id: e.target.value, ville_id: "" }))}
+                >
+                  <option value="">Tous les pays</option>
+                  {pays.map((p) => (
+                    <option key={p.pays_id} value={p.pays_id}>{p.nom}</option>
+                  ))}
+                </ApsSelect>
+              </div>
+              <div className="annuaire26-filtre">
+                <label className="form-label-aps" htmlFor="f-ville">Ville</label>
+                <ApsSelect
+                  id="f-ville"
+                  value={filtres.ville_id}
+                  onChange={(e) => setFiltres((f) => ({ ...f, ville_id: e.target.value }))}
+                  disabled={!filtres.pays_id}
+                >
+                  <option value="">Toutes les villes</option>
+                  {villesFiltre.map((v) => (
+                    <option key={v.ville_id} value={v.ville_id}>{v.nom}</option>
+                  ))}
+                </ApsSelect>
+              </div>
+
+              <div className="annuaire26-sep" />
+              <div className="d-flex justify-content-between align-items-center gap-2">
+                <label htmlFor="f-autour" className="annuaire26-switch-lib">
+                  <b>Autour de moi</b>
+                  <span className="aps-t-xs">Selon votre position</span>
+                </label>
+                <div className="form-check form-switch m-0">
+                  <input className="form-check-input" type="checkbox" role="switch" id="f-autour"
+                    checked={autourDeMoi} onChange={(e) => handleToggleAutourDeMoi(e.target.checked)} />
+                </div>
+              </div>
+              {autourDeMoi && (
+                <div className="annuaire26-filtre">
+                  <span className="form-label-aps">Rayon de recherche</span>
+                  <div className="d-flex flex-wrap gap-2">
+                    {RAYONS_KM.map((km) => (
+                      <button type="button" key={km}
+                        className={`aps-chip is-sm ${rayonKm === km ? "is-on" : ""}`}
+                        onClick={() => setRayonKm(km)}>
+                        {km} km
+                      </button>
+                    ))}
+                  </div>
+                  {geoEnCours && <p className="minimal-note mt-2">Localisation en cours…</p>}
+                  {geoErreur && (
+                    <p className="minimal-note mt-2">
+                      <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+          <div className="annuaire26-grille">
+          <div className="annuaire26-resultats">
+            <div className="annuaire26-barre">
+              <div className="d-flex flex-wrap gap-2">
+                {nomType && (
+                  <button type="button" className="aps-chip is-sm is-active-filter"
+                    onClick={() => setFiltres((f) => ({ ...f, type_structure: "" }))}>
+                    {nomType} <i className="fa-solid fa-xmark" />
+                  </button>
+                )}
+                {nomVille && (
+                  <button type="button" className="aps-chip is-sm is-active-filter"
+                    onClick={() => setFiltres((f) => ({ ...f, ville_id: "" }))}>
+                    {nomVille} <i className="fa-solid fa-xmark" />
+                  </button>
+                )}
+                {filtres.recherche && (
+                  <button type="button" className="aps-chip is-sm is-active-filter"
+                    onClick={() => setFiltres((f) => ({ ...f, recherche: "" }))}>
+                    « {filtres.recherche} » <i className="fa-solid fa-xmark" />
+                  </button>
+                )}
+                {autourDeMoi && (
+                  <button type="button" className="aps-chip is-sm is-active-filter" onClick={() => setAutourDeMoi(false)}>
+                    ≤ {rayonKm} km <i className="fa-solid fa-xmark" />
+                  </button>
+                )}
+              </div>
+              <div className="ms-auto">
+                <button type="button" className="btn btn-primary btn-sm-aps" onClick={() => navigate("/structure-sante/creation")}>
+                  <i className="fa-solid fa-plus" /> Ajouter une structure
+                </button>
               </div>
             </div>
 
-            {/* Colonne résultats */}
-            <div className="col-md-6">
-              <div className="d-flex justify-content-end mb-3">
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => navigate("/structure-sante/creation")}
-                >
-                  <i className="fa-solid fa-hospital" /> Ajouter une structure
-                </button>
-              </div>
-              <div className="results-toolbar" style={{ marginTop: 0 }}>
-                <span className="text-muted-soft" style={{ fontSize: ".9rem" }}>
-                  <strong style={{ color: "var(--ink)" }}>{structures.length}</strong>{" "}
-                  structures trouvées
-                </span>
-              </div>
-              {chargement && (
-                <div className="info-card" style={{ padding: "2rem", textAlign: "center" }}>
-                  Chargement de l&apos;annuaire...
-                </div>
-              )}
-              {!chargement && erreur && (
-                <div className="info-card" style={{ padding: "2rem", textAlign: "center", color: "var(--danger, #c0392b)" }}>
-                  {erreur}
-                </div>
-              )}
-              {!chargement && !erreur && structures.length === 0 && (
-                <div className="info-card" style={{ padding: "2rem", textAlign: "center" }}>
-                  Aucune structure ne correspond à ces critères.
-                </div>
-              )}
-              {!chargement && !erreur && structures.length > 0 && (
-                <div>
+            {chargement && <div className="info-card annuaire26-etat">Chargement de l&apos;annuaire…</div>}
+            {!chargement && erreur && (
+              <div className="info-card annuaire26-etat" style={{ color: "var(--danger)" }}>{erreur}</div>
+            )}
+            {!chargement && !erreur && structures.length === 0 && (
+              <div className="info-card annuaire26-etat">Aucune structure ne correspond à ces critères.</div>
+            )}
+            {!chargement && !erreur && structures.length > 0 && (
+              <>
+                <div className="annuaire26-cartes is-larges">
                   {structuresPage.map((s) => (
                     <StructureCard
                       key={s.structure_id}
@@ -425,47 +420,46 @@ export default function StructureSante() {
                       demanderPosition={demanderPosition}
                     />
                   ))}
-                  {totalPages > 1 && (
-                    <nav aria-label="Pagination des résultats" className="mt-4">
-                      <ul className="pagination justify-content-center">
+                </div>
+                {totalPages > 1 && (
+                  <div className="annuaire26-pagination">
+                    <span className="aps-t-xs">
+                      Affichage de {(page - 1) * RESULTATS_PAR_PAGE + 1} à {Math.min(page * RESULTATS_PAR_PAGE, structures.length)} sur {structures.length}
+                    </span>
+                    <nav aria-label="Pagination des résultats">
+                      <ul className="pagination mb-0">
                         <li className={`page-item ${page === 1 ? "disabled" : ""}`}>
-                          <button type="button" className="page-link" onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                            Précédent
+                          <button type="button" className="page-link" aria-label="Page précédente"
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                            <i className="fa-solid fa-chevron-left" />
                           </button>
                         </li>
                         {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
                           <li className={`page-item ${page === n ? "active" : ""}`} key={n}>
-                            <button type="button" className="page-link" onClick={() => setPage(n)}>
-                              {n}
-                            </button>
+                            <button type="button" className="page-link" onClick={() => setPage(n)}>{n}</button>
                           </li>
                         ))}
                         <li className={`page-item ${page === totalPages ? "disabled" : ""}`}>
-                          <button
-                            type="button"
-                            className="page-link"
-                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                          >
-                            Suivant
+                          <button type="button" className="page-link" aria-label="Page suivante"
+                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                            <i className="fa-solid fa-chevron-right" />
                           </button>
                         </li>
                       </ul>
                     </nav>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <aside className="annuaire26-pubs" aria-label="Publicités">
+            <div className="ad-col">
+              <SliderPublicite code={PAGES_PUBLICITE.structure} />
             </div>
-
-            {/* Colonne publicité */}
-            <div className="col-md-3">
-              <div className="ad-col">
-                <SliderPublicite code={PAGES_PUBLICITE.structure} />
-              </div>
-            </div>
+          </aside>
           </div>
         </div>
       </section>
-
     </>
   );
 }

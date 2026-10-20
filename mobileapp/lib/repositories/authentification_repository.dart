@@ -77,7 +77,10 @@ class ApiException implements Exception {
   final String message;
   final int? statusCode;
 
-  const ApiException(this.message, {this.statusCode});
+  /// Code métier renvoyé par le serveur (`code` du corps JSON), ou null.
+  final String? code;
+
+  const ApiException(this.message, {this.statusCode, this.code});
 
   /// Vrai si l'échec vient d'une absence/expiration d'authentification.
   bool get estNonAutorise => statusCode == 401 || statusCode == 403;
@@ -139,7 +142,8 @@ class AuthentificationRepository {
     final message = (corps is Map && corps['message'] is String)
         ? corps['message'] as String
         : 'Erreur ${reponse.statusCode} lors de l\'appel à l\'API.';
-    throw ApiException(message, statusCode: reponse.statusCode);
+    final code = (corps is Map && corps['code'] is String) ? corps['code'] as String : null;
+    throw ApiException(message, statusCode: reponse.statusCode, code: code);
   }
 
   Future<dynamic> _get(String url, {String? token}) async {
@@ -201,6 +205,138 @@ class AuthentificationRepository {
       );
       //print("Json : ${json}");
       return ConnexionResultat.fromJson(_carte(json));
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────
+  // POST /auth/login-pin — connexion numéro + code PIN. Même forme de
+  // réponse que /login ; avec un PIN provisoire, `pinAChanger` est vrai
+  // et seul `tokenChangementPin` est renvoyé (aucune session).
+  // ───────────────────────────────────────────────────────────────
+  Future<ConnexionResultat> connecterParPin(ConnexionPinPayload payload) {
+    return _executer(() async {
+      final json = await _post(ApiRealEndpoints.connexionPin, body: payload.toJson());
+      return ConnexionResultat.fromJson(_carte(json));
+    });
+  }
+
+  // POST /auth/changer-pin-initial — token restreint du PIN provisoire.
+  // Ouvre la session (même forme que /login-pin réussi).
+  Future<ConnexionResultat> changerPinInitial(String nouveauPin, {required String tokenChangementPin}) {
+    return _executer(() async {
+      final json = await _post(
+        ApiRealEndpoints.changementPinInitial,
+        body: {'nouveau_pin': nouveauPin},
+        token: tokenChangementPin,
+      );
+      return ConnexionResultat.fromJson(_carte(json));
+    });
+  }
+
+  // POST /auth/pin — choisir / changer son numéro de connexion et son PIN.
+  Future<Utilisateur> definirPin({
+    required String accessToken,
+    String? telephone,
+    String? paysIso2,
+    required String pin,
+    String? ancienPin,
+    String? preuveTelephone,
+  }) {
+    return _executer(() async {
+      final json = await _post(
+        ApiRealEndpoints.pin,
+        token: accessToken,
+        body: {
+          if (telephone != null) 'telephone': telephone,
+          if (paysIso2 != null) 'pays_iso2': paysIso2,
+          'pin': pin,
+          if (ancienPin != null) 'ancien_pin': ancienPin,
+          if (preuveTelephone != null) 'preuve_telephone': preuveTelephone,
+        },
+      );
+      return Utilisateur.fromJson(_carte(_carte(json)['utilisateur']));
+    });
+  }
+
+  // GET /auth/espaces — espaces du compte, le dernier utilisé en premier.
+  Future<List<EspaceCompte>> listerEspaces({required String accessToken}) {
+    return _executer(() async {
+      final json = await _get(ApiRealEndpoints.espacesCompte, token: accessToken);
+      return EspaceCompte.listeDepuisJson(_carte(json)['espaces']);
+    });
+  }
+
+  // POST /auth/espaces/choisir — nouvelle session sur l'espace choisi
+  // (rôle de cet espace). Espace professionnel : `pin` peut être exigé
+  // (ErreurAuthentification.code == 'PIN_REQUIS').
+  Future<ConnexionResultat> choisirEspace(String cle, {required String accessToken, String? pin}) {
+    return _executer(() async {
+      final json = await _post(
+        ApiRealEndpoints.choisirEspaceCompte,
+        token: accessToken,
+        body: {'cle': cle, if (pin != null) 'pin': pin},
+      );
+      return ConnexionResultat.fromJson({'message': '', ..._carte(json)});
+    });
+  }
+
+  // POST /auth/pin/verifier — jeton valable 5 min pour les actions sensibles.
+  Future<String> verifierPin(String pin, {required String accessToken}) {
+    return _executer(() async {
+      final json = await _post(ApiRealEndpoints.verifierPin, token: accessToken, body: {'pin': pin});
+      return _carte(json)['access_token'] as String;
+    });
+  }
+
+  // GET /auth/configuration-connexion
+  Future<ConfigurationConnexion> configurationConnexion() {
+    return _executer(() async => ConfigurationConnexion.fromJson(_carte(await _get(ApiRealEndpoints.configurationConnexion))));
+  }
+
+  // POST /verification-telephone/envoyer — renvoie le message (« Code envoyé au … »).
+  Future<String> envoyerCodeTelephone({required String telephone, String? paysIso2, required String objet, String canal = 'sms'}) {
+    return _executer(() async {
+      final json = await _post(ApiRealEndpoints.envoyerCodeTelephone, body: {
+        'telephone': telephone, if (paysIso2 != null) 'pays_iso2': paysIso2, 'objet': objet, 'canal': canal,
+      });
+      return (_carte(json)['message'] as String?) ?? 'Code envoyé.';
+    });
+  }
+
+  // POST /verification-telephone/verifier — renvoie la preuve à usage unique.
+  Future<String> verifierCodeTelephone({required String telephone, String? paysIso2, required String objet, required String code}) {
+    return _executer(() async {
+      final json = await _post(ApiRealEndpoints.verifierCodeTelephone, body: {
+        'telephone': telephone, if (paysIso2 != null) 'pays_iso2': paysIso2, 'objet': objet, 'code': code,
+      });
+      return _carte(json)['preuve'] as String;
+    });
+  }
+
+  // POST /auth/pin/reinitialiser — code PIN oublié (numéro prouvé par code).
+  Future<void> reinitialiserPin({required String telephone, String? paysIso2, required String preuve, required String nouveauPin}) {
+    return _executer(() async {
+      await _post(ApiRealEndpoints.reinitialiserPin, body: {
+        'telephone': telephone, if (paysIso2 != null) 'pays_iso2': paysIso2,
+        'preuve_telephone': preuve, 'nouveau_pin': nouveauPin,
+      });
+    });
+  }
+
+  // GET /auth/connexion-application/demandes — connexions web à valider.
+  Future<List<DemandeConnexionWeb>> demandesConnexionWeb({required String accessToken}) {
+    return _executer(() async {
+      final json = _carte(await _get(ApiRealEndpoints.demandesConnexionWeb, token: accessToken));
+      return [for (final d in (json['demandes'] as List? ?? const [])) if (d is Map<String, dynamic>) DemandeConnexionWeb.fromJson(d)];
+    });
+  }
+
+  // POST /auth/connexion-application/demandes/:id/repondre
+  Future<void> repondreDemandeConnexionWeb(String demandeId, {required bool accepter, String? code, required String accessToken}) {
+    return _executer(() async {
+      await _post(ApiRealEndpoints.repondreDemandeConnexionWeb(demandeId), token: accessToken, body: {
+        'accepter': accepter, if (code != null) 'code': code,
+      });
     });
   }
 
@@ -370,6 +506,7 @@ class AuthentificationRepository {
       throw ErreurAuthentification(
         codeHttp: e.statusCode ?? 0,
         message: e.message,
+        code: e.code,
       );
     }
   }

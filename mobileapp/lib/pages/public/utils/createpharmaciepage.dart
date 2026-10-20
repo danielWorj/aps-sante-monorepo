@@ -86,6 +86,8 @@ class _CreatePharmacieScreenState extends ConsumerState<CreatePharmacieScreen>
 
   // ---- Étape 3 — Agent responsable -------------------------------------------
   final _fonctionCtrl = TextEditingController();
+  /// « Je suis le responsable » : fiche rattachée à mon compte.
+  bool _responsableMoi = true;
   final _agentNomCtrl = TextEditingController();
   final _agentPrenomCtrl = TextEditingController();
   final _agentEmailCtrl = TextEditingController();
@@ -159,6 +161,7 @@ class _CreatePharmacieScreenState extends ConsumerState<CreatePharmacieScreen>
         if (_fonctionCtrl.text.trim().isEmpty) {
           return "La fonction de l'agent est obligatoire.";
         }
+        if (_responsableMoi) return null;
         if (_agentNomCtrl.text.trim().isEmpty) {
           return "Le nom de l'agent est obligatoire.";
         }
@@ -275,6 +278,7 @@ class _CreatePharmacieScreenState extends ConsumerState<CreatePharmacieScreen>
       agentPrenom: _agentPrenomCtrl.text.trim(),
       agentEmail: _agentEmailCtrl.text.trim(),
       agentTelephone: agentTel.isEmpty ? null : agentTel,
+      responsableMoi: _responsableMoi,
       latitude: apsParseCoordonnee(_latCtrl.text),
       longitude: apsParseCoordonnee(_lngCtrl.text),
     );
@@ -287,6 +291,7 @@ class _CreatePharmacieScreenState extends ConsumerState<CreatePharmacieScreen>
     }
     final resultat = etat.value;
     if (resultat == null) return;
+    if (resultat.agent.rattacheAuCompte) ref.invalidate(espacesCompteProvider);
     setState(() {
       _resultat = resultat;
       _stepError = null;
@@ -459,6 +464,14 @@ class _CreatePharmacieScreenState extends ConsumerState<CreatePharmacieScreen>
             textCapitalization: TextCapitalization.sentences,
           ),
         ),
+        ApsCheckRow(
+          label: 'Je suis le responsable de cette fiche : elle sera rattachée à mon '
+              'compte (« Changer d’espace »), sans nouveau mot de passe. '
+              'Décochez pour créer le compte d’une autre personne.',
+          checked: _responsableMoi,
+          onTap: () => setState(() => _responsableMoi = !_responsableMoi),
+        ),
+        if (!_responsableMoi) ...[
         ApsFormField(
           label: 'Nom',
           required: true,
@@ -494,6 +507,7 @@ class _CreatePharmacieScreenState extends ConsumerState<CreatePharmacieScreen>
             keyboardType: TextInputType.phone,
           ),
         ),
+        ],
       ],
     );
   }
@@ -578,7 +592,9 @@ class _CreatePharmacieScreenState extends ConsumerState<CreatePharmacieScreen>
             ),
             ApsSummaryRow(
               label: 'Agent responsable',
-              value: '${_agentPrenomCtrl.text.trim()} '
+              value: _responsableMoi
+                  ? 'Moi (rattachée à mon compte)'
+                  : '${_agentPrenomCtrl.text.trim()} '
                       '${_agentNomCtrl.text.trim()}'
                   .trim(),
             ),
@@ -622,7 +638,15 @@ class _CreatePharmacieScreenState extends ConsumerState<CreatePharmacieScreen>
                 : "Votre demande a bien été envoyée. La fiche sera visible "
                     "dans l'annuaire après vérification par un administrateur.",
           ),
-          if (resultat != null)
+          if (resultat != null && resultat.agent.rattacheAuCompte)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 14),
+              child: ApsBanner(
+                message: 'Cette fiche est rattachée à votre compte : retrouvez-la '
+                    'dans « Changer d’espace ».',
+              ),
+            ),
+          if (resultat != null && !resultat.agent.rattacheAuCompte)
             ApsCredentialsCard(
               email: resultat.agent.utilisateur.email,
               motDePasseTemporaire: resultat.agent.motDePasseTemporaire,

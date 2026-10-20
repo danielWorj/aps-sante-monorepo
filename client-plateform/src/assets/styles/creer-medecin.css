@@ -1,199 +1,8 @@
+/* Formulaires d'inscription (médecin, patient, pharmacie, structure).
+   La base (typo, boutons, navbar, champs, pied de page) vient de style.css
+   et theme-2026.css : ne pas la redupliquer ici, ce fichier est chargé
+   pour toute l'application et l'écraserait. */
 
-/* ---------------------------- RESET / BASE ---------------------------- */
-*{box-sizing:border-box;}
-html{scroll-behavior:smooth; font-size:13px;}
-body{
-  font-family:var(--font-body);
-  color:var(--ink);
-  background:var(--surface);
-  font-size:13px;
-  line-height:1.6;
-  -webkit-font-smoothing:antialiased;
-}
-h1,h2,h3,h4,h5{
-  font-family:var(--font-display);
-  color:var(--ink);
-  font-weight:800;
-  letter-spacing:-.01em;
-  margin:0 0 .6rem;
-}
-h1{font-size:2.6rem; line-height:1.12;}
-h2{font-size:1.9rem; line-height:1.2;}
-h3{font-size:1.05rem; font-weight:700;}
-p{color:var(--ink-soft); margin:0 0 1rem;}
-a{color:var(--primary); text-decoration:none;}
-a:hover{color:var(--primary-dark);}
-:focus-visible{outline:2px solid var(--primary); outline-offset:2px; border-radius:4px;}
-img{max-width:100%; display:block;}
-
-.container-aps{
-  width:100%;
-  max-width:var(--container-w);
-  margin:0 auto;
-  padding:0 1.5rem;
-}
-
-section{padding:4.5rem 0;}
-
-.eyebrow{
-  display:inline-block;
-  font-family:var(--font-mono);
-  font-size:.72rem;
-  font-weight:600;
-  letter-spacing:.09em;
-  text-transform:uppercase;
-  color:var(--primary);
-  background:var(--primary-tint);
-  padding:.3rem .7rem;
-  border-radius:var(--radius-pill);
-}
-
-.text-muted-soft{color:var(--ink-soft) !important;}
-.text-faint{color:var(--ink-faint) !important;}
-
-/* ---------------------------- BOUTONS ---------------------------- */
-.btn{
-  font-family:var(--font-body);
-  font-weight:700;
-  font-size:.92rem;
-  border-radius:var(--radius-sm);
-  padding:.68rem 1.3rem;
-  border:1px solid transparent;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:.5rem;
-  transition:background .15s ease, border-color .15s ease, color .15s ease, transform .1s ease;
-  white-space:nowrap;
-}
-.btn:active{transform:translateY(1px);}
-
-.btn-primary{
-  background:var(--primary);
-  border-color:var(--primary);
-  color:#fff;
-}
-.btn-primary:hover{background:var(--primary-hover); border-color:var(--primary-hover); color:#fff;}
-
-.btn-outline-primary{
-  background:transparent;
-  border-color:var(--line-strong);
-  color:var(--ink);
-}
-.btn-outline-primary:hover{border-color:var(--primary); color:var(--primary); background:var(--primary-tint);}
-
-.btn-ghost{
-  background:transparent;
-  border-color:transparent;
-  color:var(--ink-soft);
-}
-.btn-ghost:hover{color:var(--primary); background:var(--surface-alt);}
-
-.btn-sm-aps{padding:.5rem 1rem; font-size:.84rem;}
-
-/* ---------------------------- NAVBAR ---------------------------- */
-.aps-navbar{
-  background:var(--surface);
-  border-bottom:1px solid var(--line);
-  position:sticky;
-  top:0;
-  z-index:200;
-}
-.navbar-inner{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:1.5rem;
-  height:72px;
-}
-.aps-logo{
-  display:flex;
-  align-items:center;
-  gap:.55rem;
-  font-family:var(--font-display);
-  font-weight:800;
-  font-size:1.25rem;
-  color:var(--ink);
-}
-.aps-logo .mark{
-  width:36px; height:36px;
-  border-radius:11px;
-  background:linear-gradient(135deg, var(--primary), var(--teal-dark));
-  color:#fff;
-  display:flex; align-items:center; justify-content:center;
-  font-size:1rem;
-  box-shadow:0 6px 14px rgba(47,92,246,.28);
-}
-.aps-nav-links{
-  display:flex;
-  align-items:center;
-  gap:1.9rem;
-  list-style:none;
-  margin:0; padding:0;
-}
-.aps-nav-links a{
-  color:var(--ink-soft);
-  font-size:.9rem;
-  font-weight:600;
-  display:inline-flex;
-  align-items:center;
-  gap:.45rem;
-}
-.aps-nav-links a i{color:var(--ink-faint); font-size:.85rem;}
-.aps-nav-links a:hover, .aps-nav-links a.text-primary{color:var(--primary);}
-.aps-nav-links a:hover i, .aps-nav-links a.text-primary i{color:var(--primary);}
-
-.aps-nav-actions{display:flex; align-items:center; gap:.6rem;}
-.navbar-toggler-aps{
-  display:none;
-  border:1px solid var(--line-strong);
-  background:var(--surface);
-  width:40px; height:40px;
-  border-radius:var(--radius-sm);
-  color:var(--ink);
-  align-items:center; justify-content:center;
-}
-
-@media (max-width:991px){
-  nav{display:none;}
-  nav.is-open{
-    display:block;
-    position:absolute;
-    top:72px; left:0; right:0;
-    background:var(--surface);
-    border-bottom:1px solid var(--line);
-    box-shadow:var(--shadow-md);
-  }
-  .aps-nav-links{flex-direction:column; align-items:flex-start; gap:0; padding:.5rem 0;}
-  .aps-nav-links li{width:100%;}
-  .aps-nav-links a{padding:.85rem 1.5rem; width:100%;}
-  .navbar-toggler-aps{display:flex;}
-}
-
-/* ---------------------------- FORMULAIRES (Bootstrap custom) ---------------------------- */
-.form-control, .form-select{
-  border:1px solid var(--line-strong);
-  border-radius:var(--radius-sm);
-  padding:.62rem .85rem;
-  font-size:.92rem;
-  color:var(--ink);
-  background-color:var(--surface);
-}
-.form-control:focus, .form-select:focus{
-  border-color:var(--primary);
-  box-shadow:0 0 0 3px var(--primary-tint);
-}
-.form-label-aps{
-  display:block;
-  font-size:.82rem;
-  font-weight:700;
-  color:var(--ink);
-  margin-bottom:.4rem;
-}
-.form-hint{font-size:.76rem; color:var(--ink-faint); margin:.35rem 0 0;}
-.form-check-input{border-color:var(--line-strong);}
-.form-check-input:checked{background-color:var(--primary); border-color:var(--primary);}
-.form-check-input:focus{box-shadow:0 0 0 3px var(--primary-tint);}
 
 /* ---------------------------- FORMULAIRE MULTI-ÉTAPES (form-shell) ---------------------------- */
 .form-shell{
@@ -366,35 +175,6 @@ section{padding:4.5rem 0;}
 }
 .form-done p{font-size:.9rem; max-width:440px; margin:0 auto 1.3rem;}
 
-/* ---------------------------- FOOTER ---------------------------- */
-.aps-footer{background:#6B7396; padding:3.5rem 0 0; color:rgba(255,255,255,.82);}
-.aps-footer h5{color:#fff; font-size:.85rem; text-transform:uppercase; letter-spacing:.05em; margin-bottom:1.1rem;}
-.footer-links{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.7rem;}
-.footer-links a{color:rgba(255,255,255,.68); font-size:.87rem;}
-.footer-links a:hover{color:#fff;}
-.social-row{display:flex; gap:.6rem;}
-.social-row a{
-  width:36px; height:36px; border-radius:50%;
-  border:1px solid rgba(255,255,255,.2);
-  color:#fff;
-  display:flex; align-items:center; justify-content:center;
-  font-size:.85rem;
-}
-.social-row a:hover{background:var(--primary); border-color:var(--primary);}
-.footer-bottom{
-  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;
-  border-top:1px solid rgba(255,255,255,.12);
-  margin-top:2.5rem;
-  padding:1.5rem 0;
-  font-size:.82rem;
-}
-.footer-lang{display:flex; align-items:center; gap:.5rem; color:rgba(255,255,255,.7);}
-.footer-lang select{
-  background:transparent; color:#fff; border:1px solid rgba(255,255,255,.25);
-  border-radius:var(--radius-sm); padding:.3rem .5rem; font-size:.78rem;
-}
-.footer-lang select option{color:#111;}
-
 /* ---------------------------- RESPONSIVE ---------------------------- */
 @media (max-width:991px){
   .form-shell-grid{grid-template-columns:1fr;}
@@ -431,7 +211,7 @@ section{padding:4.5rem 0;}
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 4px;
-  background: linear-gradient(90deg, var(--primary), var(--teal-dark));
+  background: var(--primary);
 }
 /* Checkmark animé */
 .confirm-check-wrap {
@@ -457,7 +237,7 @@ section{padding:4.5rem 0;}
   width: 90px;
   height: 90px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary), var(--teal-dark));
+  background: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -500,7 +280,7 @@ section{padding:4.5rem 0;}
 }
 /* Bloc identifiants */
 .confirm-credentials {
-  background: linear-gradient(135deg, #EEF2FF 0%, #E0F2FE 100%);
+  background: var(--surface-sunk);
   border: 1px solid #C7D2FE;
   border-radius: 16px;
   padding: 1.3rem 1.4rem;
@@ -614,7 +394,7 @@ section{padding:4.5rem 0;}
   display: inline-flex;
   align-items: center;
   gap: .6rem;
-  background: linear-gradient(135deg, var(--primary), var(--teal-dark));
+  background: var(--primary);
   color: #fff;
   border: none;
   border-radius: 12px;

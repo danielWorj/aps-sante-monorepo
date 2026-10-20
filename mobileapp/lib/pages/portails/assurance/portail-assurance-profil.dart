@@ -19,6 +19,7 @@ import '../../../models/assurance_models.dart';
 import '../../../models/portail_assurance_models.dart';
 import '../../../repositories/assurance_repository.dart';
 import 'portail_assurance_commun.dart';
+import '../../espaces/carte_connexion_compte.dart';
 
 /// Appel authentifié sur le dépôt assurance existant (fiche, activités, agences).
 Future<T> _appelAssurance<T>(WidgetRef ref, Future<T> Function(AssuranceRepository repo, String token) appel) {
@@ -52,6 +53,7 @@ class PortailAssuranceProfil extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 8),
+            const CarteConnexionCompte(),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(

@@ -10,7 +10,7 @@ encre (--ink / --ink-soft), jamais dans la couleur des données.
   --etoile:#E9A93A;
   --etoile-vide:#E3ECE7;
   --donnee:var(--primary);
-  --donnee-lavis:rgba(79,158,130,.10);
+  --donnee-lavis:rgba(22,153,108,.10);
 }
 
 /* ------------------------------ Étoiles ------------------------------ */

@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APS Santé — Nouvelle UI web</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   TOKENS — site (toujours clair) + page de présentation
+   ========================================================= */
+:root{
+  /* vert santé, clair et doux */
+  --g9:#0B4A35; --g8:#0F6B4C; --g7:#13845D; --g6:#16996C; --g5:#2FB283; --g3:#9FDCC1; --g2:#CDEEDD; --g1:#E7F6EE; --g0:#F3FAF6;
+  --co:#EE6847; --co1:#FDEDE7; --co7:#B8432A;
+  --am:#E59E2E; --am1:#FCF3E1; --am7:#9A6100;
+  --vi:#6B5CF0; --vi1:#EEECFE; --vi7:#4A3DC4;
+  --sk:#2F80ED; --sk1:#E8F1FD;
+  --rd:#E5484D; --rd1:#FDECEC;
+  --ink:#0F1C17; --ink2:#51625B; --ink3:#8A9992; --ink4:#BAC6C0;
+  --bg:#F6F8F7; --sf:#FFFFFF; --ln:#E5ECE8; --ln2:#D5DFDA;
+  --r:14px; --r-s:10px;
+  --sh:0 1px 2px rgba(15,28,23,.04),0 8px 24px -14px rgba(15,28,23,.16);
+
+  /* page (hors navigateur) */
+  --pg:#EEF3F0; --pg-ink:#0F1C17; --pg-ink2:#53635C; --pg-card:#FFFFFF; --pg-ln:#DCE5E0; --pg-accent:#13845D;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){ --pg:#0B1411; --pg-ink:#EAF2EE; --pg-ink2:#93A69D; --pg-card:#121E1A; --pg-ln:#1F2E28; --pg-accent:#4CC495; }
+}
+:root[data-theme="dark"]{ --pg:#0B1411; --pg-ink:#EAF2EE; --pg-ink2:#93A69D; --pg-card:#121E1A; --pg-ln:#1F2E28; --pg-accent:#4CC495; }
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--pg);color:var(--pg-ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.mono{font-family:'DM Mono',monospace}
+.serif{font-family:'Instrument Serif',serif;font-weight:400}
+img{display:block;max-width:100%}
+
+/* =========================================================
+   PAGE DE PRÉSENTATION
+   ========================================================= */
+.hero{max-width:1320px;margin:0 auto;padding:72px 32px 24px}
+.tag{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--pg-accent);border:1px solid var(--pg-ln);background:var(--pg-card);padding:7px 14px;border-radius:99px}
+.tag i{width:7px;height:7px;border-radius:50%;background:var(--g6);box-shadow:0 0 0 4px rgba(22,153,108,.18)}
+.hero h1{font-size:clamp(36px,5.4vw,68px);line-height:1.02;letter-spacing:-.045em;font-weight:800;margin:22px 0 18px;max-width:960px}
+.hero h1 .serif{font-style:italic;letter-spacing:-.01em;color:var(--pg-accent)}
+.hero p{font-size:17px;line-height:1.6;color:var(--pg-ink2);max-width:700px;margin:0}
+.principles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:40px}
+.pr{background:var(--pg-card);border:1px solid var(--pg-ln);border-radius:16px;padding:20px}
+.pr b{display:block;font-size:15px;margin:12px 0 6px;letter-spacing:-.01em}
+.pr p{font-size:13px;line-height:1.55;margin:0;color:var(--pg-ink2)}
+.pr .k{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--g1);color:var(--g7)}
+.ds{display:flex;flex-wrap:wrap;gap:24px;align-items:center;margin-top:14px;padding:18px 22px;background:var(--pg-card);border:1px solid var(--pg-ln);border-radius:16px}
+.ds .sw{display:flex;gap:6px}
+.ds .sw span{width:30px;height:30px;border-radius:8px;border:1px solid rgba(0,0,0,.06)}
+.ds small{font-size:12px;color:var(--pg-ink2);font-weight:600}
+.ds .ty{font-size:22px;font-weight:800;letter-spacing:-.03em}
+
+.toc{position:sticky;top:0;z-index:50;margin-top:36px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);background:color-mix(in srgb,var(--pg) 84%,transparent);border-bottom:1px solid var(--pg-ln)}
+.toc div{max-width:1320px;margin:0 auto;padding:12px 32px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+.toc a{flex-shrink:0;text-decoration:none;color:var(--pg-ink2);font-size:13px;font-weight:700;padding:8px 14px;border-radius:99px;border:1px solid var(--pg-ln);background:var(--pg-card)}
+.toc a:hover{color:var(--pg-ink);border-color:var(--pg-accent)}
+.toc a span{font-family:'DM Mono',monospace;color:var(--pg-accent);margin-right:6px}
+
+.sec{max-width:1320px;margin:0 auto;padding:88px 32px 0;scroll-margin-top:60px}
+.sec-head{display:grid;grid-template-columns:1.1fr 1fr;gap:40px;align-items:end;margin-bottom:36px}
+.sec-head .n{font-family:'DM Mono',monospace;font-size:13px;color:var(--pg-accent)}
+.sec-head h2{font-size:clamp(28px,3.4vw,42px);letter-spacing:-.04em;line-height:1.05;margin:10px 0 0;font-weight:800}
+.sec-head h2 .serif{font-style:italic;color:var(--pg-accent);letter-spacing:-.01em}
+.sec-head p{margin:0 0 14px;font-size:15px;line-height:1.6;color:var(--pg-ink2)}
+.ux{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none}
+.ux li{font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:99px;background:var(--pg-card);border:1px solid var(--pg-ln);color:var(--pg-ink)}
+.ux li::before{content:"✓";color:var(--g6);margin-right:6px;font-weight:800}
+
+.shot{margin:0 0 56px}
+.shot:last-child{margin-bottom:0}
+figcaption{display:flex;gap:12px;align-items:flex-start;margin-top:16px;max-width:760px}
+figcaption .num{font-family:'DM Mono',monospace;font-size:12px;background:var(--pg-ink);color:var(--pg);border-radius:6px;padding:4px 8px;flex-shrink:0}
+figcaption b{display:block;font-size:14.5px;letter-spacing:-.01em}
+figcaption small{display:block;font-size:12.5px;color:var(--pg-ink2);margin-top:3px;line-height:1.45}
+footer.end{max-width:1320px;margin:100px auto 0;padding:32px;border-top:1px solid var(--pg-ln);color:var(--pg-ink2);font-size:13px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
+
+@media (max-width:980px){ .principles{grid-template-columns:1fr 1fr} .sec-head{grid-template-columns:1fr;gap:16px} }
+@media (max-width:560px){
+  .hero,.sec{padding-left:16px;padding-right:16px} .toc div{padding:12px 16px} .principles{grid-template-columns:1fr}
+  footer.end{padding:24px 16px}
+}
+
+/* =========================================================
+   FENÊTRE NAVIGATEUR
+   ========================================================= */
+.win{border-radius:14px;overflow:hidden;background:var(--sf);border:1px solid var(--pg-ln);box-shadow:0 2px 4px rgba(0,0,0,.04),0 40px 80px -48px rgba(11,74,53,.45)}
+.wbar{height:42px;display:flex;align-items:center;gap:14px;padding:0 16px;background:#F1F4F2;border-bottom:1px solid var(--ln)}
+.wbar .dots{display:flex;gap:7px}
+.wbar .dots i{width:11px;height:11px;border-radius:50%;background:#D9E0DC}
+.wbar .url{flex:1;max-width:460px;margin:0 auto;height:28px;border-radius:8px;background:#fff;border:1px solid var(--ln);display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink2)}
+.wbar .url .i{width:12px;height:12px;color:var(--g6)}
+.wbar .sp{width:47px}
+.vp{overflow:hidden}
+.site{width:1280px;background:var(--bg);color:var(--ink);font-size:14px;transform-origin:0 0}
+
+/* =========================================================
+   SITE — composants
+   ========================================================= */
+.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;display:block}
+.i.s{width:16px;height:16px}.i.xs{width:13px;height:13px}.i.l{width:24px;height:24px}
+.i.f{fill:currentColor;stroke:none}.i.b{stroke-width:2.4}
+
+.row{display:flex;align-items:center;gap:10px}.between{justify-content:space-between}.col{display:flex;flex-direction:column}.grow{flex:1;min-width:0}.wrap{flex-wrap:wrap}.top-a{align-items:flex-start}
+.g4{gap:4px}.g6{gap:6px}.g8{gap:8px}.g12{gap:12px}.g16{gap:16px}.g20{gap:20px}.g24{gap:24px}
+.mt4{margin-top:4px}.mt6{margin-top:6px}.mt8{margin-top:8px}.mt10{margin-top:10px}.mt12{margin-top:12px}.mt14{margin-top:14px}.mt16{margin-top:16px}.mt20{margin-top:20px}.mt24{margin-top:24px}.mt32{margin-top:32px}
+.ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.green{color:var(--g7)}.muted{color:var(--ink3)}.red{color:var(--rd)}
+.t-xs{font-size:12px;color:var(--ink3);font-weight:600}
+.t-s{font-size:13.5px;color:var(--ink2);line-height:1.6}
+.t-b{font-size:14.5px;font-weight:700;letter-spacing:-.01em}
+.over{font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--g7)}
+.h1{font-size:54px;font-weight:800;letter-spacing:-.045em;line-height:1.04;margin:0}
+.h2{font-size:34px;font-weight:800;letter-spacing:-.04em;line-height:1.1;margin:0}
+.h3{font-size:22px;font-weight:800;letter-spacing:-.03em;line-height:1.2;margin:0}
+.h4{font-size:16px;font-weight:800;letter-spacing:-.02em;margin:0}
+.ctr{width:1160px;margin:0 auto}
+
+/* navigation publique */
+.nv{height:72px;display:flex;align-items:center;gap:36px;padding:0 60px;background:var(--sf);border-bottom:1px solid var(--ln)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px;letter-spacing:-.02em}
+.brand .lg{width:34px;height:34px;border-radius:9px;background:var(--g6);color:#fff;display:grid;place-items:center}
+.nv .links{display:flex;gap:4px;flex:1}
+.nv .links a{padding:9px 13px;border-radius:8px;font-weight:600;font-size:14px;color:var(--ink2)}
+.nv .links a.on{color:var(--ink);background:var(--g0)}
+.nv .links a.on::after{content:"";display:block;height:2px;background:var(--g6);border-radius:2px;margin-top:4px}
+
+/* boutons */
+.btn{height:44px;padding:0 20px;border-radius:var(--r-s);background:var(--g6);color:#fff;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:700;font-size:14px;letter-spacing:-.01em;white-space:nowrap;border:1px solid transparent}
+.btn.lg{height:52px;padding:0 26px;font-size:15px}
+.btn.sm{height:36px;padding:0 14px;font-size:13px;border-radius:9px}
+.btn.ghost{background:var(--sf);color:var(--ink);border-color:var(--ln2)}
+.btn.soft{background:var(--g1);color:var(--g8)}
+.btn.dark{background:var(--ink)}
+.btn.white{background:#fff;color:var(--g8)}
+.btn.red{background:var(--rd)}
+.btn.block{width:100%}
+.lnk{color:var(--g7);font-weight:700;font-size:13.5px;display:inline-flex;align-items:center;gap:4px}
+
+/* pastilles, chips */
+.pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.pill.g{background:var(--g1);color:var(--g8)}.pill.a{background:var(--am1);color:var(--am7)}.pill.c{background:var(--co1);color:var(--co7)}.pill.v{background:var(--vi1);color:var(--vi7)}.pill.s{background:var(--sk1);color:var(--sk)}.pill.r{background:var(--rd1);color:var(--rd)}.pill.k{background:var(--ink);color:#fff}
+.pill.w{background:rgba(255,255,255,.92);color:var(--ink)}
+.pill .d{width:6px;height:6px;border-radius:50%;background:currentColor}
+.chip{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:99px;background:var(--sf);border:1px solid var(--ln);font-size:13px;font-weight:600;color:var(--ink2);white-space:nowrap}
+.chip.on{background:var(--g6);border-color:var(--g6);color:#fff}
+.chip .x{opacity:.7}
+
+/* cartes */
+.card{background:var(--sf);border:1px solid var(--ln);border-radius:var(--r);padding:20px}
+.card.sh{box-shadow:var(--sh)}
+.ic{width:42px;height:42px;border-radius:10px;display:grid;place-items:center;background:var(--g1);color:var(--g7);flex-shrink:0}
+.ic.sm{width:34px;height:34px;border-radius:9px}
+.ic.c{background:var(--co1);color:var(--co7)}.ic.v{background:var(--vi1);color:var(--vi7)}.ic.s{background:var(--sk1);color:var(--sk)}.ic.a{background:var(--am1);color:var(--am7)}.ic.r{background:var(--rd1);color:var(--rd)}.ic.k{background:var(--ink);color:#fff}
+.hr{height:1px;background:var(--ln);margin:16px 0}
+.verif{color:var(--sk);display:inline;vertical-align:-2px}
+.stars{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:800;color:var(--ink)}
+.stars .i{color:#F5B400}
+.av{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px;color:#fff;background:var(--g6);flex-shrink:0;background-size:cover;background-position:center}
+.av.sm{width:32px;height:32px;font-size:11.5px}.av.lg{width:56px;height:56px;font-size:17px}
+.av.v2{background-color:#7D6EF2}.av.v3{background-color:#E9785C}.av.v4{background-color:#4F8FE6}.av.v5{background-color:#D99A2B}
+.stack{display:flex}.stack .av{border:2px solid #fff;margin-left:-10px}.stack .av:first-child{margin-left:0}
+.photo{background-color:#CFE3D8;background-size:cover;background-position:center}
+
+/* champs */
+.fl{display:flex;flex-direction:column;gap:6px}
+.fl label{font-size:12.5px;font-weight:700;color:var(--ink2)}
+.inp{height:46px;border:1px solid var(--ln2);border-radius:var(--r-s);background:var(--sf);display:flex;align-items:center;gap:10px;padding:0 14px;font-size:14px;font-weight:600;color:var(--ink)}
+.inp .ph{color:var(--ink4);font-weight:500}
+.inp .i{color:var(--ink3)}
+.inp.focus{border-color:var(--g6);box-shadow:0 0 0 4px rgba(22,153,108,.12)}
+.area{border:1px solid var(--ln2);border-radius:var(--r-s);background:var(--sf);padding:12px 14px;min-height:86px;font-size:13.5px;line-height:1.55;color:var(--ink2)}
+.caret{display:inline-block;width:2px;height:17px;background:var(--g6);vertical-align:-3px;margin-left:1px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.tg{width:40px;height:24px;border-radius:99px;background:var(--ln2);position:relative;flex-shrink:0}
+.tg::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.tg.on{background:var(--g6)}.tg.on::after{left:19px}
+.cb{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--ln2);background:#fff;display:grid;place-items:center;flex-shrink:0}
+.cb.on{background:var(--g6);border-color:var(--g6);color:#fff}
+.rd{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--ln2);background:#fff;flex-shrink:0}
+.rd.on{border:5px solid var(--g6)}
+.seg{display:flex;background:var(--bg);border:1px solid var(--ln);border-radius:11px;padding:4px}
+.seg span{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;height:36px;border-radius:8px;font-size:13px;font-weight:700;color:var(--ink2)}
+.seg span.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(15,28,23,.1)}
+.tabs-u{display:flex;gap:28px;border-bottom:1px solid var(--ln)}
+.tabs-u span{padding:14px 0;font-size:14px;font-weight:700;color:var(--ink3);position:relative}
+.tabs-u span.on{color:var(--ink)}
+.tabs-u span.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px;background:var(--g6)}
+.note{display:flex;gap:10px;padding:12px 14px;border-radius:var(--r-s);background:var(--g0);border:1px solid var(--g2);font-size:12.5px;line-height:1.5;color:var(--ink2)}
+.note .i{color:var(--g7);margin-top:1px}
+.note.a{background:var(--am1);border-color:#F4E0BA}.note.a .i{color:var(--am7)}
+
+/* créneaux */
+.slots{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.slot{height:38px;border-radius:9px;display:grid;place-items:center;background:var(--g1);color:var(--g8);font-weight:700;font-size:13px}
+.slot.off{background:var(--bg);color:var(--ink4);text-decoration:line-through}
+.slot.on{background:var(--g6);color:#fff}
+.slot.more{background:#fff;border:1px dashed var(--ln2);color:var(--ink2)}
+.days{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.day{text-align:center;padding:9px 0;border-radius:10px;border:1px solid var(--ln);background:#fff}
+.day small{display:block;font-size:11px;font-weight:700;color:var(--ink3)}
+.day b{font-size:16px}
+.day.on{background:var(--ink);border-color:var(--ink);color:#fff}.day.on small{color:rgba(255,255,255,.6)}
+.day.off{color:var(--ink4)}
+
+/* barre de recherche composée */
+.sbar{display:flex;align-items:center;background:#fff;border:1px solid var(--ln);border-radius:var(--r);padding:8px;box-shadow:var(--sh)}
+.sbar .f{flex:1;display:flex;align-items:center;gap:12px;padding:6px 16px;border-right:1px solid var(--ln);min-width:0}
+.sbar .f:last-of-type{border-right:0}
+.sbar .f small{display:block;font-size:11.5px;font-weight:700;color:var(--ink3)}
+.sbar .f b{display:block;font-size:14px;font-weight:700;margin-top:1px}
+.sbar .f b.ph{color:var(--ink4);font-weight:500}
+.sbar .f .i{color:var(--g7)}
+
+/* ===== Carte annuaire : image surplombée par le texte ===== */
+.dc{position:relative;border-radius:var(--r);overflow:hidden;aspect-ratio:4/5;background:#CFE3D8;isolation:isolate}
+.dc>img,.dc>.ph{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top}
+.dc .tl{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:center}
+.dc .fav{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.88);display:grid;place-items:center;color:var(--ink)}
+.dc .fav.on{color:var(--co)}
+.dc .info{position:absolute;left:10px;right:10px;bottom:10px;background:rgba(255,255,255,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:11px;padding:12px 12px 12px 14px}
+.dc .info .nm{font-size:15px;font-weight:800;letter-spacing:-.02em}
+.dc .info .sp{font-size:12.5px;color:var(--ink2);font-weight:600;margin-top:2px}
+.dc .info .ft{display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--ln)}
+.dc .go{width:34px;height:34px;border-radius:9px;background:var(--g6);color:#fff;display:grid;place-items:center;margin-left:auto}
+.dc.wide{aspect-ratio:4/3}
+.dc.tall{aspect-ratio:3/4}
+
+/* footer site */
+.sft{background:var(--sf);border-top:1px solid var(--ln);padding:48px 60px 28px}
+.sft h5{font-size:13px;margin:0 0 12px}
+.sft a{display:block;font-size:13px;color:var(--ink2);font-weight:500;margin-top:8px}
+
+/* espace connecté */
+.app{display:grid;grid-template-columns:248px 1fr;min-height:860px}
+.side{background:var(--sf);border-right:1px solid var(--ln);padding:20px 16px;display:flex;flex-direction:column;gap:4px}
+.side .grp{font-size:10.5px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--ink4);padding:18px 12px 6px}
+.side a{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:9px;font-size:13.5px;font-weight:600;color:var(--ink2)}
+.side a.on{background:var(--g1);color:var(--g8);font-weight:700}
+.side a em{margin-left:auto;font-style:normal;font-size:11px;font-weight:800;background:var(--co);color:#fff;border-radius:99px;padding:1px 7px}
+.topb{height:68px;display:flex;align-items:center;gap:16px;padding:0 32px;background:var(--sf);border-bottom:1px solid var(--ln)}
+.ib{width:40px;height:40px;border-radius:10px;border:1px solid var(--ln);background:#fff;display:grid;place-items:center;position:relative;color:var(--ink2)}
+.ib .dot{position:absolute;top:9px;right:10px;width:7px;height:7px;border-radius:50%;background:var(--co);border:2px solid #fff}
+.main{padding:28px 32px 40px}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:11.5px;font-weight:700;color:var(--ink3);padding:0 12px 10px;border-bottom:1px solid var(--ln)}
+.tbl td{padding:14px 12px;border-bottom:1px solid var(--ln);font-size:13.5px;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+
+/* carte géographique */
+.map{position:absolute;inset:0;width:100%;height:100%}
+.ppin{position:absolute;width:34px;height:34px;border-radius:50%;background:var(--g6);color:#fff;display:grid;place-items:center;border:3px solid #fff;box-shadow:0 6px 14px -4px rgba(0,0,0,.3);transform:translate(-50%,-50%)}
+.ppin.off{background:#9AA8A2}
+.ppin.on{width:44px;height:44px;background:var(--ink)}
+.me{position:absolute;width:16px;height:16px;border-radius:50%;background:var(--sk);border:3px solid #fff;box-shadow:0 0 0 10px rgba(47,128,237,.18);transform:translate(-50%,-50%)}
+
+.float{animation:fl 6s ease-in-out infinite}
+@keyframes fl{50%{transform:translateY(-6px)}}
+@media (prefers-reduced-motion:reduce){.float,.caret{animation:none}}
+</style>
+</head>
+<body>
+
+<!-- =========================================================
+     BIBLIOTHÈQUE D'ICÔNES (reprise de new-mobile-ui.html)
+     ========================================================= -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="sb" viewBox="0 0 66 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/><path d="M30 2.6a10 10 0 0 1 7.6 3.1l1.3-1.3A11.8 11.8 0 0 0 30 .6a11.8 11.8 0 0 0-8.9 3.8l1.3 1.3A10 10 0 0 1 30 2.6zm0 3.6a6 6 0 0 1 4.6 2l1.3-1.3a8 8 0 0 0-5.9-2.6 8 8 0 0 0-5.9 2.6l1.3 1.3a6 6 0 0 1 4.6-2zm0 3.4a2.3 2.3 0 0 0-1.7.8L30 12l1.7-1.6a2.3 2.3 0 0 0-1.7-.8z"/><rect x="43" y=".5" width="20" height="11" rx="3.2" fill="none" stroke="currentColor" opacity=".45"/><rect x="45" y="2.5" width="14" height="7" rx="1.8"/><rect x="64" y="4" width="1.6" height="4" rx=".8" opacity=".45"/></symbol>
+    <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></symbol>
+    <symbol id="pin" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
+    <symbol id="map" viewBox="0 0 24 24"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></symbol>
+    <symbol id="list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+    <symbol id="bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+    <symbol id="heart" viewBox="0 0 24 24"><path d="M19.5 12.6 12 20l-7.5-7.4A5 5 0 0 1 12 6a5 5 0 0 1 7.5 6.6z"/></symbol>
+    <symbol id="pulse" viewBox="0 0 24 24"><path d="M19.5 12.6 12 20l-7.5-7.4A5 5 0 0 1 12 6a5 5 0 0 1 7.5 6.6z"/><path d="M3.5 12h4l2-3 3 6 2-3h6"/></symbol>
+    <symbol id="star" viewBox="0 0 24 24"><path d="m12 2.8 2.8 5.7 6.3.9-4.6 4.4 1.1 6.2L12 17l-5.6 3 1.1-6.2-4.6-4.4 6.3-.9z"/></symbol>
+    <symbol id="cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M16 3v4M8 3v4M3 10h18"/></symbol>
+    <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="video" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="3"/><path d="m16 10 6-3v10l-6-3"/></symbol>
+    <symbol id="hosp" viewBox="0 0 24 24"><path d="M4 21V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14"/><path d="M2 21h20M12 8v6M9 11h6M10 21v-3h4v3"/></symbol>
+    <symbol id="pill" viewBox="0 0 24 24"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7z"/><path d="m8.5 8.5 7 7"/></symbol>
+    <symbol id="shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="siren" viewBox="0 0 24 24"><path d="M7 18v-6a5 5 0 0 1 10 0v6"/><path d="M5 21h14v-3H5zM12 2v2M4.2 5.2l1.4 1.4M19.8 5.2l-1.4 1.4M2 12h2M20 12h2"/></symbol>
+    <symbol id="phone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></symbol>
+    <symbol id="chr" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="chl" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+    <symbol id="chd" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M16 4a4 4 0 0 1 0 8M22 21a7 7 0 0 0-4-6.3"/></symbol>
+    <symbol id="home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></symbol>
+    <symbol id="wallet" viewBox="0 0 24 24"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/><path d="M16.5 14h.01"/></symbol>
+    <symbol id="card" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20M6 15h4"/></symbol>
+    <symbol id="file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></symbol>
+    <symbol id="lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+    <symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+    <symbol id="msg" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z"/></symbol>
+    <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="arr" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="nav" viewBox="0 0 24 24"><path d="m3 11 19-9-9 19-2-8z"/></symbol>
+    <symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="steth" viewBox="0 0 24 24"><path d="M5 3v6a5 5 0 0 0 10 0V3"/><path d="M10 14v2a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="12" r="2"/></symbol>
+    <symbol id="spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></symbol>
+    <symbol id="logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+    <symbol id="help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></symbol>
+    <symbol id="mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m3 7 9 6 9-6"/></symbol>
+    <symbol id="receipt" viewBox="0 0 24 24"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/></symbol>
+    <symbol id="edit" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+    <symbol id="trend" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-8M15 7h6v6"/></symbol>
+    <symbol id="locate" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+    <symbol id="share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+    <symbol id="dl" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></symbol>
+    <symbol id="zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+    <symbol id="eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14a4 4 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></symbol>
+    <symbol id="verif" viewBox="0 0 24 24"><path d="m12 2 2.4 1.8 3 .1.9 2.9 2.4 1.8-.9 2.9.9 2.9-2.4 1.8-.9 2.9-3 .1L12 22l-2.4-1.8-3-.1-.9-2.9-2.4-1.8.9-2.9-.9-2.9 2.4-1.8.9-2.9 3-.1z"/><path d="m9 12 2 2 4-4" stroke="#fff" stroke-width="2.2" fill="none"/></symbol>
+    <symbol id="grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+    <symbol id="bksp" viewBox="0 0 24 24"><path d="M21 5H9l-6 7 6 7h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><path d="m16 9-5 6M11 9l5 6"/></symbol>
+    <symbol id="send" viewBox="0 0 24 24"><path d="m22 2-11 11M22 2l-7 20-4-9-9-4z"/></symbol>
+    <symbol id="mega" viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M17 8a5 5 0 0 1 0 8M20 5a9 9 0 0 1 0 14"/></symbol>
+    <symbol id="clip" viewBox="0 0 24 24"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></symbol>
+    <symbol id="moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></symbol>
+    <symbol id="drop" viewBox="0 0 24 24"><path d="M12 2.7s7 7.3 7 12.3a7 7 0 0 1-14 0c0-5 7-12.3 7-12.3z"/></symbol>
+    <symbol id="cross" viewBox="0 0 24 24"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></symbol>
+    <symbol id="ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+    <symbol id="fire" viewBox="0 0 24 24"><path d="M12 22a7 7 0 0 0 7-7c0-4-3-6-4-9-1 2-2 3-4 3 0-2 0-4-2-7-1 4-4 7-4 12a7 7 0 0 0 7 8z"/></symbol>
+    <symbol id="google" viewBox="0 0 24 24"><path fill="#4285F4" stroke="none" d="M22.6 12.2c0-.8-.1-1.5-.2-2.2H12v4.2h5.9a5 5 0 0 1-2.2 3.3v2.7h3.6c2.1-1.9 3.3-4.8 3.3-8z"/><path fill="#34A853" stroke="none" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1-3.7 1-2.9 0-5.3-1.9-6.2-4.5H2.1v2.8A11 11 0 0 0 12 23z"/><path fill="#FBBC05" stroke="none" d="M5.8 14a6.6 6.6 0 0 1 0-4.2V7H2.1a11 11 0 0 0 0 9.9z"/><path fill="#EA4335" stroke="none" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7l3.7 2.8C6.7 7.3 9.1 5.4 12 5.4z"/></symbol>
+
+    <!-- Fond de carte stylisé -->
+    <symbol id="mapart" viewBox="0 0 340 740" preserveAspectRatio="xMidYMid slice">
+      <rect width="340" height="740" fill="#E8EFEA"/>
+      <g fill="#DFE8E2"><rect x="16" y="20" width="80" height="70" rx="8"/><rect x="170" y="30" width="70" height="90" rx="8"/><rect x="20" y="300" width="70" height="80" rx="8"/><rect x="170" y="290" width="60" height="70" rx="8"/><rect x="250" y="270" width="80" height="60" rx="8"/><rect x="30" y="640" width="90" height="70" rx="8"/><rect x="180" y="660" width="60" height="60" rx="8"/></g>
+      <rect x="252" y="40" width="90" height="170" rx="18" fill="#CFE8D8"/>
+      <rect x="20" y="130" width="60" height="70" rx="14" fill="#CFE8D8"/>
+      <path d="M-10 470C80 430 140 525 220 485s110-60 140-35v55c-40-20-100 40-150 30s-140-40-220-15z" fill="#C9E0EF"/>
+      <g stroke="#fff" fill="none" stroke-linecap="round"><path d="M-10 250 350 212" stroke-width="15"/><path d="M118-10 150 750" stroke-width="15"/><path d="M-10 610 350 640" stroke-width="12"/><path d="M262-10 232 750" stroke-width="11"/><path d="M-10 110 350 150" stroke-width="6"/><path d="M50-10 40 750" stroke-width="5"/><path d="M-10 400 350 380" stroke-width="6"/><path d="M190 -10 200 750" stroke-width="4"/><path d="M-10 540 350 560" stroke-width="4"/></g>
+      <g fill="#9CABA4" font-family="Plus Jakarta Sans" font-size="9" font-weight="700" letter-spacing=".5"><text x="160" y="226" transform="rotate(-6 160 226)">BD DE LA LIBERTÉ</text><text x="132" y="560" transform="rotate(87 132 560)">RUE JOSS</text><text x="262" y="120">PARC</text><text x="40" y="455">WOURI</text><text x="22" y="76">AKWA</text><text x="182" y="320">BONANJO</text></g>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- =========================================================
+     INTRODUCTION
+     ========================================================= -->
+<header class="hero">
+  <span class="tag"><i></i>APS Santé · Refonte web 2026</span>
+  <h1>La même clarté que l'app, <span class="serif">sur grand écran</span>.</h1>
+  <p>Déclinaison web de la nouvelle UI mobile : un site public sobre et aéré, des annuaires en cartes photo avec le texte posé sur l'image, une réservation en trois étapes et des espaces patient et médecin construits sur une barre latérale. Vert santé clair, aplats plutôt que dégradés, cartes à bords légèrement arrondis.</p>
+
+  <div class="principles">
+    <div class="pr"><div class="k"><svg class="i"><use href="#search"/></svg></div><b>La recherche au centre</b><p>Spécialité, ville et date dans une seule barre, sur l'accueil comme dans l'annuaire. Les résultats montrent les prochains créneaux.</p></div>
+    <div class="pr"><div class="k"><svg class="i"><use href="#grid"/></svg></div><b>Annuaires en photo</b><p>Médecins, pharmacies et structures partagent la même carte : grande image, bloc d'infos blanc posé dessus, une action.</p></div>
+    <div class="pr"><div class="k"><svg class="i"><use href="#shield"/></svg></div><b>Confiance visible</b><p>Badge vérifié, avis vérifiés, paiement sous séquestre : chaque preuve est affichée là où la décision se prend.</p></div>
+    <div class="pr"><div class="k"><svg class="i"><use href="#zap"/></svg></div><b>Aplats, pas d'effets</b><p>Un vert clair #16996C, des fonds blancs, des bordures fines. Pas de dégradé ni d'ombre lourde.</p></div>
+  </div>
+
+  <div class="ds">
+    <div><small>Couleurs</small><div class="sw mt6"><span style="background:#0F6B4C"></span><span style="background:#16996C"></span><span style="background:#2FB283"></span><span style="background:#CDEEDD"></span><span style="background:#E7F6EE"></span><span style="background:#0F1C17"></span><span style="background:#EE6847"></span><span style="background:#6B5CF0"></span></div></div>
+    <div><small>Typographie</small><div class="ty mt4">Plus Jakarta Sans <span class="serif" style="font-style:italic;font-weight:400">&amp; Instrument</span></div></div>
+    <div><small>Rayons</small><div class="row g6 mt6"><span style="width:28px;height:28px;border:2px solid var(--pg-accent);border-radius:6px"></span><span style="width:28px;height:28px;border:2px solid var(--pg-accent);border-radius:10px"></span><span style="width:28px;height:28px;border:2px solid var(--pg-accent);border-radius:14px"></span><small>Champs 10 · Cartes 14</small></div></div>
+    <div><small>Grille</small><div class="ty mt4" style="font-size:16px">Conteneur 1160 px · 12 colonnes</div></div>
+  </div>
+</header>
+
+<nav class="toc"><div>
+  <a href="#s1"><span>01</span>Accueil</a>
+  <a href="#s2"><span>02</span>Connexion</a>
+  <a href="#s3"><span>03</span>Annuaire médecins</a>
+  <a href="#s4"><span>04</span>Réserver</a>
+  <a href="#s5"><span>05</span>Demande express</a>
+  <a href="#s6"><span>06</span>Pharmacies &amp; structures</a>
+  <a href="#s7"><span>07</span>Espace patient</a>
+  <a href="#s8"><span>08</span>Espace médecin</a>
+</div></nav>
+
+
+<!-- =========================================================
+     01 — ACCUEIL
+     ========================================================= -->
+<section class="sec" id="s1">
+  <div class="sec-head">
+    <div><span class="n">01 — Accueil</span><h2>Une page d'accueil qui <span class="serif">mène à un rendez-vous</span>.</h2></div>
+    <div>
+      <p>Le haut de page tient en une promesse et une barre de recherche. Viennent ensuite les services, les médecins disponibles aujourd'hui en cartes photo, le parcours en trois étapes, les pharmacies de garde et l'appel aux professionnels.</p>
+      <ul class="ux"><li>Recherche spécialité · ville · date</li><li>Médecins libres aujourd'hui</li><li>Gardes en direct</li><li>Lien Urgence toujours visible</li></ul>
+    </div>
+  </div>
+
+  <figure class="shot"><div class="win"><div class="wbar"><div class="dots"><i></i><i></i><i></i></div><div class="url"><svg class="i"><use href="#lock"/></svg>aps-sante.com</div><div class="sp"></div></div><div class="vp"><div class="site">
+
+    <nav class="nv">
+      <div class="brand"><span class="lg"><svg class="i s f"><use href="#cross"/></svg></span>APS Santé</div>
+      <div class="links"><a class="on">Accueil</a><a>Médecins</a><a>Pharmacies</a><a>Structures</a><a>Assurances</a><a>Demande express</a></div>
+      <a class="row g6" style="font-weight:700;font-size:13.5px;color:var(--rd)"><svg class="i s"><use href="#siren"/></svg>Urgence</a>
+      <span class="btn ghost sm">Se connecter</span><span class="btn sm">Créer un compte</span>
+    </nav>
+
+    <!-- Hero -->
+    <div style="padding:28px 60px 0">
+      <div style="background:var(--g0);border:1px solid var(--g2);border-radius:20px;padding:56px 56px 0;display:grid;grid-template-columns:1.05fr 1fr;gap:40px;overflow:hidden">
+        <div style="padding-bottom:56px">
+          <span class="pill" style="background:#fff;color:var(--g8);border:1px solid var(--g2);padding:6px 12px"><span class="d" style="background:var(--g6)"></span>1 240 médecins vérifiés au Cameroun</span>
+          <h1 class="h1 mt20">Des soins de qualité,<br>réservés en <span style="color:var(--g6)">quelques clics</span>.</h1>
+          <p class="t-s mt16" style="font-size:16px;max-width:470px">Trouvez un médecin disponible, une pharmacie de garde ou un hôpital proche. Payez par Mobile Money, l'argent n'est versé qu'après la consultation.</p>
+          <div class="sbar mt32" style="margin-right:-90px;position:relative;z-index:3">
+            <div class="f"><svg class="i"><use href="#steth"/></svg><div><small>Spécialité ou médecin</small><b>Cardiologue</b></div></div>
+            <div class="f"><svg class="i"><use href="#pin"/></svg><div><small>Ville</small><b>Douala</b></div></div>
+            <div class="f"><svg class="i"><use href="#cal"/></svg><div><small>Date</small><b class="ph">Dès que possible</b></div></div>
+            <span class="btn lg"><svg class="i s"><use href="#search"/></svg>Rechercher</span>
+          </div>
+          <div class="row g8 mt16"><span class="t-xs">Populaire :</span><span class="chip" style="height:30px;font-size:12px">Généraliste</span><span class="chip" style="height:30px;font-size:12px">Pédiatre</span><span class="chip" style="height:30px;font-size:12px">Gynécologue</span><span class="chip" style="height:30px;font-size:12px">Dentiste</span></div>
+          <div class="row g12 mt32">
+            <div class="stack"><span class="av sm v2">AM</span><span class="av sm v3">MA</span><span class="av sm v4">JK</span><span class="av sm">+</span></div>
+            <div><div class="stars"><svg class="i xs f"><use href="#star"/></svg><svg class="i xs f"><use href="#star"/></svg><svg class="i xs f"><use href="#star"/></svg><svg class="i xs f"><use href="#star"/></svg><svg class="i xs f"><use href="#star"/></svg>&nbsp;4,8/5</div><div class="t-xs">3 200 avis vérifiés de patients</div></div>
+          </div>
+        </div>
+        <div style="position:relative;min-height:520px">
+          <div class="photo" style="position:absolute;left:30px;right:0;top:0;bottom:0;border-radius:16px 16px 0 0;background-image:url(https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=900&q=70&auto=format&fit=crop)"></div>
+          <div class="card sh float" style="position:absolute;left:-10px;top:60px;width:270px;padding:14px">
+            <div class="row between"><span class="pill g"><svg class="i xs b"><use href="#check"/></svg>RDV confirmé</span><span class="t-xs">Demain</span></div>
+            <div class="row mt12"><span class="av v2">PE</span><div><div class="t-b" style="font-size:13.5px">Dr Paul Etoundi</div><div class="t-xs">Généraliste · 10:30</div></div></div>
+          </div>
+          <div class="card sh float" style="position:absolute;right:20px;top:250px;width:230px;padding:14px;animation-delay:-2s">
+            <div class="row"><span class="ic sm"><svg class="i s"><use href="#lock"/></svg></span><div><div class="t-b" style="font-size:13px">Paiement protégé</div><div class="t-xs">MTN MoMo · Orange Money</div></div></div>
+          </div>
+          <div class="card sh float" style="position:absolute;left:0;bottom:40px;width:250px;padding:14px;animation-delay:-4s">
+            <div class="row"><span class="ic sm"><svg class="i s"><use href="#pill"/></svg></span><div class="grow"><div class="t-b" style="font-size:13px">Pharmacie de garde</div><div class="t-xs">Akwa · 600 m · ouverte</div></div><span class="pill g"><span class="d"></span>24/7</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chiffres -->
+    <div class="ctr" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:40px;border:1px solid var(--ln);border-radius:var(--r);background:#fff">
+      <div style="padding:22px 26px;border-right:1px solid var(--ln)"><b style="font-size:28px;letter-spacing:-.04em">1 240</b><div class="t-xs mt4">Médecins vérifiés</div></div>
+      <div style="padding:22px 26px;border-right:1px solid var(--ln)"><b style="font-size:28px;letter-spacing:-.04em">380</b><div class="t-xs mt4">Pharmacies partenaires</div></div>
+      <div style="padding:22px 26px;border-right:1px solid var(--ln)"><b style="font-size:28px;letter-spacing:-.04em">95</b><div class="t-xs mt4">Hôpitaux et cliniques</div></div>
+      <div style="padding:22px 26px"><b style="font-size:28px;letter-spacing:-.04em">&lt; 2 h</b><div class="t-xs mt4">Délai moyen pour un RDV</div></div>
+    </div>
+
+    <!-- Services -->
+    <div class="ctr" style="margin-top:80px">
+      <div class="row between" style="align-items:flex-end"><div><span class="over">Nos services</span><h2 class="h2 mt8">Tout votre parcours de soins,<br>au même endroit.</h2></div><p class="t-s" style="max-width:360px;margin:0">De la recherche d'un médecin au remboursement par votre assurance, sans paperasse.</p></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:32px">
+        <div class="card" style="background:var(--g6);border-color:var(--g6);color:#fff"><span class="ic" style="background:rgba(255,255,255,.18);color:#fff"><svg class="i"><use href="#steth"/></svg></span><div class="h4 mt16">Consultation au cabinet</div><p style="font-size:13.5px;line-height:1.6;opacity:.85;margin:8px 0 18px">Choisissez un créneau parmi les disponibilités du médecin, confirmées en temps réel.</p><span class="lnk" style="color:#fff">Prendre RDV<svg class="i s"><use href="#arr"/></svg></span></div>
+        <div class="card"><span class="ic s"><svg class="i"><use href="#video"/></svg></span><div class="h4 mt16">Téléconsultation</div><p class="t-s" style="margin:8px 0 18px">Consultez en vidéo depuis chez vous, ordonnance envoyée dans votre espace.</p><span class="lnk">Consulter en vidéo<svg class="i s"><use href="#arr"/></svg></span></div>
+        <div class="card"><span class="ic v"><svg class="i"><use href="#mega"/></svg></span><div class="h4 mt16">Demande express</div><p class="t-s" style="margin:8px 0 18px">Fixez le jour et l'heure, les médecins disponibles vous répondent.</p><span class="lnk">Publier une demande<svg class="i s"><use href="#arr"/></svg></span></div>
+        <div class="card"><span class="ic"><svg class="i"><use href="#pill"/></svg></span><div class="h4 mt16">Pharmacies de garde</div><p class="t-s" style="margin:8px 0 18px">Les pharmacies ouvertes cette nuit autour de vous, avec appel direct.</p><span class="lnk">Voir les gardes<svg class="i s"><use href="#arr"/></svg></span></div>
+        <div class="card"><span class="ic a"><svg class="i"><use href="#hosp"/></svg></span><div class="h4 mt16">Structures de santé</div><p class="t-s" style="margin:8px 0 18px">Hôpitaux, cliniques et laboratoires, avec leurs services et leurs médecins.</p><span class="lnk">Explorer<svg class="i s"><use href="#arr"/></svg></span></div>
+        <div class="card"><span class="ic c"><svg class="i"><use href="#shield"/></svg></span><div class="h4 mt16">Assurances santé</div><p class="t-s" style="margin:8px 0 18px">Comparez les formules des assureurs partenaires et souscrivez en ligne.</p><span class="lnk">Comparer<svg class="i s"><use href="#arr"/></svg></span></div>
+      </div>
+    </div>
+
+    <!-- Médecins -->
+    <div class="ctr" style="margin-top:80px">
+      <div class="row between" style="align-items:flex-end"><div><span class="over">Disponibles aujourd'hui</span><h2 class="h2 mt8">Rencontrez nos médecins</h2></div><div class="row g8"><span class="chip on">Tous</span><span class="chip">Généralistes</span><span class="chip">Cardiologues</span><span class="chip">Pédiatres</span><span class="ib" style="border-radius:50%"><svg class="i s"><use href="#chl"/></svg></span><span class="ib" style="border-radius:50%;background:var(--ink);color:#fff;border-color:var(--ink)"><svg class="i s"><use href="#chr"/></svg></span></div></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:28px">
+        <div class="dc"><img src="https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=600&q=70&auto=format&fit=crop" alt=""><div class="tl"><span class="pill w"><span class="d" style="color:var(--g6)"></span>Libre à 14:30</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div>
+          <div class="info"><div class="nm">Dr Arielle Mbarga <svg class="i xs f verif"><use href="#verif"/></svg></div><div class="sp">Cardiologue · Bonapriso</div><div class="ft"><span class="stars"><svg class="i xs f"><use href="#star"/></svg>4,9 <span class="t-xs">(128)</span></span><span class="t-xs" style="color:var(--ink)">15 000 F</span><span class="go"><svg class="i s"><use href="#arr"/></svg></span></div></div></div>
+        <div class="dc"><img src="https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=600&q=70&auto=format&fit=crop" alt=""><div class="tl"><span class="pill w"><span class="d" style="color:var(--g6)"></span>Libre à 15:00</span><span class="fav on"><svg class="i s f"><use href="#heart"/></svg></span></div>
+          <div class="info"><div class="nm">Dr Hervé Tchoupo <svg class="i xs f verif"><use href="#verif"/></svg></div><div class="sp">Généraliste · Akwa</div><div class="ft"><span class="stars"><svg class="i xs f"><use href="#star"/></svg>4,7 <span class="t-xs">(86)</span></span><span class="t-xs" style="color:var(--ink)">10 000 F</span><span class="go"><svg class="i s"><use href="#arr"/></svg></span></div></div></div>
+        <div class="dc"><img src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=600&q=70&auto=format&fit=crop" alt=""><div class="tl"><span class="pill w"><svg class="i xs" style="color:var(--sk)"><use href="#video"/></svg>Vidéo</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div>
+          <div class="info"><div class="nm">Dr Grâce Nkoulou <svg class="i xs f verif"><use href="#verif"/></svg></div><div class="sp">Pédiatre · Bastos</div><div class="ft"><span class="stars"><svg class="i xs f"><use href="#star"/></svg>4,8 <span class="t-xs">(204)</span></span><span class="t-xs" style="color:var(--ink)">12 000 F</span><span class="go"><svg class="i s"><use href="#arr"/></svg></span></div></div></div>
+        <div class="dc"><img src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=600&q=70&auto=format&fit=crop" alt=""><div class="tl"><span class="pill w"><span class="d" style="color:var(--g6)"></span>Libre à 16:30</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div>
+          <div class="info"><div class="nm">Dr Jean Kamdem <svg class="i xs f verif"><use href="#verif"/></svg></div><div class="sp">Dermatologue · Bonanjo</div><div class="ft"><span class="stars"><svg class="i xs f"><use href="#star"/></svg>4,6 <span class="t-xs">(57)</span></span><span class="t-xs" style="color:var(--ink)">18 000 F</span><span class="go"><svg class="i s"><use href="#arr"/></svg></span></div></div></div>
+      </div>
+      <div class="row mt24" style="justify-content:center"><span class="btn ghost">Voir les 1 240 médecins<svg class="i s"><use href="#arr"/></svg></span></div>
+    </div>
+
+    <!-- Comment ça marche -->
+    <div class="ctr" style="margin-top:80px;display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center">
+      <div class="photo" style="height:440px;border-radius:var(--r);background-image:url(assets/structure2.jpg);position:relative">
+        <div class="card sh" style="position:absolute;right:20px;bottom:20px;width:260px;padding:16px">
+          <div class="t-xs">Somme sous séquestre</div><b style="font-size:24px;letter-spacing:-.03em">15 500 F</b>
+          <div class="row mt8 g6" style="font-size:12px;color:var(--ink2);font-weight:600"><svg class="i xs green"><use href="#lock"/></svg>Versée au médecin après la consultation</div>
+        </div>
+      </div>
+      <div>
+        <span class="over">Comment ça marche</span><h2 class="h2 mt8">Trois étapes, aucune surprise.</h2>
+        <div class="col g16 mt32">
+          <div class="row top-a g16"><span class="mono" style="width:44px;height:44px;border-radius:10px;background:var(--g6);color:#fff;display:grid;place-items:center;flex-shrink:0">01</span><div><div class="h4">Choisissez un créneau</div><p class="t-s" style="margin:4px 0 0">Filtrez par spécialité, lieu, tarif ou langue. Chaque fiche affiche ses prochaines disponibilités.</p></div></div>
+          <div class="hr" style="margin:0 0 0 60px"></div>
+          <div class="row top-a g16"><span class="mono" style="width:44px;height:44px;border-radius:10px;background:var(--g1);color:var(--g8);display:grid;place-items:center;flex-shrink:0">02</span><div><div class="h4">Payez par Mobile Money</div><p class="t-s" style="margin:4px 0 0">MTN MoMo ou Orange Money. Le créneau est bloqué pendant le paiement.</p></div></div>
+          <div class="hr" style="margin:0 0 0 60px"></div>
+          <div class="row top-a g16"><span class="mono" style="width:44px;height:44px;border-radius:10px;background:var(--g1);color:var(--g8);display:grid;place-items:center;flex-shrink:0">03</span><div><div class="h4">Consultez, puis donnez votre avis</div><p class="t-s" style="margin:4px 0 0">Le médecin confirme le lieu, vous êtes notifié. Après la visite, votre avis est marqué « vérifié ».</p></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pharmacies de garde -->
+    <div class="ctr" style="margin-top:80px">
+      <div class="row between" style="align-items:flex-end"><div><span class="over">Cette nuit à Douala</span><h2 class="h2 mt8">Pharmacies de garde</h2></div><span class="lnk">Voir sur la carte<svg class="i s"><use href="#arr"/></svg></span></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:28px">
+        <div class="dc wide"><img src="assets/pharma1.jpg" alt=""><div class="tl"><span class="pill w"><span class="d" style="color:var(--g6)"></span>De garde · 24 h/24</span></div><div class="info"><div class="row"><div class="grow"><div class="nm">Pharmacie du Soleil</div><div class="sp">Akwa · 600 m · 4 min à pied</div></div><span class="go"><svg class="i s"><use href="#phone"/></svg></span></div></div></div>
+        <div class="dc wide"><img src="assets/pharma2.jpg" alt=""><div class="tl"><span class="pill w"><span class="d" style="color:var(--g6)"></span>Garde jusqu'à 08:00</span></div><div class="info"><div class="row"><div class="grow"><div class="nm">Pharmacie de Bonapriso</div><div class="sp">Bonapriso · 1,4 km · 6 min</div></div><span class="go"><svg class="i s"><use href="#phone"/></svg></span></div></div></div>
+        <div class="dc wide"><img src="assets/pharma3.jpg" alt=""><div class="tl"><span class="pill w"><span class="d" style="color:var(--g6)"></span>Garde jusqu'à 08:00</span></div><div class="info"><div class="row"><div class="grow"><div class="nm">Pharmacie Makepe</div><div class="sp">Makepe · 3,2 km · 11 min</div></div><span class="go"><svg class="i s"><use href="#phone"/></svg></span></div></div></div>
+      </div>
+    </div>
+
+    <!-- Bandeau pro -->
+    <div class="ctr" style="margin-top:80px;background:var(--g6);border-radius:20px;padding:48px 56px;color:#fff;display:grid;grid-template-columns:1.2fr 1fr;gap:40px;align-items:center">
+      <div><span class="over" style="color:var(--g2)">Professionnels de santé</span><h2 class="h2 mt8" style="color:#fff">Rejoignez APS Santé et remplissez votre agenda.</h2><p style="font-size:15px;line-height:1.6;opacity:.85;margin:12px 0 0">Médecins, pharmacies, cliniques et assureurs : un profil vérifié, un agenda en ligne et des paiements sécurisés.</p></div>
+      <div class="col g8">
+        <div class="row" style="background:rgba(255,255,255,.12);border-radius:12px;padding:12px 14px"><svg class="i s"><use href="#steth"/></svg><b class="grow" style="font-size:14px">Devenir médecin partenaire</b><svg class="i s"><use href="#arr"/></svg></div>
+        <div class="row" style="background:rgba(255,255,255,.12);border-radius:12px;padding:12px 14px"><svg class="i s"><use href="#pill"/></svg><b class="grow" style="font-size:14px">Inscrire ma pharmacie</b><svg class="i s"><use href="#arr"/></svg></div>
+        <div class="row" style="background:rgba(255,255,255,.12);border-radius:12px;padding:12px 14px"><svg class="i s"><use href="#hosp"/></svg><b class="grow" style="font-size:14px">Inscrire ma structure ou mon assurance</b><svg class="i s"><use href="#arr"/></svg></div>
+      </div>
+    </div>
+
+    <footer class="sft" style="margin-top:80px">
+      <div style="display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1.2fr;gap:32px">
+        <div><div class="brand"><span class="lg"><svg class="i s f"><use href="#cross"/></svg></span>APS Santé</div><p class="t-s mt12" style="max-width:280px">La plateforme de santé qui relie patients, médecins, pharmacies et assureurs au Cameroun.</p></div>
+        <div><h5>Patients</h5><a>Trouver un médecin</a><a>Téléconsultation</a><a>Demande express</a><a>Urgences</a></div>
+        <div><h5>Annuaires</h5><a>Pharmacies</a><a>Structures</a><a>Assurances</a><a>Annonces</a></div>
+        <div><h5>Professionnels</h5><a>Devenir partenaire</a><a>Abonnements</a><a>Publicité</a></div>
+        <div><h5>Application mobile</h5><span class="btn dark sm mt8"><svg class="i s"><use href="#dl"/></svg>Télécharger l'APK</span><div class="t-xs mt12">Urgence : SAMU 1515 · Police 117</div></div>
+      </div>
+      <div class="hr" style="margin:32px 0 18px"></div>
+      <div class="row between t-xs"><span>© 2026 APS Santé</span><span>Mentions légales · Confidentialité · FR / EN</span></div>
+    </footer>
+  </div></div></div>
+  <figcaption><span class="num">01</span><div><b>Accueil public</b><small>Bloc d'accroche sur fond vert très clair, barre de recherche qui déborde sur l'image, services, médecins disponibles en cartes photo, parcours, gardes et bandeau pro en aplat vert</small></div></figcaption></figure>
+</section>
+
+
+<!-- =========================================================
+     02 — CONNEXION
+     ========================================================= -->
+<section class="sec" id="s2">
+  <div class="sec-head">
+    <div><span class="n">02 — Connexion</span><h2>Numéro, code PIN, <span class="serif">et c'est tout</span>.</h2></div>
+    <div>
+      <p>La connexion se fait par numéro de téléphone et code PIN. Le choix de l'espace (patient, médecin, pharmacie, structure, assurance) arrive après, sur un écran à part, seulement si le compte en a plusieurs.</p>
+      <ul class="ux"><li>Numéro avec indicatif pays</li><li>PIN à 4 chiffres</li><li>Choix d'espace après connexion</li><li>PIN oublié par OTP</li></ul>
+    </div>
+  </div>
+
+  <figure class="shot"><div class="win"><div class="wbar"><div class="dots"><i></i><i></i><i></i></div><div class="url"><svg class="i"><use href="#lock"/></svg>aps-sante.com/connexion</div><div class="sp"></div></div><div class="vp"><div class="site" style="background:#fff">
+    <div style="display:grid;grid-template-columns:1fr 1fr;min-height:720px">
+      <div style="padding:36px 60px;display:flex;flex-direction:column">
+        <div class="brand"><span class="lg"><svg class="i s f"><use href="#cross"/></svg></span>APS Santé</div>
+        <div style="margin:auto 0;max-width:400px;padding:40px 0">
+          <h2 class="h2">Bon retour parmi nous</h2>
+          <p class="t-s mt8">Connectez-vous avec votre numéro de téléphone et votre code PIN.</p>
+          <div class="fl mt32"><label>Numéro de téléphone</label><div class="inp focus"><span class="row g6" style="padding-right:10px;border-right:1px solid var(--ln);color:var(--ink)">🇨🇲 +237<svg class="i xs"><use href="#chd"/></svg></span><span>6 77 12 34 56<span class="caret"></span></span></div></div>
+          <div class="fl mt16"><div class="row between"><label>Code PIN</label><span class="lnk" style="font-size:12.5px">PIN oublié ?</span></div>
+            <div class="row g8"><span class="inp" style="width:56px;justify-content:center;font-size:20px">•</span><span class="inp" style="width:56px;justify-content:center;font-size:20px">•</span><span class="inp" style="width:56px;justify-content:center;font-size:20px">•</span><span class="inp" style="width:56px;justify-content:center"></span></div></div>
+          <div class="row g8 mt16"><span class="cb on"><svg class="i xs b"><use href="#check"/></svg></span><span class="t-s" style="font-size:13px">Rester connecté sur cet appareil</span></div>
+          <span class="btn lg block mt24">Se connecter<svg class="i s"><use href="#arr"/></svg></span>
+          <p class="t-s mt20" style="text-align:center">Pas encore de compte ? <span class="lnk">Créer un compte</span></p>
+        </div>
+        <div class="t-xs">© 2026 APS Santé · Données de santé hébergées de façon sécurisée</div>
+      </div>
+      <div style="padding:16px">
+        <div class="photo" style="height:100%;border-radius:16px;background-image:url(assets/structure3.jpg);position:relative">
+          <div style="position:absolute;left:24px;right:24px;bottom:24px;background:rgba(255,255,255,.94);border-radius:14px;padding:22px">
+            <div class="stars"><svg class="i xs f"><use href="#star"/></svg><svg class="i xs f"><use href="#star"/></svg><svg class="i xs f"><use href="#star"/></svg><svg class="i xs f"><use href="#star"/></svg><svg class="i xs f"><use href="#star"/></svg></div>
+            <p style="font-size:17px;line-height:1.5;font-weight:600;letter-spacing:-.01em;margin:10px 0 14px">« J'ai trouvé une pédiatre disponible le soir même pour mon fils, et payé par MoMo en deux minutes. »</p>
+            <div class="row"><span class="av v3">MA</span><div><div class="t-b" style="font-size:13.5px">Mireille Abena</div><div class="t-xs">Patiente à Douala · avis vérifié</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div></div></div>
+  <figcaption><span class="num">02</span><div><b>Connexion</b><small>Formulaire à gauche, photo et témoignage vérifié à droite. Le PIN se saisit dans quatre cases</small></div></figcaption></figure>
+
+  <figure class="shot"><div class="win"><div class="wbar"><div class="dots"><i></i><i></i><i></i></div><div class="url"><svg class="i"><use href="#lock"/></svg>aps-sante.com/choisir-espace</div><div class="sp"></div></div><div class="vp"><div class="site">
+    <div style="padding:28px 60px"><div class="brand"><span class="lg"><svg class="i s f"><use href="#cross"/></svg></span>APS Santé</div></div>
+    <div style="width:880px;margin:20px auto 0;padding-bottom:80px;text-align:center">
+      <span class="av lg v3" style="margin:0 auto">PE</span>
+      <h2 class="h2 mt16">Bonjour Paul, quel espace ouvrir ?</h2>
+      <p class="t-s mt8">Votre compte donne accès à plusieurs espaces. Vous pourrez changer à tout moment depuis le menu.</p>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:36px;text-align:left">
+        <div class="card" style="border:2px solid var(--g6);background:var(--g0);padding:22px"><div class="row between"><span class="ic"><svg class="i"><use href="#steth"/></svg></span><span class="rd on"></span></div><div class="h4 mt16">Espace médecin</div><p class="t-s" style="margin:4px 0 0">Agenda, demandes express, revenus</p><div class="row g6 mt14"><span class="pill c">3 à traiter</span></div></div>
+        <div class="card" style="padding:22px"><div class="row between"><span class="ic v"><svg class="i"><use href="#user"/></svg></span><span class="rd"></span></div><div class="h4 mt16">Espace patient</div><p class="t-s" style="margin:4px 0 0">Mes RDV, mes proches, mes paiements</p><div class="row g6 mt14"><span class="pill g">1 RDV demain</span></div></div>
+        <div class="card" style="padding:22px"><div class="row between"><span class="ic a"><svg class="i"><use href="#pill"/></svg></span><span class="rd"></span></div><div class="h4 mt16">Pharmacie du Soleil</div><p class="t-s" style="margin:4px 0 0">Gardes, présence, annonces</p><div class="row g6 mt14"><span class="pill a">Abonnement à renouveler</span></div></div>
+      </div>
+      <span class="btn lg mt32" style="width:320px">Continuer vers l'espace médecin<svg class="i s"><use href="#arr"/></svg></span>
+    </div>
+  </div></div></div>
+  <figcaption><span class="num">03</span><div><b>Choix de l'espace</b><small>Après la connexion, une carte par espace avec ce qui attend une action. Sélection par bordure verte</small></div></figcaption></figure>
+</section>
+
+
+<!-- =========================================================
+     03 — ANNUAIRE MÉDECINS
+     ========================================================= -->
+<section class="sec" id="s3">
+  <div class="sec-head">
+    <div><span class="n">03 — Annuaire médecins</span><h2>Des visages d'abord, <span class="serif">puis les créneaux</span>.</h2></div>
+    <div>
+      <p>Les résultats prennent la forme de cartes photo : l'image occupe toute la carte et le bloc d'informations blanc est posé dessus. Les filtres restent ouverts à gauche, la requête reste modifiable en haut. Un clic ouvre la fiche avec le module de réservation fixé à droite.</p>
+      <ul class="ux"><li>Filtres en colonne avec compteurs</li><li>Filtres actifs en puces</li><li>Cartes photo homogènes</li><li>Réservation toujours visible</li></ul>
+    </div>
+  </div>
+
+  <figure class="shot"><div class="win"><div class="wbar"><div class="dots"><i></i><i></i><i></i></div><div class="url"><svg class="i"><use href="#lock"/></svg>aps-sante.com/medecins?specialite=cardiologie&amp;ville=douala</div><div class="sp"></div></div><div class="vp"><div class="site">
+    <nav class="nv">
+      <div class="brand"><span class="lg"><svg class="i s f"><use href="#cross"/></svg></span>APS Santé</div>
+      <div class="links"><a>Accueil</a><a class="on">Médecins</a><a>Pharmacies</a><a>Structures</a><a>Assurances</a><a>Demande express</a></div>
+      <span class="ib"><svg class="i s"><use href="#bell"/></svg><span class="dot"></span></span><span class="av sm v3">MA</span>
+    </nav>
+    <div style="background:#fff;border-bottom:1px solid var(--ln);padding:28px 60px">
+      <div class="t-xs">Accueil / Médecins / Cardiologie</div>
+      <div class="row between mt8"><h2 class="h3" style="font-size:28px">Cardiologues à Douala</h2><span class="t-s">48 médecins · <b style="color:var(--g7)">9 disponibles aujourd'hui</b></span></div>
+      <div class="sbar mt20" style="box-shadow:none;background:var(--bg)">
+        <div class="f"><svg class="i"><use href="#steth"/></svg><div><small>Spécialité ou médecin</small><b>Cardiologue</b></div></div>
+        <div class="f"><svg class="i"><use href="#pin"/></svg><div><small>Ville ou quartier</small><b>Douala · tous quartiers</b></div></div>
+        <div class="f"><svg class="i"><use href="#cal"/></svg><div><small>Date</small><b>Aujourd'hui</b></div></div>
+        <span class="btn lg"><svg class="i s"><use href="#search"/></svg>Rechercher</span>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:260px 1fr;gap:28px;padding:28px 60px 60px">
+      <aside class="card" style="padding:20px;align-self:start">
+        <div class="row between"><div class="h4" style="font-size:15px">Filtres</div><span class="lnk" style="font-size:12.5px">Réinitialiser</span></div>
+        <div class="t-b mt20" style="font-size:13px">Disponibilité</div>
+        <div class="col g8 mt10">
+          <div class="row g8"><span class="rd on"></span><span class="t-s grow" style="font-size:13px">Aujourd'hui</span><span class="t-xs">9</span></div>
+          <div class="row g8"><span class="rd"></span><span class="t-s grow" style="font-size:13px">3 prochains jours</span><span class="t-xs">26</span></div>
+          <div class="row g8"><span class="rd"></span><span class="t-s grow" style="font-size:13px">Cette semaine</span><span class="t-xs">41</span></div>
+        </div>
+        <div class="hr"></div>
+        <div class="t-b" style="font-size:13px">Type de consultation</div>
+        <div class="col g8 mt10">
+          <div class="row g8"><span class="cb on"><svg class="i xs b"><use href="#check"/></svg></span><span class="t-s grow" style="font-size:13px">Au cabinet</span><span class="t-xs">44</span></div>
+          <div class="row g8"><span class="cb on"><svg class="i xs b"><use href="#check"/></svg></span><span class="t-s grow" style="font-size:13px">En vidéo</span><span class="t-xs">17</span></div>
+        </div>
+        <div class="hr"></div>
+        <div class="row between"><span class="t-b" style="font-size:13px">Tarif</span><span class="t-xs" style="color:var(--ink)">5 000 – 20 000 F</span></div>
+        <div style="position:relative;height:30px;margin-top:6px"><div style="position:absolute;left:0;right:0;top:13px;height:4px;border-radius:4px;background:var(--ln)"><div style="position:absolute;left:10%;right:28%;height:100%;background:var(--g6);border-radius:4px"></div></div><span style="position:absolute;left:10%;top:5px;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:#fff;border:2px solid var(--g6)"></span><span style="position:absolute;left:72%;top:5px;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:#fff;border:2px solid var(--g6)"></span></div>
+        <div class="hr"></div>
+        <div class="t-b" style="font-size:13px">Langues</div>
+        <div class="row wrap g6 mt10"><span class="chip on" style="height:30px;font-size:12px">Français</span><span class="chip on" style="height:30px;font-size:12px">English</span><span class="chip" style="height:30px;font-size:12px">Ewondo</span></div>
+        <div class="hr"></div>
+        <div class="row between"><div><div class="t-b" style="font-size:13px">Accepte mon assurance</div><div class="t-xs">AXA · Confort</div></div><span class="tg on"></span></div>
+      </aside>
+      <div>
+        <div class="row between">
+          <div class="row g8"><span class="chip" style="height:32px;font-size:12.5px;background:var(--g1);border-color:var(--g2);color:var(--g8)">Aujourd'hui<svg class="i xs x"><use href="#x"/></svg></span><span class="chip" style="height:32px;font-size:12.5px;background:var(--g1);border-color:var(--g2);color:var(--g8)">≤ 20 000 F<svg class="i xs x"><use href="#x"/></svg></span><span class="chip" style="height:32px;font-size:12.5px;background:var(--g1);border-color:var(--g2);color:var(--g8)">AXA<svg class="i xs x"><use href="#x"/></svg></span></div>
+          <div class="row g8"><span class="t-xs">Trier par</span><span class="inp" style="height:38px;font-size:13px">Plus tôt disponible<svg class="i xs"><use href="#chd"/></svg></span><div class="seg" style="padding:3px"><span class="on" style="height:30px;width:36px"><svg class="i s"><use href="#grid"/></svg></span><span style="height:30px;width:36px"><svg class="i s"><use href="#map"/></svg></span></div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:18px">
+          <div class="dc tall"><img src="https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=600&q=70&auto=format&fit=crop" alt=""><div class="tl"><span class="pill w"><span class="d" style="color:var(--g6)"></span>Aujourd'hui · 14:30</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div>
+            <div class="info"><div class="nm">Dr Arielle Mbarga <svg class="i xs f verif"><use href="#verif"/></svg></div><div class="sp">Cardiologue · Bonapriso · 1,2 km</div><div class="ft"><span class="stars"><svg class="i xs f"><use href="#star"/></svg>4,9 <span class="t-xs">(128)</span></span><span class="pill s" style="padding:3px 8px"><svg class="i xs"><use href="#video"/></svg>Vidéo</span><span class="go"><svg class="i s"><use href="#arr"/></svg></span></div></div></div>
+          <div class="dc tall"><img src="https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=600&q=70&auto=format&fit=crop" alt=""><div class="tl"><span class="pill w"><span class="d" style="color:var(--g6)"></span>Aujourd'hui · 15:00</span><span class="fav on"><svg class="i s f"><use href="#heart"/></svg></span></div>
+            <div class="info"><div class="nm">Dr Hervé Tchoupo <svg class="i xs f verif"><use href="#verif"/></svg></div><div class="sp">Cardiologue · Akwa · 2,4 km</div><div class="ft"><span class="stars"><svg class="i xs f"><use href="#star"/></svg>4,7 <span class="t-xs">(86)</span></span><span class="t-xs" style="color:var(--ink)">12 000 F</span><span class="go"><svg class="i s"><use href="#arr"/></svg></span></div></div></div>
+          <div class="dc tall"><img src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=600&q=70&auto=format&fit=crop" alt=""><div class="tl"><span class="pill w"><span class="d" style="color:var(--g6)"></span>Aujourd'hui · 16:30</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div>
+            <div class="info"><div class="nm">Dr Carine Ewane <svg class="i xs f verif"><use href="#verif"/></svg></div><div class="sp">Cardiologue · Bonanjo · 3,0 km</div><div class="ft"><span class="stars"><svg class="i xs f"><use href="#star"/></svg>4,8 <span class="t-xs">(64)</span></span><span class="t-xs" style="color:var(--ink)">15 000 F</span><span class="go"><svg class="i s"><use href="#arr"/></svg></span></div></div></div>
+          <div class="dc tall"><img src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=600&q=70&auto=format&fit=crop" alt=""><div class="tl"><span class="pill w">Demain · 08:00</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div>
+            <div class="info"><div class="nm">Dr Jean Kamdem <svg class="i xs f verif"><use href="#verif"/></svg></div><div class="sp">Cardiologue · Makepe · 4,1 km</div><div class="ft"><span class="stars"><svg class="i xs f"><use href="#star"/></svg>4,6 <span class="t-xs">(41)</span></span><span class="t-xs" style="color:var(--ink)">10 000 F</span><span class="go"><svg class="i s"><use href="#arr"/></svg></span></div></div></div>
+          <div class="dc tall"><img src="https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=600&q=70&auto=format&fit=crop" alt=""><div class="tl"><span class="pill w">Demain · 11:00</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div>
+            <div class="info"><div class="nm">Dr Samuel Ndjock <svg class="i xs f verif"><use href="#verif"/></svg></div><div class="sp">Cardiologue · Deïdo · 2,8 km</div><div class="ft"><span class="stars"><svg class="i xs f"><use href="#star"/></svg>4,5 <span class="t-xs">(29)</span></span><span class="pill s" style="padding:3px 8px"><svg class="i xs"><use href="#video"/></svg>Vidéo</span><span class="go"><svg class="i s"><use href="#arr"/></svg></span></div></div></div>
+          <div class="dc tall"><img src="https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=600&q=70&auto=format&fit=crop" alt=""><div class="tl"><span class="pill w">Ven. 20 · 09:30</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div>
+            <div class="info"><div class="nm">Dr Paul Etoundi <svg class="i xs f verif"><use href="#verif"/></svg></div><div class="sp">Cardiologue · Bali · 1,9 km</div><div class="ft"><span class="stars"><svg class="i xs f"><use href="#star"/></svg>4,9 <span class="t-xs">(152)</span></span><span class="t-xs" style="color:var(--ink)">14 000 F</span><span class="go"><svg class="i s"><use href="#arr"/></svg></span></div></div></div>
+        </div>
+        <div class="row between mt24"><span class="t-xs">Affichage de 1 à 6 sur 48</span><div class="row g6"><span class="ib" style="width:36px;height:36px"><svg class="i s"><use href="#chl"/></svg></span><span class="ib" style="width:36px;height:36px;background:var(--g6);border-color:var(--g6);color:#fff;font-weight:700">1</span><span class="ib" style="width:36px;height:36px;font-weight:700">2</span><span class="ib" style="width:36px;height:36px;font-weight:700">3</span><span class="t-xs">…</span><span class="ib" style="width:36px;height:36px;font-weight:700">8</span><span class="ib" style="width:36px;height:36px"><svg class="i s"><use href="#chr"/></svg></span></div></div>
+      </div>
+    </div>
+  </div></div></div>
+  <figcaption><span class="num">04</span><div><b>Annuaire des médecins</b><small>Filtres en colonne avec le nombre de résultats par option, puces des filtres actifs, grille de cartes photo avec prochain créneau en haut et infos en bas</small></div></figcaption></figure>
+
+  <figure class="shot"><div class="win"><div class="wbar"><div class="dots"><i></i><i></i><i></i></div><div class="url"><svg class="i"><use href="#lock"/></svg>aps-sante.com/medecins/arielle-mbarga</div><div class="sp"></div></div><div class="vp"><div class="site">
+    <nav class="nv">
+      <div class="brand"><span class="lg"><svg class="i s f"><use href="#cross"/></svg></span>APS Santé</div>
+      <div class="links"><a>Accueil</a><a class="on">Médecins</a><a>Pharmacies</a><a>Structures</a><a>Assurances</a><a>Demande express</a></div>
+      <span class="ib"><svg class="i s"><use href="#bell"/></svg></span><span class="av sm v3">MA</span>
+    </nav>
+    <div style="display:grid;grid-template-columns:1fr 380px;gap:28px;padding:28px 60px 60px">
+      <div>
+        <div class="t-xs"><span class="lnk" style="font-size:12px"><svg class="i xs"><use href="#chl"/></svg>Retour aux résultats</span></div>
+        <div class="card mt14" style="padding:24px;display:grid;grid-template-columns:180px 1fr;gap:24px">
+          <div class="photo" style="height:210px;border-radius:12px;background-image:url(https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=500&q=70&auto=format&fit=crop);background-position:center top"></div>
+          <div>
+            <div class="row between"><span class="pill g"><span class="d"></span>Disponible aujourd'hui</span><div class="row g8"><span class="ib"><svg class="i s"><use href="#share"/></svg></span><span class="ib"><svg class="i s"><use href="#heart"/></svg></span></div></div>
+            <h2 class="h3 mt10" style="font-size:26px">Dr Arielle Mbarga <svg class="i f verif" style="width:20px;height:20px"><use href="#verif"/></svg></h2>
+            <div class="t-s">Cardiologue · Ordre des médecins n° 4821</div>
+            <div class="row g6 mt8 t-xs"><svg class="i xs"><use href="#pin"/></svg>Cabinet Bonapriso, rue des Cocotiers · Douala</div>
+            <div class="row mt16" style="gap:0;border:1px solid var(--ln);border-radius:12px">
+              <div class="grow" style="padding:12px 16px;border-right:1px solid var(--ln)"><span class="stars" style="font-size:17px"><svg class="i s f"><use href="#star"/></svg>4,9</span><div class="t-xs">128 avis vérifiés</div></div>
+              <div class="grow" style="padding:12px 16px;border-right:1px solid var(--ln)"><b style="font-size:17px">12 ans</b><div class="t-xs">d'expérience</div></div>
+              <div class="grow" style="padding:12px 16px;border-right:1px solid var(--ln)"><b style="font-size:17px">1 450</b><div class="t-xs">patients suivis</div></div>
+              <div class="grow" style="padding:12px 16px"><b style="font-size:17px">FR · EN</b><div class="t-xs">Langues</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="tabs-u mt20"><span class="on">Présentation</span><span>Disponibilités</span><span>Avis · 128</span><span>Tarifs</span><span>Lieux</span></div>
+        <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:20px;margin-top:20px">
+          <div class="card">
+            <div class="h4">À propos</div>
+            <p class="t-s" style="margin:8px 0 0">Cardiologue formée à Yaoundé et à Lyon. Prise en charge de l'hypertension, échographie cardiaque, suivi après un infarctus et bilans avant le sport.</p>
+            <div class="t-b mt20" style="font-size:13px">Expertises</div>
+            <div class="row wrap g6 mt8"><span class="chip" style="height:32px;font-size:12.5px">Hypertension</span><span class="chip" style="height:32px;font-size:12.5px">Échographie cardiaque</span><span class="chip" style="height:32px;font-size:12.5px">Holter ECG</span><span class="chip" style="height:32px;font-size:12.5px">Insuffisance cardiaque</span></div>
+          </div>
+          <div class="card">
+            <div class="row between"><div class="h4">Avis récents</div><span class="lnk" style="font-size:12.5px">Tout lire</span></div>
+            <div class="mt14"><div class="row g8"><span class="av sm v4">JN</span><div class="grow"><div class="t-b" style="font-size:13px">Joseph N.</div><div class="t-xs">il y a 3 jours</div></div><span class="pill g" style="font-size:10.5px"><svg class="i xs b"><use href="#check"/></svg>Avis vérifié</span></div><p class="t-s" style="margin:8px 0 0;font-size:13px">Très à l'écoute, explications claires sur mon traitement. Ponctuelle.</p></div>
+            <div class="hr"></div>
+            <div><div class="row g8"><span class="av sm v5">RB</span><div class="grow"><div class="t-b" style="font-size:13px">Rose B.</div><div class="t-xs">il y a 1 semaine</div></div><span class="stars" style="font-size:12px"><svg class="i xs f"><use href="#star"/></svg>5</span></div><p class="t-s" style="margin:8px 0 0;font-size:13px">Consultation vidéo de bonne qualité, ordonnance reçue tout de suite.</p></div>
+          </div>
+        </div>
+      </div>
+      <aside class="card sh" style="padding:22px;align-self:start;margin-top:30px">
+        <div class="h4">Prendre rendez-vous</div>
+        <div class="seg mt14"><span class="on"><svg class="i s"><use href="#hosp"/></svg>Au cabinet</span><span><svg class="i s"><use href="#video"/></svg>En vidéo</span></div>
+        <div class="row between mt20"><b style="font-size:13.5px">Octobre 2026</b><div class="row g6"><span class="ib" style="width:30px;height:30px;border-radius:8px"><svg class="i xs"><use href="#chl"/></svg></span><span class="ib" style="width:30px;height:30px;border-radius:8px"><svg class="i xs"><use href="#chr"/></svg></span></div></div>
+        <div class="days mt10"><div class="day on"><small>JEU</small><b>19</b></div><div class="day"><small>VEN</small><b>20</b></div><div class="day"><small>SAM</small><b>21</b></div><div class="day off"><small>DIM</small><b>22</b></div><div class="day"><small>LUN</small><b>23</b></div></div>
+        <div class="t-xs mt16">Après-midi</div>
+        <div class="slots mt8"><span class="slot">14:30</span><span class="slot on">15:00</span><span class="slot off">15:30</span><span class="slot">16:30</span><span class="slot">17:00</span><span class="slot">17:30</span><span class="slot off">18:00</span><span class="slot more">+3</span></div>
+        <div class="hr"></div>
+        <div class="row between"><span class="t-s">Consultation</span><b>15 000 F</b></div>
+        <div class="row between mt6"><span class="t-s">Frais de service</span><b>500 F</b></div>
+        <span class="btn lg block mt16">Réserver jeu. 19 à 15:00</span>
+        <div class="row g6 mt12 t-xs" style="justify-content:center"><svg class="i xs green"><use href="#lock"/></svg>Paiement sous séquestre jusqu'à la consultation</div>
+      </aside>
+    </div>
+  </div></div></div>
+  <figcaption><span class="num">05</span><div><b>Fiche praticien</b><small>Photo, n° d'Ordre, chiffres clés et avis vérifiés à gauche ; module de réservation fixé à droite avec jours, créneaux et prix détaillé</small></div></figcaption></figure>
+</section>
+
+
+<!-- =========================================================
+     04 — RÉSERVER
+     ========================================================= -->
+<section class="sec" id="s4">
+  <div class="sec-head">
+    <div><span class="n">04 — Réserver</span><h2>Un tunnel court, <span class="serif">un récapitulatif fixe</span>.</h2></div>
+    <div>
+      <p>Les étapes sont visibles en haut. À gauche, ce qu'il reste à remplir ; à droite, le récapitulatif ne bouge pas. Le créneau est bloqué pendant le paiement et le séquestre est expliqué juste au-dessus du bouton.</p>
+      <ul class="ux"><li>Pour moi ou pour un proche</li><li>MTN MoMo · Orange Money</li><li>Créneau bloqué 4 h</li><li>Récapitulatif fixe</li></ul>
+    </div>
+  </div>
+
+  <figure class="shot"><div class="win"><div class="wbar"><div class="dots"><i></i><i></i><i></i></div><div class="url"><svg class="i"><use href="#lock"/></svg>aps-sante.com/rendez-vous/paiement</div><div class="sp"></div></div><div class="vp"><div class="site">
+    <div class="nv" style="justify-content:space-between">
+      <div class="brand"><span class="lg"><svg class="i s f"><use href="#cross"/></svg></span>APS Santé</div>
+      <div class="row g12">
+        <div class="row g8"><span style="width:26px;height:26px;border-radius:50%;background:var(--g6);color:#fff;display:grid;place-items:center"><svg class="i xs b"><use href="#check"/></svg></span><b style="font-size:13px">Créneau</b></div>
+        <span style="width:48px;height:2px;background:var(--g6);border-radius:2px"></span>
+        <div class="row g8"><span style="width:26px;height:26px;border-radius:50%;background:var(--g6);color:#fff;display:grid;place-items:center"><svg class="i xs b"><use href="#check"/></svg></span><b style="font-size:13px">Informations</b></div>
+        <span style="width:48px;height:2px;background:var(--g6);border-radius:2px"></span>
+        <div class="row g8"><span style="width:26px;height:26px;border-radius:50%;border:2px solid var(--g6);color:var(--g7);display:grid;place-items:center;font-size:12px;font-weight:800">3</span><b style="font-size:13px">Paiement</b></div>
+      </div>
+      <span class="btn ghost sm"><svg class="i s"><use href="#x"/></svg>Quitter</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 400px;gap:32px;width:1080px;margin:0 auto;padding:36px 0 70px">
+      <div>
+        <h2 class="h2" style="font-size:30px">Paiement</h2>
+        <p class="t-s mt6">Votre créneau est réservé pendant <b style="color:var(--ink)">3 h 52 min</b>. Il sera libéré si le paiement n'aboutit pas.</p>
+        <div class="card mt24">
+          <div class="t-b">Patient</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:12px">
+            <div class="row g8" style="border:2px solid var(--g6);background:var(--g0);border-radius:11px;padding:12px"><span class="rd on"></span><span class="av sm v3">MA</span><div><b style="font-size:13px">Moi</b><div class="t-xs">Mireille A.</div></div></div>
+            <div class="row g8" style="border:1px solid var(--ln);border-radius:11px;padding:12px"><span class="rd"></span><span class="av sm v4">JR</span><div><b style="font-size:13px">Junior</b><div class="t-xs">8 ans</div></div></div>
+            <div class="row g8" style="border:1px dashed var(--ln2);border-radius:11px;padding:12px;color:var(--ink2)"><svg class="i s"><use href="#plus"/></svg><b style="font-size:13px">Ajouter un proche</b></div>
+          </div>
+          <div class="fl mt20"><label>Motif de consultation (facultatif)</label><div class="area">Douleurs thoraciques à l'effort depuis une semaine, suivi tension.</div></div>
+        </div>
+        <div class="card mt16">
+          <div class="t-b">Moyen de paiement</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+            <div class="row" style="border:2px solid var(--g6);background:var(--g0);border-radius:11px;padding:14px"><span class="rd on"></span><span style="width:42px;height:30px;border-radius:7px;background:#FFCC00;display:grid;place-items:center;font-size:10px;font-weight:800;color:#002E5D">MoMo</span><div class="grow"><b style="font-size:13.5px">MTN Mobile Money</b><div class="t-xs">·· ·· 56 · par défaut</div></div></div>
+            <div class="row" style="border:1px solid var(--ln);border-radius:11px;padding:14px"><span class="rd"></span><span style="width:42px;height:30px;border-radius:7px;background:#111;display:grid;place-items:center;font-size:9px;font-weight:800;color:#FF7900">orange</span><div class="grow"><b style="font-size:13.5px">Orange Money</b><div class="t-xs">·· ·· 21</div></div></div>
+          </div>
+          <div class="fl mt16"><label>Numéro à débiter</label><div class="inp focus"><span style="color:var(--ink3)">+237</span>6 77 12 34 56<span class="caret"></span></div></div>
+          <div class="note mt14"><svg class="i s"><use href="#phone"/></svg><span>Vous recevrez une demande de validation sur votre téléphone. Composez votre code secret MoMo pour confirmer.</span></div>
+        </div>
+      </div>
+      <aside style="align-self:start;margin-top:4px">
+        <div class="card sh" style="padding:22px">
+          <div class="t-xs">Récapitulatif</div>
+          <div class="row mt12"><span class="av lg" style="border-radius:12px;background-image:url(https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=200&q=70&auto=format&fit=crop)"></span><div><div class="t-b">Dr Arielle Mbarga <svg class="i xs f verif"><use href="#verif"/></svg></div><div class="t-xs">Cardiologue · Bonapriso</div></div></div>
+          <div class="col g8 mt16" style="background:var(--bg);border-radius:11px;padding:14px">
+            <div class="row g8 t-s" style="font-size:13px"><svg class="i s green"><use href="#cal"/></svg><b style="color:var(--ink)">Jeudi 19 octobre</b></div>
+            <div class="row g8 t-s" style="font-size:13px"><svg class="i s green"><use href="#clock"/></svg>15:00 · 30 min</div>
+            <div class="row g8 t-s" style="font-size:13px"><svg class="i s green"><use href="#hosp"/></svg>Au cabinet · lieu confirmé par le médecin</div>
+          </div>
+          <div class="row between mt16"><span class="t-s">Consultation</span><span>15 000 F</span></div>
+          <div class="row between mt8"><span class="t-s">Frais de service</span><span>500 F</span></div>
+          <div class="hr" style="margin:14px 0"></div>
+          <div class="row between"><b>Total</b><b style="font-size:22px;letter-spacing:-.03em">15 500 F</b></div>
+          <div class="note a mt16"><svg class="i s"><use href="#lock"/></svg><span><b style="color:var(--ink)">Paiement sous séquestre.</b> Le montant est versé au médecin après la consultation. Remboursé s'il n'accepte pas.</span></div>
+          <span class="btn lg block mt16">Payer 15 500 F</span>
+        </div>
+      </aside>
+    </div>
+  </div></div></div>
+  <figcaption><span class="num">06</span><div><b>Réservation · paiement</b><small>Étapes dans l'en-tête, choix du patient et du moyen de paiement à gauche, récapitulatif avec total et séquestre à droite</small></div></figcaption></figure>
+</section>
+
+
+<!-- =========================================================
+     05 — DEMANDE EXPRESS
+     ========================================================= -->
+<section class="sec" id="s5">
+  <div class="sec-head">
+    <div><span class="n">05 — Demande express</span><h2>Vous fixez le moment, <span class="serif">les médecins répondent</span>.</h2></div>
+    <div>
+      <p>Le patient indique la spécialité, la ville, le jour et l'heure. Les médecins répondent au tarif de leur profil. Les réponses arrivent à droite en direct ; le patient en choisit une puis paie.</p>
+      <ul class="ux"><li>Jour et heure fixés par le patient</li><li>Tarif du profil médecin</li><li>Réponses en direct</li><li>Choisir puis payer</li></ul>
+    </div>
+  </div>
+
+  <figure class="shot"><div class="win"><div class="wbar"><div class="dots"><i></i><i></i><i></i></div><div class="url"><svg class="i"><use href="#lock"/></svg>aps-sante.com/demande-express</div><div class="sp"></div></div><div class="vp"><div class="site">
+    <nav class="nv">
+      <div class="brand"><span class="lg"><svg class="i s f"><use href="#cross"/></svg></span>APS Santé</div>
+      <div class="links"><a>Accueil</a><a>Médecins</a><a>Pharmacies</a><a>Structures</a><a>Assurances</a><a class="on">Demande express</a></div>
+      <span class="ib"><svg class="i s"><use href="#bell"/></svg><span class="dot"></span></span><span class="av sm v3">MA</span>
+    </nav>
+    <div style="display:grid;grid-template-columns:440px 1fr;gap:28px;padding:32px 60px 60px">
+      <div class="card" style="padding:24px;align-self:start">
+        <span class="ic v"><svg class="i"><use href="#mega"/></svg></span>
+        <h2 class="h3 mt14">Votre demande</h2>
+        <p class="t-s mt6" style="font-size:13px">Envoyée aux médecins de la spécialité dans votre ville.</p>
+        <div class="fl mt20"><label>Spécialité</label><div class="inp"><svg class="i s"><use href="#steth"/></svg>Médecine générale<svg class="i xs" style="margin-left:auto"><use href="#chd"/></svg></div></div>
+        <div class="fl mt14"><label>Ville</label><div class="inp"><svg class="i s"><use href="#pin"/></svg>Douala · Akwa</div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" class="mt14">
+          <div class="fl"><label>Jour</label><div class="inp"><svg class="i s"><use href="#cal"/></svg>Sam. 21 oct</div></div>
+          <div class="fl"><label>Heure</label><div class="inp"><svg class="i s"><use href="#clock"/></svg>09:00</div></div>
+        </div>
+        <div class="fl mt14"><label>Mode</label><div class="seg"><span class="on"><svg class="i s"><use href="#hosp"/></svg>Au cabinet</span><span><svg class="i s"><use href="#video"/></svg>En vidéo</span></div></div>
+        <div class="fl mt14"><label>Motif</label><div class="area" style="min-height:70px">Fièvre et maux de tête depuis 2 jours.</div></div>
+        <span class="btn block mt20" style="background:var(--vi)">Demande publiée · modifier</span>
+      </div>
+      <div>
+        <div class="row between">
+          <div><h2 class="h3">Réponses reçues <span class="muted">· 3</span></h2><div class="t-s mt4" style="font-size:13px">Sam. 21 oct à 09:00 · Généraliste · Akwa</div></div>
+          <span class="pill v"><span class="d"></span>En attente d'autres réponses · expire dans 3 h 40</span>
+        </div>
+        <div class="col g12 mt20">
+          <div class="card row g16" style="padding:16px;border:2px solid var(--g6)">
+            <div class="photo" style="width:84px;height:84px;border-radius:12px;background-image:url(https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=200&q=70&auto=format&fit=crop)"></div>
+            <div class="grow"><div class="row g8"><b style="font-size:15px">Dr Paul Etoundi</b><svg class="i xs f verif"><use href="#verif"/></svg><span class="pill g">Plus proche</span></div><div class="t-xs mt4">Généraliste · Cabinet Akwa · 600 m</div><div class="row g12 mt8"><span class="stars"><svg class="i xs f"><use href="#star"/></svg>4,9 <span class="t-xs">(152)</span></span><span class="t-xs">a répondu il y a 4 min</span></div></div>
+            <div style="text-align:right"><div class="t-xs">Tarif</div><b style="font-size:20px;letter-spacing:-.03em">10 000 F</b></div>
+            <span class="btn">Choisir et payer</span>
+          </div>
+          <div class="card row g16" style="padding:16px">
+            <div class="photo" style="width:84px;height:84px;border-radius:12px;background-image:url(https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&q=70&auto=format&fit=crop)"></div>
+            <div class="grow"><div class="row g8"><b style="font-size:15px">Dr Hervé Tchoupo</b><svg class="i xs f verif"><use href="#verif"/></svg></div><div class="t-xs mt4">Généraliste · Polyclinique Bonanjo · 2,1 km</div><div class="row g12 mt8"><span class="stars"><svg class="i xs f"><use href="#star"/></svg>4,7 <span class="t-xs">(86)</span></span><span class="t-xs">a répondu il y a 9 min</span></div></div>
+            <div style="text-align:right"><div class="t-xs">Tarif</div><b style="font-size:20px;letter-spacing:-.03em">12 000 F</b></div>
+            <span class="btn ghost">Choisir</span>
+          </div>
+          <div class="card row g16" style="padding:16px">
+            <div class="photo" style="width:84px;height:84px;border-radius:12px;background-image:url(https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&q=70&auto=format&fit=crop)"></div>
+            <div class="grow"><div class="row g8"><b style="font-size:15px">Dr Grâce Nkoulou</b><svg class="i xs f verif"><use href="#verif"/></svg></div><div class="t-xs mt4">Généraliste · Clinique Bonapriso · 1,4 km</div><div class="row g12 mt8"><span class="stars"><svg class="i xs f"><use href="#star"/></svg>4,8 <span class="t-xs">(204)</span></span><span class="t-xs">a répondu il y a 15 min</span></div></div>
+            <div style="text-align:right"><div class="t-xs">Tarif</div><b style="font-size:20px;letter-spacing:-.03em">15 000 F</b></div>
+            <span class="btn ghost">Choisir</span>
+          </div>
+        </div>
+        <div class="note mt16"><svg class="i s"><use href="#info"/></svg><span>Chaque médecin répond au tarif affiché sur son profil. Une fois votre choix payé, les autres réponses sont fermées et le médecin vous indique le lieu exact.</span></div>
+      </div>
+    </div>
+  </div></div></div>
+  <figcaption><span class="num">07</span><div><b>Demande express</b><small>Formulaire à gauche, réponses des médecins à droite avec tarif du profil, distance et note. Le patient choisit puis paie</small></div></figcaption></figure>
+</section>
+
+
+<!-- =========================================================
+     06 — PHARMACIES & STRUCTURES
+     ========================================================= -->
+<section class="sec" id="s6">
+  <div class="sec-head">
+    <div><span class="n">06 — Pharmacies &amp; structures</span><h2>Les mêmes cartes photo, <span class="serif">pour tous les annuaires</span>.</h2></div>
+    <div>
+      <p>Pharmacies, hôpitaux, cliniques et assurances reprennent la carte des médecins : image pleine, bloc blanc posé dessus, une action principale (appeler, voir la fiche). Les gardes s'affichent à côté d'une carte géographique.</p>
+      <ul class="ux"><li>Liste + carte synchronisées</li><li>Gardes en direct</li><li>Appel en un clic</li><li>Invitation « Devenir partenaire »</li></ul>
+    </div>
+  </div>
+
+  <figure class="shot"><div class="win"><div class="wbar"><div class="dots"><i></i><i></i><i></i></div><div class="url"><svg class="i"><use href="#lock"/></svg>aps-sante.com/pharmacies?garde=1</div><div class="sp"></div></div><div class="vp"><div class="site">
+    <nav class="nv">
+      <div class="brand"><span class="lg"><svg class="i s f"><use href="#cross"/></svg></span>APS Santé</div>
+      <div class="links"><a>Accueil</a><a>Médecins</a><a class="on">Pharmacies</a><a>Structures</a><a>Assurances</a><a>Demande express</a></div>
+      <span class="btn ghost sm">Se connecter</span><span class="btn sm">Créer un compte</span>
+    </nav>
+    <div style="display:grid;grid-template-columns:1fr 520px;height:780px">
+      <div style="padding:28px 28px 28px 60px;overflow:hidden">
+        <div class="row between"><div><h2 class="h3" style="font-size:28px">Pharmacies de garde</h2><div class="t-s mt4">Cette nuit jusqu'à 08:00 · Douala · <b style="color:var(--g7)">12 ouvertes</b></div></div><div class="seg" style="width:240px"><span class="on"><svg class="i xs"><use href="#moon"/></svg>De garde</span><span>Toutes</span></div></div>
+        <div class="row g8 mt20"><div class="inp grow"><svg class="i s"><use href="#search"/></svg><span class="ph">Nom, quartier…</span></div><span class="chip"><svg class="i xs"><use href="#locate"/></svg>Autour de moi</span><span class="chip"><svg class="i xs"><use href="#sliders"/></svg>Filtres</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px">
+          <div class="dc wide" style="outline:2px solid var(--g6);outline-offset:2px"><img src="assets/pharma1.jpg" alt=""><div class="tl"><span class="pill w"><span class="d" style="color:var(--g6)"></span>Ouverte 24 h/24</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div><div class="info"><div class="row"><div class="grow"><div class="nm">Pharmacie du Soleil</div><div class="sp">Akwa · 600 m · 4 min</div></div><span class="go"><svg class="i s"><use href="#phone"/></svg></span></div></div></div>
+          <div class="dc wide"><img src="assets/pharma2.jpg" alt=""><div class="tl"><span class="pill w"><span class="d" style="color:var(--g6)"></span>Garde → 08:00</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div><div class="info"><div class="row"><div class="grow"><div class="nm">Pharmacie de Bonapriso</div><div class="sp">Bonapriso · 1,4 km</div></div><span class="go"><svg class="i s"><use href="#phone"/></svg></span></div></div></div>
+          <div class="dc wide"><img src="assets/pharma3.jpg" alt=""><div class="tl"><span class="pill w"><span class="d" style="color:var(--g6)"></span>Garde → 08:00</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div><div class="info"><div class="row"><div class="grow"><div class="nm">Pharmacie Makepe</div><div class="sp">Makepe · 3,2 km</div></div><span class="go"><svg class="i s"><use href="#phone"/></svg></span></div></div></div>
+          <div class="dc wide"><img src="assets/pharma4.jpg" alt=""><div class="tl"><span class="pill w"><span class="d" style="color:var(--g6)"></span>Garde → 07:00</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div><div class="info"><div class="row"><div class="grow"><div class="nm">Pharmacie de Deïdo</div><div class="sp">Deïdo · 2,7 km</div></div><span class="go"><svg class="i s"><use href="#phone"/></svg></span></div></div></div>
+        </div>
+      </div>
+      <div style="position:relative;overflow:hidden;border-left:1px solid var(--ln)">
+        <svg class="map" viewBox="0 0 340 740" preserveAspectRatio="xMidYMid slice"><use href="#mapart"/></svg>
+        <div class="me" style="left:44%;top:46%"></div>
+        <div class="ppin on" style="left:58%;top:38%"><svg class="i s f"><use href="#cross"/></svg></div>
+        <div class="ppin" style="left:24%;top:28%"><svg class="i xs f"><use href="#cross"/></svg></div>
+        <div class="ppin" style="left:78%;top:58%"><svg class="i xs f"><use href="#cross"/></svg></div>
+        <div class="ppin" style="left:34%;top:68%"><svg class="i xs f"><use href="#cross"/></svg></div>
+        <div class="ppin off" style="left:66%;top:18%"><svg class="i xs f"><use href="#cross"/></svg></div>
+        <div class="card sh" style="position:absolute;left:50%;top:38%;transform:translate(-50%,-140%);padding:10px 14px;white-space:nowrap"><b style="font-size:13px">Pharmacie du Soleil</b><div class="t-xs">600 m · ouverte</div></div>
+        <div class="col g6" style="position:absolute;right:16px;top:16px"><span class="ib"><svg class="i s"><use href="#plus"/></svg></span><span class="ib"><svg class="i s"><use href="#locate"/></svg></span></div>
+      </div>
+    </div>
+  </div></div></div>
+  <figcaption><span class="num">08</span><div><b>Pharmacies de garde</b><small>Liste en cartes photo à gauche, carte synchronisée à droite : la carte sélectionnée est cerclée de vert et son repère passe en noir</small></div></figcaption></figure>
+
+  <figure class="shot"><div class="win"><div class="wbar"><div class="dots"><i></i><i></i><i></i></div><div class="url"><svg class="i"><use href="#lock"/></svg>aps-sante.com/structures</div><div class="sp"></div></div><div class="vp"><div class="site">
+    <nav class="nv">
+      <div class="brand"><span class="lg"><svg class="i s f"><use href="#cross"/></svg></span>APS Santé</div>
+      <div class="links"><a>Accueil</a><a>Médecins</a><a>Pharmacies</a><a class="on">Structures</a><a>Assurances</a><a>Demande express</a></div>
+      <span class="btn ghost sm">Se connecter</span><span class="btn sm">Créer un compte</span>
+    </nav>
+    <div class="ctr" style="padding:36px 0 60px">
+      <div class="row between" style="align-items:flex-end"><div><span class="over">Annuaire</span><h2 class="h2 mt8">Structures de santé</h2><p class="t-s mt6">Hôpitaux, cliniques, laboratoires et centres d'imagerie vérifiés.</p></div><div class="row g8"><div class="inp" style="width:280px"><svg class="i s"><use href="#search"/></svg><span class="ph">Nom ou service…</span></div><span class="btn ghost"><svg class="i s"><use href="#sliders"/></svg>Filtres</span></div></div>
+      <div class="row g8 mt20"><span class="chip on">Toutes · 95</span><span class="chip">Hôpitaux publics · 18</span><span class="chip">Cliniques · 41</span><span class="chip">Laboratoires · 22</span><span class="chip">Imagerie · 14</span><span class="chip"><svg class="i xs" style="color:var(--rd)"><use href="#siren"/></svg>Urgences 24/7</span></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:24px">
+        <div class="dc tall"><img src="assets/structure1.jpg" alt=""><div class="tl"><span class="pill w">Hôpital public</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div><div class="info"><div class="nm">Hôpital Laquintinie</div><div class="sp">Akwa · Urgences 24/7</div><div class="ft"><div class="stack"><span class="av sm v2" style="width:26px;height:26px;font-size:9px">AM</span><span class="av sm v4" style="width:26px;height:26px;font-size:9px">GN</span></div><span class="t-xs">32 médecins</span><span class="go"><svg class="i s"><use href="#arr"/></svg></span></div></div></div>
+        <div class="dc tall"><img src="assets/structure2.jpg" alt=""><div class="tl"><span class="pill w">Clinique privée</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div><div class="info"><div class="nm">Polyclinique Bonanjo</div><div class="sp">Bonanjo · 2,1 km</div><div class="ft"><div class="stack"><span class="av sm v3" style="width:26px;height:26px;font-size:9px">HT</span><span class="av sm" style="width:26px;height:26px;font-size:9px">PE</span></div><span class="t-xs">18 médecins</span><span class="go"><svg class="i s"><use href="#arr"/></svg></span></div></div></div>
+        <div class="dc tall"><img src="assets/structure3.jpg" alt=""><div class="tl"><span class="pill w">Laboratoire</span><span class="fav on"><svg class="i s f"><use href="#heart"/></svg></span></div><div class="info"><div class="nm">Labo Bio-Santé</div><div class="sp">Bonapriso · résultats en ligne</div><div class="ft"><span class="pill g" style="padding:3px 8px">Ouvert</span><span class="t-xs">07:00 – 19:00</span><span class="go"><svg class="i s"><use href="#arr"/></svg></span></div></div></div>
+        <div class="dc tall"><img src="assets/structure4.jpg" alt=""><div class="tl"><span class="pill w">Hôpital de district</span><span class="fav"><svg class="i s"><use href="#heart"/></svg></span></div><div class="info"><div class="nm">Hôpital de Biyem-Assi</div><div class="sp">Yaoundé · Maternité, pédiatrie</div><div class="ft"><div class="stack"><span class="av sm v5" style="width:26px;height:26px;font-size:9px">RB</span><span class="av sm v2" style="width:26px;height:26px;font-size:9px">CE</span></div><span class="t-xs">24 médecins</span><span class="go"><svg class="i s"><use href="#arr"/></svg></span></div></div></div>
+      </div>
+      <div class="card row g16 mt24" style="padding:20px 24px;background:var(--g0);border-color:var(--g2)"><span class="ic"><svg class="i"><use href="#hosp"/></svg></span><div class="grow"><div class="h4" style="font-size:15px">Vous gérez un hôpital, une clinique ou un laboratoire ?</div><div class="t-s" style="font-size:13px">Créez la fiche de votre structure et rattachez-y vos médecins.</div></div><span class="btn">Devenir structure partenaire</span></div>
+    </div>
+  </div></div></div>
+  <figcaption><span class="num">09</span><div><b>Structures de santé</b><small>Filtres par type en puces avec compteurs, grille de cartes photo avec médecins rattachés, invitation « Devenir partenaire » sous la liste</small></div></figcaption></figure>
+
+  <figure class="shot"><div class="win"><div class="wbar"><div class="dots"><i></i><i></i><i></i></div><div class="url"><svg class="i"><use href="#lock"/></svg>aps-sante.com/assurances/axa</div><div class="sp"></div></div><div class="vp"><div class="site">
+    <nav class="nv">
+      <div class="brand"><span class="lg"><svg class="i s f"><use href="#cross"/></svg></span>APS Santé</div>
+      <div class="links"><a>Accueil</a><a>Médecins</a><a>Pharmacies</a><a>Structures</a><a class="on">Assurances</a><a>Demande express</a></div>
+      <span class="ib"><svg class="i s"><use href="#bell"/></svg></span><span class="av sm v3">MA</span>
+    </nav>
+    <div class="ctr" style="padding:36px 0 60px">
+      <div class="card row g20" style="padding:24px">
+        <div style="width:84px;height:84px;border-radius:14px;border:1px solid var(--ln);display:grid;place-items:center;background:#fff"><img src="assets/axa.png" alt="" style="width:58px;height:58px;object-fit:contain"></div>
+        <div class="grow"><div class="row g8"><h2 class="h3">AXA Assurances Cameroun</h2><svg class="i f verif" style="width:18px;height:18px"><use href="#verif"/></svg></div><div class="t-s">Santé individuelle et famille · 6 agences à Douala · 4 à Yaoundé</div><div class="row g8 mt10"><span class="pill g">Tiers payant chez 210 partenaires</span><span class="pill s">Remboursement sous 72 h</span></div></div>
+        <span class="btn ghost"><svg class="i s"><use href="#phone"/></svg>Être rappelé</span><span class="btn">Souscrire</span>
+      </div>
+      <div class="row between mt32"><h2 class="h3">Formules santé</h2><div class="seg" style="width:240px"><span class="on">Mensuel</span><span>Annuel · −10 %</span></div></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:18px">
+        <div class="card" style="padding:24px"><span class="over" style="color:var(--ink3)">Essentiel</span><div class="mt10"><b style="font-size:34px;letter-spacing:-.04em">8 500</b><span class="t-xs"> F / mois</span></div><p class="t-s" style="margin:6px 0 0;font-size:13px">L'essentiel pour les soins courants.</p><div class="hr"></div><div class="col g10 t-s" style="gap:10px;font-size:13px"><span class="row g8"><svg class="i s green b"><use href="#check"/></svg>Consultations remboursées à 70 %</span><span class="row g8"><svg class="i s green b"><use href="#check"/></svg>Pharmacie à 60 %</span><span class="row g8 muted"><svg class="i s"><use href="#x"/></svg>Hospitalisation</span><span class="row g8 muted"><svg class="i s"><use href="#x"/></svg>Maternité</span></div><span class="btn ghost block mt20">Choisir Essentiel</span></div>
+        <div class="card" style="padding:24px;border:2px solid var(--g6)"><div class="row between"><span class="over">Confort</span><span class="pill k">Le plus choisi</span></div><div class="mt10"><b style="font-size:34px;letter-spacing:-.04em">15 000</b><span class="t-xs"> F / mois</span></div><p class="t-s" style="margin:6px 0 0;font-size:13px">Couverture complète pour la famille.</p><div class="hr"></div><div class="col t-s" style="gap:10px;font-size:13px"><span class="row g8"><svg class="i s green b"><use href="#check"/></svg>Consultations remboursées à 90 %</span><span class="row g8"><svg class="i s green b"><use href="#check"/></svg>Pharmacie à 80 %</span><span class="row g8"><svg class="i s green b"><use href="#check"/></svg>Hospitalisation</span><span class="row g8 muted"><svg class="i s"><use href="#x"/></svg>Maternité</span></div><span class="btn block mt20">Choisir Confort</span></div>
+        <div class="card" style="padding:24px"><span class="over" style="color:var(--ink3)">Intégrale</span><div class="mt10"><b style="font-size:34px;letter-spacing:-.04em">24 000</b><span class="t-xs"> F / mois</span></div><p class="t-s" style="margin:6px 0 0;font-size:13px">Tout inclus, maternité comprise.</p><div class="hr"></div><div class="col t-s" style="gap:10px;font-size:13px"><span class="row g8"><svg class="i s green b"><use href="#check"/></svg>Consultations remboursées à 100 %</span><span class="row g8"><svg class="i s green b"><use href="#check"/></svg>Pharmacie à 90 %</span><span class="row g8"><svg class="i s green b"><use href="#check"/></svg>Hospitalisation</span><span class="row g8"><svg class="i s green b"><use href="#check"/></svg>Maternité</span></div><span class="btn ghost block mt20">Choisir Intégrale</span></div>
+      </div>
+    </div>
+  </div></div></div>
+  <figcaption><span class="num">10</span><div><b>Fiche assurance</b><small>En-tête de l'assureur avec badges de service, formules comparables côte à côte, la formule recommandée marquée par une bordure verte</small></div></figcaption></figure>
+</section>
+
+
+<!-- =========================================================
+     07 — ESPACE PATIENT
+     ========================================================= -->
+<section class="sec" id="s7">
+  <div class="sec-head">
+    <div><span class="n">07 — Espace patient</span><h2>Un tableau de bord qui ressemble à un <span class="serif">carnet de santé</span>.</h2></div>
+    <div>
+      <p>Barre latérale fixe, contenu en cartes. Le prochain rendez-vous est en tête, à côté de la carte santé (groupe sanguin, allergies, assurance). Les paiements distinguent ce qui est sous séquestre de ce qui a été versé.</p>
+      <ul class="ux"><li>Prochain RDV en premier</li><li>Carte santé</li><li>Proches gérés au même endroit</li><li>Factures téléchargeables</li></ul>
+    </div>
+  </div>
+
+  <figure class="shot"><div class="win"><div class="wbar"><div class="dots"><i></i><i></i><i></i></div><div class="url"><svg class="i"><use href="#lock"/></svg>aps-sante.com/espace/patient</div><div class="sp"></div></div><div class="vp"><div class="site">
+    <div class="app">
+      <aside class="side">
+        <div class="brand" style="padding:4px 12px 14px"><span class="lg"><svg class="i s f"><use href="#cross"/></svg></span>APS Santé</div>
+        <a class="on"><svg class="i s"><use href="#home"/></svg>Tableau de bord</a>
+        <a><svg class="i s"><use href="#cal"/></svg>Mes rendez-vous<em>2</em></a>
+        <a><svg class="i s"><use href="#mega"/></svg>Demandes express</a>
+        <a><svg class="i s"><use href="#video"/></svg>Téléconsultations</a>
+        <div class="grp">Santé</div>
+        <a><svg class="i s"><use href="#users"/></svg>Mes proches</a>
+        <a><svg class="i s"><use href="#file"/></svg>Documents</a>
+        <a><svg class="i s"><use href="#shield"/></svg>Mes assurances</a>
+        <div class="grp">Compte</div>
+        <a><svg class="i s"><use href="#wallet"/></svg>Paiements</a>
+        <a><svg class="i s"><use href="#bell"/></svg>Annonces</a>
+        <a><svg class="i s"><use href="#lock"/></svg>Sécurité</a>
+        <div style="margin-top:auto;padding:14px;border-radius:12px;background:var(--rd1)"><div class="row g8" style="color:var(--rd)"><svg class="i s"><use href="#siren"/></svg><b style="font-size:13px">Urgence</b></div><div class="t-xs mt4">SAMU 1515 · Police 117</div></div>
+      </aside>
+      <div>
+        <div class="topb">
+          <div class="inp grow" style="max-width:420px;height:42px;background:var(--bg);border-color:var(--ln)"><svg class="i s"><use href="#search"/></svg><span class="ph">Rechercher un médecin, une pharmacie…</span></div>
+          <div class="grow"></div>
+          <span class="btn sm"><svg class="i s"><use href="#plus"/></svg>Nouveau rendez-vous</span>
+          <span class="ib"><svg class="i s"><use href="#bell"/></svg><span class="dot"></span></span>
+          <div class="row g8"><span class="av sm v3">MA</span><div><b style="font-size:13px">Mireille Abena</b><div class="t-xs">Patiente</div></div><svg class="i xs muted"><use href="#chd"/></svg></div>
+        </div>
+        <div class="main">
+          <h2 class="h3" style="font-size:26px">Bonjour Mireille 👋</h2>
+          <p class="t-s mt4">Vous avez un rendez-vous demain et une demande express en cours.</p>
+          <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:20px;margin-top:22px">
+            <div class="card" style="padding:22px">
+              <div class="row between"><span class="pill g"><span class="d"></span>Confirmé · demain</span><span class="lnk" style="font-size:12.5px">Détails</span></div>
+              <div class="row g16 mt16"><div class="photo" style="width:72px;height:72px;border-radius:12px;background-image:url(https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=200&q=70&auto=format&fit=crop)"></div><div class="grow"><div class="h4">Dr Paul Etoundi <svg class="i xs f verif"><use href="#verif"/></svg></div><div class="t-s" style="font-size:13px">Médecin généraliste · Suivi tension</div><div class="row g6 mt6 t-xs"><svg class="i xs"><use href="#pin"/></svg>Cabinet Médical Akwa, rue Joss, immeuble Socar, 2ᵉ étage</div></div></div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px">
+                <div style="background:var(--bg);border-radius:11px;padding:12px"><div class="t-xs">Date</div><b>Ven. 20 oct</b></div>
+                <div style="background:var(--bg);border-radius:11px;padding:12px"><div class="t-xs">Heure</div><b>10:30</b></div>
+                <div style="background:var(--bg);border-radius:11px;padding:12px"><div class="t-xs">Payé</div><b>15 500 F</b></div>
+              </div>
+              <div class="row g8 mt16"><span class="btn"><svg class="i s"><use href="#nav"/></svg>Itinéraire</span><span class="btn ghost"><svg class="i s"><use href="#cal"/></svg>Déplacer</span><span class="btn ghost" style="color:var(--rd)">Annuler</span></div>
+            </div>
+            <div class="card" style="padding:22px;background:var(--g6);border-color:var(--g6);color:#fff;position:relative;overflow:hidden">
+              <svg class="i f" style="position:absolute;right:-10px;bottom:-14px;width:130px;height:130px;opacity:.08"><use href="#cross"/></svg>
+              <div class="row between"><span style="font-size:11px;font-weight:800;letter-spacing:.14em;opacity:.75">CARTE SANTÉ APS</span><svg class="i s" style="opacity:.85"><use href="#share"/></svg></div>
+              <div class="row g12 mt16"><span class="av lg v3" style="border:2px solid rgba(255,255,255,.4)">MA</span><div><b style="font-size:18px;letter-spacing:-.02em">Mireille Abena</b><div style="font-size:12.5px;opacity:.75">32 ans · Douala · ID 0042-8812</div></div></div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:20px">
+                <div style="background:rgba(255,255,255,.14);border-radius:10px;padding:10px 12px"><div style="font-size:10.5px;opacity:.7;font-weight:700">Groupe</div><b style="font-size:16px">O+</b></div>
+                <div style="background:rgba(255,255,255,.14);border-radius:10px;padding:10px 12px"><div style="font-size:10.5px;opacity:.7;font-weight:700">Allergie</div><b style="font-size:13.5px">Pénicilline</b></div>
+                <div style="background:rgba(255,255,255,.14);border-radius:10px;padding:10px 12px"><div style="font-size:10.5px;opacity:.7;font-weight:700">Assurance</div><b style="font-size:13.5px">AXA Confort</b></div>
+              </div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:20px">
+            <div class="card row g12" style="padding:16px"><span class="ic"><svg class="i"><use href="#steth"/></svg></span><div><b style="font-size:13.5px">Prendre RDV</b><div class="t-xs">1 240 médecins</div></div></div>
+            <div class="card row g12" style="padding:16px"><span class="ic v"><svg class="i"><use href="#mega"/></svg></span><div><b style="font-size:13.5px">Demande express</b><div class="t-xs">1 en cours · 3 réponses</div></div></div>
+            <div class="card row g12" style="padding:16px"><span class="ic a"><svg class="i"><use href="#pill"/></svg></span><div><b style="font-size:13.5px">Pharmacie de garde</b><div class="t-xs">12 ouvertes</div></div></div>
+            <div class="card row g12" style="padding:16px"><span class="ic s"><svg class="i"><use href="#users"/></svg></span><div><b style="font-size:13.5px">Mes proches</b><div class="t-xs">Junior, Maman</div></div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:20px;margin-top:20px">
+            <div class="card" style="padding:22px">
+              <div class="row between"><div class="h4">Mes rendez-vous</div><div class="seg" style="padding:3px"><span class="on" style="height:30px;padding:0 12px">À venir</span><span style="height:30px;padding:0 12px">Passés</span></div></div>
+              <table class="tbl mt14">
+                <tr><th>Praticien</th><th>Date</th><th>Mode</th><th>Statut</th></tr>
+                <tr><td><div class="row g8"><span class="av sm">PE</span><b style="font-size:13px">Dr Paul Etoundi</b></div></td><td>Ven. 20 oct · 10:30</td><td>Cabinet</td><td><span class="pill g">Confirmé</span></td></tr>
+                <tr><td><div class="row g8"><span class="av sm v2">AM</span><b style="font-size:13px">Dr Arielle Mbarga</b></div></td><td>Jeu. 26 oct · 15:00</td><td><span class="row g6"><svg class="i xs" style="color:var(--sk)"><use href="#video"/></svg>Vidéo</span></td><td><span class="pill a">Lieu à confirmer</span></td></tr>
+                <tr><td><div class="row g8"><span class="av sm v4">GN</span><b style="font-size:13px">Dr Grâce Nkoulou</b><span class="t-xs">pour Junior</span></div></td><td>Lun. 30 oct · 09:00</td><td>Cabinet</td><td><span class="pill c">Paiement en attente</span></td></tr>
+              </table>
+            </div>
+            <div class="card" style="padding:22px">
+              <div class="row between"><div class="h4">Paiements</div><span class="lnk" style="font-size:12.5px">Tout voir</span></div>
+              <div class="note a mt14" style="align-items:center"><svg class="i s"><use href="#lock"/></svg><span><b style="color:var(--ink)">15 500 F sous séquestre</b> · versés après le RDV du 20 oct.</span></div>
+              <div class="col mt12">
+                <div class="row g12" style="padding:10px 0;border-bottom:1px solid var(--ln)"><span class="ic sm"><svg class="i s"><use href="#steth"/></svg></span><div class="grow"><b style="font-size:13px">Dr Arielle Mbarga</b><div class="t-xs">12 oct · MoMo</div></div><b style="font-size:13px">−15 500 F</b><span class="ib" style="width:32px;height:32px"><svg class="i xs"><use href="#dl"/></svg></span></div>
+                <div class="row g12" style="padding:10px 0"><span class="ic sm s"><svg class="i s"><use href="#shield"/></svg></span><div class="grow"><b style="font-size:13px">AXA · Confort</b><div class="t-xs">1 oct · Orange Money</div></div><b style="font-size:13px">−15 000 F</b><span class="ib" style="width:32px;height:32px"><svg class="i xs"><use href="#dl"/></svg></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div></div></div>
+  <figcaption><span class="num">11</span><div><b>Tableau de bord patient</b><small>Prochain RDV avec actions, carte santé en aplat vert, raccourcis, tableau des rendez-vous par statut et paiements avec séquestre</small></div></figcaption></figure>
+</section>
+
+
+<!-- =========================================================
+     08 — ESPACE MÉDECIN
+     ========================================================= -->
+<section class="sec" id="s8">
+  <div class="sec-head">
+    <div><span class="n">08 — Espace médecin</span><h2>Le cabinet sur un écran, <span class="serif">sans paperasse</span>.</h2></div>
+    <div>
+      <p>Le médecin voit d'abord ce qui attend une action : RDV payés à accepter avec le lieu, demandes express de sa spécialité. L'agenda de la semaine distingue créneaux confirmés, en attente de paiement et libres. La réputation (note, avis vérifiés) a son propre bloc.</p>
+      <ul class="ux"><li>« À faire » en premier</li><li>Réponse express au tarif du profil</li><li>Agenda coloré par statut</li><li>Revenus et séquestre</li></ul>
+    </div>
+  </div>
+
+  <figure class="shot"><div class="win"><div class="wbar"><div class="dots"><i></i><i></i><i></i></div><div class="url"><svg class="i"><use href="#lock"/></svg>aps-sante.com/espace/medecin</div><div class="sp"></div></div><div class="vp"><div class="site">
+    <div class="app">
+      <aside class="side">
+        <div class="brand" style="padding:4px 12px 14px"><span class="lg"><svg class="i s f"><use href="#cross"/></svg></span>APS Santé <span class="pill g" style="margin-left:auto;font-size:10px">Pro</span></div>
+        <a class="on"><svg class="i s"><use href="#grid"/></svg>Tableau de bord</a>
+        <a><svg class="i s"><use href="#cal"/></svg>Agenda</a>
+        <a><svg class="i s"><use href="#check"/></svg>RDV à traiter<em>2</em></a>
+        <a><svg class="i s"><use href="#mega"/></svg>Demandes express<em>1</em></a>
+        <a><svg class="i s"><use href="#users"/></svg>Patients</a>
+        <div class="grp">Activité</div>
+        <a><svg class="i s"><use href="#wallet"/></svg>Portefeuille</a>
+        <a><svg class="i s"><use href="#star"/></svg>Réputation</a>
+        <a><svg class="i s"><use href="#receipt"/></svg>Abonnement</a>
+        <div class="grp">Profil</div>
+        <a><svg class="i s"><use href="#user"/></svg>Profil public</a>
+        <a><svg class="i s"><use href="#clock"/></svg>Semaine type</a>
+      </aside>
+      <div>
+        <div class="topb">
+          <div><b style="font-size:16px">Tableau de bord</b><div class="t-xs">Jeudi 19 octobre 2026</div></div>
+          <div class="grow"></div>
+          <div class="row g8" style="border:1px solid var(--ln);border-radius:99px;padding:5px 6px 5px 14px"><span style="font-size:12.5px;font-weight:700;color:var(--g7)">Disponible</span><span class="tg on"></span></div>
+          <span class="ib"><svg class="i s"><use href="#bell"/></svg><span class="dot"></span></span>
+          <div class="row g8"><span class="av sm" style="background-image:url(https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=120&q=70&auto=format&fit=crop)"></span><div><b style="font-size:13px">Dr Paul Etoundi</b><div class="t-xs">Généraliste</div></div></div>
+        </div>
+        <div class="main">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+            <div class="card" style="padding:18px"><div class="t-xs">RDV aujourd'hui</div><b style="font-size:28px;letter-spacing:-.04em">6</b><div class="row g4 mt8"><i style="flex:1;height:5px;border-radius:5px;background:var(--g6)"></i><i style="flex:1;height:5px;border-radius:5px;background:var(--g6)"></i><i style="flex:1;height:5px;border-radius:5px;background:var(--ln)"></i><i style="flex:1;height:5px;border-radius:5px;background:var(--ln)"></i><i style="flex:1;height:5px;border-radius:5px;background:var(--ln)"></i><i style="flex:1;height:5px;border-radius:5px;background:var(--ln)"></i></div><div class="t-xs mt6">2 terminés</div></div>
+            <div class="card" style="padding:18px"><div class="t-xs">Revenus · octobre</div><b style="font-size:28px;letter-spacing:-.04em">420 000 F</b><div class="row g4 mt8 green" style="font-size:12px;font-weight:800"><svg class="i xs"><use href="#trend"/></svg>+12 % vs septembre</div></div>
+            <div class="card" style="padding:18px"><div class="t-xs">Sous séquestre</div><b style="font-size:28px;letter-spacing:-.04em">45 000 F</b><div class="t-xs mt8">Versés après 3 consultations</div></div>
+            <div class="card" style="padding:18px"><div class="t-xs">Réputation</div><div class="row g6"><b style="font-size:28px;letter-spacing:-.04em">4,9</b><svg class="i f" style="color:#F5B400"><use href="#star"/></svg></div><div class="t-xs mt8">152 avis vérifiés · 98 % recommandent</div></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1.7fr;gap:20px;margin-top:20px">
+            <div class="col g12">
+              <div class="row between"><div class="h4">À faire</div><span class="pill c">3</span></div>
+              <div class="card" style="padding:16px;border-color:#F1D8A6;background:#FFFBF2">
+                <div class="row g12"><span class="ic a"><svg class="i"><use href="#pin"/></svg></span><div class="grow"><b style="font-size:13.5px">2 RDV payés à accepter</b><div class="t-xs">Indiquez le lieu de consultation</div></div></div>
+                <div class="col g8 mt14">
+                  <div class="row g8" style="background:#fff;border:1px solid var(--ln);border-radius:10px;padding:10px"><span class="av sm v3">MA</span><div class="grow"><b style="font-size:12.5px">Mireille Abena</b><div class="t-xs">Ven. 20 · 10:30</div></div><span class="btn sm">Accepter</span></div>
+                  <div class="row g8" style="background:#fff;border:1px solid var(--ln);border-radius:10px;padding:10px"><span class="av sm v4">JM</span><div class="grow"><b style="font-size:12.5px">Jean Mballa</b><div class="t-xs">Sam. 21 · 08:00</div></div><span class="btn sm">Accepter</span></div>
+                </div>
+              </div>
+              <div class="card" style="padding:16px;background:var(--vi1);border-color:#DCD8FD">
+                <div class="row between"><span class="pill v" style="background:#fff"><span class="d"></span>Demande express</span><span class="t-xs">il y a 6 min</span></div>
+                <b class="mt10" style="display:block;font-size:13.5px">Généraliste · Sam. 21 oct, 09:00</b>
+                <div class="t-xs mt4">Akwa · Au cabinet · « Fièvre et maux de tête depuis 2 jours »</div>
+                <div class="row g8 mt14"><span class="btn sm ghost" style="flex:1;border-color:transparent">Ignorer</span><span class="btn sm" style="flex:2;background:var(--vi)">Répondre · 10 000 F</span></div>
+              </div>
+            </div>
+
+            <div class="card" style="padding:20px">
+              <div class="row between"><div class="row g12"><div class="h4">Agenda</div><span class="t-s" style="font-size:13px">16 – 21 octobre</span></div><div class="row g8"><span class="row g6 t-xs"><i style="width:9px;height:9px;border-radius:3px;background:var(--g6)"></i>Confirmé</span><span class="row g6 t-xs"><i style="width:9px;height:9px;border-radius:3px;background:var(--am)"></i>Attente paiement</span><span class="row g6 t-xs"><i style="width:9px;height:9px;border-radius:3px;background:var(--sk)"></i>Vidéo</span><span class="btn sm ghost" style="margin-left:8px"><svg class="i s"><use href="#plus"/></svg>Créneaux</span></div></div>
+              <div style="display:grid;grid-template-columns:44px repeat(6,1fr);margin-top:16px;border:1px solid var(--ln);border-radius:12px;overflow:hidden;font-size:11.5px">
+                <div style="border-bottom:1px solid var(--ln);background:var(--bg)"></div>
+                <div style="padding:8px;text-align:center;border-bottom:1px solid var(--ln);border-left:1px solid var(--ln);background:var(--bg)"><div class="t-xs">LUN</div><b>16</b></div>
+                <div style="padding:8px;text-align:center;border-bottom:1px solid var(--ln);border-left:1px solid var(--ln);background:var(--bg)"><div class="t-xs">MAR</div><b>17</b></div>
+                <div style="padding:8px;text-align:center;border-bottom:1px solid var(--ln);border-left:1px solid var(--ln);background:var(--bg)"><div class="t-xs">MER</div><b>18</b></div>
+                <div style="padding:8px;text-align:center;border-bottom:1px solid var(--ln);border-left:1px solid var(--ln);background:var(--g1);color:var(--g8)"><div style="font-size:11px;font-weight:700">JEU</div><b>19</b></div>
+                <div style="padding:8px;text-align:center;border-bottom:1px solid var(--ln);border-left:1px solid var(--ln);background:var(--bg)"><div class="t-xs">VEN</div><b>20</b></div>
+                <div style="padding:8px;text-align:center;border-bottom:1px solid var(--ln);border-left:1px solid var(--ln);background:var(--bg)"><div class="t-xs">SAM</div><b>21</b></div>
+                <!-- grille horaire -->
+                <div class="col" style="color:var(--ink3);font-weight:600"><span style="height:54px;padding:4px 6px" class="mono">08:00</span><span style="height:54px;padding:4px 6px" class="mono">09:00</span><span style="height:54px;padding:4px 6px" class="mono">10:00</span><span style="height:54px;padding:4px 6px" class="mono">11:00</span><span style="height:54px;padding:4px 6px" class="mono">12:00</span><span style="height:54px;padding:4px 6px" class="mono">14:00</span></div>
+                <div style="border-left:1px solid var(--ln);position:relative;padding:4px"><div style="height:46px;border-radius:8px;background:var(--g1);border-left:3px solid var(--g6);padding:5px 7px"><b>A. Ngono</b><div class="t-xs" style="font-size:10.5px">Cabinet</div></div><div style="height:46px;margin-top:8px;border-radius:8px;background:var(--sk1);border-left:3px solid var(--sk);padding:5px 7px"><b>R. Bella</b><div class="t-xs" style="font-size:10.5px">Vidéo</div></div><div style="height:108px;margin-top:8px;border-radius:8px;background:repeating-linear-gradient(135deg,#F1F4F2 0 7px,#EAEFEC 7px 14px)"></div></div>
+                <div style="border-left:1px solid var(--ln);padding:4px"><div style="height:46px;margin-top:54px;border-radius:8px;background:var(--g1);border-left:3px solid var(--g6);padding:5px 7px"><b>S. Fouda</b><div class="t-xs" style="font-size:10.5px">Cabinet</div></div><div style="height:46px;margin-top:62px;border-radius:8px;background:var(--g1);border-left:3px solid var(--g6);padding:5px 7px"><b>L. Essomba</b><div class="t-xs" style="font-size:10.5px">Cabinet</div></div></div>
+                <div style="border-left:1px solid var(--ln);padding:4px"><div style="height:100px;border-radius:8px;border:1.5px dashed var(--ln2);display:grid;place-items:center;color:var(--ink3);font-weight:700">Libre</div><div style="height:46px;margin-top:8px;border-radius:8px;background:var(--am1);border-left:3px solid var(--am);padding:5px 7px"><b>P. Kamga</b><div style="font-size:10.5px;color:var(--am7);font-weight:700">expire 18:00</div></div></div>
+                <div style="border-left:1px solid var(--ln);padding:4px;background:#FBFDFC;position:relative"><div style="height:46px;border-radius:8px;background:var(--g1);border-left:3px solid var(--g6);padding:5px 7px;opacity:.6"><b>J. Mballa</b><div class="t-xs" style="font-size:10.5px">Terminé ✓</div></div><div style="height:46px;margin-top:8px;border-radius:8px;background:var(--sk1);border-left:3px solid var(--sk);padding:5px 7px;opacity:.6"><b>A. Ngono</b><div class="t-xs" style="font-size:10.5px">Terminé ✓</div></div><div style="position:absolute;left:0;right:0;top:118px;height:2px;background:var(--co)"><span style="position:absolute;left:-4px;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--co)"></span></div><div style="height:46px;margin-top:20px;border-radius:8px;background:var(--g6);color:#fff;padding:5px 7px"><b>M. Abena</b><div style="font-size:10.5px;opacity:.8">10:30 · Akwa</div></div></div>
+                <div style="border-left:1px solid var(--ln);padding:4px"><div style="height:46px;margin-top:108px;border-radius:8px;background:var(--g1);border-left:3px solid var(--g6);padding:5px 7px"><b>M. Abena</b><div class="t-xs" style="font-size:10.5px">Suivi</div></div><div style="height:46px;margin-top:62px;border-radius:8px;background:var(--am1);border-left:3px solid var(--am);padding:5px 7px"><b>C. Tamba</b><div style="font-size:10.5px;color:var(--am7);font-weight:700">en attente</div></div></div>
+                <div style="border-left:1px solid var(--ln);padding:4px"><div style="height:46px;border-radius:8px;background:var(--g1);border-left:3px solid var(--g6);padding:5px 7px"><b>J. Mballa</b><div class="t-xs" style="font-size:10.5px">À accepter</div></div><div style="height:46px;margin-top:8px;border-radius:8px;background:var(--vi1);border-left:3px solid var(--vi);padding:5px 7px"><b>Express</b><div style="font-size:10.5px;color:var(--vi7);font-weight:700">Akwa · 09:00</div></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div></div></div>
+  <figcaption><span class="num">12</span><div><b>Tableau de bord médecin</b><small>Indicateurs du mois, colonne « À faire » (acceptation avec lieu, demande express), agenda de la semaine avec ligne « maintenant » et couleurs par statut</small></div></figcaption></figure>
+</section>
+
+
+<footer class="end">
+  <span>APS Santé — Maquettes web, refonte 2026 · compagnon de new-mobile-ui.html</span>
+  <span>12 écrans · 8 parcours · composants partagés avec le mobile</span>
+</footer>
+
+<script>
+/* Met chaque maquette (1280 px) à l'échelle de sa fenêtre */
+(function(){
+  var vps = document.querySelectorAll('.vp');
+  function fit(){
+    vps.forEach(function(vp){
+      var site = vp.firstElementChild;
+      var k = Math.min(1, vp.clientWidth / 1280);
+      site.style.transform = 'scale(' + k + ')';
+      vp.style.height = (site.offsetHeight * k) + 'px';
+    });
+  }
+  window.addEventListener('resize', fit);
+  window.addEventListener('load', fit);
+  fit();
+})();
+</script>
+</body>
+</html>

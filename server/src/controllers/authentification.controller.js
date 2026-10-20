@@ -20,6 +20,9 @@ import {
   serialiserUtilisateur,
   validerMotDePasse,
 } from "../services/compte.service.js";
+import { donneesPinCreation, ErreurPin, genererPinProvisoire } from "../services/pin.service.js";
+import { espaceParDefaut, listerEspaces, trouverEspace } from "../services/espaces.service.js";
+import { ouvrirSessionEspace } from "../services/compte.service.js";
 
 // Délai laissé au titulaire d'un mot de passe temporaire pour le
 // changer, à compter de sa toute première connexion réussie.
@@ -112,6 +115,8 @@ export async function inscrire(req, res, next) {
       mot_de_passe,
       pays_id,
       date_naissance,
+      pin,
+      preuve_telephone,
     } = req.body;
 
     if (!nom || !prenom || !emailBrut || !mot_de_passe || !pays_id || !date_naissance) {
@@ -157,6 +162,21 @@ export async function inscrire(req, res, next) {
       return res.status(409).json({ message: "Cet email est déjà utilisé." });
     }
 
+    // Connexion numéro + PIN (facultative ici tant que l'email + mot de
+    // passe reste en place) : le numéro devient l'identifiant de connexion.
+    let donneesPin = {};
+    if (pin !== undefined && pin !== null && pin !== "") {
+      if (!telephone) {
+        return res.status(400).json({ message: "Le numéro de téléphone est requis pour se connecter avec un code PIN." });
+      }
+      try {
+        donneesPin = await donneesPinCreation({ telephone, pays_id, pin: String(pin), date_naissance: dateNaissance, preuve_telephone });
+      } catch (err) {
+        if (err instanceof ErreurPin || err?.name === "ErreurSms") return res.status(err.status).json({ message: err.message, code: err.code });
+        throw err;
+      }
+    }
+
     const mot_de_passe_hash = await bcrypt.hash(mot_de_passe, SALT_ROUNDS);
 
     const utilisateur = await prisma.$transaction(async (tx) => {
@@ -170,6 +190,7 @@ export async function inscrire(req, res, next) {
           role_id: roleRecord.role_id,
           pays_id,
           statut_compte: "actif",
+          ...donneesPin,
         },
         include: { role: true },
       });
@@ -214,6 +235,7 @@ export async function creerCompteAdministre(req, res, next) {
       pays_id,
       reference_id,
       fonction,
+      generer_pin,
     } = req.body;
 
     if (!nom || !prenom || !emailBrut || !mot_de_passe || !pays_id || !role) {
@@ -275,6 +297,25 @@ export async function creerCompteAdministre(req, res, next) {
       }
     }
 
+    // PIN provisoire (connexion numéro + PIN) : jamais pour un compte
+    // d'administration. Renvoyé UNE fois à l'administrateur, qui le
+    // transmet de vive voix tant qu'aucun canal WhatsApp/SMS n'est ouvert ;
+    // le titulaire doit le changer à sa première connexion.
+    let pinProvisoire = null;
+    let donneesPin = {};
+    if (generer_pin === true && !["admin", "superadmin"].includes(role)) {
+      if (!telephone) {
+        return res.status(400).json({ message: "Le numéro de téléphone est requis pour générer un code PIN provisoire." });
+      }
+      pinProvisoire = genererPinProvisoire();
+      try {
+        donneesPin = await donneesPinCreation({ telephone, pays_id, pin: pinProvisoire, provisoire: true });
+      } catch (err) {
+        if (err instanceof ErreurPin) return res.status(err.status).json({ message: err.message, code: err.code });
+        throw err;
+      }
+    }
+
     const mot_de_passe_hash = await bcrypt.hash(mot_de_passe, SALT_ROUNDS);
 
     const utilisateur = await prisma.$transaction(async (tx) => {
@@ -288,6 +329,7 @@ export async function creerCompteAdministre(req, res, next) {
           role_id: roleRecord.role_id,
           pays_id,
           statut_compte: "actif",
+          ...donneesPin,
         },
         include: { role: true },
       });
@@ -306,8 +348,11 @@ export async function creerCompteAdministre(req, res, next) {
     });
 
     return res.status(201).json({
-      message: "Compte créé avec succès.",
+      message: pinProvisoire
+        ? "Compte créé. Transmettez le code PIN provisoire au titulaire : il le changera à sa première connexion."
+        : "Compte créé avec succès.",
       utilisateur: serialiserUtilisateur(utilisateur),
+      ...(pinProvisoire && { pin_provisoire: pinProvisoire }),
     });
   } catch (err) {
     next(err);
@@ -547,12 +592,15 @@ export async function connecter(req, res, next) {
       });
     }
 
-    const accessToken = await ouvrirSession(req, res, utilisateur);
+    const { accessToken, espace, espaces } = await ouvrirSessionEspace(req, res, utilisateur);
 
     return res.status(200).json({
       message: "Connexion réussie.",
       access_token: accessToken,
-      utilisateur: serialiserUtilisateur(utilisateur),
+      utilisateur: serialiserUtilisateur(utilisateur, espace),
+      // Même forme que POST /auth/login-pin : le client affiche
+      // « Choisir mon espace » s'il y en a plusieurs.
+      espaces,
     });
   } catch (err) {
     next(err);
@@ -656,12 +704,13 @@ export async function changerMotDePasseInitial(req, res, next) {
 
     // Ouverture immédiate d'une session complète, comme un login
     // classique réussi.
-    const accessToken = await ouvrirSession(req, res, utilisateurMisAJour);
+    const { accessToken, espace, espaces } = await ouvrirSessionEspace(req, res, utilisateurMisAJour);
 
     return res.status(200).json({
       message: "Mot de passe mis à jour. Connexion réussie.",
       access_token: accessToken,
-      utilisateur: serialiserUtilisateur(utilisateurMisAJour),
+      utilisateur: serialiserUtilisateur(utilisateurMisAJour, espace),
+      espaces,
     });
   } catch (err) {
     next(err);
@@ -713,6 +762,14 @@ export async function rafraichirToken(req, res, next) {
       date_expiration: nouvelleExpiration,
     } = genererRefreshToken();
 
+    // Espace actif de la session : repris tel quel s'il existe encore,
+    // sinon (fiche retirée entre-temps) espace par défaut du compte.
+    let espace = await trouverEspace(enregistrement.utilisateur_id, enregistrement.espace);
+    if (!espace) {
+      const espaces = await listerEspaces(enregistrement.utilisateur_id);
+      espace = espaceParDefaut(espaces, enregistrement.utilisateur.role.libelle);
+    }
+
     await prisma.$transaction([
       prisma.refreshToken.update({
         where: { refresh_token_id: enregistrement.refresh_token_id },
@@ -726,13 +783,15 @@ export async function rafraichirToken(req, res, next) {
           user_agent: req.headers["user-agent"]?.slice(0, 255),
           ip_creation: req.ip,
           statut: "actif",
+          espace: espace?.cle ?? null,
         },
       }),
     ]);
 
     const { token: accessToken } = genererAccessToken({
       ...enregistrement.utilisateur,
-      role: enregistrement.utilisateur.role.libelle,
+      role: espace?.role ?? enregistrement.utilisateur.role.libelle,
+      espace: espace?.cle ?? null,
     });
 
     res.cookie(
@@ -808,7 +867,9 @@ export async function profil(req, res, next) {
       return res.status(404).json({ message: "Utilisateur introuvable." });
     }
 
-    return res.status(200).json({ utilisateur: serialiserUtilisateur(utilisateur) });
+    // Rôle et espace de la SESSION (espace actif), pas seulement du compte.
+    const espace = req.utilisateur.espace ? await trouverEspace(utilisateur.utilisateur_id, req.utilisateur.espace) : null;
+    return res.status(200).json({ utilisateur: serialiserUtilisateur(utilisateur, espace) });
   } catch (err) {
     next(err);
   }

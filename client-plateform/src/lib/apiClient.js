@@ -25,6 +25,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 let accessToken = null;
 let onUnauthorized = null; // injecté par AuthProvider
 let onTokenRefreshed = null; // injecté par AuthProvider
+let onPinRequis = null; // injecté par GardePin (demande du code PIN)
 
 export function setAccessToken(token) {
   accessToken = token;
@@ -53,6 +54,15 @@ export function setUnauthorizedHandler(handler) {
  */
 export function setTokenRefreshedHandler(handler) {
   onTokenRefreshed = handler;
+}
+
+/**
+ * Opérations protégées par le code PIN (403 { code: "PIN_REQUIS" }) :
+ * `handler` demande le PIN, le confirme et résout `true` (la requête est
+ * alors rejouée une fois) ou `false` (abandon : l'erreur remonte).
+ */
+export function setPinRequisHandler(handler) {
+  onPinRequis = handler;
 }
 
 /**
@@ -147,7 +157,7 @@ function enteteInstallation() {
 
 export async function apiFetch(
   path,
-  { body, headers, skipAuthRetry = false, authOverride, ...options } = {}
+  { body, headers, skipAuthRetry = false, skipPinRetry = false, authOverride, ...options } = {}
 ) {
   // Un FormData (upload multipart, ex. création/modification de centre
   // de santé avec fichiers) ne doit JAMAIS être passé à JSON.stringify
@@ -194,6 +204,19 @@ export async function apiFetch(
     data = await res.json();
   } catch {
     // réponse sans corps JSON (ex: 204)
+  }
+
+  // Code PIN exigé : on le demande, puis on rejoue la requête une fois.
+  if (res.status === 403 && data?.code === 'PIN_REQUIS' && !skipPinRetry && onPinRequis) {
+    if (await onPinRequis()) {
+      res = await doFetch(accessToken);
+      data = null;
+      try {
+        data = await res.json();
+      } catch {
+        // réponse sans corps JSON
+      }
+    }
   }
 
   if (!res.ok) {

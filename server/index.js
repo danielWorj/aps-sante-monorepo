@@ -111,6 +111,13 @@ const limiteurAuth = rateLimit({
 });
 
 app.use("/api/auth/login", limiteurAuth);
+// Connexion numéro + PIN : même limite IP (en plus des 5 essais par compte).
+app.use("/api/auth/login-pin", limiteurAuth);
+app.use("/api/auth/changer-pin-initial", limiteurAuth);
+app.use("/api/auth/pin/reinitialiser", limiteurAuth);
+app.use("/api/auth/connexion-application", (req, res, next) =>
+  // Le sondage du navigateur (toutes les 2 s) a sa propre limite, plus large.
+  req.method === "POST" && req.path === "/" ? limiteurAuth(req, res, next) : next());
 app.use("/api/auth/register", limiteurAuth);
 app.use("/api/auth/bootstrap-superadmin", limiteurAuth);
 

@@ -4,6 +4,7 @@
 import { Router } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { authentifier } from "../middlewares/auth.middleware.js";
+import { exigerPinRecent } from "../middlewares/pin.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
 import {
   approuverRetrait, demanderRetrait, listerMesRetraits, listerRetraits, marquerEchoue,
@@ -23,7 +24,8 @@ const limiteurRetrait = rateLimit({
 const router = Router();
 
 // Médecin (propriétaire) — l'autorisation fine est faite dans le contrôleur.
-router.post("/medecins/:id/retraits", authentifier, limiteurRetrait, demanderRetrait);
+// Retrait : code PIN récent exigé (voir pin.middleware.js).
+router.post("/medecins/:id/retraits", authentifier, exigerPinRecent, limiteurRetrait, demanderRetrait);
 router.get("/medecins/:id/retraits", authentifier, listerMesRetraits);
 
 // Admin / superadmin

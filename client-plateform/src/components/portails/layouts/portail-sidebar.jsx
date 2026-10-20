@@ -28,7 +28,6 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
-import { deconnecter as deconnecterApi } from "../../../services/authService";
 import { useAnnoncesNonLues } from "../../annonces/annoncesVues";
 
 const LIENS = [
@@ -63,7 +62,7 @@ const PortailSidebar = ({
 }) => {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { user, status: authStatus } = useAuth();
+  const { user, status: authStatus, deconnecter } = useAuth();
 
   const medecin = user?.medecin; // présent seulement si le backend l'inclut, cf. note en tête de fichier
 
@@ -86,12 +85,13 @@ const PortailSidebar = ({
 
   const handleDeconnexion = async (e) => {
     e.preventDefault();
+    // Via le contexte (et non authService directement) : sinon l'utilisateur,
+    // son access token et ses espaces restaient en mémoire après la
+    // déconnexion. deconnecter() nettoie la session locale même si l'appel
+    // serveur échoue ; on revient toujours sur /login.
     try {
-      await deconnecterApi();
+      await deconnecter();
     } finally {
-      // On navigue même si l'appel serveur échoue (session déjà
-      // invalide côté serveur, réseau coupé...) : l'objectif est de
-      // toujours ramener l'utilisateur sur /login.
       navigate("/login", { replace: true });
     }
   };

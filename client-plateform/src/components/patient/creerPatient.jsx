@@ -8,6 +8,8 @@ import '../../assets/styles/creer-medecin.css';
 
 import { useAuth } from '../../context/AuthContext';
 import { inscrirePatient } from '../../services/authService';
+import VerificationTelephone from '../auth/VerificationTelephone';
+import { useConfigurationConnexion } from '../../hooks/useConfigurationConnexion';
 import { listerPays } from '../../services/geoService';
 
 // ───────────────────────────────────────────────────────────────────
@@ -67,6 +69,10 @@ const CreerPatient = () => {
   const [pays, setPays] = useState([]);
   const [chargementReferentiels, setChargementReferentiels] = useState(true);
 
+  // Vérification du numéro par code (si activée sur le serveur).
+  const config = useConfigurationConnexion();
+  const [preuve, setPreuve] = useState(null);
+
   const [formData, setFormData] = useState({
     // Étape 1 — informations personnelles
     nom: '',
@@ -80,6 +86,10 @@ const CreerPatient = () => {
     // jamais envoyée au serveur : voir handleSubmit)
     mot_de_passe: '',
     confirmation_mot_de_passe: '',
+    // Code PIN de la connexion par numéro (6 chiffres) ; la confirmation
+    // reste côté client.
+    pin: '',
+    confirmation_pin: '',
 
     // Étape 3
     acceptCGU: false,
@@ -110,9 +120,10 @@ const CreerPatient = () => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    const valeur = name === 'pin' || name === 'confirmation_pin' ? value.replace(/\D/g, '').slice(0, 6) : value;
     setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value,
+      [name]: type === 'checkbox' ? checked : valeur,
     }));
   };
 
@@ -126,6 +137,7 @@ const CreerPatient = () => {
         if (!formData.email.trim()) return "L'adresse e-mail est obligatoire.";
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim()))
           return "L'adresse e-mail n'est pas valide.";
+        if (!formData.telephone.trim()) return "Le numéro de téléphone est obligatoire : il sert à vous connecter.";
         if (!formData.date_naissance) return "La date de naissance est obligatoire.";
         if (!formData.pays_id) return "Le pays est obligatoire.";
         return null;
@@ -134,6 +146,11 @@ const CreerPatient = () => {
           return "Le mot de passe doit contenir au moins 8 caractères.";
         if (formData.mot_de_passe !== formData.confirmation_mot_de_passe)
           return "Les deux mots de passe ne correspondent pas.";
+        if (formData.pin.length !== 6) return "Le code PIN comporte 6 chiffres.";
+        if (formData.pin !== formData.confirmation_pin)
+          return "Les deux codes PIN ne correspondent pas.";
+        if (config?.verification_telephone && !preuve)
+          return "Vérifiez votre numéro avec le code reçu.";
         return null;
       case 3:
         if (!formData.acceptCGU)
@@ -182,6 +199,8 @@ const CreerPatient = () => {
         email: formData.email.trim(),
         telephone: formData.telephone.trim() || undefined,
         mot_de_passe: formData.mot_de_passe,
+        pin: formData.pin,
+        ...(preuve && { preuve_telephone: preuve }),
         pays_id: formData.pays_id,
         date_naissance: formData.date_naissance,
       };
@@ -399,15 +418,20 @@ const CreerPatient = () => {
                             />
                           </div>
                           <div className="col-md-6">
-                            <label className="form-label-aps">Téléphone</label>
+                            <label className="form-label-aps">
+                              Téléphone <span className="required-mark">*</span>
+                            </label>
                             <input
                               type="tel"
                               className="form-control"
                               name="telephone"
+                              inputMode="tel"
+                              placeholder="6XX XX XX XX"
                               value={formData.telephone}
                               onChange={handleChange}
+                              required
                             />
-                            <p className="form-hint">Facultatif.</p>
+                            <p className="form-hint">Il vous servira à vous connecter avec votre code PIN.</p>
                           </div>
                           <div className="col-md-6">
                             <label className="form-label-aps">
@@ -483,7 +507,56 @@ const CreerPatient = () => {
                               required
                             />
                           </div>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">
+                              Code PIN (6 chiffres) <span className="required-mark">*</span>
+                            </label>
+                            <input
+                              type="password"
+                              className="form-control"
+                              name="pin"
+                              inputMode="numeric"
+                              autoComplete="new-password"
+                              maxLength={6}
+                              style={{ letterSpacing: '.4em' }}
+                              value={formData.pin}
+                              onChange={handleChange}
+                              required
+                            />
+                            <p className="form-hint">
+                              Pour vous connecter avec votre numéro. Évitez 123456, 111111 ou votre date de naissance.
+                            </p>
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">
+                              Confirmer le code PIN <span className="required-mark">*</span>
+                            </label>
+                            <input
+                              type="password"
+                              className="form-control"
+                              name="confirmation_pin"
+                              inputMode="numeric"
+                              autoComplete="new-password"
+                              maxLength={6}
+                              style={{ letterSpacing: '.4em' }}
+                              value={formData.confirmation_pin}
+                              onChange={handleChange}
+                              required
+                            />
+                          </div>
                         </div>
+                        {config?.verification_telephone && (
+                          <div className="mt-3">
+                            <VerificationTelephone
+                              telephone={formData.telephone}
+                              pays_iso2={pays.find((p) => p.pays_id === formData.pays_id)?.code_iso2}
+                              objet="inscription"
+                              canaux={config.canaux}
+                              preuve={preuve}
+                              onPreuve={setPreuve}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
 

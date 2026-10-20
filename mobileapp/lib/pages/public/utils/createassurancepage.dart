@@ -87,6 +87,8 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
 
   // ---- Étape 5 — Agent responsable ---------------------------------------
   final _fonctionCtrl = TextEditingController();
+  /// « Je suis le responsable » : fiche rattachée à mon compte.
+  bool _responsableMoi = true;
   final _agentNomCtrl = TextEditingController();
   final _agentPrenomCtrl = TextEditingController();
   final _agentEmailCtrl = TextEditingController();
@@ -170,6 +172,7 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
         if (_fonctionCtrl.text.trim().isEmpty) {
           return "La fonction de l'agent est requise.";
         }
+        if (_responsableMoi) return null;
         if (_agentNomCtrl.text.trim().isEmpty) {
           return "Le nom de l'agent est requis.";
         }
@@ -267,6 +270,7 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
       agentPrenom: _agentPrenomCtrl.text.trim(),
       agentEmail: _agentEmailCtrl.text.trim(),
       agentTelephone: agentTel.isEmpty ? null : agentTel,
+      responsableMoi: _responsableMoi,
     );
 
     await _creation.soumettre(
@@ -284,6 +288,7 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
     }
     final reponse = etat.value;
     if (reponse == null) return;
+    if (reponse.agent.rattacheAuCompte) ref.invalidate(espacesCompteProvider);
     setState(() {
       _reponse = reponse;
       _stepError = null;
@@ -532,6 +537,14 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
             textCapitalization: TextCapitalization.sentences,
           ),
         ),
+        ApsCheckRow(
+          label: 'Je suis le responsable de cette fiche : elle sera rattachée à mon '
+              'compte (« Changer d’espace »), sans nouveau mot de passe. '
+              'Décochez pour créer le compte d’une autre personne.',
+          checked: _responsableMoi,
+          onTap: () => setState(() => _responsableMoi = !_responsableMoi),
+        ),
+        if (!_responsableMoi) ...[
         ApsFormField(
           label: 'Nom',
           required: true,
@@ -567,6 +580,7 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
             keyboardType: TextInputType.phone,
           ),
         ),
+        ],
       ],
     );
   }
@@ -599,7 +613,9 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
             ApsSummaryRow(label: 'Email', value: _emailCtrl.text.trim()),
             ApsSummaryRow(
               label: 'Agent responsable',
-              value: '${_agentPrenomCtrl.text.trim()} '
+              value: _responsableMoi
+                  ? 'Moi (rattachée à mon compte)'
+                  : '${_agentPrenomCtrl.text.trim()} '
                   '${_agentNomCtrl.text.trim()}'
                   .trim(),
             ),
@@ -645,7 +661,15 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
                 '$nom a été créée. Elle sera visible dans l\'annuaire '
                 'après vérification par notre équipe.',
           ),
-          if (reponse != null)
+          if (reponse != null && reponse.agent.rattacheAuCompte)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 14),
+              child: ApsBanner(
+                message: 'Cette fiche est rattachée à votre compte : retrouvez-la '
+                    'dans « Changer d’espace ».',
+              ),
+            ),
+          if (reponse != null && !reponse.agent.rattacheAuCompte)
             ApsCredentialsCard(
               email: reponse.agent.utilisateur.email,
               motDePasseTemporaire: reponse.agent.motDePasseTemporaire,

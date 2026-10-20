@@ -12,33 +12,33 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: var(--surface-alt, #f5f9f7);
+  background: var(--surface-alt, #F6F8F7);
   font-family: var(--font-body, "Inter", sans-serif);
-  color: var(--ink, #3f4a44);
+  color: var(--ink, #0F1C17);
   text-align: center;
 }
 
 .tc-etat-icone {
   font-size: 40px;
-  color: var(--primary, #4f9e82);
+  color: var(--primary, #16996C);
   margin-bottom: 16px;
 }
 
 .tc-etat-icone-succes {
-  color: var(--teal-dark, #2fa57f);
+  color: var(--teal-dark, #13845D);
 }
 
 .tc-etat-message {
   max-width: 420px;
   margin-bottom: 20px;
-  color: var(--ink-soft, #71807a);
+  color: var(--ink-soft, #51625B);
 }
 
 .tc-carte {
   background: var(--surface, #fff);
-  border: 1px solid var(--line, #e7f0eb);
+  border: 1px solid var(--line, #E5ECE8);
   border-radius: var(--radius-lg, 10px);
-  box-shadow: var(--shadow-md, 0 10px 26px rgba(79, 158, 130, 0.11));
+  box-shadow: var(--shadow-md, 0 10px 26px rgba(22, 153, 108, 0.11));
   padding: 40px 32px;
   max-width: 440px;
   width: 100%;
@@ -49,8 +49,8 @@
   height: 64px;
   margin: 0 auto 16px;
   border-radius: 999px;
-  background: var(--primary-tint, #eaf6f0);
-  color: var(--primary-dark, #3a7c64);
+  background: var(--primary-tint, #E7F6EE);
+  color: var(--primary-dark, #0F6B4C);
   font-family: var(--font-display, "Manrope", sans-serif);
   font-weight: 700;
   font-size: 20px;
@@ -66,19 +66,19 @@
 }
 
 .tc-creneau {
-  color: var(--ink-soft, #71807a);
+  color: var(--ink-soft, #51625B);
   margin-bottom: 4px;
 }
 
 .tc-motif {
   font-style: italic;
-  color: var(--ink-soft, #71807a);
+  color: var(--ink-soft, #51625B);
   margin-bottom: 16px;
 }
 
 .tc-note {
   font-size: 14px;
-  color: var(--ink-faint, #aab6af);
+  color: var(--ink-faint, #8A9992);
   margin: 16px 0 24px;
 }
 

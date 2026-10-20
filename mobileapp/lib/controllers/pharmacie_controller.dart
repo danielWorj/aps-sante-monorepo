@@ -182,6 +182,7 @@ class CreationPharmacieController
     String? agentTelephone,
     double? latitude,
     double? longitude,
+    bool responsableMoi = false,
   }) async {
     state = const AsyncLoading<PharmacieCreationResultat?>()
         .copyWithPrevious(state);
@@ -208,6 +209,7 @@ class CreationPharmacieController
         agentTelephone: agentTelephone,
         latitude: latitude,
         longitude: longitude,
+        responsableMoi: responsableMoi,
       );
       // La nouvelle pharmacie n'apparaîtra dans l'annuaire courant que
       // si elle correspond aux filtres actifs, mais on invalide malgré

@@ -3,8 +3,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import ApsSelect from "../components/ui/ApsSelect";
 import SliderPublicite from '../components/publicite/SliderPublicite';
 import { PAGES_PUBLICITE } from '../services/publiciteService';
+import "../assets/styles/annuaire-2026.css";
 import { listerServicesAssurance } from "../services/assuranceService";
 import { useGeolocation } from "../hooks/useGeolocation";
 
@@ -14,7 +16,7 @@ const RAYONS_KM = [5, 10, 25, 50];
 
 // Pagination côté client — même valeur que Medecin.jsx / StructureSante.jsx
 // pour rester cohérent entre les annuaires de la plateforme.
-const RESULTATS_PAR_PAGE = 3;
+const RESULTATS_PAR_PAGE = 6;
 
 const LABEL_TYPE_ACTEUR = {
   compagnie: "Compagnie d'assurance",
@@ -43,87 +45,61 @@ function InsurerCard({ insurer, positionActuelle, demanderPosition }) {
   const destLat = insurer.geolocalisation?.latitude;
   const destLng = insurer.geolocalisation?.longitude;
   const hrefItineraire = lienItineraire(destLat, destLng, positionActuelle);
+  const lieu = [
+    [insurer.ville?.nom, insurer.pays?.nom].filter(Boolean).join(", "),
+    typeof insurer.distance_km === "number" ? `${insurer.distance_km.toFixed(1)} km` : null,
+  ].filter(Boolean).join(" · ");
 
   return (
-    <div className="insurer-card">
-      <div className="insurer-head">
-        <div className="d-flex gap-3">
-          <div className="insurer-logo">
-            {insurer.image_url ? (
-              <img
-                src={insurer.image_url}
-                alt={insurer.nom}
-                style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
-              />
-            ) : (
-              <i className="fa-solid fa-building-shield" />
-            )}
-          </div>
-          <div>
-            <h3 style={{ marginBottom: ".3rem" }}>
-              <Link to={ficheUrl} style={{ color: "var(--ink)" }}>
-                {insurer.nom}
-              </Link>
-            </h3>
-            <div className="practitioner-meta">
-              <span>{LABEL_TYPE_ACTEUR[insurer.type_acteur] || insurer.type_acteur}</span>
-              <span>&middot;</span>
-              <span>
-                <i className="fa-solid fa-location-dot" /> {insurer.ville?.nom}, {insurer.pays?.nom}
-              </span>
-              {typeof insurer.distance_km === "number" && (
-                <>
-                  <span>&middot;</span>
-                  <span>
-                    <i className="fa-solid fa-route" /> {insurer.distance_km.toFixed(1)} km
-                  </span>
-                </>
-              )}
+    <article className="aps-dc is-wide">
+      {insurer.image_url ? (
+        <img src={insurer.image_url} alt="" loading="lazy" />
+      ) : (
+        <div className="aps-dc-ph"><i className="fa-solid fa-building-shield" /></div>
+      )}
+      <Link to={ficheUrl} className="aps-dc-lien" aria-label={`Voir la fiche de ${insurer.nom}`} />
+      <div className="aps-dc-top">
+        <span className="aps-pill is-white">
+          <i className="fa-solid fa-shield-heart" style={{ color: "var(--primary)" }} />{" "}
+          {LABEL_TYPE_ACTEUR[insurer.type_acteur] || insurer.type_acteur}
+        </span>
+        {hrefItineraire && (
+          <a
+            href={hrefItineraire}
+            target="_blank"
+            rel="noreferrer"
+            className="aps-dc-fav"
+            title="Itinéraire"
+            aria-label="Itinéraire"
+            onClick={() => {
+              // Si on n'a pas encore la position de l'utilisateur, on
+              // la demande pour les prochains clics (celui-ci s'ouvre
+              // sans origin — Google Maps la demandera lui-même).
+              if (!positionActuelle) demanderPosition();
+            }}
+          >
+            <i className="fa-solid fa-diamond-turn-right" />
+          </a>
+        )}
+      </div>
+      <div className="aps-dc-info">
+        <div className="d-flex align-items-center gap-2">
+          <div className="flex-grow-1" style={{ minWidth: 0 }}>
+            <div className="aps-dc-nm text-truncate">
+              {insurer.nom}
+              {estVerifie && <i className="fa-solid fa-circle-check verif" title="Vérifiée ApSa" />}
             </div>
-            <div className="practitioner-tags mt-2">
-              {estVerifie && (
-                <span className="chip chip-verifie">
-                  <i className="fa-solid fa-circle-check" /> Vérifiée ApSa
-                </span>
-              )}
+            <div className="aps-dc-sp text-truncate">
+              {lieu || "Localisation non renseignée"}
               {/* Absent en présence minimale (guide abonnements v3, §2.1.4) : on
-                  n'affiche que ce que l'API renvoie, le tri n'est pas modifié. */}
-              {insurer.droits?.siege_complet && insurer.agrement && (
-                <span className="chip chip-complet">Agrément {insurer.agrement}</span>
-              )}
+                  n'affiche que ce que l'API renvoie. */}
+              {insurer.droits?.siege_complet && insurer.agrement ? ` · Agrément ${insurer.agrement}` : ""}
             </div>
           </div>
-        </div>
-        <div className="practitioner-actions" style={{ marginLeft: 0 }}>
-          <Link to={ficheUrl} className="btn btn-sm-aps btn-outline-primary">
-            Voir la fiche
-          </Link>
-          {hrefItineraire && (
-            <a
-              href={hrefItineraire}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-outline-primary btn-sm-aps"
-              onClick={(e) => {
-                e.stopPropagation();
-                // Si on n'a pas encore la position de l'utilisateur, on
-                // la demande pour les prochains clics (celui-ci s'ouvre
-                // sans origin — Google Maps la demandera lui-même).
-                if (!positionActuelle) demanderPosition();
-              }}
-            >
-              <i className="fa-solid fa-diamond-turn-right" /> Itinéraire
-            </a>
-          )}
+          <span className="aps-dc-go"><i className="fa-solid fa-arrow-right" /></span>
         </div>
       </div>
-
-      {insurer.description && (
-        <p className="mt-3 mb-1" style={{ fontSize: ".86rem" }}>
-          {insurer.description}
-        </p>
-      )}
-    </div>
+    </article>
   );
 }
 
@@ -236,216 +212,211 @@ export default function Assurance() {
     charger();
   };
 
+  function reinitialiserFiltres() {
+    setTypeActeur("");
+    setPaysId("");
+    setVilleId("");
+    setRecherche("");
+    setAutourDeMoi(false);
+  }
+  const nbFiltresActifs = [typeActeur, paysId, recherche, autourDeMoi].filter(Boolean).length;
+
   return (
     <>
-      {/* ============================ EN-TÊTE PAGE ============================ */}
-      <section style={{ padding: "2.5rem 0 0" }}>
+      {/* ============================ EN-TÊTE + RECHERCHE ============================ */}
+      <div className="annuaire26-tete">
         <div className="container-aps">
-          <span className="eyebrow">Annuaire &amp; mise en relation</span>
-          <h1 style={{ fontSize: "1.9rem", marginTop: ".5rem" }}>
-            Compagnies d'assurance &amp; courtiers santé
-          </h1>
-          <p className="mt-2" style={{ maxWidth: "660px" }}>
-            Consultez les compagnies, leurs produits et leur réseau d'agences. ApSa ne
-            porte aucun service professionnel d'assurance : ni comparateur, ni
-            souscription en ligne, ni gestion de sinistre. La mise en relation se fait
-            directement avec l'assureur.
-          </p>
-        </div>
-      </section>
-
-      {/* ============================ PUBLICITÉ ============================ */}
-      <section style={{ paddingTop: "1.5rem", paddingBottom: 0 }}>
-        <div className="container-aps">
-          <div className="ad-banner-top">
-            <SliderPublicite code={PAGES_PUBLICITE.assurances} variante="banniere" />
+          <div className="aps-t-xs">
+            <Link to="/home" className="annuaire26-fil">Accueil</Link> / Assurances
           </div>
-        </div>
-      </section>
-
-      {/* ============================ FILTRES + RESULTATS ============================ */}
-      <section style={{ paddingTop: 0 }}>
-        <div className="container-aps">
-          <div className="row g-4">
-            {/* Colonne filtres */}
-            <div className="col-md-4">
-              <div className="filter-bar filter-sidebar">
-                <h3 style={{ marginBottom: "1rem" }}>
-                  <i className="fa-solid fa-sliders" /> Filtrer
-                </h3>
-                <form onSubmit={handleSubmit}>
-                  <div className="mb-3">
-                    <label className="form-label-aps" htmlFor="f-type">
-                      Type d'acteur
-                    </label>
-                    <select
-                      className="form-select"
-                      id="f-type"
-                      value={typeActeur}
-                      onChange={(e) => setTypeActeur(e.target.value)}
-                    >
-                      <option value="">Tous</option>
-                      <option value="compagnie">Compagnie d'assurance</option>
-                      <option value="courtier">Courtier</option>
-                    </select>
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label-aps" htmlFor="f-pays">
-                      Pays
-                    </label>
-                    <select
-                      className="form-select"
-                      id="f-pays"
-                      value={paysId}
-                      onChange={(e) => {
-                        setPaysId(e.target.value);
-                        setVilleId("");
-                      }}
-                    >
-                      <option value="">Tous les pays</option>
-                      {paysOptions.map(([id, nom]) => (
-                        <option key={id} value={id}>{nom}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label-aps" htmlFor="f-ville">
-                      Ville
-                    </label>
-                    <select
-                      className="form-select"
-                      id="f-ville"
-                      value={villeId}
-                      onChange={(e) => setVilleId(e.target.value)}
-                    >
-                      <option value="">Toutes les villes</option>
-                      {villeOptions.map(([id, nom]) => (
-                        <option key={id} value={id}>{nom}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label-aps" htmlFor="f-recherche">
-                      Recherche
-                    </label>
-                    <input
-                      id="f-recherche"
-                      className="form-control"
-                      placeholder="Nom de la compagnie…"
-                      value={recherche}
-                      onChange={(e) => setRecherche(e.target.value)}
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="chip chip-verifie" style={{ cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={autourDeMoi}
-                        onChange={(e) => handleToggleAutourDeMoi(e.target.checked)}
-                        style={{ marginRight: ".35rem" }}
-                      />
-                      <i className="fa-solid fa-location-crosshairs" /> Autour de
-                      moi
-                    </label>
-                  </div>
-                  {autourDeMoi && (
-                    <div className="mb-3">
-                      <label className="form-label-aps" htmlFor="f-rayon">
-                        Rayon de recherche
-                      </label>
-                      <select
-                        className="form-select"
-                        id="f-rayon"
-                        value={rayonKm}
-                        onChange={(e) => setRayonKm(Number(e.target.value))}
-                      >
-                        {RAYONS_KM.map((km) => (
-                          <option key={km} value={km}>
-                            {km} km
-                          </option>
-                        ))}
-                      </select>
-                      {geoEnCours && (
-                        <p className="minimal-note mt-2">Localisation en cours…</p>
-                      )}
-                      {geoErreur && (
-                        <p className="minimal-note mt-2">
-                          <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  <button type="submit" className="btn btn-primary btn-block-aps">
-                    <i className="fa-solid fa-magnifying-glass" /> Rechercher
-                  </button>
-                </form>
+          <div className="annuaire26-titre">
+            <h1 className="aps-h3">Compagnies d&apos;assurance &amp; courtiers santé</h1>
+            {!chargement && !erreur && (
+              <span className="aps-t-s">
+                <b style={{ color: "var(--primary-hover)" }}>{services.length}</b>{" "}
+                {services.length > 1 ? "acteurs référencés" : "acteur référencé"}
+              </span>
+            )}
+          </div>
+          <p className="aps-t-s mt-2 mb-0" style={{ maxWidth: 720 }}>
+            ApSa ne porte aucun service professionnel d&apos;assurance : ni comparateur, ni souscription
+            en ligne, ni gestion de sinistre. La mise en relation se fait directement avec l&apos;assureur.
+          </p>
+          <form className="aps-sbar annuaire26-sbar" onSubmit={handleSubmit}>
+            <div className="aps-sbar-f">
+              <i className="fa-solid fa-shield-heart" />
+              <div>
+                <label htmlFor="f-type">Type d&apos;acteur</label>
+                <ApsSelect variante="nu" id="f-type" value={typeActeur} onChange={(e) => setTypeActeur(e.target.value)}>
+                  <option value="">Compagnies et courtiers</option>
+                  <option value="compagnie">Compagnie d&apos;assurance</option>
+                  <option value="courtier">Courtier</option>
+                </ApsSelect>
               </div>
             </div>
+            <div className="aps-sbar-f">
+              <i className="fa-solid fa-magnifying-glass" />
+              <div>
+                <label htmlFor="f-recherche">Recherche</label>
+                <input
+                  id="f-recherche"
+                  placeholder="Nom de la compagnie…"
+                  value={recherche}
+                  onChange={(e) => setRecherche(e.target.value)}
+                />
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary btn-lg-aps">
+              <i className="fa-solid fa-magnifying-glass" /> Rechercher
+            </button>
+          </form>
+        </div>
+      </div>
 
-            {/* Colonne résultats */}
-            <div className="col-md-8">
-              
-
-              <div className="results-toolbar" style={{ marginTop: 0 }}>
-                <span className="text-muted-soft" style={{ fontSize: ".9rem" }}>
-                  <strong style={{ color: "var(--ink)" }}>{services.length}</strong>{" "}
-                  compagnies &amp; courtiers référencés
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm-aps"
-                  onClick={() => navigate("/assurances/creation")}
+      {/* ============================ FILTRES + RÉSULTATS ============================ */}
+      <section className="annuaire26-corps">
+        <div className="container-aps">
+            <form className="aps-card annuaire26-filtres is-horizontal" onSubmit={handleSubmit}>
+              <div className="d-flex justify-content-between align-items-center">
+                <h2 className="aps-h4" style={{ fontSize: "1.07rem" }}>Filtres</h2>
+                {nbFiltresActifs > 0 && (
+                  <button type="button" className="aps-reset" onClick={reinitialiserFiltres}>
+                    <i className="fa-solid fa-rotate-left" /> Réinitialiser
+                  </button>
+                )}
+              </div>
+              <div className="annuaire26-filtre">
+                <label className="form-label-aps" htmlFor="f-pays">Pays</label>
+                <ApsSelect
+                  id="f-pays"
+                  value={paysId}
+                  onChange={(e) => {
+                    setPaysId(e.target.value);
+                    setVilleId("");
+                  }}
                 >
+                  <option value="">Tous les pays</option>
+                  {paysOptions.map(([id, nom]) => (
+                    <option key={id} value={id}>{nom}</option>
+                  ))}
+                </ApsSelect>
+              </div>
+              <div className="annuaire26-filtre">
+                <label className="form-label-aps" htmlFor="f-ville">Ville</label>
+                <ApsSelect id="f-ville" value={villeId} onChange={(e) => setVilleId(e.target.value)}>
+                  <option value="">Toutes les villes</option>
+                  {villeOptions.map(([id, nom]) => (
+                    <option key={id} value={id}>{nom}</option>
+                  ))}
+                </ApsSelect>
+              </div>
+
+              <div className="annuaire26-sep" />
+              <div className="d-flex justify-content-between align-items-center gap-2">
+                <label htmlFor="f-autour" className="annuaire26-switch-lib">
+                  <b>Autour de moi</b>
+                  <span className="aps-t-xs">Selon votre position</span>
+                </label>
+                <div className="form-check form-switch m-0">
+                  <input className="form-check-input" type="checkbox" role="switch" id="f-autour"
+                    checked={autourDeMoi} onChange={(e) => handleToggleAutourDeMoi(e.target.checked)} />
+                </div>
+              </div>
+              {autourDeMoi && (
+                <div className="annuaire26-filtre">
+                  <span className="form-label-aps">Rayon de recherche</span>
+                  <div className="d-flex flex-wrap gap-2">
+                    {RAYONS_KM.map((km) => (
+                      <button type="button" key={km}
+                        className={`aps-chip is-sm ${rayonKm === km ? "is-on" : ""}`}
+                        onClick={() => setRayonKm(km)}>
+                        {km} km
+                      </button>
+                    ))}
+                  </div>
+                  {geoEnCours && <p className="minimal-note mt-2">Localisation en cours…</p>}
+                  {geoErreur && (
+                    <p className="minimal-note mt-2">
+                      <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
+                    </p>
+                  )}
+                </div>
+              )}
+              <button type="submit" className="btn btn-primary btn-sm-aps w-100 mt-3">
+                Appliquer les filtres
+              </button>
+            </form>
+
+          <div className="annuaire26-grille">
+          <div className="annuaire26-resultats">
+            <div className="annuaire26-barre">
+              <div className="ms-auto">
+                <button type="button" className="btn btn-primary btn-sm-aps" onClick={() => navigate("/assurances/creation")}>
                   <i className="fa-solid fa-plus" /> Déclarer une compagnie
                 </button>
               </div>
-
-              {chargement && <p className="minimal-note">Chargement de l'annuaire…</p>}
-              {erreur && (
-                <p className="minimal-note" style={{ color: "var(--danger, #c0392b)" }}>
-                  <i className="fa-solid fa-triangle-exclamation" /> {erreur}
-                </p>
-              )}
-              {!chargement && !erreur && services.length === 0 && (
-                <p className="minimal-note">Aucune compagnie ne correspond à ces critères.</p>
-              )}
-
-              {servicesPage.map((insurer) => (
-                <InsurerCard
-                  key={insurer.service_assurance_id}
-                  insurer={insurer}
-                  positionActuelle={positionActuelle}
-                  demanderPosition={demanderPosition}
-                />
-              ))}
-
-              {totalPages > 1 && (
-                <nav aria-label="Pagination des résultats" className="mt-4">
-                  <ul className="pagination justify-content-center">
-                    <li className={`page-item ${page === 1 ? "disabled" : ""}`}>
-                      <button type="button" className="page-link" onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                        Précédent
-                      </button>
-                    </li>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-                      <li className={`page-item ${page === n ? "active" : ""}`} key={n}>
-                        <button type="button" className="page-link" onClick={() => setPage(n)}>{n}</button>
-                      </li>
-                    ))}
-                    <li className={`page-item ${page === totalPages ? "disabled" : ""}`}>
-                      <button type="button" className="page-link" onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
-                        Suivant
-                      </button>
-                    </li>
-                  </ul>
-                </nav>
-              )}
             </div>
+            {chargement && <div className="info-card annuaire26-etat">Chargement de l&apos;annuaire…</div>}
+            {!chargement && erreur && (
+              <div className="info-card annuaire26-etat" style={{ color: "var(--danger)" }}>
+                <i className="fa-solid fa-triangle-exclamation" /> {erreur}
+              </div>
+            )}
+            {!chargement && !erreur && services.length === 0 && (
+              <div className="info-card annuaire26-etat">Aucune compagnie ne correspond à ces critères.</div>
+            )}
+
+            {!chargement && !erreur && services.length > 0 && (
+              <>
+                <div className="annuaire26-cartes is-larges">
+                  {servicesPage.map((insurer) => (
+                    <InsurerCard
+                      key={insurer.service_assurance_id}
+                      insurer={insurer}
+                      positionActuelle={positionActuelle}
+                      demanderPosition={demanderPosition}
+                    />
+                  ))}
+                </div>
+                {totalPages > 1 && (
+                  <div className="annuaire26-pagination">
+                    <span className="aps-t-xs">
+                      Affichage de {(page - 1) * RESULTATS_PAR_PAGE + 1} à {Math.min(page * RESULTATS_PAR_PAGE, services.length)} sur {services.length}
+                    </span>
+                    <nav aria-label="Pagination des résultats">
+                      <ul className="pagination mb-0">
+                        <li className={`page-item ${page === 1 ? "disabled" : ""}`}>
+                          <button type="button" className="page-link" aria-label="Page précédente"
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                            <i className="fa-solid fa-chevron-left" />
+                          </button>
+                        </li>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+                          <li className={`page-item ${page === n ? "active" : ""}`} key={n}>
+                            <button type="button" className="page-link" onClick={() => setPage(n)}>{n}</button>
+                          </li>
+                        ))}
+                        <li className={`page-item ${page === totalPages ? "disabled" : ""}`}>
+                          <button type="button" className="page-link" aria-label="Page suivante"
+                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                            <i className="fa-solid fa-chevron-right" />
+                          </button>
+                        </li>
+                      </ul>
+                    </nav>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <aside className="annuaire26-pubs" aria-label="Publicités">
+            <div className="ad-flyer">
+              <SliderPublicite code={PAGES_PUBLICITE.assurances} />
+            </div>
+          </aside>
           </div>
         </div>
       </section>
-
-
     </>
   );
 }

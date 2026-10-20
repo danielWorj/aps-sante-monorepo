@@ -12,6 +12,7 @@ import { creerPharmacie } from '../../services/pharmacieService';
 import { listerPays, listerVilles } from '../../services/geoService';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import GoogleMapPicker from '../maps/GoogleMapPicker';
+import { useAuth } from '../../context/AuthContext';
 
 // ───────────────────────────────────────────────────────────────────
 // Ce formulaire suit EXACTEMENT le contrat de POST /pharmacies
@@ -53,6 +54,7 @@ const ETAPES = [
 ];
 
 const CreationPharmacie = () => {
+  const { rafraichirEspaces } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,6 +91,8 @@ const CreationPharmacie = () => {
     longitude: '',
 
     // Étape 3 — agent responsable
+    // Responsable = l'auteur connecté (fiche rattachée à son compte).
+    responsable_moi: true,
     fonction: '',
     agent_nom: '',
     agent_prenom: '',
@@ -205,6 +209,7 @@ const CreationPharmacie = () => {
       }
       case 3:
         if (!formData.fonction.trim()) return "La fonction de l'agent est obligatoire.";
+        if (formData.responsable_moi) return null;
         if (!formData.agent_nom.trim()) return "Le nom de l'agent est obligatoire.";
         if (!formData.agent_prenom.trim()) return "Le prénom de l'agent est obligatoire.";
         if (!formData.agent_email.trim()) return "L'e-mail de l'agent est obligatoire.";
@@ -272,12 +277,14 @@ const CreationPharmacie = () => {
         agent_prenom: formData.agent_prenom.trim(),
         agent_email: formData.agent_email.trim(),
         agent_telephone: formData.agent_telephone.trim() || undefined,
+        responsable_moi: formData.responsable_moi ? 'true' : undefined,
         image_pharmacie: formData.image_pharmacie,
         piece_identite: formData.piece_identite,
         document_agrement: formData.document_agrement,
       });
 
       const { pharmacie, agent } = resultat;
+      if (agent?.rattache_au_compte) rafraichirEspaces();
 
       setPharmacieCreee({
         message: resultat.message,
@@ -643,6 +650,26 @@ const CreationPharmacie = () => {
                     {/* Étape 3 : Agent responsable */}
                     {currentStep === 3 && (
                       <div className="form-page active">
+                        {/* Responsable = moi : la fiche est rattachée à mon compte
+                            (nouvel espace), sans compte agent ni mot de passe. */}
+                        <div className="form-check mb-3" style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start' }}>
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id="responsable_moi"
+                            name="responsable_moi"
+                            checked={formData.responsable_moi}
+                            onChange={handleChange}
+                          />
+                          <label className="form-check-label" htmlFor="responsable_moi">
+                            <strong>Je suis le responsable de cette fiche.</strong>{' '}
+                            <span className="form-hint" style={{ display: 'block', margin: 0 }}>
+                              Elle sera rattachée à mon compte : je la retrouverai dans « Changer d’espace », sans nouveau mot de passe.
+                              Décochez pour créer le compte d’une autre personne.
+                            </span>
+                          </label>
+                        </div>
+
                         <p className="form-hint" style={{ marginBottom: '1rem' }}>
                           Un compte est créé pour la personne qui aura la charge
                           de cette pharmacie (pas forcément vous). Un mot de
@@ -664,7 +691,7 @@ const CreationPharmacie = () => {
                               required
                             />
                           </div>
-                          <div className="col-md-6">
+                          <div className="col-md-6" hidden={formData.responsable_moi}>
                             <label className="form-label-aps">
                               Téléphone de l'agent
                             </label>
@@ -676,7 +703,7 @@ const CreationPharmacie = () => {
                               onChange={handleChange}
                             />
                           </div>
-                          <div className="col-md-6">
+                          <div className="col-md-6" hidden={formData.responsable_moi}>
                             <label className="form-label-aps">
                               Nom <span className="required-mark">*</span>
                             </label>
@@ -689,7 +716,7 @@ const CreationPharmacie = () => {
                               required
                             />
                           </div>
-                          <div className="col-md-6">
+                          <div className="col-md-6" hidden={formData.responsable_moi}>
                             <label className="form-label-aps">
                               Prénom <span className="required-mark">*</span>
                             </label>
@@ -702,7 +729,7 @@ const CreationPharmacie = () => {
                               required
                             />
                           </div>
-                          <div className="col-md-6">
+                          <div className="col-md-6" hidden={formData.responsable_moi}>
                             <label className="form-label-aps">
                               Adresse e-mail <span className="required-mark">*</span>
                             </label>

@@ -117,9 +117,14 @@ export function genererAccessToken(utilisateur) {
   const token = jwt.sign(
     {
       sub: utilisateur.utilisateur_id,
+      // Rôle de l'ESPACE ACTIF (voir espaces.service.js), lu par autoriser().
       role: utilisateur.role,
       pays_id: utilisateur.pays_id,
       jti,
+      // Espace actif (« patient », « pharmacie:<id> »…), absent pour un admin.
+      ...(utilisateur.espace && { espace: utilisateur.espace }),
+      // Date (s) du dernier code PIN vérifié : actions sensibles (exigerPinRecent).
+      ...(utilisateur.pin_le && { pin_le: utilisateur.pin_le }),
     },
     ACCESS_TOKEN_PRIVATE_KEY,
     { algorithm: ACCESS_TOKEN_ALGORITHM, expiresIn: ACCESS_TOKEN_EXPIRES_IN }
@@ -171,12 +176,27 @@ const CHANGEMENT_MOT_DE_PASSE_TOKEN_EXPIRES_IN =
  * bien plus vite pour limiter la fenêtre d'exploitation en cas de fuite.
  */
 export function genererTokenChangementMotDePasse(utilisateur) {
+  return genererTokenRestreint(utilisateur, SCOPE_CHANGEMENT_MOT_DE_PASSE);
+}
+
+// ─── Token restreint : changement de PIN provisoire ──────────────
+// Même principe que ci-dessus pour la connexion numéro + PIN : un compte
+// créé par un administrateur avec un PIN provisoire n'obtient, à sa
+// connexion, que ce token, valable uniquement sur
+// POST /auth/changer-pin-initial (voir pin.controller.js).
+export const SCOPE_CHANGEMENT_PIN = "changement_pin_oblige";
+
+export function genererTokenChangementPin(utilisateur) {
+  return genererTokenRestreint(utilisateur, SCOPE_CHANGEMENT_PIN);
+}
+
+function genererTokenRestreint(utilisateur, scope) {
   const jti = crypto.randomUUID();
 
   const token = jwt.sign(
     {
       sub: utilisateur.utilisateur_id,
-      scope: SCOPE_CHANGEMENT_MOT_DE_PASSE,
+      scope,
       jti,
     },
     ACCESS_TOKEN_PRIVATE_KEY,

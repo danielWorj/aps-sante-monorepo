@@ -12,27 +12,27 @@
   --fb-font: var(--font-body, 'Inter', sans-serif);
   --fb-font-titre: var(--font-display, 'Manrope', sans-serif);
   --fb-surface: var(--surface, #fff);
-  --fb-surface-alt: var(--surface-alt, #F5F9F7);
-  --fb-texte: var(--ink, #3F4A44);
-  --fb-texte-doux: var(--ink-soft, #71807A);
-  --fb-bordure: var(--line-strong, #D6E5DD);
+  --fb-surface-alt: var(--surface-alt, #F6F8F7);
+  --fb-texte: var(--ink, #0F1C17);
+  --fb-texte-doux: var(--ink-soft, #51625B);
+  --fb-bordure: var(--line-strong, #D5DFDA);
   --fb-rayon: var(--radius-lg, 10px);
   --fb-rayon-sm: var(--radius-sm, 6px);
   --fb-ombre: 0 20px 44px rgba(30, 40, 35, .18), 0 2px 6px rgba(30, 40, 35, .08);
 
-  --fb-primaire: var(--primary, #4F9E82);
-  --fb-primaire-fonce: var(--primary-hover, #458B70);
-  --fb-primaire-teinte: var(--primary-tint, #EAF6F0);
-  --fb-succes: var(--teal-dark, #2FA57F);
-  --fb-succes-teinte: var(--teal-tint, #E9FBF3);
-  --fb-danger: var(--urgence, #EC7A6B);
-  --fb-danger-fonce: var(--urgence-dark, #D9604F);
-  --fb-danger-teinte: var(--urgence-tint, #FDEEEC);
+  --fb-primaire: var(--primary, #16996C);
+  --fb-primaire-fonce: var(--primary-hover, #13845D);
+  --fb-primaire-teinte: var(--primary-tint, #E7F6EE);
+  --fb-succes: var(--teal-dark, #13845D);
+  --fb-succes-teinte: var(--teal-tint, #F3FAF6);
+  --fb-danger: var(--urgence, #E5484D);
+  --fb-danger-fonce: var(--urgence-dark, #C53A3F);
+  --fb-danger-teinte: var(--urgence-tint, #FDECEC);
   --fb-avertissement: var(--orange-dark, #F0964F);
   --fb-avertissement-fonce: #D97F38;
-  --fb-avertissement-teinte: var(--orange-tint, #FFF6EC);
-  --fb-info: var(--primary, #4F9E82);
-  --fb-info-teinte: var(--primary-tint, #EAF6F0);
+  --fb-avertissement-teinte: var(--orange-tint, #FCF3E1);
+  --fb-info: var(--primary, #16996C);
+  --fb-info-teinte: var(--primary-tint, #E7F6EE);
 }
 
 /* =============================== TOASTS =============================== */

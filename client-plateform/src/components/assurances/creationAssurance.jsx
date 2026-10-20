@@ -6,6 +6,7 @@ import { listerPays, listerVilles } from '../../services/geoService';
 import { connecter } from '../../services/authService';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import GoogleMapPicker from '../maps/GoogleMapPicker';
+import { useAuth } from '../../context/AuthContext';
 
 // ───────────────────────────────────────────────────────────────────
 // Ce formulaire suit EXACTEMENT le contrat de POST /services-assurance
@@ -27,6 +28,7 @@ import GoogleMapPicker from '../maps/GoogleMapPicker';
 //   Étape 6 : Confirmation
 
 const CreationAssurance = () => {
+  const { rafraichirEspaces } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,6 +72,8 @@ const CreationAssurance = () => {
     longitude: '',
 
     // Étape 5 — Agent responsable
+    // Responsable = l'auteur connecté (fiche rattachée à son compte).
+    responsable_moi: true,
     fonction: '',
     agent_nom: '',
     agent_prenom: '',
@@ -210,6 +214,7 @@ const CreationAssurance = () => {
           setStepError('La fonction de l\'agent est requise.');
           return false;
         }
+        if (formData.responsable_moi) return true;
         if (!formData.agent_nom.trim()) {
           setStepError('Le nom de l\'agent est requis.');
           return false;
@@ -278,6 +283,7 @@ const CreationAssurance = () => {
         agent_prenom: formData.agent_prenom,
         agent_email: formData.agent_email,
         agent_telephone: formData.agent_telephone || undefined,
+        responsable_moi: formData.responsable_moi ? 'true' : undefined,
         statut_verification: 'en_cours', // Les nouvelles entrées commencent en révision
       };
 
@@ -303,7 +309,9 @@ const CreationAssurance = () => {
         );
       }
 
+      if (response.agent?.rattache_au_compte) rafraichirEspaces();
       setCompteCree({
+        rattache: Boolean(response.agent?.rattache_au_compte),
         nom_compagnie: response.service_assurance?.nom,
         agent_email: agentEmail,
         mot_de_passe_temporaire: response.agent?.mot_de_passe_temporaire,
@@ -334,6 +342,12 @@ const CreationAssurance = () => {
                   avec succès. Elle est actuellement en cours de vérification.
                 </p>
 
+                {compteCree.rattache ? (
+                  <div className="alert alert-info mt-4">
+                    <i className="fa-solid fa-repeat" /> Cette fiche est rattachée à votre compte :
+                    retrouvez-la dans « Changer d’espace ».
+                  </div>
+                ) : (
                 <div className="alert alert-info credentials-box mt-4">
                   <strong>Identifiants de connexion :</strong>
                   <p className="mt-2">
@@ -349,6 +363,7 @@ const CreationAssurance = () => {
                     connexion.
                   </p>
                 </div>
+                )}
 
                 <div className="mt-4" style={{ textAlign: 'center' }}>
                   <a href="/" className="btn btn-primary">
@@ -734,6 +749,26 @@ const CreationAssurance = () => {
                     {/* Étape 5 : Agent responsable */}
                     {currentStep === 5 && (
                       <div className="form-page active">
+                        {/* Responsable = moi : la fiche est rattachée à mon compte
+                            (nouvel espace), sans compte agent ni mot de passe. */}
+                        <div className="form-check mb-3" style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start' }}>
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id="responsable_moi"
+                            name="responsable_moi"
+                            checked={formData.responsable_moi}
+                            onChange={handleChange}
+                          />
+                          <label className="form-check-label" htmlFor="responsable_moi">
+                            <strong>Je suis le responsable de cette fiche.</strong>{' '}
+                            <span className="form-hint" style={{ display: 'block', margin: 0 }}>
+                              Elle sera rattachée à mon compte : je la retrouverai dans « Changer d’espace », sans nouveau mot de passe.
+                              Décochez pour créer le compte d’une autre personne.
+                            </span>
+                          </label>
+                        </div>
+
                         <h2 className="form-title">
                           Agent responsable
                         </h2>
@@ -756,7 +791,7 @@ const CreationAssurance = () => {
                         </div>
 
                         <div className="row g-3">
-                          <div className="col-md-6">
+                          <div className="col-md-6" hidden={formData.responsable_moi}>
                             <label className="form-label-aps" htmlFor="agent_nom">
                               Nom <span className="required-mark">*</span>
                             </label>
@@ -771,7 +806,7 @@ const CreationAssurance = () => {
                               required
                             />
                           </div>
-                          <div className="col-md-6">
+                          <div className="col-md-6" hidden={formData.responsable_moi}>
                             <label className="form-label-aps" htmlFor="agent_prenom">
                               Prénom <span className="required-mark">*</span>
                             </label>
@@ -788,7 +823,7 @@ const CreationAssurance = () => {
                           </div>
                         </div>
 
-                        <div className="form-group">
+                        <div className="form-group" hidden={formData.responsable_moi}>
                           <label className="form-label-aps" htmlFor="agent_email">
                             Email de l'agent{' '}
                             <span className="required-mark">*</span>
@@ -808,7 +843,7 @@ const CreationAssurance = () => {
                           </p>
                         </div>
 
-                        <div className="form-group">
+                        <div className="form-group" hidden={formData.responsable_moi}>
                           <label className="form-label-aps" htmlFor="agent_telephone">
                             Téléphone de l'agent
                           </label>

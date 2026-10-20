@@ -40,6 +40,20 @@ class ApiRealEndpoints {
       '${baseUrl}/auth/changer-mot-de-passe-initial';
   static const String rafraichissement = '${baseUrl}/auth/refresh';
   static const String deconnexion = '${baseUrl}/auth/logout';
+  // Connexion numéro + code PIN, code PIN, espaces du compte.
+  static const String connexionPin = '${baseUrl}/auth/login-pin';
+  static const String changementPinInitial = '${baseUrl}/auth/changer-pin-initial';
+  static const String pin = '${baseUrl}/auth/pin';
+  static const String espacesCompte = '${baseUrl}/auth/espaces';
+  static const String choisirEspaceCompte = '${baseUrl}/auth/espaces/choisir';
+  static const String verifierPin = '${baseUrl}/auth/pin/verifier';
+  static const String reinitialiserPin = '${baseUrl}/auth/pin/reinitialiser';
+  static const String configurationConnexion = '${baseUrl}/auth/configuration-connexion';
+  static const String envoyerCodeTelephone = '${baseUrl}/verification-telephone/envoyer';
+  static const String verifierCodeTelephone = '${baseUrl}/verification-telephone/verifier';
+  // Connexion web validée depuis l'application.
+  static const String demandesConnexionWeb = '${baseUrl}/auth/connexion-application/demandes';
+  static String repondreDemandeConnexionWeb(String id) => '${baseUrl}/auth/connexion-application/demandes/$id/repondre';
   static const String profilCourant = '${baseUrl}/auth/me';
   static const String comptes = '${baseUrl}/auth/comptes';
   static const String amorcageSuperAdmin =

@@ -9,6 +9,7 @@ import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/patient_controller.dart';
 import '../../../models/patient_models.dart';
 import '../../../repositories/patient_repository.dart' show ApiException;
+import '../../espaces/carte_connexion_compte.dart';
 
 /// ============================================================
 /// portail-patient-profil.dart
@@ -159,6 +160,7 @@ class _PortailPatientProfilState extends ConsumerState<PortailPatientProfil>
             const _PageHead(),
             _ProfileHero(patient: patient, statistiques: statistiques),
             const SizedBox(height: 14),
+            const CarteConnexionCompte(),
             _SegmentedTabs(controller: _tabController, tabs: tabs),
             const SizedBox(height: 16),
             // Hauteur fixe simple : sur un vrai écran, préférer un

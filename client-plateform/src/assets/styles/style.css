@@ -7,78 +7,98 @@
 
 /* ---------------------------- TOKENS ---------------------------- */
 :root{
-  --font-display:'Manrope', sans-serif;
-  --font-body:'Inter', sans-serif;
-  --font-mono:'IBM Plex Mono', monospace;
+  /* Refonte UI web 2026 (mobile/new-web-ui.html) : vert santé #16996C en
+     aplats, fonds très clairs, cartes rayon 14 / champs rayon 10, bordures
+     fines, aucun dégradé. Les noms de jetons historiques sont conservés pour
+     que tous les écrans suivent la nouvelle palette sans modification. */
+  --font-display:'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body:'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:'DM Mono', ui-monospace, monospace;
 
-  /* Encre — gris-vert doux, jamais noir dense */
-  --ink:#3F4A44;
-  --ink-soft:#71807A;
-  --ink-faint:#AAB6AF;
+  /* Encre */
+  --ink:#0F1C17;
+  --ink-soft:#51625B;
+  --ink-faint:#8A9992;
+  --ink-ghost:#BAC6C0;
 
-  /* Surfaces — blanc + fond vert très pâle, comme les écrans app */
+  /* Surfaces */
   --surface:#FFFFFF;
-  --surface-alt:#F5F9F7;
-  --surface-sunk:#EEF6F2;
+  --surface-alt:#F6F8F7;
+  --surface-sunk:#F3FAF6;
 
   /* Lignes */
-  --line:#E7F0EB;
-  --line-strong:#D6E5DD;
+  --line:#E5ECE8;
+  --line-strong:#D5DFDA;
 
-  /* Primaire — vert médecine doux, apaisant plutôt que criard */
-  --primary:#4F9E82;
-  --primary-dark:#3A7C64;
-  --primary-hover:#458B70;
-  --primary-tint:#EAF6F0;
-  --primary-tint-strong:#D2ECE1;
+  /* Primaire — vert santé clair et doux */
+  --primary:#16996C;
+  --primary-dark:#0F6B4C;
+  --primary-hover:#13845D;
+  --primary-tint:#E7F6EE;
+  --primary-tint-strong:#CDEEDD;
+  --primary-deep:#0B4A35;
+  --primary-soft:#9FDCC1;
 
-  /* Secondaire — menthe/sarcelle adoucie (accent "Sign Up", onglets actifs) */
-  --teal:#6FD8B8;
-  --teal-dark:#2FA57F;
-  --teal-tint:#E9FBF3;
+  /* Secondaire (anciennement sarcelle) : ramené sur la gamme verte */
+  --teal:#2FB283;
+  --teal-dark:#13845D;
+  --teal-tint:#F3FAF6;
 
-  /* Accent orange adouci (touches chaleureuses) */
-  --orange:#FFB27A;
-  --orange-dark:#F0964F;
-  --orange-tint:#FFF6EC;
+  /* Ambre (touches chaleureuses, avertissements) */
+  --orange:#E59E2E;
+  --orange-dark:#9A6100;
+  --orange-tint:#FCF3E1;
 
-  /* Urgence — corail doux plutôt que rouge vif */
-  --urgence:#EC7A6B;
-  --urgence-dark:#D9604F;
-  --urgence-tint:#FDEEEC;
+  /* Corail (badges, favoris) */
+  --corail:#EE6847;
+  --corail-dark:#B8432A;
+  --corail-tint:#FDEDE7;
+
+  /* Urgence / erreurs */
+  --urgence:#E5484D;
+  --urgence-dark:#C53A3F;
+  --urgence-tint:#FDECEC;
 
   /* Information */
-  --info:#4F9E82;
-  --info-tint:#EAF6F0;
+  --info:#2F80ED;
+  --info-tint:#E8F1FD;
 
-  /* Accent doré adouci (notation, étoiles) */
-  --gold:#EFB65D;
-  --gold-tint:#FEF6E9;
+  /* Notation */
+  --gold:#F5B400;
+  --gold-tint:#FCF3E1;
 
-  /* Violet adouci (variété des icônes de catégories) */
-  --violet:#A491EE;
-  --violet-tint:#F4F0FE;
+  /* Violet (variété des icônes de catégories) */
+  --violet:#6B5CF0;
+  --violet-dark:#4A3DC4;
+  --violet-tint:#EEECFE;
 
-  --radius-sm:6px;
-  --radius-md:8px;
-  --radius-lg:10px;
+  --radius-sm:10px;
+  --radius-md:10px;
+  --radius-lg:14px;
+  --radius-xl:20px;
   --radius-pill:999px;
 
-  --shadow-sm:0 2px 6px rgba(79,158,130,.07), 0 1px 2px rgba(63,74,68,.04);
-  --shadow-md:0 10px 26px rgba(79,158,130,.11);
-  --shadow-lg:0 20px 44px rgba(79,158,130,.15);
+  --shadow-sm:0 1px 2px rgba(15,28,23,.04), 0 8px 24px -14px rgba(15,28,23,.16);
+  --shadow-md:0 2px 4px rgba(15,28,23,.04), 0 16px 36px -18px rgba(15,28,23,.22);
+  --shadow-lg:0 2px 6px rgba(15,28,23,.05), 0 28px 56px -28px rgba(11,74,53,.34);
 
-  --container-w:1180px;
+  /* Alias utilisés par des feuilles plus anciennes (var(--green, …), etc.) */
+  --green:var(--primary);
+  --success:var(--primary);
+  --danger:var(--urgence);
+  --warning:var(--orange);
+
+  --container-w:1200px;
 }
 
 /* ---------------------------- RESET / BASE ---------------------------- */
 *{box-sizing:border-box; min-width:0;}
-html{scroll-behavior:smooth; font-size:13px; -webkit-text-size-adjust:100%; text-size-adjust:100%;}
+html{scroll-behavior:smooth; font-size:14px; -webkit-text-size-adjust:100%; text-size-adjust:100%;}
 body{
   font-family:var(--font-body);
   color:var(--ink);
   background:var(--surface);
-  font-size:13px;
+  font-size:14px;
   line-height:1.6;
   -webkit-font-smoothing:antialiased;
   overflow-x:hidden;
@@ -88,12 +108,13 @@ h1,h2,h3,h4,h5{
   font-family:var(--font-display);
   color:var(--ink);
   font-weight:800;
-  letter-spacing:-.01em;
+  letter-spacing:-.03em;
   margin:0 0 .6rem;
 }
-h1{font-size:2.6rem; line-height:1.12;}
-h2{font-size:1.9rem; line-height:1.2;}
-h3{font-size:1.05rem; font-weight:700;}
+h1{font-size:2.8rem; line-height:1.06; letter-spacing:-.045em;}
+h2{font-size:2rem; line-height:1.12; letter-spacing:-.04em;}
+h3{font-size:1.1rem; font-weight:800; letter-spacing:-.02em;}
+h4,h5{letter-spacing:-.02em;}
 p{color:var(--ink-soft); margin:0 0 1rem;}
 a{color:var(--primary); text-decoration:none;}
 a:hover{color:var(--primary-dark);}
@@ -182,6 +203,9 @@ table{max-width:100%; display:block; overflow-x:auto;}
 .btn-block-aps{width:100%;}
 
 /* ---------------------------- NAVBAR ---------------------------- */
+/* Refonte UI web 2026 : barre blanche 72 px, liens gris, lien actif sur
+   fond vert très clair souligné de vert, lien Urgence rouge. Partagée par
+   la navigation publique (Navbar.jsx) et celles des portails. */
 .aps-navbar{
   background:var(--surface);
   border-bottom:1px solid var(--line);
@@ -192,86 +216,113 @@ table{max-width:100%; display:block; overflow-x:auto;}
 .navbar-inner{
   display:flex;
   align-items:center;
-  justify-content:space-between;
-  gap:1rem;
+  gap:2rem;
   height:72px;
   min-height:72px;
 }
 .aps-logo{
   display:flex;
   align-items:center;
-  gap:.55rem;
+  gap:.65rem;
   font-family:var(--font-display);
   font-weight:800;
-  font-size:1.25rem;
+  font-size:1.2rem;
+  letter-spacing:-.02em;
   color:var(--ink);
+  flex:none;
 }
+.aps-logo:hover{color:var(--ink);}
 .aps-logo .mark{
-  width:36px; height:36px;
-  border-radius:11px;
-  background:linear-gradient(135deg, var(--primary), var(--teal-dark));
+  width:34px; height:34px;
+  border-radius:9px;
+  background:var(--primary);
   color:#fff;
   display:flex; align-items:center; justify-content:center;
-  font-size:1rem;
-  box-shadow:0 6px 14px rgba(58,124,100,.28);
+  font-size:.95rem;
 }
-.aps-logo .aps-logo-img{
-  height:48px;
+.aps-logo .aps-logo-img{ /* logo image dans la barre */
+  height:56px;
   width:auto;
   max-width:100%;
   object-fit:contain;
   display:block;
   border-radius:8px;
 }
+.aps-navbar nav{flex:1; min-width:0;}
 .aps-nav-links{
   display:flex;
   align-items:center;
-  gap:1.9rem;
+  gap:.25rem;
   list-style:none;
   margin:0; padding:0;
 }
 .aps-nav-links a{
   color:var(--ink-soft);
-  font-size:.9rem;
+  font-size:1rem;
   font-weight:600;
   display:inline-flex;
   align-items:center;
   gap:.45rem;
-  padding:.5rem .95rem;
-  border-radius:var(--radius-pill);
+  padding:.6rem .9rem;
+  border-radius:8px;
   position:relative;
-  overflow:hidden;
+  white-space:nowrap;
   -webkit-tap-highlight-color:transparent;
-  transition:color .15s ease, background-color .15s ease, transform .12s ease;
+  transition:color .15s ease, background-color .15s ease;
 }
 .aps-nav-links a i{color:var(--ink-faint); font-size:.85rem; transition:color .15s ease;}
-.aps-nav-links a:hover, .aps-nav-links a.text-primary{color:var(--primary); background:var(--surface-alt);}
-.aps-nav-links a:hover i, .aps-nav-links a.text-primary i{color:var(--primary);}
+.aps-nav-links a:hover{color:var(--ink); background:var(--surface-alt);}
+.aps-nav-links a:hover i{color:var(--primary);}
 
-/* Effet clic : léger tassement + flash de fond, propre et rapide */
-.aps-nav-links a:active{
-  transform:scale(.94);
-  background:var(--primary-tint-strong);
-  color:var(--primary-dark);
-  transition:transform .08s ease, background-color .08s ease;
+/* Lien de la page en cours (NavLink actif, ou .text-primary des portails) */
+.aps-nav-links a.active, .aps-nav-links a.text-primary{
+  color:var(--ink) !important;
+  background:var(--surface-sunk);
 }
-
-/* Lien de la page en cours (NavLink actif) */
-.aps-nav-links a.active{
-  color:var(--primary);
-  background:var(--primary-tint);
-}
-.aps-nav-links a.active i{color:var(--primary);}
-.aps-nav-links a.active::after{
+.aps-nav-links a.active i, .aps-nav-links a.text-primary i{color:var(--primary);}
+.aps-nav-links a.active::after, .aps-nav-links a.text-primary::after{
   content:'';
   position:absolute;
-  left:.95rem; right:.95rem; bottom:.28rem;
+  left:.9rem; right:.9rem; bottom:.3rem;
   height:2px;
-  border-radius:var(--radius-pill);
+  border-radius:2px;
   background:var(--primary);
 }
 
-.aps-nav-actions{display:flex; align-items:center; gap:.6rem;}
+.aps-nav-actions{display:flex; align-items:center; gap:.6rem; margin-left:auto; flex:none;}
+.aps-nav-urgence{
+  display:inline-flex; align-items:center; gap:.4rem;
+  font-weight:700; font-size:.96rem; color:var(--urgence);
+  padding:.45rem .6rem; border-radius:8px; margin-right:.3rem;
+}
+.aps-nav-urgence:hover{color:var(--urgence-dark); background:var(--urgence-tint);}
+
+/* Bouton icône (cloche) et avatar du compte */
+.aps-nav-ib{
+  width:40px; height:40px; border-radius:10px; position:relative;
+  border:1px solid var(--line); background:var(--surface);
+  display:grid; place-items:center; color:var(--ink-soft);
+}
+.aps-nav-ib:hover{color:var(--primary-dark); border-color:var(--line-strong);}
+.aps-nav-ib-dot{
+  position:absolute; top:9px; right:10px; width:8px; height:8px; border-radius:50%;
+  background:var(--corail); border:2px solid #fff;
+}
+.aps-nav-compte{position:relative;}
+.aps-nav-avatar{
+  display:flex; align-items:center; gap:.4rem;
+  background:transparent; border:0; padding:2px; border-radius:99px; color:var(--ink-faint);
+  font-size:.7rem;
+}
+.aps-nav-compte .dropdown-menu{position:absolute; right:0; left:auto; top:calc(100% + 8px); min-width:15rem;}
+.aps-nav-compte-nom{padding:.55rem .8rem .7rem; display:flex; flex-direction:column; line-height:1.35;}
+.aps-nav-compte-nom b{font-size:.98rem; color:var(--ink);}
+.aps-nav-compte-nom span{font-size:.84rem; color:var(--ink-faint); font-weight:600;}
+.aps-nav-deconnexion{color:var(--urgence) !important;}
+.aps-nav-deconnexion i{color:var(--urgence) !important;}
+.dropdown-item{background:transparent; border:0; width:100%; text-align:left;}
+
+.aps-nav-mobile-only{display:none;}
 .navbar-toggler-aps{
   display:none;
   border:1px solid var(--line-strong);
@@ -282,19 +333,31 @@ table{max-width:100%; display:block; overflow-x:auto;}
   align-items:center; justify-content:center;
 }
 
+@media (max-width:1199px){
+  .navbar-inner{gap:1rem;}
+  .aps-nav-links a{padding:.55rem .65rem; font-size:.95rem;}
+  .aps-nav-urgence span{display:none;}
+}
 @media (max-width:991px){
-  nav{display:none;}
-  nav.is-open{
+  .aps-navbar nav{display:none;}
+  .aps-navbar nav.is-open, .aps-navbar nav:has(.aps-nav-links.is-open){
     display:block;
     position:absolute;
     top:72px; left:0; right:0;
     background:var(--surface);
     border-bottom:1px solid var(--line);
     box-shadow:var(--shadow-md);
+    max-height:calc(100vh - 72px);
+    overflow-y:auto;
   }
-  .aps-nav-links{flex-direction:column; align-items:flex-start; gap:0; padding:.5rem 0;}
+  .aps-nav-links{flex-direction:column; align-items:stretch; gap:2px; padding:.6rem 1rem 1rem;}
   .aps-nav-links li{width:100%;}
-  .aps-nav-links a{padding:.85rem 1.5rem; width:100%;}
+  .aps-nav-links a{padding:.85rem 1rem; width:100%; font-size:1rem;}
+  .aps-nav-links a.active::after, .aps-nav-links a.text-primary::after{left:0; right:auto; top:.7rem; bottom:.7rem; width:3px; height:auto;}
+  .aps-nav-mobile-only{display:block;}
+  .aps-nav-mobile-actions{display:flex; gap:.5rem; padding-top:.6rem; margin-top:.4rem; border-top:1px solid var(--line);}
+  .aps-nav-mobile-actions .btn{flex:1;}
+  .aps-nav-desktop-only{display:none !important;}
   .navbar-toggler-aps{display:flex;}
 }
 
@@ -303,13 +366,13 @@ table{max-width:100%; display:block; overflow-x:auto;}
   padding:4rem 0 3.5rem;
   position:relative;
 }
-.hero .eyebrow{color:#8FE8C6;}
+.hero .eyebrow{color:#CDEEDD;}
 .hero h1{color:#fff;}
-.hero h1 .accent{color:#6FE0B0;}
+.hero h1 .accent{color:#9FDCC1;}
 .hero .lead-text{color:rgba(255,255,255,.88);}
 .hero .trust-row{border-top-color:rgba(255,255,255,.25);}
 .hero .trust-item{color:rgba(255,255,255,.85);}
-.hero .trust-item i{color:#6FE0B0;}
+.hero .trust-item i{color:#9FDCC1;}
 .hero .search-card{box-shadow:0 20px 45px rgba(0,0,0,.35);}
 .hero-grid{
   display:grid;
@@ -336,7 +399,8 @@ table{max-width:100%; display:block; overflow-x:auto;}
 
 /* ---------------------------- APP PROMO (télécharger l'application) ---------------------------- */
 .app-promo{
-  background:linear-gradient(135deg, var(--surface-alt) 0%, var(--primary-tint) 100%);
+  background:var(--surface-sunk);
+  border-top:1px solid var(--line); border-bottom:1px solid var(--line);
   overflow:hidden;
 }
 .app-promo-grid{
@@ -383,7 +447,7 @@ table{max-width:100%; display:block; overflow-x:auto;}
   position:relative;
   width:220px;
   height:440px;
-  background:linear-gradient(160deg, var(--primary-dark), var(--teal-dark));
+  background:var(--primary);
   border-radius:34px;
   padding:12px;
   box-shadow:var(--shadow-lg);
@@ -795,7 +859,7 @@ table{max-width:100%; display:block; overflow-x:auto;}
 .dynamic-fields.active{display:block; animation:fadeIn .2s ease;}
 
 /* ---------------------------- BANDEAU CTA ---------------------------- */
-.cta-band{background:linear-gradient(120deg, var(--primary-dark), var(--primary), var(--teal-dark)); padding:3rem 0;}
+.cta-band{background:var(--primary); padding:3rem 0;}
 .cta-band-inner{
   display:flex; align-items:center; justify-content:space-between; gap:1.5rem; flex-wrap:wrap;
 }
@@ -804,35 +868,7 @@ table{max-width:100%; display:block; overflow-x:auto;}
 .cta-band .btn-primary{background:#fff; border-color:#fff; color:var(--primary-dark);}
 .cta-band .btn-primary:hover{background:var(--primary-tint); border-color:var(--primary-tint);}
 
-/* ---------------------------- FOOTER ---------------------------- */
-.aps-footer{background:#4C6459; padding:3.5rem 0 0; color:rgba(255,255,255,.82);}
-.aps-footer-logo .aps-logo-img{height:56px; background:#fff; padding:3px;}
-.aps-footer h5{color:#fff; font-size:.85rem; text-transform:uppercase; letter-spacing:.05em; margin-bottom:1.1rem;}
-.footer-links{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.7rem;}
-.footer-links a{color:rgba(255,255,255,.68); font-size:.87rem;}
-.footer-links a:hover{color:#fff;}
-.social-row{display:flex; gap:.6rem;}
-.social-row a{
-  width:36px; height:36px; border-radius:50%;
-  border:1px solid rgba(255,255,255,.2);
-  color:#fff;
-  display:flex; align-items:center; justify-content:center;
-  font-size:.85rem;
-}
-.social-row a:hover{background:var(--primary); border-color:var(--primary);}
-.footer-bottom{
-  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;
-  border-top:1px solid rgba(255,255,255,.12);
-  margin-top:2.5rem;
-  padding:1.5rem 0;
-  font-size:.82rem;
-}
-.footer-lang{display:flex; align-items:center; gap:.5rem; color:rgba(255,255,255,.7);}
-.footer-lang select{
-  background:transparent; color:#fff; border:1px solid rgba(255,255,255,.25);
-  border-radius:var(--radius-sm); padding:.3rem .5rem; font-size:.78rem;
-}
-.footer-lang select option{color:#111;}
+/* FOOTER : voir footer-2026.css (importé par Footer.jsx) */
 
 /* ---------------------------- CHIPS / BADGES ---------------------------- */
 .chip{
@@ -1196,7 +1232,7 @@ table{max-width:100%; display:block; overflow-x:auto;}
   overflow:hidden;
 }
 .ticket-top{
-  background:linear-gradient(135deg, var(--primary), var(--teal-dark));
+  background:var(--primary);
   color:#fff;
   text-align:center;
   padding:2.2rem 1.5rem 1.8rem;
@@ -1357,7 +1393,7 @@ table{max-width:100%; display:block; overflow-x:auto;}
 }
 .choix-paiement-option:hover:not(:disabled){
   border-color:var(--primary); background:var(--primary-tint);
-  box-shadow:0 2px 10px rgba(79,158,130,.15);
+  box-shadow:0 2px 10px rgba(22,153,108,.15);
 }
 .choix-paiement-option:focus-visible{outline:2px solid var(--primary); outline-offset:2px;}
 .choix-paiement-option:disabled{opacity:.65; cursor:not-allowed;}

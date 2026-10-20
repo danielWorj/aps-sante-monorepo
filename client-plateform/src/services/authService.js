@@ -216,6 +216,87 @@ export async function obtenirProfilCourant() {
   return data.utilisateur;
 }
 
+/* ===================================================================
+ * Connexion numéro + code PIN (à côté de l'email + mot de passe)
+ * =================================================================== */
+
+/**
+ * POST /auth/login-pin  { telephone, pays_iso2?, pin }
+ * Deux formes de réponse, comme connecter() :
+ *  - session : { access_token, utilisateur, espaces } ;
+ *  - PIN provisoire : { pin_a_changer: true, token_changement_pin, ... }
+ *    (aucune session : le token ne sert qu'à changerPinInitial()).
+ * Erreurs : 401 numéro ou PIN incorrect (err.data.essais_restants),
+ * 429 compte bloqué (err.data.minutes_restantes).
+ */
+export async function connecterParPin(telephone, pays_iso2, pin) {
+  return apiFetch('/auth/login-pin', {
+    method: 'POST',
+    body: { telephone, pays_iso2, pin },
+    skipAuthRetry: true,
+  });
+}
+
+/** POST /auth/changer-pin-initial (token restreint du PIN provisoire) -> { access_token, utilisateur, espaces } */
+export async function changerPinInitial(tokenChangementPin, nouveauPin) {
+  return apiFetch('/auth/changer-pin-initial', {
+    method: 'POST',
+    body: { nouveau_pin: nouveauPin },
+    skipAuthRetry: true,
+    authOverride: `Bearer ${tokenChangementPin}`,
+  });
+}
+
+/** POST /auth/pin { telephone?, pays_iso2?, pin, ancien_pin? } (session ouverte) -> { message, utilisateur } */
+export async function definirPin(donnees) {
+  return apiFetch('/auth/pin', { method: 'POST', body: donnees });
+}
+
+/** GET /auth/espaces -> espaces du compte, le dernier utilisé en premier */
+export async function listerEspaces() {
+  const data = await apiFetch('/auth/espaces');
+  return data.espaces ?? [];
+}
+
+/**
+ * POST /auth/espaces/choisir { cle } -> nouvelle session sur cet espace :
+ * { access_token, utilisateur, espace, espaces }. Le PIN peut être exigé
+ * (403 PIN_REQUIS, géré par GardePin via apiClient).
+ */
+export async function choisirEspace(cle) {
+  return apiFetch('/auth/espaces/choisir', { method: 'POST', body: { cle } });
+}
+
+/** GET /auth/configuration-connexion -> { verification_telephone, canaux, connexion_application } */
+export async function configurationConnexion() {
+  return apiFetch('/auth/configuration-connexion', { skipAuthRetry: true });
+}
+
+/** POST /verification-telephone/envoyer { telephone, pays_iso2, objet, canal } */
+export async function envoyerCodeTelephone(donnees) {
+  return apiFetch('/verification-telephone/envoyer', { method: 'POST', body: donnees, skipAuthRetry: true });
+}
+
+/** POST /verification-telephone/verifier { telephone, pays_iso2, objet, code } -> { preuve, ... } */
+export async function verifierCodeTelephone(donnees) {
+  return apiFetch('/verification-telephone/verifier', { method: 'POST', body: donnees, skipAuthRetry: true });
+}
+
+/** POST /auth/pin/reinitialiser { telephone, pays_iso2, preuve_telephone, nouveau_pin } */
+export async function reinitialiserPin(donnees) {
+  return apiFetch('/auth/pin/reinitialiser', { method: 'POST', body: donnees, skipAuthRetry: true });
+}
+
+/** POST /auth/connexion-application { telephone, pays_iso2 } -> { demande_id, secret, code, expire_le } */
+export async function demanderConnexionApplication(telephone, pays_iso2) {
+  return apiFetch('/auth/connexion-application', { method: 'POST', body: { telephone, pays_iso2 }, skipAuthRetry: true });
+}
+
+/** POST /auth/connexion-application/:id/statut { secret } -> { statut } ou session complète */
+export async function sonderConnexionApplication(demandeId, secret) {
+  return apiFetch(`/auth/connexion-application/${demandeId}/statut`, { method: 'POST', body: { secret }, skipAuthRetry: true });
+}
+
 /**
  * POST /auth/logout
  */
@@ -233,6 +314,17 @@ export default {
   creerCompteAdministre,
   connecter,
   changerMotDePasseInitial,
+  connecterParPin,
+  changerPinInitial,
+  definirPin,
+  listerEspaces,
+  choisirEspace,
+  configurationConnexion,
+  envoyerCodeTelephone,
+  verifierCodeTelephone,
+  reinitialiserPin,
+  demanderConnexionApplication,
+  sonderConnexionApplication,
   rafraichirToken,
   obtenirProfilCourant,
   deconnecter,

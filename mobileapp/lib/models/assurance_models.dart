@@ -557,13 +557,19 @@ class AgentServiceAssurance {
   final String agentId;
   final String fonction;
   final AgentUtilisateurLite utilisateur;
-  final String motDePasseTemporaire;
+
+  /// Absent quand la fiche est rattachée au compte de l'auteur.
+  final String? motDePasseTemporaire;
+
+  /// Fiche rattachée au compte connecté (nouvel espace, aucun secret).
+  final bool rattacheAuCompte;
 
   const AgentServiceAssurance({
     required this.agentId,
     required this.fonction,
     required this.utilisateur,
-    required this.motDePasseTemporaire,
+    this.motDePasseTemporaire,
+    this.rattacheAuCompte = false,
   });
 
   factory AgentServiceAssurance.fromJson(Map<String, dynamic> json) {
@@ -573,7 +579,8 @@ class AgentServiceAssurance {
       utilisateur: AgentUtilisateurLite.fromJson(
         json['utilisateur'] as Map<String, dynamic>,
       ),
-      motDePasseTemporaire: json['mot_de_passe_temporaire'] as String,
+      motDePasseTemporaire: json['mot_de_passe_temporaire'] as String?,
+      rattacheAuCompte: json['rattache_au_compte'] == true,
     );
   }
 
@@ -1262,6 +1269,9 @@ class ServiceAssuranceCreationRequete {
   final String agentEmail;
   final String? agentTelephone;
 
+  /// Fiche rattachée au compte connecté (« Je suis le responsable »).
+  final bool responsableMoi;
+
   const ServiceAssuranceCreationRequete({
     required this.nom,
     required this.paysId,
@@ -1279,6 +1289,7 @@ class ServiceAssuranceCreationRequete {
     required this.agentPrenom,
     required this.agentEmail,
     this.agentTelephone,
+    this.responsableMoi = false,
   });
 
   /// Champs texte prêts à être ajoutés à un http.MultipartRequest.fields.
@@ -1305,6 +1316,7 @@ class ServiceAssuranceCreationRequete {
     if (agentTelephone != null && agentTelephone!.trim().isNotEmpty) {
       champs['agent_telephone'] = agentTelephone!;
     }
+    if (responsableMoi) champs['responsable_moi'] = 'true';
     return champs;
   }
 }
