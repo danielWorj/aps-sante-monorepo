@@ -1890,29 +1890,29 @@ class ApsSheetHeader extends StatelessWidget {
   }
 }
 
-/// `.logo` — tuile verte en dégradé avec la croix APS.
+/// `.logo` — logo officiel APS Santé sur une tuile blanche arrondie.
 class ApsLogo extends StatelessWidget {
   const ApsLogo({super.key, this.size = 52});
   final double size;
+
+  /// Logo officiel de l'application (même fichier que le favicon web).
+  static const String asset = 'assets/img/logoapsa.jpeg';
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: size,
       height: size,
+      padding: EdgeInsets.all(size * 0.06),
       decoration: BoxDecoration(
-        gradient: AppColors.gradientLogo,
-        borderRadius: BorderRadius.circular(size / 3),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.b7.withValues(alpha: 0.7),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-            spreadRadius: -10,
-          ),
-        ],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(size / 4),
+        border: Border.all(color: AppColors.line),
       ),
-      child: Icon(Icons.add_rounded, color: Colors.white, size: size * 0.6),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(size / 5),
+        child: Image.asset(asset, fit: BoxFit.contain),
+      ),
     );
   }
 }
@@ -1979,6 +1979,46 @@ class ApsSearchField extends StatelessWidget {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Vignette carrée arrondie d'une carte d'annuaire : l'image de la fiche
+/// si elle existe (et se charge), sinon [repli] (icône, sigle…).
+class ApsVignette extends StatelessWidget {
+  const ApsVignette({
+    super.key,
+    required this.imageUrl,
+    required this.repli,
+    this.size = 58,
+    this.radius = 12,
+  });
+
+  final String? imageUrl;
+  final Widget repli;
+  final double size;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = imageUrl;
+    if (url == null || url.isEmpty) return repli;
+    return Container(
+      width: size,
+      height: size,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.bg,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Image.network(
+        url,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => Center(child: repli),
       ),
     );
   }

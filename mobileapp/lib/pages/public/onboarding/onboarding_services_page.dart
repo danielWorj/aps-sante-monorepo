@@ -6,6 +6,7 @@ import '../Pharmaciepage.dart';
 import '../urgence.dart';
 import 'onboarding_assurance_ville_page.dart';
 import 'onboarding_medecin_ville_page.dart';
+import 'onboarding_passer.dart';
 
 /// Écran 1.1 — Liste des services de ApSa Santé.
 ///
@@ -32,6 +33,7 @@ class OnboardingServicesPage extends StatelessWidget {
         backgroundColor: AppColors.paper,
         elevation: 0,
         foregroundColor: AppColors.ink,
+        actions: const [OnboardingPasser()],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

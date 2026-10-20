@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import NotificationsBell from "../components/notifications-bell";
+import { useAnnoncesNonLues } from "../../annonces/annoncesVues";
 import { LIENS_PORTAIL_ASSURANCE } from "./assurance.liens";
 
 const AssurancePortailNavbar = ({ nouvellesDemandes = 0 }) => {
@@ -11,6 +12,7 @@ const AssurancePortailNavbar = ({ nouvellesDemandes = 0 }) => {
   const { pathname } = useLocation();
   const { deconnecter } = useAuth();
   const [menuOuvert, setMenuOuvert] = useState(false);
+  const badges = { demandes: nouvellesDemandes, annonces: useAnnoncesNonLues() };
 
   const handleLogout = async () => {
     await deconnecter();
@@ -39,8 +41,8 @@ const AssurancePortailNavbar = ({ nouvellesDemandes = 0 }) => {
                     onClick={() => setMenuOuvert(false)}
                   >
                     <i className={`fa-solid ${link.icon}`}></i> {link.label}
-                    {link.badge && nouvellesDemandes > 0 && (
-                      <span className="nav-badge ms-1" aria-label={`${nouvellesDemandes} nouvelle(s)`}>{nouvellesDemandes}</span>
+                    {badges[link.badge] > 0 && (
+                      <span className="nav-badge ms-1" aria-label={`${badges[link.badge]} nouvelle(s)`}>{badges[link.badge]}</span>
                     )}
                   </Link>
                 </li>

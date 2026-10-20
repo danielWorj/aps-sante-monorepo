@@ -25,6 +25,8 @@ import {
 import { purgerVisiteursVuesFiche } from "../services/vuesFiche.service.js";
 import { purgerVisiteursEngagement } from "../services/engagementMedecin.service.js";
 import { relancerMessagesWhatsapp } from "../services/whatsapp.service.js";
+import { relancerMessagesSms } from "../services/sms.service.js";
+import { purgerCodesVerification } from "../services/verificationTelephone.service.js";
 import { expirerPublicitesNonPayees } from "../services/publicite.service.js";
 
 // Fréquence non précisée par le cahier des charges ni par le plan
@@ -71,6 +73,10 @@ const CRON_BROUILLONS_ABONNEMENTS_PRESENCE = process.env.CRON_BROUILLONS_ABONNEM
 // WhatsApp : relance des envois en échec transitoire (débit Meta, réseau,
 // aucun numéro actif au moment de l'envoi) toutes les 10 min par défaut.
 const CRON_RELANCE_WHATSAPP = process.env.CRON_RELANCE_WHATSAPP || "*/10 * * * *";
+// SMS : relance des échecs transitoires (hors codes de vérification) et
+// purge quotidienne des codes de plus de 30 jours.
+const CRON_RELANCE_SMS = process.env.CRON_RELANCE_SMS || "*/10 * * * *";
+const CRON_PURGE_CODES_VERIFICATION = process.env.CRON_PURGE_CODES_VERIFICATION || "50 3 * * *";
 
 // Publicités acceptées non payées dans le délai : place libérée (toutes les 5 min).
 const CRON_EXPIRATION_PUBLICITES = process.env.CRON_EXPIRATION_PUBLICITES || "*/5 * * * *";
@@ -197,6 +203,22 @@ export function demarrerScheduler() {
     });
   });
 
+  cron.schedule(CRON_RELANCE_SMS, () => {
+    relancerMessagesSms().catch((err) => {
+      console.error("[scheduler] Échec relance des SMS :", err);
+    });
+  });
+
+  cron.schedule(
+    CRON_PURGE_CODES_VERIFICATION,
+    () => {
+      purgerCodesVerification().catch((err) => {
+        console.error("[scheduler] Échec purge des codes de vérification :", err);
+      });
+    },
+    { timezone: "UTC" }
+  );
+
   cron.schedule(CRON_EXPIRATION_PUBLICITES, () => {
     expirerPublicitesNonPayees().catch((err) => {
       console.error("[scheduler] Échec expiration des publicités non payées :", err);
@@ -204,6 +226,6 @@ export function demarrerScheduler() {
   });
 
   console.info(
-    `[scheduler] Démarré — detecterCreneauxDepasses planifié (${CRON_DETECTION_DEFAILLANCE}), traiterReprogrammations planifié (${CRON_REPROGRAMMATIONS}), reconcilierCampayEnAttente planifié (${CRON_RECONCILIATION_CAMPAY}), reconcilierRetraitsEnCours planifié (${CRON_RECONCILIATION_RETRAITS}), libererFondsEchus planifié (${CRON_LIBERATION_FONDS}), expiration RDV non confirmés (${CRON_EXPIRATION_CONFIRMATION}), synchronisation agendas (${CRON_SYNCHRO_AGENDAS}), cycle abonnements assurance (${CRON_CYCLE_ABONNEMENTS_ASSURANCE}), brouillons abonnements assurance (${CRON_BROUILLONS_ABONNEMENTS_ASSURANCE}), cycle abonnements de présence (${CRON_CYCLE_ABONNEMENTS_PRESENCE}), brouillons abonnements de présence (${CRON_BROUILLONS_ABONNEMENTS_PRESENCE}), relance WhatsApp (${CRON_RELANCE_WHATSAPP}), expiration des publicités non payées (${CRON_EXPIRATION_PUBLICITES}).`
+    `[scheduler] Démarré — detecterCreneauxDepasses planifié (${CRON_DETECTION_DEFAILLANCE}), traiterReprogrammations planifié (${CRON_REPROGRAMMATIONS}), reconcilierCampayEnAttente planifié (${CRON_RECONCILIATION_CAMPAY}), reconcilierRetraitsEnCours planifié (${CRON_RECONCILIATION_RETRAITS}), libererFondsEchus planifié (${CRON_LIBERATION_FONDS}), expiration RDV non confirmés (${CRON_EXPIRATION_CONFIRMATION}), synchronisation agendas (${CRON_SYNCHRO_AGENDAS}), cycle abonnements assurance (${CRON_CYCLE_ABONNEMENTS_ASSURANCE}), brouillons abonnements assurance (${CRON_BROUILLONS_ABONNEMENTS_ASSURANCE}), cycle abonnements de présence (${CRON_CYCLE_ABONNEMENTS_PRESENCE}), brouillons abonnements de présence (${CRON_BROUILLONS_ABONNEMENTS_PRESENCE}), relance WhatsApp (${CRON_RELANCE_WHATSAPP}), relance SMS (${CRON_RELANCE_SMS}), purge des codes de vérification (${CRON_PURGE_CODES_VERIFICATION}), expiration des publicités non payées (${CRON_EXPIRATION_PUBLICITES}).`
   );
 }

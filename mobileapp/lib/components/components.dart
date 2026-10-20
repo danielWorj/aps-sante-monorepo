@@ -13,6 +13,9 @@ export 'style/app_theme.dart';
 // Primitives de la refonte 2026
 export 'ui/aps_ui.dart';
 export 'ui/aps_filter_sheet.dart';
+export 'ui/aps_pagination.dart';
+export 'ui/aps_invitation_pro.dart';
+export 'ui/aps_filtre_pays_ville.dart';
 
 // Cards
 export 'cards/badge_chip.dart';
@@ -33,6 +36,7 @@ export 'alert/app_alert.dart';
 
 // Navigation
 export 'navigation/app_bottom_nav.dart';
+export 'navigation/bouton_deconnexion.dart';
 
 // Onboarding
 export 'onboarding/onboarding_header.dart';

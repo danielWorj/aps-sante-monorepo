@@ -1,14 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../components/components.dart';
-import '../Medecinpage.dart' show medecinProviderContainer;
-import '../../../controllers/authentification_controller.dart';
+import '../../../utils/mon_espace_navigation.dart';
 import '../login.dart';
-import '../utils/createassurancepage.dart';
-import '../utils/createcentresantepage.dart';
-import '../utils/createmedecinpage.dart';
-import '../utils/createpharmaciepage.dart';
+import 'onboarding_passer.dart';
 
 /// Écran 1.2 — Parcours « Je suis professionnel ».
 ///
@@ -26,7 +21,7 @@ import '../utils/createpharmaciepage.dart';
 /// [CreateAssuranceScreen]. Contrairement à `POST /medecins` (publique),
 /// ces trois routes exigent une session ouverte : sans session, on passe
 /// d'abord par [LoginScreen], puis on reprend automatiquement sur l'écran
-/// demandé (voir [_ouvrirAvecSession]).
+/// demandé (voir [ouvrirAvecSession], mon_espace_navigation.dart).
 ///
 /// [CreateMedecinScreen] reçoit explicitement [medecinProviderContainer]
 /// (le même [ProviderContainer] que [MedecinPage]/l'onboarding médecin)
@@ -45,6 +40,7 @@ class OnboardingProChoixPage extends StatelessWidget {
         backgroundColor: AppColors.paper,
         elevation: 0,
         foregroundColor: AppColors.ink,
+        actions: const [OnboardingPasser()],
       ),
       body: SafeArea(
         child: Padding(
@@ -75,76 +71,31 @@ class OnboardingProChoixPage extends StatelessWidget {
                 icon: Icons.add_circle_outline_rounded,
                 title: 'Créer ma fiche professionnelle',
                 subtitle: 'Médecin, spécialiste — inscription en 6 étapes',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => CreateMedecinScreen(
-                      container: medecinProviderContainer,
-                    ),
-                  ),
-                ),
+                onTap: () => ouvrirDevenirMedecin(context),
               ),
               const SizedBox(height: 14),
               _ProChoiceCard(
                 icon: Icons.local_pharmacy_outlined,
                 title: 'Déclarer ma pharmacie',
                 subtitle: 'Fiche pharmacie — inscription en 5 étapes',
-                onTap: () => _ouvrirAvecSession(
-                  context,
-                      (_) => const CreatePharmacieScreen(),
-                ),
+                onTap: () => ouvrirDeclarerPharmacie(context),
               ),
               const SizedBox(height: 14),
               _ProChoiceCard(
                 icon: Icons.local_hospital_outlined,
                 title: 'Déclarer mon centre de santé',
                 subtitle: 'Clinique, hôpital, laboratoire, dispensaire…',
-                onTap: () => _ouvrirAvecSession(
-                  context,
-                      (_) => const CreateCentreSanteScreen(),
-                ),
+                onTap: () => ouvrirDeclarerCentreSante(context),
               ),
               const SizedBox(height: 14),
               _ProChoiceCard(
                 icon: Icons.shield_outlined,
                 title: 'Déclarer mon assurance',
                 subtitle: 'Compagnie ou courtier',
-                onTap: () => _ouvrirAvecSession(
-                  context,
-                      (_) => const CreateAssuranceScreen(),
-                ),
+                onTap: () => ouvrirDeclarerAssurance(context),
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  /// Ouvre [destination] si une session est ouverte ; sinon affiche
-  /// [LoginScreen] et, une fois connecté, remplace le login par
-  /// [destination] pour que le professionnel ne perde pas son intention.
-  /// Évite qu'un visiteur remplisse toutes les étapes avant d'apprendre
-  /// à l'envoi que la route exige une connexion.
-  Future<void> _ouvrirAvecSession(BuildContext context, WidgetBuilder destination) async {
-    final container = ProviderScope.containerOf(context, listen: false);
-    // Attendre la restauration du démarrage (jeton persisté).
-    final session = await attendreSession(container);
-    if (!context.mounted) return;
-    if (session != null) {
-      Navigator.of(context).push(MaterialPageRoute(builder: destination));
-      return;
-    }
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (routeContext) => LoginScreen(
-          onLoginSuccess: () {
-            if (container.read(sessionControllerProvider).value == null) {
-              return;
-            }
-            Navigator.of(routeContext).pushReplacement(
-              MaterialPageRoute(builder: destination),
-            );
-          },
         ),
       ),
     );

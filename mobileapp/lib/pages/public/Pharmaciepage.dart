@@ -56,12 +56,11 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
   /// [listeGardesPharmacieControllerProvider] (voir [_filtrer]).
   bool _deGardeUniquement = false;
 
-  /// Filtre ville : appliqué côté client sur `pharmacie.ville?.nom`, faute
-  /// d'un référentiel des villes (avec leur `ville_id`) disponible ici.
-  /// ⚠️ Si un provider de référentiel (ex: `villesProvider`) existe déjà
-  /// ailleurs dans l'app, préférez-le pour filtrer via `villeId` côté
-  /// serveur (paramètre `villeId` de [PharmaciesFiltre]).
-  String _villeSelectionnee = 'Toutes les villes';
+  // Pays et ville : envoyés au serveur via [filtresPharmaciesProvider]
+  // (identifiants du référentiel, comme l'annuaire des médecins). Les
+  // filtres ci-dessous et le tri s'appliquent côté client.
+  bool _verifieesUniquement = false;
+  String _tri = 'pertinence';
 
   int _navIndex = 1; // "Pharmacies" actif
   final _searchCtrl = TextEditingController();
@@ -131,8 +130,9 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
     _debounce?.cancel();
     _searchCtrl.clear();
     setState(() {
-      _villeSelectionnee = 'Toutes les villes';
       _deGardeUniquement = false;
+      _verifieesUniquement = false;
+      _tri = 'pertinence';
     });
     ref.read(filtresPharmaciesProvider.notifier).state =
     const PharmaciesFiltre(
@@ -140,49 +140,73 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
     );
   }
 
-  /// Villes disponibles pour les chips de filtre, dérivées des pharmacies
-  /// effectivement chargées (faute de référentiel villes injecté ici).
-  List<String> _villesDisponibles(List<Pharmacie> pharmacies) {
-    final noms = pharmacies
-        .map((p) => p.ville?.nom)
-        .whereType<String>()
-        .toSet()
-        .toList()
-      ..sort();
-    return ['Toutes les villes', ...noms];
+  PharmaciesFiltre get _filtresServeur =>
+      ref.read(filtresPharmaciesProvider) ?? const PharmaciesFiltre();
+
+  /// Pays / ville côté serveur, en conservant la recherche en cours.
+  void _appliquerPaysVille(String? paysId, String? villeId) {
+    final actuel = _filtresServeur;
+    ref.read(filtresPharmaciesProvider.notifier).state = PharmaciesFiltre(
+      paysId: paysId,
+      villeId: villeId,
+      statutVerification: actuel.statutVerification,
+      recherche: actuel.recherche,
+    );
   }
 
   List<Pharmacie> _filtrer(List<Pharmacie> pharmacies, Set<String> deGardeIds) {
-    return pharmacies.where((p) {
+    final liste = pharmacies.where((p) {
       final matchGarde = !_deGardeUniquement || deGardeIds.contains(p.pharmacieId);
-      final matchVille = _villeSelectionnee == 'Toutes les villes' ||
-          p.ville?.nom == _villeSelectionnee;
-      return matchGarde && matchVille;
+      final matchVerifiee = !_verifieesUniquement ||
+          p.statutVerification == StatutVerificationPharmacie.publie;
+      return matchGarde && matchVerifiee;
     }).toList();
+    if (_tri == 'nom') {
+      liste.sort((a, b) => a.nom.toLowerCase().compareTo(b.nom.toLowerCase()));
+    }
+    return liste;
   }
 
-  Future<void> _ouvrirFiltres(List<String> villes) async {
-    final choix = await showApsFilterSheet<({String ville, bool deGarde})>(
+  /// Feuille de filtres, sur le modèle de celle des médecins.
+  Future<void> _ouvrirFiltres() async {
+    final f = _filtresServeur;
+    final choix = await showApsFilterSheet<_FiltresPharmacieSheet>(
       context: context,
-      initial: (ville: _villeSelectionnee, deGarde: _deGardeUniquement),
-      reset: (ville: 'Toutes les villes', deGarde: false),
-      builder: (f, maj) => [
+      initial: (
+        paysId: f.paysId,
+        villeId: f.villeId,
+        deGarde: _deGardeUniquement,
+        verifiees: _verifieesUniquement,
+        tri: _tri,
+      ),
+      reset: (paysId: null, villeId: null, deGarde: false, verifiees: false, tri: 'pertinence'),
+      builder: (c, maj) => [
         ApsFilterSwitch(
           label: 'De garde uniquement',
           subtitle: 'Pharmacies ouvertes en ce moment',
           icon: Icons.nightlight_outlined,
-          value: f.deGarde,
-          onChanged: (v) => maj((ville: f.ville, deGarde: v)),
+          value: c.deGarde,
+          onChanged: (v) => maj((paysId: c.paysId, villeId: c.villeId, deGarde: v, verifiees: c.verifiees, tri: c.tri)),
+        ),
+        ApsFiltrePaysVille(
+          paysId: c.paysId,
+          villeId: c.villeId,
+          onChanged: (paysId, villeId) => maj((paysId: paysId, villeId: villeId, deGarde: c.deGarde, verifiees: c.verifiees, tri: c.tri)),
+        ),
+        ApsFilterSwitch(
+          label: 'Vérifiées uniquement',
+          subtitle: "Fiches vérifiées à l'Ordre par APS Santé",
+          icon: Icons.verified_outlined,
+          value: c.verifiees,
+          onChanged: (v) => maj((paysId: c.paysId, villeId: c.villeId, deGarde: c.deGarde, verifiees: v, tri: c.tri)),
         ),
         ApsFilterSection(
-          title: 'Ville',
+          title: 'Trier par',
           child: ApsFilterChoices<String>(
-            value: f.ville,
-            onChanged: (v) => maj((ville: v, deGarde: f.deGarde)),
+            value: c.tri,
+            onChanged: (v) => maj((paysId: c.paysId, villeId: c.villeId, deGarde: c.deGarde, verifiees: c.verifiees, tri: v)),
             options: [
-              for (final v in villes)
-                ApsFilterOption(v, v,
-                    icon: v == 'Toutes les villes' ? null : Icons.location_on_outlined),
+              for (final e in apsLibellesTriAnnuaire.entries) ApsFilterOption(e.key, e.value),
             ],
           ),
         ),
@@ -190,9 +214,13 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
     );
     if (choix == null || !mounted) return;
     setState(() {
-      _villeSelectionnee = choix.ville;
       _deGardeUniquement = choix.deGarde;
+      _verifieesUniquement = choix.verifiees;
+      _tri = choix.tri;
     });
+    if (choix.paysId != f.paysId || choix.villeId != f.villeId) {
+      _appliquerPaysVille(choix.paysId, choix.villeId);
+    }
   }
 
   String _messageErreur(Object erreur) {
@@ -272,6 +300,7 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
         gardesAsync.hasError && !gardesAsync.hasValue && _deGardeUniquement;
 
     final nbGardes = deGardeIds.length;
+    final filtres = ref.watch(filtresPharmaciesProvider);
     return SafeArea(
       bottom: false,
       child: ListView(
@@ -314,9 +343,11 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    _villeSelectionnee == 'Toutes les villes'
-                        ? 'Fiches vérifiées · appel direct et itinéraire'
-                        : _villeSelectionnee,
+                    filtres?.villeId != null
+                        ? apsNomVille(ref, filtres!.paysId!, filtres.villeId!)
+                        : filtres?.paysId != null
+                            ? apsNomPays(ref, filtres!.paysId!)
+                            : 'Fiches vérifiées · appel direct et itinéraire',
                     style: AppTextStyles.xs,
                   ),
                 ],
@@ -332,20 +363,35 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
         _SearchField(controller: _searchCtrl, onChanged: _onSearchChanged),
         const SizedBox(height: 12),
 
-        // ---------- Villes ----------
-        pharmaciesAsync.maybeWhen(
-          data: (liste) => ApsFilterBar(
-            onOpen: () => _ouvrirFiltres(_villesDisponibles(liste)),
-            actifs: [
-              if (_villeSelectionnee != 'Toutes les villes')
-                (
-                  label: _villeSelectionnee,
-                  icon: Icons.location_on_outlined,
-                  onRemove: () => setState(() => _villeSelectionnee = 'Toutes les villes'),
-                ),
-            ],
-          ),
-          orElse: () => const SizedBox.shrink(),
+        // ---------- Filtres (feuille) + puces actives ----------
+        ApsFilterBar(
+          onOpen: _ouvrirFiltres,
+          actifs: [
+            if (filtres?.paysId != null)
+              (
+                label: apsNomPays(ref, filtres!.paysId!),
+                icon: Icons.public_rounded,
+                onRemove: () => _appliquerPaysVille(null, null),
+              ),
+            if (filtres?.paysId != null && filtres?.villeId != null)
+              (
+                label: apsNomVille(ref, filtres!.paysId!, filtres.villeId!),
+                icon: Icons.location_on_outlined,
+                onRemove: () => _appliquerPaysVille(filtres.paysId, null),
+              ),
+            if (_verifieesUniquement)
+              (
+                label: 'Vérifiées',
+                icon: Icons.verified_outlined,
+                onRemove: () => setState(() => _verifieesUniquement = false),
+              ),
+            if (_tri != 'pertinence')
+              (
+                label: apsLibellesTriAnnuaire[_tri]!,
+                icon: Icons.sort_rounded,
+                onRemove: () => setState(() => _tri = 'pertinence'),
+              ),
+          ],
         ),
         if (gardesIndisponibles) ...[
           const SizedBox(height: 12),
@@ -356,6 +402,14 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
           ),
         ],
         const SizedBox(height: 16),
+
+        ApsInvitationPro(
+          question: 'Vous êtes pharmacien ?',
+          libelle: 'Inscrire ma pharmacie',
+          icone: Icons.local_pharmacy_outlined,
+          onPressed: () => ouvrirDeclarerPharmacie(context),
+        ),
+        const SizedBox(height: 14),
 
         // ---------- Liste (branchée sur l'API) ----------
         pharmaciesAsync.when(
@@ -415,21 +469,33 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
         if (resultats.isEmpty)
           const _EmptyState()
         else
-          ...resultats.map(
-                (p) => CardPharmacie(
-              nom: p.nom,
-              quartier: p.ville?.nom ?? p.villeId,
-              deGarde: deGardeIds.contains(p.pharmacieId),
-              verifiee:
-              p.statutVerification == StatutVerificationPharmacie.publie,
-              numeroOrdre: p.numeroOrdreTitulaire,
-              // TODO: remplacer par une vraie distance (Haversine) une fois
-              // la position de l'utilisateur disponible (ex: Geolocator),
-              // combinée à p.geolocalisation quand elle est renseignée.
-              distanceKm: null,
-              onAppeler: () => _appeler(p),
-              onItineraire: () => _itineraire(p),
+          // 5 pharmacies par page, pagination sous la liste.
+          ApsListePaginee<Pharmacie>(
+            elements: resultats,
+            cleReinitialisation: Object.hash(
+              identityHashCode(pharmacies),
+              _deGardeUniquement,
+              _verifieesUniquement,
+              _tri,
             ),
+            construirePage: (context, page) => [
+              for (final p in page)
+                CardPharmacie(
+                  nom: p.nom,
+                  quartier: p.ville?.nom ?? p.villeId,
+                  imageUrl: p.imageUrl,
+                  deGarde: deGardeIds.contains(p.pharmacieId),
+                  verifiee:
+                      p.statutVerification == StatutVerificationPharmacie.publie,
+                  numeroOrdre: p.numeroOrdreTitulaire,
+                  // TODO: remplacer par une vraie distance (Haversine) une fois
+                  // la position de l'utilisateur disponible (ex: Geolocator),
+                  // combinée à p.geolocalisation quand elle est renseignée.
+                  distanceKm: null,
+                  onAppeler: () => _appeler(p),
+                  onItineraire: () => _itineraire(p),
+                ),
+            ],
           ),
       ],
     );
@@ -500,3 +566,12 @@ class _ErrorState extends StatelessWidget {
     );
   }
 }
+
+/// Brouillon de la feuille de filtres de [PharmaciePage].
+typedef _FiltresPharmacieSheet = ({
+  String? paysId,
+  String? villeId,
+  bool deGarde,
+  bool verifiees,
+  String tri,
+});

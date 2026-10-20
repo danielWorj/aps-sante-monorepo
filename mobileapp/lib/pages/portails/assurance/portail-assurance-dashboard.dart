@@ -8,7 +8,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../components/navigation/bouton_deconnexion.dart';
 import '../../../components/style/colors.dart';
+import '../../../components/ui/aps_ui.dart' show ApsAvatar;
 import '../../../components/style/text_styles.dart';
 import '../../../controllers/portail_assurance_controller.dart';
 import '../../../models/portail_assurance_models.dart';
@@ -38,6 +40,7 @@ class _PortailAssuranceDashboardState extends ConsumerState<PortailAssuranceDash
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
           children: [
+            const _Proprietaire(),
             const EnTetePortail(
               titre: 'Tableau de bord',
               description: "L'activité de votre fiche : demandes reçues, consultations et présence.",
@@ -60,6 +63,42 @@ class _PortailAssuranceDashboardState extends ConsumerState<PortailAssuranceDash
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Identité de l'espace (logo + nom de la fiche) et déconnexion.
+class _Proprietaire extends ConsumerWidget {
+  const _Proprietaire();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fiche = ref.watch(maFicheAssuranceProvider).value;
+    final nom = fiche?.nom ?? 'Espace assurance';
+    return Padding(
+      // Marge droite : la cloche flotte en haut à droite (shell).
+      padding: const EdgeInsets.fromLTRB(0, 12, 56, 0),
+      child: Row(
+        children: [
+          ApsAvatar(name: nom, photoUrl: fiche?.imageUrl, size: 40),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Espace assurance', style: AppTextStyles.cardMeta),
+                Text(
+                  nom,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.h3.copyWith(fontSize: 15),
+                ),
+              ],
+            ),
+          ),
+          const BoutonDeconnexion(),
+        ],
       ),
     );
   }

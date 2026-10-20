@@ -3,17 +3,19 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import NotificationsBell from "../components/notifications-bell";
+import { useAnnoncesNonLues } from "../../annonces/annoncesVues";
 
 const PatientPortailNavbar = ({ activePage = "" }) => {
   const navigate = useNavigate();
   const { deconnecter } = useAuth();
   const [menuOuvert, setMenuOuvert] = useState(false);
+  const annoncesNonLues = useAnnoncesNonLues();
 
   const navLinks = [
     { label: "Rendez-vous", to: "/portail/patient-rdv", key: "rdv", icon: "fa-calendar-check" },
     { label: "Demande rapide", to: "/portail/patient-demandes", key: "demandes", icon: "fa-bullhorn" },
     { label: "Messages", to: "/portail/patient-messages", key: "messages", icon: "fa-comment-medical" },
-    { label: "Annonces", to: "/portail/patient-annonces", key: "annonces", icon: "fa-bullhorn" },
+    { label: "Annonces", to: "/portail/patient-annonces", key: "annonces", icon: "fa-bell" },
     { label: "Profil", to: "/portail/patient-profil", key: "profil", icon: "fa-user" },
     { label: "Site public", to: "/", key: "site", icon: "fa-house" },
   ];
@@ -44,6 +46,9 @@ const PatientPortailNavbar = ({ activePage = "" }) => {
                     onClick={() => setMenuOuvert(false)}
                   >
                     <i className={`fa-solid ${link.icon}`}></i> {link.label}
+                    {link.key === "annonces" && annoncesNonLues > 0 && (
+                      <span className="nav-badge ms-1">{annoncesNonLues}</span>
+                    )}
                   </Link>
                 </li>
               ))}

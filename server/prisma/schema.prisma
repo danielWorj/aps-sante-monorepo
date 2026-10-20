@@ -485,6 +485,8 @@ model Utilisateur {
   notifications Notification[]
   // Messages WhatsApp qui lui ont été adressés (journal d'envoi).
   messages_whatsapp MessageWhatsapp[]
+  // SMS qui lui ont été adressés (journal d'envoi, Twilio).
+  messages_sms      MessageSms[]
 
   medecin               Medecin?
   patient               Patient?
@@ -3173,4 +3175,95 @@ model MessageWhatsapp {
   @@index([utilisateur_id])
   @@index([date_creation])
   @@map("message_whatsapp")
+}
+
+
+// =====================================================================
+// SMS (Twilio) — socle d'envoi et codes de vérification
+//
+// Les identifiants Twilio restent en variables d'environnement
+// (TWILIO_*) : aucune donnée secrète en base. Tout envoi passe par
+// services/sms.service.js ; les codes par verificationTelephone.service.js.
+// =====================================================================
+
+enum StatutMessageSms {
+  en_attente // ligne créée, appel à Twilio en cours (ou interrompu)
+  envoye // accepté par Twilio (identifiant_fournisseur = SM…)
+  delivre // remise confirmée par l'opérateur (rappel de statut Twilio)
+  echec // refusé, injoignable ou non délivré ; `relancable` dit si le job peut réessayer
+  simule // SMS_MODE=test : rien n'est parti, le texte est affiché dans la console du serveur
+}
+
+model MessageSms {
+  message_sms_id String @id @default(uuid()) @db.Uuid
+
+  // Idempotence (ex. « rdv_rappel:<rdv_id>:<utilisateur_id> »).
+  cle            String?          @unique @db.VarChar(200)
+  // Service émetteur (ex. « code_verification », « test_back_office »).
+  origine        String           @db.VarChar(60)
+  // Destinataire, format international sans « + ».
+  destinataire   String           @db.VarChar(20)
+  utilisateur_id String?          @db.Uuid
+  // Texte envoyé. Pour un code de vérification, le code est MASQUÉ ici.
+  texte          String           @db.Text
+  statut         StatutMessageSms @default(en_attente)
+  // Identifiant Twilio du message (SM…), pour le rappel de statut.
+  identifiant_fournisseur String? @unique @db.VarChar(64)
+  // Nombre de segments facturés (160 caractères GSM-7, 70 en Unicode).
+  segments       Int?
+  erreur_code    String?          @db.VarChar(40)
+  erreur         String?          @db.Text
+  relancable     Boolean          @default(false)
+  tentatives     Int              @default(0)
+
+  date_creation DateTime  @default(now())
+  date_envoi    DateTime?
+  date_statut   DateTime?
+
+  utilisateur Utilisateur?       @relation(fields: [utilisateur_id], references: [utilisateur_id], onDelete: SetNull)
+  codes       CodeVerification[]
+
+  @@index([statut, relancable])
+  @@index([utilisateur_id])
+  @@index([date_creation])
+  @@map("message_sms")
+}
+
+enum ObjetCodeVerification {
+  inscription
+  connexion
+  reinitialisation_mot_de_passe
+  changement_telephone
+}
+
+enum CanalCodeVerification {
+  sms
+  whatsapp
+}
+
+// Code à usage unique envoyé pour prouver la possession d'un numéro.
+// Jamais stocké en clair (HMAC). Une fois vérifié, la ligne sert de
+// « preuve » que le service métier (inscription…) consomme une seule fois.
+model CodeVerification {
+  code_verification_id String @id @default(uuid()) @db.Uuid
+
+  // Format international sans « + ».
+  telephone      String                @db.VarChar(20)
+  objet          ObjetCodeVerification
+  canal          CanalCodeVerification
+  code_hache     String                @db.VarChar(64)
+  tentatives     Int                   @default(0)
+  expire_le      DateTime
+  verifie_le     DateTime?
+  consomme_le    DateTime?
+  adresse_ip     String?               @db.VarChar(45)
+  message_sms_id String?               @db.Uuid
+
+  date_creation DateTime @default(now())
+
+  message_sms MessageSms? @relation(fields: [message_sms_id], references: [message_sms_id], onDelete: SetNull)
+
+  @@index([telephone, objet, date_creation])
+  @@index([adresse_ip, date_creation])
+  @@map("code_verification")
 }

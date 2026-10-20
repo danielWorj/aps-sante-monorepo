@@ -40,7 +40,11 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
 
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
-  String _villeSelectionnee = 'Toutes les villes';
+  // Pays / ville : envoyés au serveur via [filtresServicesAssuranceProvider]
+  // (identifiants du référentiel, comme l'annuaire des médecins). Type
+  // d'acteur, vérification et tri s'appliquent côté client.
+  TypeActeurAssurance? _typeActeur;
+  String _tri = 'pertinence';
   bool _verifieesUniquement = false;
 
   @override
@@ -51,70 +55,104 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
 
   /// Villes réellement présentes dans les fiches chargées, déduites de
   /// `ServiceAssurance.ville` (inclus par le backend sur cette route).
-  List<String> _villesDisponibles(List<ServiceAssurance> services) {
-    final noms = <String>{
-      for (final s in services)
-        if ((s.ville?.nom ?? '').isNotEmpty) s.ville!.nom,
-    }.toList()
-      ..sort();
-    return ['Toutes les villes', ...noms];
+  ServicesAssuranceFiltre get _filtresServeur =>
+      ref.read(filtresServicesAssuranceProvider) ?? const ServicesAssuranceFiltre();
+
+  void _appliquerPaysVille(String? paysId, String? villeId) {
+    final actuel = _filtresServeur;
+    ref.read(filtresServicesAssuranceProvider.notifier).state = ServicesAssuranceFiltre(
+      paysId: paysId,
+      villeId: villeId,
+      typeActeur: actuel.typeActeur,
+      statutVerification: actuel.statutVerification,
+      recherche: actuel.recherche,
+    );
   }
 
-  /// Filtrage client (recherche + ville + « vérifiées APS ») sur la liste
-  /// déjà récupérée du backend. « Vérifiée APS » correspond au statut
-  /// `StatutVerificationAssurance.publie`.
   List<ServiceAssurance> _filtrer(List<ServiceAssurance> services) {
-    return services.where((s) {
+    final q = _query.toLowerCase();
+    final liste = services.where((s) {
       final ville = s.ville?.nom ?? '';
       final description = s.description ?? '';
-      final matchRecherche = _query.isEmpty ||
-          s.nom.toLowerCase().contains(_query.toLowerCase()) ||
-          ville.toLowerCase().contains(_query.toLowerCase()) ||
-          description.toLowerCase().contains(_query.toLowerCase());
-      final matchVille = _villeSelectionnee == 'Toutes les villes' ||
-          ville == _villeSelectionnee;
+      final matchRecherche = q.isEmpty ||
+          s.nom.toLowerCase().contains(q) ||
+          ville.toLowerCase().contains(q) ||
+          description.toLowerCase().contains(q);
+      final matchType = _typeActeur == null || s.typeActeur == _typeActeur;
       final matchVerifiee = !_verifieesUniquement ||
           s.statutVerification == StatutVerificationAssurance.publie;
-      return matchRecherche && matchVille && matchVerifiee;
+      return matchRecherche && matchType && matchVerifiee;
     }).toList();
+    if (_tri == 'nom') {
+      liste.sort((a, b) => a.nom.toLowerCase().compareTo(b.nom.toLowerCase()));
+    }
+    return liste;
   }
 
-  Future<void> _ouvrirFiltres(List<String> villes) async {
-    final choix = await showApsFilterSheet<({String ville, bool verifiees})>(
+  static String _libelleType(TypeActeurAssurance t) =>
+      t == TypeActeurAssurance.courtier ? 'Courtiers' : 'Compagnies';
+
+  /// Feuille de filtres, sur le modèle de celle des médecins.
+  Future<void> _ouvrirFiltres() async {
+    final f = _filtresServeur;
+    final choix = await showApsFilterSheet<_FiltresAssuranceSheet>(
       context: context,
-      initial: (ville: _villeSelectionnee, verifiees: _verifieesUniquement),
-      reset: (ville: 'Toutes les villes', verifiees: false),
-      builder: (f, maj) => [
+      initial: (
+        type: _typeActeur,
+        paysId: f.paysId,
+        villeId: f.villeId,
+        verifiees: _verifieesUniquement,
+        tri: _tri,
+      ),
+      reset: (type: null, paysId: null, villeId: null, verifiees: false, tri: 'pertinence'),
+      builder: (c, maj) => [
         ApsFilterSection(
-          title: 'Ville',
-          child: ApsFilterChoices<String>(
-            value: f.ville,
-            onChanged: (v) => maj((ville: v, verifiees: f.verifiees)),
+          title: "Type d'acteur",
+          child: ApsFilterChoices<TypeActeurAssurance?>(
+            value: c.type,
+            onChanged: (v) => maj((type: v, paysId: c.paysId, villeId: c.villeId, verifiees: c.verifiees, tri: c.tri)),
             options: [
-              for (final v in villes)
-                ApsFilterOption(v, v,
-                    icon: v == 'Toutes les villes' ? null : Icons.location_on_outlined),
+              const ApsFilterOption(null, 'Tous'),
+              for (final t in TypeActeurAssurance.values)
+                ApsFilterOption(t, _libelleType(t), icon: Icons.shield_outlined),
             ],
           ),
         ),
+        ApsFiltrePaysVille(
+          paysId: c.paysId,
+          villeId: c.villeId,
+          onChanged: (paysId, villeId) => maj((type: c.type, paysId: paysId, villeId: villeId, verifiees: c.verifiees, tri: c.tri)),
+        ),
         ApsFilterSwitch(
           label: 'Vérifiées APS uniquement',
+          subtitle: 'Fiches vérifiées par APS Santé',
           icon: Icons.verified_outlined,
-          value: f.verifiees,
-          onChanged: (v) => maj((ville: f.ville, verifiees: v)),
+          value: c.verifiees,
+          onChanged: (v) => maj((type: c.type, paysId: c.paysId, villeId: c.villeId, verifiees: v, tri: c.tri)),
+        ),
+        ApsFilterSection(
+          title: 'Trier par',
+          child: ApsFilterChoices<String>(
+            value: c.tri,
+            onChanged: (v) => maj((type: c.type, paysId: c.paysId, villeId: c.villeId, verifiees: c.verifiees, tri: v)),
+            options: [
+              for (final e in apsLibellesTriAnnuaire.entries) ApsFilterOption(e.key, e.value),
+            ],
+          ),
         ),
       ],
     );
     if (choix == null || !mounted) return;
     setState(() {
-      _villeSelectionnee = choix.ville;
+      _typeActeur = choix.type;
       _verifieesUniquement = choix.verifiees;
+      _tri = choix.tri;
     });
+    if (choix.paysId != f.paysId || choix.villeId != f.villeId) {
+      _appliquerPaysVille(choix.paysId, choix.villeId);
+    }
   }
 
-  /// Gère un tap sur la barre de navigation basse : met à jour l'index actif
-  /// ET navigue réellement vers l'écran correspondant (0=Accueil,
-  /// 1=Médecin, 2=Assurance [écran courant], 3=À propos).
   void _onBottomNavTap(int index) {
     setState(() => _navIndex = index);
     switch (index) {
@@ -203,15 +241,28 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
 
         // ---- Filtres ------------------------------------------------
         const SizedBox(height: 12),
-        servicesAsync.when(
-          data: (services) => ApsFilterBar(
-            onOpen: () => _ouvrirFiltres(_villesDisponibles(services)),
+        Builder(builder: (context) {
+          final f = ref.watch(filtresServicesAssuranceProvider);
+          return ApsFilterBar(
+            onOpen: _ouvrirFiltres,
             actifs: [
-              if (_villeSelectionnee != 'Toutes les villes')
+              if (_typeActeur != null)
                 (
-                  label: _villeSelectionnee,
+                  label: _libelleType(_typeActeur!),
+                  icon: Icons.shield_outlined,
+                  onRemove: () => setState(() => _typeActeur = null),
+                ),
+              if (f?.paysId != null)
+                (
+                  label: apsNomPays(ref, f!.paysId!),
+                  icon: Icons.public_rounded,
+                  onRemove: () => _appliquerPaysVille(null, null),
+                ),
+              if (f?.paysId != null && f?.villeId != null)
+                (
+                  label: apsNomVille(ref, f!.paysId!, f.villeId!),
                   icon: Icons.location_on_outlined,
-                  onRemove: () => setState(() => _villeSelectionnee = 'Toutes les villes'),
+                  onRemove: () => _appliquerPaysVille(f.paysId, null),
                 ),
               if (_verifieesUniquement)
                 (
@@ -219,13 +270,15 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
                   icon: Icons.verified_outlined,
                   onRemove: () => setState(() => _verifieesUniquement = false),
                 ),
+              if (_tri != 'pertinence')
+                (
+                  label: apsLibellesTriAnnuaire[_tri]!,
+                  icon: Icons.sort_rounded,
+                  onRemove: () => setState(() => _tri = 'pertinence'),
+                ),
             ],
-          ),
-          // Filtres non disponibles tant que la liste n'a pas répondu au
-          // moins une fois — on évite un flash de puces vides.
-          loading: () => const SizedBox.shrink(),
-          error: (_, _) => const SizedBox.shrink(),
-        ),
+          );
+        }),
         const SizedBox(height: 14),
 
         ApsNote.text(
@@ -237,6 +290,14 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
 
         // ---- Publicité (encart réel de PAGE_ASSURANCES, placé au-dessus de la liste) ----
         _InsuranceAdBanner(token: ref.read(authTokenProvider)),
+
+        ApsInvitationPro(
+          question: 'Vous êtes assureur ou courtier ?',
+          libelle: 'Inscrire mon assurance',
+          icone: Icons.shield_outlined,
+          onPressed: () => ouvrirDeclarerAssurance(context),
+        ),
+        const SizedBox(height: 16),
 
         // ---- Résultats ------------------------------------------------
         servicesAsync.when(
@@ -271,15 +332,32 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
 
         if (resultats.isEmpty)
           _EmptyState(
-            onReset: () => setState(() {
-              _searchController.clear();
-              _query = '';
-              _villeSelectionnee = 'Toutes les villes';
-              _verifieesUniquement = false;
-            }),
+            onReset: () {
+              setState(() {
+                _searchController.clear();
+                _query = '';
+                _typeActeur = null;
+                _verifieesUniquement = false;
+                _tri = 'pertinence';
+              });
+              _appliquerPaysVille(null, null);
+            },
           )
         else
-          for (final service in resultats) _buildCarte(service),
+          // 5 compagnies par page, pagination sous la liste.
+          ApsListePaginee<ServiceAssurance>(
+            elements: resultats,
+            cleReinitialisation: Object.hash(
+              identityHashCode(services),
+              _query,
+              _typeActeur,
+              _verifieesUniquement,
+              _tri,
+            ),
+            construirePage: (context, page) => [
+              for (final service in page) _buildCarte(service),
+            ],
+          ),
       ],
     );
   }
@@ -293,6 +371,7 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
     return CardAssurance(
       nom: service.nom,
       sigle: sigle,
+      imageUrl: service.imageUrl,
       ville: service.ville?.nom ?? '',
       // Présence minimale (sans abonnement) : ni description ni agrément,
       // le serveur ne les envoie pas (guide abonnements v3, §4.1.2).
@@ -451,3 +530,12 @@ class _ErrorState extends StatelessWidget {
     );
   }
 }
+
+/// Brouillon de la feuille de filtres de [AssurancePage].
+typedef _FiltresAssuranceSheet = ({
+  TypeActeurAssurance? type,
+  String? paysId,
+  String? villeId,
+  bool verifiees,
+  String tri,
+});

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../components/components.dart';
-import '../../../utils/mon_espace_navigation.dart';
 import '../publicAcceuil.dart';
 import 'onboarding_pro_choix_page.dart';
 import 'onboarding_services_page.dart';
@@ -14,12 +13,11 @@ import 'onboarding_services_page.dart';
 /// Point d'entrée de l'app (voir main.dart). Fond vert profond, la
 /// promesse en une phrase illustrée par de vrais composants de l'app
 /// (carte médecin avec créneaux, paiement Mobile Money, pharmacie de
-/// garde), puis deux actions :
-///   - « Commencer » -> [OnboardingServicesPage] (parcours de recherche) ;
-///   - « J'ai déjà un compte » -> [ouvrirMonEspace] (connexion, puis
-///     l'espace du rôle connecté).
-/// Les professionnels ont leur entrée dédiée ([OnboardingProChoixPage]),
-/// et « Passer » rejoint directement [PublicAcceuilPage].
+/// garde), puis deux actions, comme l'onboarding du site public :
+///   - « Je recherche un professionnel » -> [OnboardingServicesPage] ;
+///   - « Je suis professionnel » -> [OnboardingProChoixPage] (connexion
+///     ou création de fiche).
+/// « Passer » rejoint directement [PublicAcceuilPage].
 class OnboardingAccueilPage extends StatelessWidget {
   const OnboardingAccueilPage({super.key});
 
@@ -78,9 +76,11 @@ class OnboardingAccueilPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 24),
+                    // Mêmes choix que l'onboarding du site public
+                    // (OnboardingAccueil.jsx).
                     ApsButton(
-                      label: 'Commencer',
-                      trailingIcon: Icons.arrow_forward_rounded,
+                      label: 'Je recherche un professionnel',
+                      icon: Icons.search_rounded,
                       variant: ApsButtonVariant.white,
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(
@@ -90,23 +90,13 @@ class OnboardingAccueilPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     ApsButton(
-                      label: "J'ai déjà un compte",
+                      label: 'Je suis professionnel',
+                      icon: Icons.medical_services_outlined,
                       variant: ApsButtonVariant.ghostWhite,
-                      onPressed: () => ouvrirMonEspace(context),
-                    ),
-                    const SizedBox(height: 12),
-                    Center(
-                      child: TextButton.icon(
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const OnboardingProChoixPage(),
-                          ),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const OnboardingProChoixPage(),
                         ),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.white.withValues(alpha: 0.8),
-                        ),
-                        icon: const Icon(Icons.medical_services_outlined, size: 16),
-                        label: const Text('Je suis professionnel de santé'),
                       ),
                     ),
                   ],
@@ -170,16 +160,8 @@ class _EnTete extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
-        ),
-        const SizedBox(width: 8),
+        const ApsLogo(size: 40),
+        const SizedBox(width: 10),
         const Text(
           'APS Santé',
           style: TextStyle(

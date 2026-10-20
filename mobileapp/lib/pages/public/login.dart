@@ -26,6 +26,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../components/components.dart';
 import '../../controllers/authentification_controller.dart';
 import '../../models/authentification_models.dart';
+import '../home_router_for_role.dart';
+import 'changement_mot_de_passe_initial.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({
@@ -91,21 +93,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
 
       if (resultat.motDePasseAChanger) {
-        // Mot de passe temporaire : pas de session ouverte, on redirige
-        // vers l'écran de changement de mot de passe initial avec le
-        // token restreint fourni par le serveur.
+        // Mot de passe temporaire : pas de session ouverte. Sans
+        // `onMotDePasseTemporaire` fourni par l'appelant, l'écran ouvre
+        // lui-même le changement de mot de passe initial (sinon un compte
+        // pro fraîchement créé restait bloqué ici sans aucun retour).
         final token = resultat.tokenChangementMotDePasse;
         if (token == null) {
           setState(() {
             _errorMessage = 'Une erreur est survenue. Veuillez réessayer.';
           });
+        } else if (widget.onMotDePasseTemporaire != null) {
+          widget.onMotDePasseTemporaire!(token);
         } else {
-          widget.onMotDePasseTemporaire?.call(token);
+          setState(() => _loading = false);
+          final change = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => ChangementMotDePasseInitialScreen(
+                tokenChangementMotDePasse: token,
+              ),
+            ),
+          );
+          if (change == true && mounted) _apresConnexion();
         }
       } else {
-        // Session complète ouverte par SessionController : il ne reste
-        // qu'à prévenir l'appelant pour la navigation post-login.
-        widget.onLoginSuccess?.call();
+        _apresConnexion();
       }
     } on ErreurAuthentification catch (e) {
       if (!mounted) return;
@@ -122,6 +133,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Session ouverte : l'appelant pilote la navigation s'il a fourni
+  /// `onLoginSuccess` ; sinon on remplace le login par l'espace du rôle
+  /// connecté (avant, rien ne se passait : l'écran restait affiché).
+  void _apresConnexion() {
+    if (widget.onLoginSuccess != null) {
+      widget.onLoginSuccess!();
+      return;
+    }
+    final session = ref.read(sessionControllerProvider).value;
+    if (session == null) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => HomeRouterForRole(role: session.utilisateur.role),
+      ),
+    );
   }
 
   @override
@@ -147,7 +175,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  const Align(alignment: Alignment.centerLeft, child: ApsLogo()),
+                  const Align(alignment: Alignment.centerLeft, child: ApsLogo(size: 72)),
                   const SizedBox(height: 20),
                   Text('Bon retour\nparmi nous.', style: AppTextStyles.xl),
                   const SizedBox(height: 8),
