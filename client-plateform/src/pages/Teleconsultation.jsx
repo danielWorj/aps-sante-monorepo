@@ -53,12 +53,14 @@
 // nom afficher comme "vous" / "interlocuteur" ; ne conditionne aucune
 // autorisation réelle (déjà gérée par le serveur).
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { obtenirRendezVous } from "../services/medecinService";
 import { estRdvNonPaye, estErreurRdvNonPaye } from "../utils/rdv";
 import { useAuth } from "../context/AuthContext";
 import ConsultationRoom from "../components/visio/ConsultationRoom";
+import ClotureConsultation from "../components/visio/ClotureConsultation";
+import { obtenirBilanVisio } from "../services/visioService";
 import "../assets/styles/teleconsultation.css";
 
 // Doit rester synchronisé avec STATUTS_AUTORISES_VISIO côté serveur
@@ -192,12 +194,41 @@ export default function Teleconsultation() {
   }, [rdv, estLeMedecin]);
 
   const retourPortail = useCallback(() => {
-    navigate(estLeMedecin ? "/portail/medecin-rdv" : "/", { replace: true });
+    navigate(estLeMedecin ? "/portail/medecin-rdv" : "/portail/patient-rdv", { replace: true });
   }, [navigate, estLeMedecin]);
 
+  // Fin de consultation : une seule fois par appel (videoConferenceLeft et
+  // readyToClose peuvent se suivre). La carte de clôture prend le relais.
+  const apiRef = useRef(null);
+  const phaseRef = useRef(phase);
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
   const gererFinAppel = useCallback(() => {
+    if (phaseRef.current !== "session") return;
+    phaseRef.current = "terminee";
+    apiRef.current = null;
     setPhase("terminee");
   }, []);
+
+  // PATIENT : l'autre participant est sorti — si le médecin a clôturé la
+  // consultation, on raccroche proprement (sinon il s'est peut-être juste
+  // déconnecté : on reste dans la salle).
+  const verifierClotureMedecin = useCallback(async () => {
+    if (estLeMedecin || phaseRef.current !== "session") return;
+    try {
+      const bilan = await obtenirBilanVisio(id);
+      if (!bilan.termine || phaseRef.current !== "session") return;
+      try {
+        apiRef.current?.executeCommand("hangup");
+      } catch {
+        // l'appel est déjà terminé
+      }
+      setTimeout(gererFinAppel, 2000);
+    } catch {
+      // Silencieux : nouvel essai au prochain départ d'un participant.
+    }
+  }, [estLeMedecin, id, gererFinAppel]);
 
   // ── Rendu ────────────────────────────────────────────────────────
 
@@ -227,11 +258,12 @@ export default function Teleconsultation() {
   if (phase === "terminee") {
     return (
       <div className="tc-etat-plein-ecran">
-        <i className="fa-solid fa-circle-check tc-etat-icone tc-etat-icone-succes" />
-        <p className="tc-etat-message">La téléconsultation est terminée.</p>
-        <button type="button" className="btn btn-primary btn-sm-aps" onClick={retourPortail}>
-          <i className="fa-solid fa-arrow-left" /> Retour à mes rendez-vous
-        </button>
+        <ClotureConsultation
+          rdvId={rdv.rdv_id}
+          role={estLeMedecin ? "medecin" : "patient"}
+          onFermer={retourPortail}
+          onRejoindre={estLeMedecin ? undefined : () => setPhase("session")}
+        />
       </div>
     );
   }
@@ -239,7 +271,14 @@ export default function Teleconsultation() {
   if (phase === "session") {
     return (
       <div className="tc-session">
-        <ConsultationRoom rdvId={rdv.rdv_id} onCallEnded={gererFinAppel} />
+        <ConsultationRoom
+          rdvId={rdv.rdv_id}
+          onApi={(api) => {
+            apiRef.current = api;
+          }}
+          onCallEnded={gererFinAppel}
+          onParticipantLeft={verifierClotureMedecin}
+        />
       </div>
     );
   }
@@ -250,23 +289,43 @@ export default function Teleconsultation() {
   return (
     <div className="tc-salle-attente">
       <div className="tc-carte">
-        <div className="tc-avatar">{interlocuteur?.initiales}</div>
-        <h1 className="tc-titre">Téléconsultation avec {interlocuteur?.nom}</h1>
-        <p className="tc-creneau">
-          <i className="fa-regular fa-calendar" /> {formaterCreneau(rdv.date_creneau)}
-        </p>
-        {rdv.motif && <p className="tc-motif">« {rdv.motif} »</p>}
-        <p className="tc-note">
-          Vérifiez votre caméra et votre micro avant de rejoindre. La consultation
-          démarrera dans une salle sécurisée, accessible uniquement à vous deux.
-        </p>
-        <div className="tc-actions">
-          <button type="button" className="btn btn-outline-primary btn-sm-aps" onClick={retourPortail}>
-            Annuler
-          </button>
-          <button type="button" className="btn btn-primary btn-sm-aps" onClick={() => setPhase("session")}>
-            <i className="fa-solid fa-video" /> Rejoindre la consultation
-          </button>
+        <div className="tc-carte-bandeau">
+          <div className="tc-avatar">{interlocuteur?.initiales}</div>
+          <div>
+            <span className="tc-surtitre">Téléconsultation</span>
+            <h1 className="tc-titre">{interlocuteur?.nom}</h1>
+          </div>
+        </div>
+        <div className="tc-carte-corps">
+          <div className="tc-infos">
+            <div className="tc-info">
+              <i className="fa-regular fa-calendar" />
+              <span>{formaterCreneau(rdv.date_creneau)}</span>
+            </div>
+            {rdv.motif && (
+              <div className="tc-info is-motif">
+                <i className="fa-solid fa-comment-medical" />
+                <span>« {rdv.motif} »</span>
+              </div>
+            )}
+          </div>
+          <ul className="tc-verifs">
+            <li><i className="fa-solid fa-wifi" /> Une connexion internet stable</li>
+            <li><i className="fa-solid fa-video" /> Caméra et micro autorisés dans le navigateur</li>
+            <li><i className="fa-solid fa-volume-low" /> Un endroit calme et bien éclairé</li>
+          </ul>
+          <div className="tc-actions">
+            <button type="button" className="tcc-btn is-secondaire" onClick={retourPortail}>
+              Plus tard
+            </button>
+            <button type="button" className="tcc-btn" onClick={() => setPhase("session")}>
+              <i className="fa-solid fa-video" /> Rejoindre la consultation
+            </button>
+          </div>
+          <p className="tc-securite">
+            <i className="fa-solid fa-shield-halved" />
+            Salle sécurisée, accessible uniquement à vous deux. Rien n&apos;est enregistré.
+          </p>
         </div>
       </div>
     </div>

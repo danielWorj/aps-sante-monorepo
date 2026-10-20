@@ -29,6 +29,7 @@ import { relancerMessagesSms } from "../services/sms.service.js";
 import { purgerCodesVerification } from "../services/verificationTelephone.service.js";
 import { purgerDemandesConnexion } from "../services/connexionApplication.service.js";
 import { expirerPublicitesNonPayees } from "../services/publicite.service.js";
+import { envoyerRappelsRdv } from "../services/rappelRdv.service.js";
 
 // Fréquence non précisée par le cahier des charges ni par le plan
 // ("fréquence courte, ex. toutes les 15 min") — valeur par défaut
@@ -82,12 +83,22 @@ const CRON_PURGE_CODES_VERIFICATION = process.env.CRON_PURGE_CODES_VERIFICATION 
 // Publicités acceptées non payées dans le délai : place libérée (toutes les 5 min).
 const CRON_EXPIRATION_PUBLICITES = process.env.CRON_EXPIRATION_PUBLICITES || "*/5 * * * *";
 
+// Rappels de RDV (J-3, J-1, H-3, à l'heure) : chaque minute, pour que
+// « c'est l'heure » parte à l'heure du rendez-vous.
+const CRON_RAPPELS_RDV = process.env.CRON_RAPPELS_RDV || "* * * * *";
+
 /**
  * Démarre tous les jobs planifiés du back-end. Appelé une seule fois,
  * après app.listen() (voir index.js) — pas de raison de bloquer le
  * démarrage HTTP en attendant que le scheduler soit prêt.
  */
 export function demarrerScheduler() {
+  cron.schedule(CRON_RAPPELS_RDV, () => {
+    envoyerRappelsRdv().catch((err) => {
+      console.error("[scheduler] Échec envoi des rappels de RDV :", err);
+    });
+  });
+
   cron.schedule(CRON_DETECTION_DEFAILLANCE, () => {
     detecterCreneauxDepasses().catch((err) => {
       // Filet de sécurité : detecterCreneauxDepasses gère déjà ses

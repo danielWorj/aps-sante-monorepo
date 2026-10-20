@@ -53,6 +53,12 @@ IconData iconeNotification(TypeNotification type) {
       return Icons.reviews_outlined;
     case TypeNotification.avisMedecinReponse:
       return Icons.reply_rounded;
+    case TypeNotification.rdvRappel:
+      return Icons.alarm_rounded;
+    case TypeNotification.offreRdvCandidatureRetenue:
+      return Icons.handshake_outlined;
+    case TypeNotification.offreRdvCandidatureNonRetenue:
+      return Icons.cancel_outlined;
     case TypeNotification.inconnu:
       return Icons.notifications_none_outlined;
   }
@@ -64,8 +70,13 @@ ApsTone _teinteNotification(TypeNotification type) {
   switch (type) {
     case TypeNotification.offreRdvNouvelle:
     case TypeNotification.offreRdvReponse:
+    case TypeNotification.offreRdvCandidatureRetenue:
     case TypeNotification.miseEnRelationRecue:
       return ApsTone.violet;
+    case TypeNotification.rdvRappel:
+      return ApsTone.sky;
+    case TypeNotification.offreRdvCandidatureNonRetenue:
+      return ApsTone.neutral;
     case TypeNotification.rdvAReprogrammer:
     case TypeNotification.offreRdvExpiree:
     case TypeNotification.abonnementAssuranceEcheance:
@@ -85,7 +96,9 @@ bool _estNotificationDemande(TypeNotification type) =>
     type == TypeNotification.miseEnRelationRecue ||
     type == TypeNotification.offreRdvNouvelle ||
     type == TypeNotification.offreRdvReponse ||
-    type == TypeNotification.offreRdvExpiree;
+    type == TypeNotification.offreRdvExpiree ||
+    type == TypeNotification.offreRdvCandidatureRetenue ||
+    type == TypeNotification.offreRdvCandidatureNonRetenue;
 
 /// Texte du compteur : « 9+ » au-delà de 9 (comme sur le web).
 String libelleCompteur(int nombre) => nombre > 9 ? '9+' : '$nombre';

@@ -2,10 +2,10 @@
 // Politique de fonds v2 §5 (étape 6, point ouvert E) — POINT UNIQUE
 // d'émission des notifications.
 //
-// Canal retenu : in-app (table `notification`, lue via /api/notifications).
-// Aucune infrastructure e-mail/SMS/push n'existe dans le dépôt (ni SMTP,
-// ni FCM, ni modèle de jeton d'appareil). Un canal supplémentaire se
-// branchera dans `creerNotifications` sans toucher aux appelants.
+// Canaux : in-app (table `notification`, lue via /api/notifications) et
+// push mobile (FCM, push.service.js), branché dans `creerNotifications` :
+// toute notification créée est aussi poussée sur les téléphones du
+// destinataire, sans toucher aux appelants.
 //
 // Idempotence : chaque notification porte une clé unique (`cle`) qui
 // identifie l'ÉVÉNEMENT et le DESTINATAIRE ; `createMany({ skipDuplicates })`
@@ -20,6 +20,7 @@
 
 import prisma from "../lib/prisma.js";
 import { DELAI_REPROGRAMMATION_H } from "./politiqueFonds.service.js";
+import { planifierPush } from "./push.service.js";
 
 /**
  * @param {Array<{ utilisateur_id: string, type: string, rdv_id?: string,
@@ -29,7 +30,11 @@ import { DELAI_REPROGRAMMATION_H } from "./politiqueFonds.service.js";
  */
 export async function creerNotifications(notifications, db = prisma) {
   if (!notifications.length) return { count: 0 };
-  return db.notification.createMany({ data: notifications, skipDuplicates: true });
+  const resultat = await db.notification.createMany({ data: notifications, skipDuplicates: true });
+  // Push différé : relit la base (seules les lignes réellement créées, et
+  // validées si `db` est une transaction, sont poussées — une seule fois).
+  if (resultat?.count) planifierPush(notifications.map((n) => n.cle));
+  return resultat;
 }
 
 const SELECTION_PARTIES = {

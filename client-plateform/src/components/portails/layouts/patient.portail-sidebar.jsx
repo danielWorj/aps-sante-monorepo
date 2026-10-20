@@ -17,14 +17,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import { useAnnoncesNonLues } from "../../annonces/annoncesVues";
-
-const LIENS = [
-  { to: "/portail/patient-rdv", icone: "fa-calendar-check", label: "Rendez-vous", badgeKey: "rdvBadge" },
-  { to: "/portail/patient-demandes", icone: "fa-bullhorn", label: "Demande rapide" },
-  { to: "/portail/patient-messages", icone: "fa-comment-medical", label: "Messages", badgeKey: "messagesBadge" },
-  { to: "/portail/patient-annonces", icone: "fa-bell", label: "Annonces", badgeKey: "annoncesBadge" },
-  { to: "/portail/patient-profil", icone: "fa-user", label: "Profil" },
-];
+import { LIENS_PORTAIL_PATIENT } from "./patient.liens";
 
 /** "Jean" + "Dupont" → "JD". Retombe sur "?" si aucun nom exploitable. */
 function calculerInitiales(prenom, nom) {
@@ -38,7 +31,6 @@ const PatientPortailSidebar = ({
   // Ces props restent surchargeables (tests, storybook, ou tant que le
   // backend n'expose pas encore les données patient dédiées).
   rdvBadge = 0,
-  messagesBadge = 0,
   annoncesBadge,
   solde,
 }) => {
@@ -60,7 +52,7 @@ const PatientPortailSidebar = ({
   const initiales = user ? calculerInitiales(user.prenom, user.nom) : "…";
 
   const annoncesNonLues = useAnnoncesNonLues();
-  const badges = { rdvBadge, messagesBadge, annoncesBadge: annoncesBadge ?? annoncesNonLues };
+  const badges = { rdv: rdvBadge, annonces: annoncesBadge ?? annoncesNonLues };
 
   const handleDeconnexion = async (e) => {
     e.preventDefault();
@@ -84,11 +76,11 @@ const PatientPortailSidebar = ({
         </div>
 
         <nav className="sidebar-nav" aria-label="Rubriques">
-          {LIENS.map((lien) => {
-            const badge = lien.badgeKey ? badges[lien.badgeKey] : null;
+          {LIENS_PORTAIL_PATIENT.map((lien) => {
+            const badge = lien.badge ? badges[lien.badge] : null;
             return (
               <Link key={lien.to} to={lien.to} className={pathname === lien.to ? "active" : undefined}>
-                <i className={`fa-solid ${lien.icone}`}></i> {lien.label}
+                <i className={`fa-solid ${lien.icon}`}></i> {lien.label}
                 {badge ? <span className="nav-badge">{badge}</span> : null}
               </Link>
             );

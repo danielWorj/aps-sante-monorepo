@@ -21,7 +21,10 @@ import { JitsiMeeting } from "@jitsi/react-sdk";
 import { apiFetch } from "../../lib/apiClient";
 import { estErreurRdvNonPaye } from "../../utils/rdv";
 
-function ConsultationRoom({ rdvId, onCallEnded, onReady }) {
+// onApi(externalApi) : API Jitsi, pour raccrocher / terminer pour tous depuis
+// l'habillage (fin de consultation). onParticipantLeft : l'autre participant
+// est sorti (le patient vérifie alors si le médecin a clôturé).
+function ConsultationRoom({ rdvId, onCallEnded, onReady, onApi, onParticipantLeft }) {
   const [visioData, setVisioData] = useState(null);
   const [error, setError] = useState(null);
 
@@ -53,7 +56,7 @@ function ConsultationRoom({ rdvId, onCallEnded, onReady }) {
   if (error) {
     return (
       <div className="p-4 text-center">
-        <p className="text-danger mb-0">{error}</p>
+        <p className="tc-room-erreur mb-0">{error}</p>
       </div>
     );
   }
@@ -62,7 +65,7 @@ function ConsultationRoom({ rdvId, onCallEnded, onReady }) {
     return (
       <div className="p-4 text-center">
         <span className="spinner-border spinner-border-sm me-2"></span>
-        Chargement de la consultation...
+        Connexion à la salle de consultation…
       </div>
     );
   }
@@ -88,6 +91,7 @@ function ConsultationRoom({ rdvId, onCallEnded, onReady }) {
           iframeRef.style.border = "0";
         }}
         onApiReady={(externalApi) => {
+          onApi?.(externalApi);
           // Le SDK appelle onApiReady dès le chargement de l'iframe (avant
           // que le médecin ait rejoint le salon) ; on affine avec
           // videoConferenceJoined pour ne passer "en direct" qu'une fois
@@ -95,6 +99,7 @@ function ConsultationRoom({ rdvId, onCallEnded, onReady }) {
           externalApi.addEventListener("videoConferenceJoined", () => onReady?.(externalApi));
           externalApi.addEventListener("videoConferenceLeft", () => onCallEnded?.());
           externalApi.addEventListener("readyToClose", () => onCallEnded?.());
+          externalApi.addEventListener("participantLeft", () => onParticipantLeft?.());
         }}
       />
     </div>

@@ -65,6 +65,17 @@ class AppColors {
   static const Color sky100 = Color(0xFFE6F0FD);
 
   // ===========================================================
+  // BLEU SANTÉ — téléconsultation (déclinaison posée du bleu ciel,
+  // ni trop foncé ni trop vif ; mêmes valeurs que --bleu-sante-* web)
+  // ===========================================================
+  static const Color bleuSante = Color(0xFF2E6FB7);
+  static const Color bleuSanteFonce = Color(0xFF1D4F8A);
+  static const Color bleuSanteVif = Color(0xFF4A8FDB);
+  static const Color bleuSanteClair = Color(0xFFEEF4FB);
+  static const Color bleuSanteLigne = Color(0xFFD5E3F3);
+  static const Color bleuNuit = Color(0xFF0F2236);
+
+  // ===========================================================
   // ROUGE — urgence, actions destructives
   // ===========================================================
   static const Color red = Color(0xFFE5484D);

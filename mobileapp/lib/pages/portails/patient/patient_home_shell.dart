@@ -5,6 +5,7 @@ import 'package:mobileapp/pages/portails/patient/portail-patient-profil.dart';
 import '../../../components/cards/notifications_bell.dart';
 import '../../../components/navigation/patient-bottom-navigation.dart';
 import '../../../controllers/notification_controller.dart';
+import '../../../utils/navigation_push.dart';
 import 'portail-patient-accueil.dart';
 import 'portail-patient-demandes.dart';
 import 'portail-patient-rdv.dart';
@@ -53,6 +54,38 @@ class _PatientHomeShellState extends ConsumerState<PatientHomeShell> {
     const PortailPatientDemandes(),
     const PortailPatientProfil(),
   ];
+
+  // Notification push touchée : bascule sur l'onglet demandé.
+  @override
+  void initState() {
+    super.initState();
+    demandeOngletPush.addListener(_surDemandePush);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _route = ModalRoute.of(context);
+    if (_route != null) routesShellsPush[EspacePush.patient] = _route!;
+  }
+
+  Route<dynamic>? _route;
+
+  @override
+  void dispose() {
+    demandeOngletPush.removeListener(_surDemandePush);
+    if (routesShellsPush[EspacePush.patient] == _route) {
+      routesShellsPush.remove(EspacePush.patient);
+    }
+    super.dispose();
+  }
+
+  void _surDemandePush() {
+    final demande = demandeOngletPush.value;
+    if (demande == null || demande.espace != EspacePush.patient) return;
+    demandeOngletPush.value = null;
+    setState(() => _index = ongletPatientPush(demande.cible));
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -118,4 +118,27 @@ class VisioRepository {
     );
     return VisioSession.fromJson(donnees as Map<String, dynamic>);
   }
+
+  /// POST /visio/:id/cloture — fin d'appel de l'utilisateur courant.
+  /// Médecin : clôt la consultation. Patient : bilan seul.
+  Future<BilanClotureVisio> cloturer({
+    required String rdvId,
+    required String token,
+  }) async {
+    final donnees = await _post(ApiRealEndpoints.visioCloture(rdvId), token: token);
+    return BilanClotureVisio.fromJson(donnees as Map<String, dynamic>);
+  }
+
+  /// GET /visio/:id/cloture — bilan sans effet (le patient attend la
+  /// clôture par le médecin).
+  Future<BilanClotureVisio> obtenirBilan({
+    required String rdvId,
+    required String token,
+  }) async {
+    final reponse = await http
+        .get(Uri.parse(ApiRealEndpoints.visioCloture(rdvId)),
+            headers: _entetes(token: token, avecJson: false))
+        .timeout(_timeout);
+    return BilanClotureVisio.fromJson(_decoder(reponse) as Map<String, dynamic>);
+  }
 }

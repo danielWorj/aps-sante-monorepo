@@ -251,62 +251,94 @@ body.portail{ background:var(--surface-alt); }
 
 /* ---------------------------- MODALE VISIO (téléconsultation) ---------------------------- */
 /* visio-modal.jsx : grande modale (pas une page dédiée) qui embarque
-   ConsultationRoom (Jitsi). Réutilise les animations rdvFadeIn /
-   rdvSlideUp déjà définies plus haut pour rester cohérent avec .rdv-modal. */
+   ConsultationRoom (Jitsi), habillée en bleu santé (--bleu-sante-*).
+   Réutilise les animations rdvFadeIn / rdvSlideUp définies plus haut. */
 .visio-modal-overlay{
   position:fixed; inset:0; z-index:700;
-  background:rgba(14,18,15,.72); backdrop-filter:blur(3px);
+  background:rgba(12,27,44,.62); backdrop-filter:blur(4px);
   display:flex; align-items:center; justify-content:center; padding:1.5rem;
   animation:rdvFadeIn .18s ease;
 }
 .visio-modal{
-  position:relative; width:100%; max-width:1080px; height:min(720px,88vh);
+  position:relative; width:100%; max-width:1080px; height:min(740px,90vh);
   display:flex; flex-direction:column;
-  background:var(--surface); border-radius:var(--radius-lg);
-  box-shadow:var(--shadow-lg); overflow:hidden;
+  background:var(--surface); border-radius:16px;
+  border:1px solid var(--bleu-sante-ligne);
+  box-shadow:0 24px 60px rgba(15,34,54,.28); overflow:hidden;
   animation:rdvSlideUp .22s ease;
+}
+.visio-modal::before{
+  content:""; position:absolute; inset:0 0 auto 0; height:3px;
+  background:var(--bleu-sante); z-index:1;
 }
 .visio-modal-head{
   display:flex; align-items:center; justify-content:space-between; gap:1rem;
-  padding:1rem 1.3rem; border-bottom:1px solid var(--line);
+  padding:1rem 1.3rem; border-bottom:1px solid var(--bleu-sante-ligne);
   background:var(--surface); flex:none;
 }
-.visio-modal-who{ display:flex; align-items:center; gap:.8rem; min-width:0; }
+.visio-modal-who{ display:flex; align-items:center; gap:.85rem; min-width:0; }
 .visio-modal-avatar{
-  width:44px; height:44px; min-width:44px; border-radius:50%;
-  background:var(--primary-tint); color:var(--primary-dark);
+  position:relative; width:46px; height:46px; min-width:46px; border-radius:50%;
+  background:var(--bleu-sante-clair); color:var(--bleu-sante-fonce);
+  border:1px solid var(--bleu-sante-ligne);
   display:flex; align-items:center; justify-content:center;
   font-family:var(--font-display); font-weight:800; font-size:.92rem;
 }
-.visio-modal-heading h3{ font-size:1rem; margin:0 0 .15rem; }
-.visio-status{ display:inline-flex; align-items:center; gap:.4rem; font-size:.78rem; font-weight:600; color:var(--ink-faint); }
-.visio-status-dot{ width:8px; height:8px; border-radius:50%; background:var(--ink-faint); flex:none; }
+.visio-modal-avatar-badge{
+  position:absolute; right:-3px; bottom:-3px; width:20px; height:20px; border-radius:50%;
+  background:var(--bleu-sante); color:#fff; border:2px solid var(--surface);
+  display:flex; align-items:center; justify-content:center; font-size:.55rem;
+}
+.visio-modal-heading{ min-width:0; }
+.visio-modal-surtitre{
+  display:block; font-size:.68rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--bleu-sante);
+}
+.visio-modal-heading h3{
+  font-size:1.02rem; margin:.1rem 0 0; color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.visio-modal-outils{ display:flex; align-items:center; gap:.6rem; flex:none; }
+.visio-status{
+  display:inline-flex; align-items:center; gap:.45rem; padding:.32rem .7rem; border-radius:999px;
+  font-size:.75rem; font-weight:700; background:var(--bleu-sante-clair); color:var(--bleu-sante-fonce);
+  border:1px solid var(--bleu-sante-ligne);
+}
+.visio-status-dot{ width:7px; height:7px; border-radius:50%; background:var(--bleu-sante-vif); flex:none; }
 .visio-status.is-connecting .visio-status-dot{ background:var(--gold); animation:visioPulse 1.2s ease-in-out infinite; }
-.visio-status.is-live{ color:var(--teal-dark); font-family:var(--font-mono); }
-.visio-status.is-live .visio-status-dot{ background:var(--teal-dark); animation:visioPulse 1.6s ease-in-out infinite; }
+.visio-status.is-live{ font-family:var(--font-mono); }
+.visio-status.is-live .visio-status-dot{ background:var(--bleu-sante); animation:visioPulse 1.6s ease-in-out infinite; }
+.visio-btn-terminer{
+  display:inline-flex; align-items:center; gap:.45rem; height:34px; padding:0 .9rem;
+  border:1px solid var(--urgence-tint); border-radius:999px; background:var(--urgence-tint);
+  color:var(--urgence-dark); font-size:.78rem; font-weight:700; cursor:pointer;
+  transition:background .15s ease, color .15s ease;
+}
+.visio-btn-terminer:hover{ background:var(--urgence); border-color:var(--urgence); color:#fff; }
 .visio-modal-close{
-  flex:none; width:34px; height:34px; border:none; border-radius:50%;
-  background:var(--surface-alt); color:var(--ink-soft);
+  flex:none; width:34px; height:34px; border:1px solid var(--bleu-sante-ligne); border-radius:50%;
+  background:var(--surface); color:var(--ink-soft);
   display:flex; align-items:center; justify-content:center; font-size:.9rem; cursor:pointer;
   transition:background .15s ease, color .15s ease;
 }
-.visio-modal-close:hover{ background:var(--urgence-tint); color:var(--urgence-dark); }
+.visio-modal-close:hover{ background:var(--bleu-sante-clair); color:var(--bleu-sante-fonce); }
 
 .visio-stage{
   flex:1; min-height:0; position:relative;
-  background:linear-gradient(160deg,#1B221D,#10140F);
+  background:var(--bleu-nuit);
   display:flex; align-items:center; justify-content:center;
 }
-.visio-stage p{ color:#EAF2ED; margin:0; }
-.visio-stage .text-danger{ color:#F6A99A !important; }
-.visio-stage .spinner-border{ color:var(--teal) !important; }
+.visio-stage p{ color:#E6EEF8; margin:0; }
+.visio-stage .tc-room-erreur{ color:#F6B4A8; }
+.visio-stage .spinner-border{ color:var(--bleu-sante-vif) !important; }
+.visio-stage > div:not(.tcc-voile){ color:#C9D8EA; }
 
 .visio-modal-foot{
-  flex:none; padding:.6rem 1.3rem; border-top:1px solid var(--line);
-  background:var(--surface-alt); text-align:center;
+  flex:none; padding:.6rem 1.3rem; border-top:1px solid var(--bleu-sante-ligne);
+  background:var(--bleu-sante-clair); text-align:center;
 }
-.visio-modal-foot span{ font-size:.72rem; color:var(--ink-faint); font-weight:600; }
-.visio-modal-foot i{ color:var(--teal-dark); margin-right:.35rem; }
+.visio-modal-foot span{ font-size:.72rem; color:var(--bleu-sante-fonce); font-weight:600; }
+.visio-modal-foot i{ color:var(--bleu-sante); margin-right:.4rem; }
 
 @keyframes visioPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
 
@@ -711,7 +743,10 @@ RESPONSIVE
 
   /* --- Modale visio : plein écran sur mobile --- */
   .visio-modal-overlay{ padding:0; }
-  .visio-modal{ max-width:none; height:100vh; height:100dvh; border-radius:0; }
+  .visio-modal{ max-width:none; height:100vh; height:100dvh; border-radius:0; border:0; }
+  .visio-btn-terminer span{ display:none; }
+  .visio-btn-terminer{ width:34px; padding:0; justify-content:center; }
+  .visio-status{ padding:.28rem .55rem; }
   .visio-modal-head{ padding:.8rem 1rem; }
   .visio-modal-heading h3{ font-size:.92rem; }
 }

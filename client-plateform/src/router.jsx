@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom';
 import App from './App';
+import RacineNavigation from './components/RacineNavigation';
 import Home from './pages/Home';
 import Medecin from './pages/Medecin';
 import APropos from './pages/APropos';
@@ -98,6 +99,10 @@ import PinOublie from './pages/PinOublie.jsx';
 import { AssuranceAnnonces, EspaceAnnonces, MedecinAnnonces, PatientAnnonces } from './components/portails/components/portail-annonces.jsx';
 
 export const router = createBrowserRouter([
+  {
+  // Racine : remet la page en haut à chaque navigation (cf. RacineNavigation).
+  element: <RacineNavigation />,
+  children: [
   {
     // ONBOARDING : sans Navbar ni Footer
     element: <OnboardingLayout />,
@@ -269,5 +274,7 @@ export const router = createBrowserRouter([
         ],
       },
     ],
+  },
+  ],
   },
 ]);

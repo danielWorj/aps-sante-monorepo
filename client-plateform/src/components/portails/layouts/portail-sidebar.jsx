@@ -29,18 +29,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import { useAnnoncesNonLues } from "../../annonces/annoncesVues";
-
-const LIENS = [
-  { to: "/portail/medecin-tableau-de-bord", icone: "fa-chart-line", label: "Tableau de bord" },
-  { to: "/portail/medecin-rdv", icone: "fa-calendar-check", label: "Rendez-vous", badgeKey: "rdvBadge" },
-  { to: "/portail/medecin-demandes", icone: "fa-bullhorn", label: "Demandes patients" },
-  { to: "/portail/medecin-avis", icone: "fa-star", label: "Avis & notes" },
-  { to: "/portail/medecin-annonces", icone: "fa-bell", label: "Annonces", badgeKey: "annoncesBadge" },
-  { to: "/portail/medecin-profil", icone: "fa-user-doctor", label: "Profil" },
-  { to: "/portail/medecin-agenda", icone: "fa-calendar-days", label: "Agenda" },
-  { to: "/portail/medecin-paiements", icone: "fa-wallet", label: "Moyens de paiement" },
-  { to: "/portail/medecin-abonnement", icone: "fa-id-card-clip", label: "Abonnement" },
-];
+import { LIENS_PORTAIL_MEDECIN } from "./medecin.liens";
 
 /** "Jean" + "Dupont" → "JD". Retombe sur "?" si aucun nom exploitable. */
 function calculerInitiales(prenom, nom) {
@@ -82,7 +71,7 @@ const PortailSidebar = ({
   const specialiteAffichee = specialite ?? medecin?.specialite?.nom ?? "";
   const estVerifie = verifie ?? (medecin ? medecin.statut_verification === "publie" : false);
 
-  const badges = { rdvBadge, annoncesBadge: useAnnoncesNonLues() };
+  const badges = { rdv: rdvBadge, annonces: useAnnoncesNonLues() };
 
   const handleDeconnexion = async (e) => {
     e.preventDefault();
@@ -112,11 +101,11 @@ const PortailSidebar = ({
         </div>
 
         <nav className="sidebar-nav" aria-label="Rubriques">
-          {LIENS.map((lien) => {
-            const badge = lien.badgeKey ? badges[lien.badgeKey] : null;
+          {LIENS_PORTAIL_MEDECIN.map((lien) => {
+            const badge = lien.badge ? badges[lien.badge] : null;
             return (
               <Link key={lien.to} to={lien.to} className={pathname === lien.to ? "active" : undefined}>
-                <i className={`fa-solid ${lien.icone}`}></i> {lien.label}
+                <i className={`fa-solid ${lien.icon}`}></i> {lien.label}
                 {badge ? <span className="nav-badge">{badge}</span> : null}
               </Link>
             );

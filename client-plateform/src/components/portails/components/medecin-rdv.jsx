@@ -1056,7 +1056,11 @@ const MedecinRdv = () => {
         <VisioModal
           rdv={visioRdv}
           patientNom={nomPatient(visioRdv)}
-          onClose={fermerVisio}
+          role="medecin"
+          onClose={() => {
+            fermerVisio();
+            chargerRendezVous(); // fin de consultation : statut et fonds ont pu changer
+          }}
         />
       )}
     </>

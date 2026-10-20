@@ -13,7 +13,7 @@
 import prisma from "../lib/prisma.js";
 import { genererJitsiToken } from "../services/jitsi.service.js";
 import { constaterFinConsultation } from "../services/finConsultation.service.js";
-import { ErreurParametreDelai } from "../services/parametreDelaiLiberation.service.js";
+import { ErreurParametreDelai, exigerParametreDelai } from "../services/parametreDelaiLiberation.service.js";
 import { verifierSignatureWebhookVisio } from "../lib/jitsiWebhookService.js";
 import { enregistrerPresence } from "../services/presence.service.js";
 import { partieDepuisParticipant } from "../services/reglesPresenceReprogrammation.service.js";
@@ -241,6 +241,157 @@ export async function traiterFinSessionVisio(req, res, next) {
     if (!fin.deja_constate) inviterAvisPatient(rdv_id);
 
     return res.status(200).json({ traite: true, deja_constate: fin.deja_constate });
+  } catch (err) {
+    next(err);
+  }
+}
+/* -------------------------------------------------------------------
+ * Clôture de la téléconsultation (fin d'appel côté application)
+ * ------------------------------------------------------------------- */
+
+/** Heures avant versement : T figé sur le RDV, sinon T actif du pays du médecin. */
+async function delaiVersementHeures(rdv) {
+  if (rdv.delai_liberation_heures != null) return rdv.delai_liberation_heures;
+  try {
+    return (await exigerParametreDelai(rdv.medecin_id)).heures;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Bilan affiché dans la carte de fin de consultation :
+ *   - médecin : remerciement + « paiement dans X heures » (X = T du pays) ;
+ *   - patient : noter le médecin, laisser un avis, déclarer un litige.
+ */
+async function bilanCloture(rdv_id, role, raison = null) {
+  const rdv = await prisma.rendezVous.findUnique({
+    where: { rdv_id },
+    include: {
+      medecin: { include: { utilisateur: true, specialite: { select: { nom: true } } } },
+      patient: { include: { utilisateur: true } },
+      compte_escrow: { select: { statut: true } },
+      avis_medecin: { select: { avis_id: true } },
+    },
+  });
+
+  const termine = Boolean(rdv.termine_le) || rdv.statut === "honore";
+  const delai = await delaiVersementHeures(rdv);
+  const finEnCours = Boolean(rdv.termine_le) && STATUTS_AUTORISES_VISIO.includes(rdv.statut);
+
+  let raison_non_terminee = null;
+  if (!termine) {
+    if (raison) raison_non_terminee = raison;
+    else if (!STATUTS_AUTORISES_VISIO.includes(rdv.statut)) raison_non_terminee = "statut_incompatible";
+    else if (!rdv.medecin_present_le || !rdv.patient_present_le) raison_non_terminee = "presences_incompletes";
+    else raison_non_terminee = "en_attente_medecin";
+  }
+
+  const interlocuteur =
+    role === "medecin"
+      ? { prenom: rdv.patient.utilisateur.prenom, nom: rdv.patient.utilisateur.nom }
+      : {
+          prenom: rdv.medecin.utilisateur.prenom,
+          nom: rdv.medecin.utilisateur.nom,
+          specialite: rdv.medecin.specialite?.nom ?? null,
+        };
+
+  const bilan = {
+    rdv_id,
+    role,
+    type_rdv: rdv.type_rdv,
+    date_creneau: rdv.date_creneau,
+    statut: rdv.statut,
+    termine,
+    termine_le: rdv.termine_le,
+    raison_non_terminee,
+    delai_liberation_heures: delai,
+    date_liberation:
+      rdv.termine_le && delai != null ? new Date(rdv.termine_le.getTime() + delai * 3_600_000) : null,
+    interlocuteur,
+  };
+
+  if (role === "patient") {
+    bilan.medecin = {
+      medecin_id: rdv.medecin_id,
+      utilisateur: interlocuteur,
+      specialite: rdv.medecin.specialite ? { nom: rdv.medecin.specialite.nom } : null,
+    };
+    bilan.avis = { possible: termine && !rdv.avis_medecin, deja_depose: Boolean(rdv.avis_medecin) };
+    bilan.contestation = { possible: finEnCours && rdv.compte_escrow?.statut === "sequestre" };
+  }
+  return bilan;
+}
+
+async function chargerRdvParticipant(req, res) {
+  const rdv = await prisma.rendezVous.findUnique({
+    where: { rdv_id: req.params.id },
+    include: {
+      medecin: { select: { utilisateur_id: true } },
+      patient: { select: { utilisateur_id: true } },
+    },
+  });
+  if (!rdv) {
+    res.status(404).json({ message: "Rendez-vous introuvable." });
+    return null;
+  }
+  const moi = req.utilisateur.utilisateur_id;
+  const role = rdv.medecin.utilisateur_id === moi ? "medecin" : rdv.patient.utilisateur_id === moi ? "patient" : null;
+  if (!role) {
+    res.status(403).json({ message: "Accès non autorisé à cette consultation." });
+    return null;
+  }
+  if (rdv.type_rdv !== "teleconsultation") {
+    res.status(400).json({ message: "Ce rendez-vous n'est pas une téléconsultation." });
+    return null;
+  }
+  return { rdv, role };
+}
+
+/**
+ * POST /api/visio/:id/cloture — appelé par l'application quand l'appel se
+ * termine pour l'utilisateur courant.
+ *
+ * MÉDECIN : sa sortie de la visio clôt la consultation (comme le webhook
+ * `muc-room-destroyed`, qui reste le filet de sécurité) — fin constatée si
+ * les deux parties ont été présentes, T figé, fonds en séquestre T heures,
+ * patient invité à noter. Idempotent.
+ * PATIENT : sa sortie ne clôt rien (il peut avoir perdu la connexion) ;
+ * l'appel renvoie seulement le bilan.
+ */
+export async function cloturerVisio(req, res, next) {
+  try {
+    const charge = await chargerRdvParticipant(req, res);
+    if (!charge) return undefined;
+    const { rdv, role } = charge;
+
+    let raison = null;
+    if (role === "medecin" && !rdv.termine_le && STATUTS_AUTORISES_VISIO.includes(rdv.statut)) {
+      if (rdv.medecin_present_le && rdv.patient_present_le) {
+        try {
+          const fin = await constaterFinConsultation(rdv.rdv_id, { source: "visio" });
+          if (fin.erreur) raison = fin.erreur.code?.toLowerCase() ?? "fin_non_constatee";
+          else if (!fin.deja_constate) inviterAvisPatient(rdv.rdv_id);
+        } catch (err) {
+          if (!(err instanceof ErreurParametreDelai)) throw err;
+          console.error(`[visio] rdv ${rdv.rdv_id} : aucun délai de libération actif pour le pays du médecin — fin NON constatée.`);
+          raison = "parametre_delai_absent";
+        }
+      }
+    }
+
+    return res.status(200).json(await bilanCloture(rdv.rdv_id, role, raison));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** GET /api/visio/:id/cloture — bilan seul (le patient attend la clôture du médecin). */
+export async function obtenirBilanVisio(req, res, next) {
+  try {
+    const charge = await chargerRdvParticipant(req, res);
+    if (!charge) return undefined;
+    return res.status(200).json(await bilanCloture(charge.rdv.rdv_id, charge.role));
   } catch (err) {
     next(err);
   }

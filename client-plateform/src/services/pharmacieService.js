@@ -116,7 +116,7 @@ export function envoyerMessagePharmacie(pharmacieId, donnees) {
   return apiFetch(`/pharmacies/${pharmacieId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(donnees),
+    body: donnees,
   });
 }
 
@@ -194,7 +194,7 @@ export function creerPlanningGarde(donnees) {
   return apiFetch("/plannings-garde", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(donnees),
+    body: donnees,
   });
 }
 
@@ -203,7 +203,7 @@ export function modifierPlanningGarde(planningId, donnees) {
   return apiFetch(`/plannings-garde/${planningId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(donnees),
+    body: donnees,
   });
 }
 
@@ -237,7 +237,7 @@ export function creerGardePharmacie(donnees) {
   return apiFetch("/gardes-pharmacie", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(donnees),
+    body: donnees,
   });
 }
 
@@ -246,7 +246,7 @@ export function modifierGardePharmacie(gardeId, donnees) {
   return apiFetch(`/gardes-pharmacie/${gardeId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(donnees),
+    body: donnees,
   });
 }
 

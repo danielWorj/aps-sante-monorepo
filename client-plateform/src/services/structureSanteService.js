@@ -164,7 +164,7 @@ export async function envoyerMessageCentre(id, donnees) {
   return apiFetch(`/centres-sante/${id}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(donnees),
+    body: donnees,
   });
 }
 

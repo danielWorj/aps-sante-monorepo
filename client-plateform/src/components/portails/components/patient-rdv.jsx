@@ -45,7 +45,7 @@
 //     rappel que le patient peut contester avant cette date.
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
-import PortailSidebar from "./../layouts/portail-sidebar";
+import PatientPortailSidebar from "./../layouts/patient.portail-sidebar";
 import VisioModal from "./visio-modal";
 import MotifAnnulationModal from "./motif-annulation-modal";
 import AvertissementAnnulation from "./avertissement-annulation";
@@ -965,7 +965,7 @@ const PatientRdv = () => {
               </div>
             </div>
           </main>
-          <PortailSidebar />
+          <PatientPortailSidebar />
         </div>
       </div>
 
@@ -1034,7 +1034,11 @@ const PatientRdv = () => {
         <VisioModal
           rdv={visioRdv}
           patientNom={nomMedecin(visioRdv)}
-          onClose={fermerVisio}
+          role="patient"
+          onClose={() => {
+            fermerVisio();
+            chargerRendezVous(); // fin de consultation : statut et fonds ont pu changer
+          }}
         />
       )}
     </>
