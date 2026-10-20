@@ -79,9 +79,12 @@ const ACTEURS = {
       });
       return agents.map((a) => ({ utilisateur_id: a.utilisateur_id, statut_compte: a.utilisateur.statut_compte }));
     },
-    async acteurDeUtilisateur(utilisateur_id) {
-      const agent = await prisma.agentPharmacie.findUnique({ where: { utilisateur_id }, select: { pharmacie_id: true } });
-      return agent?.pharmacie_id ?? null;
+    // Plusieurs pharmacies possibles par compte : celle de l'espace actif
+    // (« pharmacie:<id> ») si elle est rattachée, sinon la première.
+    async acteurDeUtilisateur(utilisateur_id, espaceActif = null) {
+      const agents = await prisma.agentPharmacie.findMany({ where: { utilisateur_id }, select: { pharmacie_id: true }, orderBy: { agent_id: "asc" } });
+      const prefere = typeof espaceActif === "string" && espaceActif.startsWith("pharmacie:") ? espaceActif.slice(10) : null;
+      return (agents.find((a) => a.pharmacie_id === prefere) ?? agents[0])?.pharmacie_id ?? null;
     },
   },
 
@@ -139,9 +142,12 @@ const ACTEURS = {
       });
       return agents.map((a) => ({ utilisateur_id: a.utilisateur_id, statut_compte: a.utilisateur.statut_compte }));
     },
-    async acteurDeUtilisateur(utilisateur_id) {
-      const agent = await prisma.agentStructureSante.findUnique({ where: { utilisateur_id }, select: { structure_id: true } });
-      return agent?.structure_id ?? null;
+    // Plusieurs structures possibles par compte : celle de l'espace actif
+    // (« structure:<id> ») si elle est rattachée, sinon la première.
+    async acteurDeUtilisateur(utilisateur_id, espaceActif = null) {
+      const agents = await prisma.agentStructureSante.findMany({ where: { utilisateur_id }, select: { structure_id: true }, orderBy: { agent_id: "asc" } });
+      const prefere = typeof espaceActif === "string" && espaceActif.startsWith("structure:") ? espaceActif.slice(10) : null;
+      return (agents.find((a) => a.structure_id === prefere) ?? agents[0])?.structure_id ?? null;
     },
   },
 

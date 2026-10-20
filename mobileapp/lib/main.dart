@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'components/style/app_theme.dart';
 import 'controllers/authentification_controller.dart';
 import 'pages/public/onboarding/onboarding_accueil_page.dart';
+import 'pages/verrou/veille_connexion_web.dart';
+import 'pages/verrou/verrou_application.dart';
 import 'utils/identifiant_installation.dart';
 
 Future<void> main() async {
@@ -68,6 +70,11 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       // professionnel" avant d'atteindre PublicAcceuilPage — qui reste
       // à une navigation "Passer" près (voir OnboardingAccueilPage).
       home: const OnboardingAccueilPage(),
+      // Au-dessus de tous les écrans : verrouillage par code PIN / empreinte,
+      // et validation des connexions web demandées depuis un ordinateur.
+      builder: (context, child) => VerrouApplication(
+        child: VeilleConnexionWeb(child: child ?? const SizedBox.shrink()),
+      ),
     );
   }
 }

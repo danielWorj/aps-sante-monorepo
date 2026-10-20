@@ -1,29 +1,131 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import authService from '../services/authService';
+import { useConfigurationConnexion } from '../hooks/useConfigurationConnexion';
 
 import med7 from '../assets/img/med7.jpg';
+import logoApsa from '../assets/img/logoapsa.jpeg';
 import { useAuth } from '../context/AuthContext';
-import { accueilParRole } from '../utils/roles';
+import { cheminRetour, destinationApresConnexion } from '../utils/apresConnexion';
+
+// Connexion par numéro + code PIN (par défaut) ou, via le petit bouton de
+// bascule, par email + mot de passe (comptes existants, administrateurs).
+// Le dernier mode utilisé est retenu sur cet appareil.
+const CLE_MODE = 'aps.connexion.mode';
+const PAYS_PAR_DEFAUT = 'CM';
+
+function lireMode() {
+  try {
+    return localStorage.getItem(CLE_MODE) === 'email' ? 'email' : 'pin';
+  } catch {
+    return 'pin';
+  }
+}
+
+function retenirMode(mode) {
+  try {
+    localStorage.setItem(CLE_MODE, mode);
+  } catch {
+    /* stockage indisponible : simple confort */
+  }
+}
+
+const styleErreur = { color: 'var(--urgence-dark)' };
+
+function ErreurChamp({ message }) {
+  if (!message) return null;
+  return (
+    <p className="form-hint" style={styleErreur}>
+      <i className="fa-solid fa-circle-exclamation" /> {message}
+    </p>
+  );
+}
 
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { connecter } = useAuth();
+  const { connecter, connecterParPin, ouvrirSession } = useAuth();
+  const config = useConfigurationConnexion();
+  // Connexion validée depuis l'application : { demande_id, secret, code, expire_le }
+  const [demandeApp, setDemandeApp] = useState(null);
+  const sondage = useRef(null);
+  const [mode, setMode] = useState(lireMode);
   const [showPassword, setShowPassword] = useState(false);
-  const [form, setForm] = useState({ email: '', password: '', remember: true });
+  const [form, setForm] = useState({ email: '', password: '', remember: true, pays_iso2: PAYS_PAR_DEFAUT, telephone: '', pin: '' });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [aidePin, setAidePin] = useState(false);
+
+  // Sondage de la demande « Valider sur mon téléphone » (toutes les 2 s).
+  useEffect(() => {
+    if (!demandeApp) return undefined;
+    let actif = true;
+    const sonder = async () => {
+      try {
+        const r = await authService.sonderConnexionApplication(demandeApp.demande_id, demandeApp.secret);
+        if (!actif) return;
+        if (r.access_token) {
+          ouvrirSession(r);
+          const { to, state } = destinationApresConnexion({
+            utilisateur: r.utilisateur,
+            espaces: r.espaces,
+            retour: cheminRetour(location.state?.from),
+          });
+          navigate(to, { replace: true, state });
+          return;
+        }
+        if (r.statut === 'refusee' || r.statut === 'expiree') {
+          setDemandeApp(null);
+          setErrors({ general: r.statut === 'refusee' ? 'Connexion refusée depuis le téléphone.' : 'La demande a expiré. Réessayez.' });
+          return;
+        }
+        sondage.current = setTimeout(sonder, 2000);
+      } catch (err) {
+        if (!actif) return;
+        setDemandeApp(null);
+        setErrors({ general: err?.message || 'Demande interrompue.' });
+      }
+    };
+    sondage.current = setTimeout(sonder, 2000);
+    return () => { actif = false; clearTimeout(sondage.current); };
+  }, [demandeApp, ouvrirSession, navigate, location.state]);
+
+  const validerSurTelephone = async () => {
+    setErrors({});
+    if (!form.telephone.trim()) {
+      setErrors({ telephone: 'Merci de renseigner votre numéro de téléphone.' });
+      return;
+    }
+    try {
+      setDemandeApp(await authService.demanderConnexionApplication(form.telephone, form.pays_iso2));
+    } catch (err) {
+      setErrors({ general: err?.message || 'Demande impossible. Réessayez.' });
+    }
+  };
+
+  const basculer = () => {
+    const suivant = mode === 'pin' ? 'email' : 'pin';
+    setMode(suivant);
+    retenirMode(suivant);
+    setErrors({});
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    const valeur = name === 'pin' ? value.replace(/\D/g, '').slice(0, 6) : value;
+    setForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : valeur }));
   };
 
   const validate = () => {
     const next = {};
-    if (!form.email.trim()) next.email = 'Merci de renseigner votre e-mail.';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) next.email = 'Adresse e-mail invalide.';
-    if (!form.password) next.password = 'Merci de renseigner votre mot de passe.';
+    if (mode === 'pin') {
+      if (!form.telephone.trim()) next.telephone = 'Merci de renseigner votre numéro de téléphone.';
+      if (form.pin.length !== 6) next.pin = 'Le code PIN comporte 6 chiffres.';
+    } else {
+      if (!form.email.trim()) next.email = 'Merci de renseigner votre e-mail.';
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) next.email = 'Adresse e-mail invalide.';
+      if (!form.password) next.password = 'Merci de renseigner votre mot de passe.';
+    }
     return next;
   };
 
@@ -34,8 +136,27 @@ export default function Login() {
     if (Object.keys(next).length > 0) return;
 
     setLoading(true);
-
     try {
+      if (mode === 'pin') {
+        const data = await connecterParPin(form.telephone, form.pays_iso2, form.pin);
+        // PIN provisoire (compte créé par un administrateur) : aucune
+        // session, le token restreint ne sert qu'à choisir son PIN.
+        if (data?.pin_a_changer) {
+          navigate('/creer-mon-pin', {
+            replace: true,
+            state: { mode: 'initial', token: data.token_changement_pin, retour: cheminRetour(location.state?.from) },
+          });
+          return;
+        }
+        const { to, state } = destinationApresConnexion({
+          utilisateur: data.utilisateur,
+          espaces: data.espaces,
+          retour: cheminRetour(location.state?.from),
+        });
+        navigate(to, { replace: true, state });
+        return;
+      }
+
       // AuthContext.connecter() ouvre déjà la session (access_token +
       // user + status) quand la réponse est une session normale. Il ne
       // le fait PAS quand mot_de_passe_a_changer=true : la réponse est
@@ -44,13 +165,9 @@ export default function Login() {
       const data = await connecter(form.email, form.password);
 
       // Mot de passe temporaire détecté par le serveur : aucune session
-      // n'est ouverte (pas d'access_token exploitable, cookie
-      // refresh_token inutile). On redirige vers l'écran de changement
-      // de mot de passe forcé en transmettant le token restreint via le
-      // state de navigation — jamais dans l'URL ni dans un stockage
-      // persistant (localStorage/sessionStorage), pour limiter son
-      // exposition. `replace: true` évite qu'un retour arrière renvoie
-      // sur ce formulaire de login déjà soumis.
+      // n'est ouverte. On redirige vers l'écran de changement de mot de
+      // passe forcé avec le token restreint, transmis par le state de
+      // navigation — jamais dans l'URL ni dans un stockage persistant.
       if (data?.mot_de_passe_a_changer) {
         navigate('/modifier-mot-de-passe', {
           replace: true,
@@ -65,203 +182,213 @@ export default function Login() {
         return;
       }
 
-      // Session normale déjà ouverte par connecter() ci-dessus.
-      // Session normale déjà ouverte par connecter() ci-dessus.
-      const role = data?.utilisateur?.role;
-
-      // Retour à la page qui a demandé la connexion (ex. /pricing), si fournie
-      // par l'appelant (`state.from`, chemin interne uniquement).
-      // `from` : chaîne, ou objet location (posé par RequireAuth).
-      const from = location.state?.from;
-      const retour = typeof from === 'string' ? from : from?.pathname ? `${from.pathname}${from.search ?? ''}` : null;
-      const retourValide = typeof retour === 'string' && retour.startsWith('/') && !retour.startsWith('//');
-      navigate(retourValide ? retour : accueilParRole(role), { replace: true });
-    } catch (err) {
-      setErrors({
-        general:
-          err?.status === 401
-            ? 'E-mail ou mot de passe incorrect.'
-            : err?.message || 'Une erreur est survenue. Merci de réessayer.',
+      // Session ouverte : on propose de créer le code PIN s'il n'existe
+      // pas encore, puis on aiguille vers l'espace.
+      const { to, state } = destinationApresConnexion({
+        utilisateur: data.utilisateur,
+        espaces: data.espaces,
+        retour: cheminRetour(location.state?.from),
+        proposerPin: true,
       });
+      navigate(to, { replace: true, state });
+    } catch (err) {
+      let general;
+      if (mode === 'pin' && (err?.status === 401 || err?.status === 429)) {
+        const restants = err?.data?.essais_restants;
+        general = err.message + (restants && restants <= 3 ? ` Il vous reste ${restants} essai${restants > 1 ? 's' : ''}.` : '');
+      } else if (err?.status === 401) {
+        general = 'E-mail ou mot de passe incorrect.';
+      } else {
+        general = err?.message || 'Une erreur est survenue. Merci de réessayer.';
+      }
+      setErrors({ general });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <section style={{ padding: '3rem 0' }}>
-      <div className="container-aps">
-        <div
-          className="row g-0"
-          style={{
-            maxWidth: 1040,
-            margin: '0 auto',
-            borderRadius: 'var(--radius-lg)',
-            overflow: 'hidden',
-            boxShadow: 'var(--shadow-lg)',
-            border: '1px solid var(--line)',
-          }}
-        >
-          {/* ============================ PANNEAU DE MARQUE ============================ */}
-          <div
-            className="col-md-5 d-none d-md-flex"
-            style={{
-              backgroundColor: 'var(--primary-dark)',
-              backgroundImage: `linear-gradient(160deg, rgba(58,124,100,.92), rgba(47,165,127,.88)), url(${med7})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat',
-              color: '#fff',
-              padding: '3rem 2.4rem',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-            }}
-          >
-            <div>
-              <div className="aps-logo" style={{ color: '#fff', marginBottom: '2.5rem' }}>
-                <span
-                  className="mark"
-                  style={{ background: 'rgba(255,255,255,.16)', boxShadow: 'none' }}
-                >
-                  <i className="fa-solid fa-staff-snake" />
-                </span>
-                ApSa
+    <section className="connexion26">
+      <div className="connexion26-cadre">
+          {/* ============================ FORMULAIRE ============================ */}
+          <div className="connexion26-form">
+            <div className="connexion26-form-int">
+              <Link to="/home" className="connexion26-logo" aria-label="ApSa — accueil">
+                <img src={logoApsa} alt="ApSa — AZA Santé Assurances" />
+              </Link>
+              <h1 className="connexion26-titre">Bon retour parmi nous</h1>
+              <p className="aps-t-s connexion26-sous-titre">
+                {mode === 'pin'
+                  ? 'Connectez-vous avec votre numéro de téléphone et votre code PIN.'
+                  : 'Connectez-vous avec votre adresse e-mail et votre mot de passe.'}
+              </p>
+
+              {/* Bascule entre les deux modes de connexion */}
+              <div className="connexion26-seg" role="tablist" aria-label="Mode de connexion">
+                <button type="button" role="tab" aria-selected={mode === 'pin'}
+                  className={mode === 'pin' ? 'is-on' : ''}
+                  onClick={() => { if (mode !== 'pin') basculer(); }} disabled={loading}>
+                  <i className="fa-solid fa-mobile-screen" /> Numéro + PIN
+                </button>
+                <button type="button" role="tab" aria-selected={mode !== 'pin'}
+                  className={mode !== 'pin' ? 'is-on' : ''}
+                  onClick={() => { if (mode === 'pin') basculer(); }} disabled={loading}>
+                  <i className="fa-solid fa-envelope" /> E-mail
+                </button>
               </div>
 
-              <span
-                className="eyebrow"
-                style={{ background: 'rgba(255,255,255,.16)', color: '#8FE8C6' }}
-              >
-                Espace patient
-              </span>
-              <h1 style={{ color: '#fff', fontSize: '2rem', marginTop: '.7rem' }}>
-                Content de vous revoir.
-              </h1>
-              <p style={{ color: 'rgba(255,255,255,.85)', maxWidth: 340 }}>
-                Connectez-vous pour retrouver vos rendez-vous, vos professionnels favoris et votre
-                dossier santé, en toute sécurité.
-              </p>
-            </div>
+              {location.state?.message && !errors.general && (
+                <div className="alert alert-success" role="status">{location.state.message}</div>
+              )}
 
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '.9rem' }}>
-              <li className="trust-item" style={{ color: 'rgba(255,255,255,.9)' }}>
-                <i className="fa-solid fa-shield-halved" style={{ color: '#6FE0B0' }} />
-                Données médicales chiffrées et protégées
-              </li>
-              <li className="trust-item" style={{ color: 'rgba(255,255,255,.9)' }}>
-                <i className="fa-solid fa-user-doctor" style={{ color: '#6FE0B0' }} />
-                Plus de 1 200 professionnels vérifiés
-              </li>
-              <li className="trust-item" style={{ color: 'rgba(255,255,255,.9)' }}>
-                <i className="fa-solid fa-calendar-check" style={{ color: '#6FE0B0' }} />
-                Rendez-vous confirmés en quelques clics
-              </li>
-            </ul>
-          </div>
-
-          {/* ============================ FORMULAIRE ============================ */}
-          <div className="col-md-7" style={{ background: 'var(--surface)', padding: '3rem 2.6rem' }}>
-            <div style={{ maxWidth: 380, margin: '0 auto' }}>
-              <span className="eyebrow">Connexion</span>
-              <h2 style={{ marginTop: '.6rem', fontSize: '1.6rem' }}>Se connecter à mon compte</h2>
-              <p className="text-muted-soft" style={{ marginBottom: '1.8rem' }}>
-                Pas encore de compte ?{' '}
-                <Link to="/inscription" style={{ fontWeight: 700 }}>
-                  Créez-en un gratuitement
-                </Link>
-              </p>
+              {/* Connexion en attente de validation sur le téléphone */}
+              {demandeApp && (
+                <div className="info-card text-center" style={{ padding: '1.4rem', marginBottom: '1.2rem' }} role="status">
+                  <i className="fa-solid fa-mobile-screen" style={{ fontSize: '1.6rem', color: 'var(--primary)' }} />
+                  <p style={{ margin: '.6rem 0 .3rem', fontWeight: 600 }}>
+                    Ouvrez l’application APS Santé sur votre téléphone et choisissez ce code :
+                  </p>
+                  <div style={{ fontSize: '2.4rem', fontWeight: 800, letterSpacing: '.15em' }}>{demandeApp.code}</div>
+                  <p className="text-muted-soft" style={{ fontSize: '.82rem' }}>
+                    <i className="fa-solid fa-spinner fa-spin" /> En attente de votre validation (2 minutes)…
+                  </p>
+                  <button type="button" className="btn btn-link btn-sm" onClick={() => setDemandeApp(null)}>Annuler</button>
+                </div>
+              )}
 
               {/* Bandeau d'erreur générale (identifiants invalides, erreur réseau…) */}
               {errors.general && (
-                <div
-                  style={{
-                    background: 'rgba(220,53,69,.08)',
-                    border: '1px solid var(--urgence)',
-                    color: 'var(--urgence-dark)',
-                    padding: '.8rem 1rem',
-                    borderRadius: 'var(--radius-md)',
-                    fontSize: '.86rem',
-                    fontWeight: 600,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '.6rem',
-                    marginBottom: '1.2rem',
-                  }}
-                >
+                <div role="alert" className="alert alert-danger d-flex align-items-center gap-2">
                   <i className="fa-solid fa-circle-exclamation" /> {errors.general}
                 </div>
               )}
 
               <form onSubmit={handleSubmit} noValidate>
-                <div className="search-field">
-                  <label className="form-label-aps" htmlFor="login-email">Adresse e-mail</label>
-                  <div className="input-icon">
-                    <i className="fa-solid fa-envelope" />
-                    <input
-                      type="email"
-                      id="login-email"
-                      name="email"
-                      className="form-control"
-                      placeholder="vous@exemple.com"
-                      value={form.email}
-                      onChange={handleChange}
-                      autoComplete="email"
-                      disabled={loading}
-                    />
-                  </div>
-                  {errors.email && (
-                    <p className="form-hint" style={{ color: 'var(--urgence-dark)' }}>
-                      <i className="fa-solid fa-circle-exclamation" /> {errors.email}
-                    </p>
-                  )}
-                </div>
+                {mode === 'pin' ? (
+                  <>
+                    <div className="search-field">
+                      <label className="form-label-aps" htmlFor="login-telephone">Numéro de téléphone</label>
+                      <div className="input-icon">
+                        <i className="fa-solid fa-phone" />
+                        <input
+                          type="tel"
+                          id="login-telephone"
+                          name="telephone"
+                          className="form-control"
+                          placeholder="6XX XX XX XX"
+                          value={form.telephone}
+                          onChange={handleChange}
+                          autoComplete="tel"
+                          inputMode="tel"
+                          disabled={loading}
+                        />
+                      </div>
+                      <ErreurChamp message={errors.telephone} />
+                    </div>
 
-                <div className="search-field">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <label className="form-label-aps" htmlFor="login-password">Mot de passe</label>
-                    <Link to="/mot-de-passe-oublie" style={{ fontSize: '.78rem', fontWeight: 600 }}>
-                      Mot de passe oublié ?
-                    </Link>
-                  </div>
-                  <div className="input-icon" style={{ position: 'relative' }}>
-                    <i className="fa-solid fa-lock" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      id="login-password"
-                      name="password"
-                      className="form-control"
-                      placeholder="••••••••"
-                      value={form.password}
-                      onChange={handleChange}
-                      autoComplete="current-password"
-                      style={{ paddingRight: '2.6rem' }}
-                      disabled={loading}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((s) => !s)}
-                      aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-                      style={{
-                        position: 'absolute',
-                        right: '.85rem',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--ink-faint)',
-                        cursor: 'pointer',
-                        padding: 0,
-                      }}
-                    >
-                      <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`} />
-                    </button>
-                  </div>
-                  {errors.password && (
-                    <p className="form-hint" style={{ color: 'var(--urgence-dark)' }}>
-                      <i className="fa-solid fa-circle-exclamation" /> {errors.password}
-                    </p>
-                  )}
-                </div>
+                    <div className="search-field">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <label className="form-label-aps" htmlFor="login-pin">Code PIN (6 chiffres)</label>
+                        <button
+                          type="button"
+                          className="btn btn-link p-0"
+                          style={{ fontSize: '.78rem', fontWeight: 600 }}
+                          onClick={() => (config?.verification_telephone ? navigate('/pin-oublie') : setAidePin((v) => !v))}
+                        >
+                          Code PIN oublié ?
+                        </button>
+                      </div>
+                      <div className="input-icon">
+                        <i className="fa-solid fa-key" />
+                        <input
+                          type="password"
+                          id="login-pin"
+                          name="pin"
+                          className="form-control"
+                          placeholder="••••••"
+                          value={form.pin}
+                          onChange={handleChange}
+                          inputMode="numeric"
+                          autoComplete="current-password"
+                          maxLength={6}
+                          style={{ letterSpacing: '.4em' }}
+                          disabled={loading}
+                        />
+                      </div>
+                      <ErreurChamp message={errors.pin} />
+                      {aidePin && (
+                        <p className="form-hint">
+                          Connectez-vous avec votre email et votre mot de passe (bouton ci-dessous), puis choisissez un
+                          nouveau code PIN. Sans email, contactez le support APS Santé.
+                        </p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="search-field">
+                      <label className="form-label-aps" htmlFor="login-email">Adresse e-mail</label>
+                      <div className="input-icon">
+                        <i className="fa-solid fa-envelope" />
+                        <input
+                          type="email"
+                          id="login-email"
+                          name="email"
+                          className="form-control"
+                          placeholder="vous@exemple.com"
+                          value={form.email}
+                          onChange={handleChange}
+                          autoComplete="email"
+                          disabled={loading}
+                        />
+                      </div>
+                      <ErreurChamp message={errors.email} />
+                    </div>
+
+                    <div className="search-field">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <label className="form-label-aps" htmlFor="login-password">Mot de passe</label>
+                        <Link to="/mot-de-passe-oublie" style={{ fontSize: '.78rem', fontWeight: 600 }}>
+                          Mot de passe oublié ?
+                        </Link>
+                      </div>
+                      <div className="input-icon" style={{ position: 'relative' }}>
+                        <i className="fa-solid fa-lock" />
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          id="login-password"
+                          name="password"
+                          className="form-control"
+                          placeholder="••••••••"
+                          value={form.password}
+                          onChange={handleChange}
+                          autoComplete="current-password"
+                          style={{ paddingRight: '2.6rem' }}
+                          disabled={loading}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((s) => !s)}
+                          aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                          style={{
+                            position: 'absolute',
+                            right: '.85rem',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--ink-faint)',
+                            cursor: 'pointer',
+                            padding: 0,
+                          }}
+                        >
+                          <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`} />
+                        </button>
+                      </div>
+                      <ErreurChamp message={errors.password} />
+                    </div>
+                  </>
+                )}
 
                 <div className="form-check mb-3" style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
                   <input
@@ -291,29 +418,36 @@ export default function Login() {
                 </button>
               </form>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '.8rem', margin: '1.6rem 0' }}>
-                <span style={{ flex: 1, height: 1, background: 'var(--line)' }} />
-                <span className="text-faint" style={{ fontSize: '.78rem' }}>ou continuer avec</span>
-                <span style={{ flex: 1, height: 1, background: 'var(--line)' }} />
-              </div>
-
-              <div className="d-flex gap-2">
-                <button type="button" className="btn btn-outline-primary btn-block-aps">
-                  <i className="fa-brands fa-google" /> Google
+              {mode === 'pin' && !demandeApp && (
+                <button type="button" className="btn btn-outline-primary btn-block-aps mt-2" onClick={validerSurTelephone} disabled={loading}>
+                  <i className="fa-solid fa-mobile-screen-button" /> Valider sur mon téléphone (sans code PIN)
                 </button>
-                <button type="button" className="btn btn-outline-primary btn-block-aps">
-                  <i className="fa-brands fa-apple" /> Apple
-                </button>
-              </div>
+              )}
 
-              <p className="text-faint" style={{ fontSize: '.76rem', marginTop: '1.8rem', textAlign: 'center' }}>
+              <p className="connexion26-inscription">
+                Pas encore de compte ? <Link to="/inscription" className="aps-lnk">Créer un compte</Link>
+              </p>
+
+              <p className="connexion26-legal">
                 En vous connectant, vous acceptez nos{' '}
                 <Link to="/conditions">conditions d&apos;utilisation</Link> et notre{' '}
                 <Link to="/confidentialite">politique de confidentialité</Link>.
               </p>
             </div>
           </div>
-        </div>
+
+          {/* ============================ PANNEAU PHOTO ============================ */}
+          <div className="connexion26-visuel" aria-hidden="true">
+            <div className="connexion26-photo" style={{ backgroundImage: `url(${med7})` }}>
+              <div className="connexion26-carte">
+                <ul className="connexion26-garanties">
+                  <li><span className="aps-ic is-sm"><i className="fa-solid fa-shield-halved" /></span> Données médicales chiffrées et protégées</li>
+                  <li><span className="aps-ic is-sm"><i className="fa-solid fa-user-doctor" /></span> Professionnels vérifiés à l&apos;Ordre</li>
+                  <li><span className="aps-ic is-sm"><i className="fa-solid fa-lock" /></span> Paiement sous séquestre jusqu&apos;à la consultation</li>
+                </ul>
+              </div>
+            </div>
+          </div>
       </div>
     </section>
   );

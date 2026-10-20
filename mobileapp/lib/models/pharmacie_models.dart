@@ -365,11 +365,15 @@ class AgentPharmacieCree {
   final UtilisateurAgentResume utilisateur;
   final String? motDePasseTemporaire;
 
+  /// Fiche rattachée au compte connecté (nouvel espace, aucun secret).
+  final bool rattacheAuCompte;
+
   const AgentPharmacieCree({
     required this.agentId,
     required this.fonction,
     required this.utilisateur,
     this.motDePasseTemporaire,
+    this.rattacheAuCompte = false,
   });
 
   factory AgentPharmacieCree.fromJson(Map<String, dynamic> json) {
@@ -379,6 +383,7 @@ class AgentPharmacieCree {
       utilisateur: UtilisateurAgentResume.fromJson(
           json['utilisateur'] as Map<String, dynamic>),
       motDePasseTemporaire: _lire<String>(json, 'mot_de_passe_temporaire'),
+      rattacheAuCompte: json['rattache_au_compte'] == true,
     );
   }
 

@@ -1,90 +1,104 @@
 import { Link } from 'react-router-dom';
-import { useState } from 'react';
-import { useToast } from './feedback';
 import logoApsa from '../assets/img/logoapsa.jpeg';
+import '../assets/styles/footer-2026.css';
+import { useTelechargementApk } from '../hooks/useTelechargementApk';
+import { useToast } from './feedback';
 
+// Pied de page public — refonte UI web 2026 (mobile/new-web-ui.html).
+// Le bouton « Télécharger l'APK » télécharge directement l'APK active
+// publiée depuis le back-office (Gestion des APKs), comme l'accueil.
 export default function Footer() {
-  const [email, setEmail] = useState('');
+  const apk = useTelechargementApk();
   const toast = useToast();
 
-  const handleSubscribe = (e) => {
-    e.preventDefault();
-    if (email) {
-      toast.succes('Merci de vous être abonné !');
-      setEmail('');
+  async function telecharger() {
+    if (!(await apk.lancer())) {
+      toast.erreur('Le téléchargement de l’application a échoué. Réessayez dans quelques instants.');
     }
-  };
+  }
 
   return (
     <footer className="aps-footer">
       <div className="container-aps">
-        {/* Newsletter Card */}
-        <div className="newsletter-card">
-          <h4>Abonnez-vous à notre newsletter !</h4>
-          <p>Restez informé about news, wellness, & more</p>
-          <form onSubmit={handleSubscribe} className="newsletter-form">
-            <input
-              type="email"
-              placeholder="Votre adresse email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <button type="submit">S'abonner</button>
-          </form>
-        </div>
-
-        <div className="row g-4">
-          <div className="col-lg-4">
-            <Link to="/" className="aps-logo aps-footer-logo" style={{ color: '#fff' }}>
-              <img src={logoApsa} alt="ApSa" className="aps-logo-img" />
-              ApSa
+        <div className="aps-footer-grid">
+          <div className="aps-footer-marque">
+            <Link to="/home" className="aps-footer-logo" aria-label="ApSa — accueil">
+              <img src={logoApsa} alt="ApSa — AZA Santé Assurances" />
             </Link>
-            <p className="mt-3" style={{ fontSize: '.87rem', maxWidth: 320 , color: '#fff'}}>
-              La plateforme qui connecte patients et professionnels de santé, avec un paiement sécurisé à chaque étape.
+            <p className="aps-footer-pitch">
+              AZA PROXI SANTÉ ASSURANCES relie patients, médecins, pharmacies, structures de santé
+              et assureurs, avec un paiement sécurisé à chaque étape.
             </p>
-            <div className="social-row mt-3">
+            <div className="social-row">
               <a href="#" aria-label="Facebook"><i className="fa-brands fa-facebook-f" /></a>
               <a href="#" aria-label="X"><i className="fa-brands fa-x-twitter" /></a>
               <a href="#" aria-label="LinkedIn"><i className="fa-brands fa-linkedin-in" /></a>
             </div>
           </div>
 
-          <div className="col-6 col-lg-2">
-            <h5>Parcours santé</h5>
+          <div>
+            <h5>Patients</h5>
             <ul className="footer-links">
               <li><Link to="/medecin">Trouver un médecin</Link></li>
-              <li><Link to="/home#pharmacies">Pharmacies de garde</Link></li>
+              <li><Link to="/demande-rapide">Demande express</Link></li>
               <li><Link to="/urgences">Urgences</Link></li>
+              <li><Link to="/creer-patient">Créer un compte patient</Link></li>
+            </ul>
+          </div>
+
+          <div>
+            <h5>Annuaires</h5>
+            <ul className="footer-links">
+              <li><Link to="/pharmacie">Pharmacies</Link></li>
+              <li><Link to="/structure-sante">Structures de santé</Link></li>
               <li><Link to="/assurance">Assurances</Link></li>
             </ul>
           </div>
 
-          <div className="col-6 col-lg-2">
+          <div>
             <h5>Professionnels</h5>
             <ul className="footer-links">
-              <li><Link to="/home#rejoindre">Devenir médecin</Link></li>
-              <li><Link to="/home#rejoindre">Inscrire un service</Link></li>
-              <li><a href="#">Espace pro</a></li>
+              <li><Link to="/inscription">Devenir partenaire</Link></li>
+              <li><Link to="/pricing">Abonnements</Link></li>
+              <li><Link to="/publicite/reserver">Publicité</Link></li>
+              <li><Link to="/login">Espace pro</Link></li>
             </ul>
           </div>
 
-          <div className="col-6 col-lg-2">
-            <h5>Ressources</h5>
-            <ul className="footer-links">
-              <li><a href="#">Aide / FAQ</a></li>
-              <li><a href="#">Contact</a></li>
-              <li><a href="#">CGU</a></li>
-              <li><a href="#">Confidentialité</a></li>
-            </ul>
-          </div>
-
-          <div className="col-6 col-lg-2">
-            <h5>Entreprise</h5>
-            <ul className="footer-links">
-              <li><a href="#">À propos</a></li>
-              <li><a href="#">Mentions légales</a></li>
-            </ul>
+          <div>
+            <h5>Application mobile</h5>
+            <button
+              type="button"
+              className="btn btn-dark btn-sm-aps"
+              onClick={telecharger}
+              disabled={!apk.disponible || apk.enCours}
+              title={apk.disponible ? undefined : 'Application momentanément indisponible au téléchargement'}
+            >
+              {apk.enCours ? (
+                <><i className="fa-solid fa-spinner fa-spin" /> Téléchargement… {apk.libelleProgression}</>
+              ) : (
+                <><i className="fa-solid fa-download" /> Télécharger l&apos;APK</>
+              )}
+            </button>
+            {apk.enCours && (
+              <div
+                className="progress mt-2"
+                role="progressbar"
+                aria-label="Progression du téléchargement de l'application"
+                aria-valuenow={apk.progression}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                style={{ maxWidth: 220, height: 6 }}
+              >
+                <div
+                  className="progress-bar progress-bar-striped progress-bar-animated"
+                  style={{ width: apk.tailleInconnue ? '100%' : `${apk.progression}%` }}
+                />
+              </div>
+            )}
+            <div className="aps-footer-urgence">
+              En cas d&apos;urgence : <Link to="/urgences">numéros de votre pays</Link>
+            </div>
           </div>
         </div>
 

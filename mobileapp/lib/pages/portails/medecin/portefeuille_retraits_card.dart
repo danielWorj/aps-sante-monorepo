@@ -20,6 +20,7 @@ import '../../../models/rendez_vous_models.dart'
 import '../../../repositories/rendez_vous_repository.dart' show ApiException;
 import '../../../repositories/retrait_repository.dart';
 import '../../../utils/fonds.dart' as fonds;
+import '../../espaces/confirmation_pin.dart';
 
 String _fcfa(int n) {
   final s = n.abs().toString();
@@ -131,13 +132,17 @@ class _PortefeuilleRetraitsCardState
     );
     if (saisie == null || !mounted) return;
 
+    // Retrait : code PIN confirmé juste avant (exigé par le serveur).
+    final jeton = await jetonAvecPin(context, ref);
+    if (jeton == null || !mounted) return;
+
     setState(() => _envoiEnCours = true);
     try {
       await ref.read(retraitControllerProvider.notifier).demander(
             medecinId: widget.medecinId,
             mobileMoneyId: saisie.mobileMoneyId,
             montant: saisie.montant,
-            token: token,
+            token: jeton,
           );
       _afficher('Demande enregistrée : le montant est réservé jusqu\'à sa validation.');
     } on ApiException catch (e) {

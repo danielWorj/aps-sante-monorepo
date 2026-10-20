@@ -41,6 +41,16 @@ export const ROLES_ESPACE = Object.freeze({
     ROLES.AGENT_PHARMACIE,
     ROLES.AGENT_STRUCTURE_SANTE,
   ],
+  // Pages du compte lui-même (choisir son espace, créer son code PIN) :
+  // tout compte non administrateur.
+  compte: [
+    ROLES.PATIENT,
+    ROLES.MEDECIN,
+    ROLES.AGENT_ASSURANCE,
+    ROLES.AGENT_PHARMACIE,
+    ROLES.AGENT_STRUCTURE_SANTE,
+    ROLES.ANNONCEUR,
+  ],
   // /mes-annonces : espaces sans portail dédié (les autres rôles ont la
   // rubrique dans leur portail).
   annonces: [ROLES.AGENT_PHARMACIE, ROLES.AGENT_STRUCTURE_SANTE, ROLES.ANNONCEUR],
@@ -48,12 +58,27 @@ export const ROLES_ESPACE = Object.freeze({
 
 const ACCUEIL_PAR_ROLE = Object.freeze({
   [ROLES.PATIENT]: '/portail/patient-rdv',
-  [ROLES.MEDECIN]: '/portail/medecin-agenda',
+  [ROLES.MEDECIN]: '/portail/medecin-tableau-de-bord',
   [ROLES.AGENT_ASSURANCE]: '/portail/assurance',
   [ROLES.AGENT_PHARMACIE]: '/mon-espace-pharmacie',
   [ROLES.AGENT_STRUCTURE_SANTE]: '/mon-espace-structure',
   [ROLES.ANNONCEUR]: '/portail/annonceur',
 });
+
+// Page d'accueil de chaque type d'espace (voir GET /auth/espaces).
+const ACCUEIL_PAR_ESPACE = Object.freeze({
+  patient: '/portail/patient-rdv',
+  medecin: '/portail/medecin-tableau-de-bord',
+  assurance: '/portail/assurance',
+  pharmacie: '/mon-espace-pharmacie',
+  structure: '/mon-espace-structure',
+  publicites: '/portail/annonceur',
+});
+
+/** Page d'accueil d'un espace (objet renvoyé par GET /auth/espaces). */
+export function accueilEspace(espace) {
+  return ACCUEIL_PAR_ESPACE[espace?.type] ?? '/home';
+}
 
 /** Page d'accueil de l'espace du rôle, ou '/home' s'il n'en a pas sur la plateforme. */
 export function accueilParRole(role) {
@@ -62,4 +87,31 @@ export function accueilParRole(role) {
 
 export function aUnRole(user, roles) {
   return Boolean(user?.role) && roles.includes(user.role);
+}
+
+// Chemins privés -> rôles admis, dans le même ordre que les gardes de
+// router.jsx (à tenir à jour avec lui). Sert à écarter une page de retour
+// après connexion qui n'est pas celle du compte connecté (ex. retour vers
+// le portail médecin mémorisé à la déconnexion, puis connexion patient).
+const ROLES_PAR_CHEMIN = [
+  [/^\/portail\/medecin-/, ROLES_ESPACE.medecin],
+  [/^\/portail\/patient-/, ROLES_ESPACE.patient],
+  [/^\/portail\/consultation\//, ROLES_ESPACE.consultation],
+  [/^\/portail\/assurance/, ROLES_ESPACE.assurance],
+  [/^\/portail\/annonceur/, ROLES_ESPACE.publicite],
+  [/^\/publicite\/[^/]+\/paiement/, ROLES_ESPACE.publicite],
+  [/^\/mon-espace-assurance/, ROLES_ESPACE.assurance],
+  [/^\/assurances\/[^/]+\/gestion/, ROLES_ESPACE.assurance],
+  [/^\/mon-espace-pharmacie/, ROLES_ESPACE.pharmacie],
+  [/^\/pharmacie\/[^/]+\/gestion/, ROLES_ESPACE.pharmacie],
+  [/^\/mon-espace-structure/, ROLES_ESPACE.structure],
+  [/^\/structure-sante\/[^/]+\/gestion/, ROLES_ESPACE.structure],
+  [/^\/mes-annonces/, ROLES_ESPACE.annonces],
+  [/^\/choisir-espace/, ROLES_ESPACE.compte],
+];
+
+/** Le rôle peut-il ouvrir ce chemin ? Toujours vrai pour une page publique. */
+export function cheminAccessible(chemin, role) {
+  const regle = ROLES_PAR_CHEMIN.find(([motif]) => motif.test(chemin));
+  return !regle || (Boolean(role) && regle[1].includes(role));
 }

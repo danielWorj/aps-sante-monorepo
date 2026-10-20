@@ -478,6 +478,26 @@ model Utilisateur {
   mot_de_passe_temporaire Boolean   @default(false)
   mot_de_passe_expire_le  DateTime?
 
+  // ── Connexion numéro + code PIN (parcours B, révision 3 de la
+  // conception « sécurisation de la connexion ») ──
+  // Numéro de connexion normalisé (international sans « + »). Distinct
+  // de `telephone` (saisie libre historique, ni unique ni normalisée).
+  telephone_connexion String?   @unique @db.VarChar(20)
+  // Vrai seulement après un code reçu par WhatsApp/SMS (aucun canal
+  // ouvert pour l'instant : les numéros restent « non vérifiés »).
+  telephone_verifie   Boolean   @default(false)
+  // PIN à 6 chiffres, haché comme un mot de passe.
+  pin_hash            String?   @db.VarChar(255)
+  // PIN donné par un administrateur : à changer à la première connexion.
+  pin_provisoire      Boolean   @default(false)
+  // Limite d'essais PAR COMPTE : 5 erreurs -> blocage, durée doublée à
+  // chaque blocage successif (remise à zéro après une connexion réussie).
+  pin_echecs          Int       @default(0)
+  pin_bloque_jusqu_au DateTime?
+  pin_nb_blocages     Int       @default(0)
+  // Dernier espace ouvert (« patient », « medecin », « pharmacie:<id> »…).
+  dernier_espace      String?   @db.VarChar(80)
+
   role Role @relation(fields: [role_id], references: [role_id])
   pays Pays @relation(fields: [pays_id], references: [pays_id])
 
@@ -487,16 +507,19 @@ model Utilisateur {
   messages_whatsapp MessageWhatsapp[]
   // SMS qui lui ont été adressés (journal d'envoi, Twilio).
   messages_sms      MessageSms[]
+  // Connexions web à valider depuis l'application mobile.
+  demandes_connexion_web DemandeConnexionWeb[]
 
   medecin               Medecin?
   patient               Patient?
   refresh_tokens        RefreshToken[]
   jetons_revoques       JetonRevoque[]
-  agent_structure_sante AgentStructureSante?
-  agent_pompes_funebres AgentPompesFunebres?
-  agent_assurance       AgentAssurance?
-  agent_pharmacie       AgentPharmacie?
-  agent_ambulance       AgentAmbulance?
+  // Rattachements d'agent : plusieurs fiches possibles par compte (espaces).
+  agents_structure_sante AgentStructureSante[]
+  agents_pompes_funebres AgentPompesFunebres[]
+  agents_assurance       AgentAssurance[]
+  agents_pharmacie       AgentPharmacie[]
+  agents_ambulance       AgentAmbulance[]
   avis_pharmacie        AvisPharmacie[]
 
   // Module transverse Gestion des médecins — voir plus bas dans ce fichier.
@@ -677,6 +700,9 @@ model RefreshToken {
   user_agent      String?            @db.VarChar(255)
   ip_creation     String?            @db.VarChar(45)
   statut          StatutRefreshToken
+  // Espace actif de la session (« patient », « pharmacie:<id> »…),
+  // repris à chaque renouvellement du jeton d'accès.
+  espace          String?            @db.VarChar(80)
 
   utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
 
@@ -720,7 +746,7 @@ model JetonRevoque {
 model AgentStructureSante {
   agent_id String @id @default(uuid()) @db.Uuid
 
-  utilisateur_id String @unique @db.Uuid
+  utilisateur_id String @db.Uuid
   structure_id   String @db.Uuid
   fonction       String @db.VarChar(100)
 
@@ -728,13 +754,17 @@ model AgentStructureSante {
   structure   StructureSante @relation(fields: [structure_id], references: [structure_id])
 
   @@index([structure_id])
+  // Option A (espaces multiples) : un compte peut gérer plusieurs fiches,
+  // une seule ligne par couple compte / fiche.
+  @@unique([utilisateur_id, structure_id])
+  @@index([utilisateur_id])
   @@map("agent_structure_sante")
 }
 
 model AgentPompesFunebres {
   agent_id String @id @default(uuid()) @db.Uuid
 
-  utilisateur_id     String @unique @db.Uuid
+  utilisateur_id     String @db.Uuid
   pompes_funebres_id String @db.Uuid
   fonction           String @db.VarChar(100)
 
@@ -742,13 +772,17 @@ model AgentPompesFunebres {
   pompes_funebres PompesFunebres @relation(fields: [pompes_funebres_id], references: [pompes_funebres_id])
 
   @@index([pompes_funebres_id])
+  // Option A (espaces multiples) : un compte peut gérer plusieurs fiches,
+  // une seule ligne par couple compte / fiche.
+  @@unique([utilisateur_id, pompes_funebres_id])
+  @@index([utilisateur_id])
   @@map("agent_pompes_funebres")
 }
 
 model AgentAssurance {
   agent_id String @id @default(uuid()) @db.Uuid
 
-  utilisateur_id       String @unique @db.Uuid
+  utilisateur_id       String @db.Uuid
   service_assurance_id String @db.Uuid
   fonction             String @db.VarChar(100)
 
@@ -756,13 +790,17 @@ model AgentAssurance {
   service_assurance ServiceAssurance @relation(fields: [service_assurance_id], references: [service_assurance_id])
 
   @@index([service_assurance_id])
+  // Option A (espaces multiples) : un compte peut gérer plusieurs fiches,
+  // une seule ligne par couple compte / fiche.
+  @@unique([utilisateur_id, service_assurance_id])
+  @@index([utilisateur_id])
   @@map("agent_assurance")
 }
 
 model AgentPharmacie {
   agent_id String @id @default(uuid()) @db.Uuid
 
-  utilisateur_id String @unique @db.Uuid
+  utilisateur_id String @db.Uuid
   pharmacie_id   String @db.Uuid
   fonction       String @db.VarChar(100)
 
@@ -770,13 +808,17 @@ model AgentPharmacie {
   pharmacie   Pharmacie   @relation(fields: [pharmacie_id], references: [pharmacie_id])
 
   @@index([pharmacie_id])
+  // Option A (espaces multiples) : un compte peut gérer plusieurs fiches,
+  // une seule ligne par couple compte / fiche.
+  @@unique([utilisateur_id, pharmacie_id])
+  @@index([utilisateur_id])
   @@map("agent_pharmacie")
 }
 
 model AgentAmbulance {
   agent_id String @id @default(uuid()) @db.Uuid
 
-  utilisateur_id       String @unique @db.Uuid
+  utilisateur_id       String @db.Uuid
   service_ambulance_id String @db.Uuid
   fonction             String @db.VarChar(100)
 
@@ -784,6 +826,10 @@ model AgentAmbulance {
   service_ambulance ServiceAmbulance @relation(fields: [service_ambulance_id], references: [service_ambulance_id])
 
   @@index([service_ambulance_id])
+  // Option A (espaces multiples) : un compte peut gérer plusieurs fiches,
+  // une seule ligne par couple compte / fiche.
+  @@unique([utilisateur_id, service_ambulance_id])
+  @@index([utilisateur_id])
   @@map("agent_ambulance")
 }
 
@@ -3266,4 +3312,45 @@ model CodeVerification {
   @@index([telephone, objet, date_creation])
   @@index([adresse_ip, date_creation])
   @@map("code_verification")
+}
+
+// =====================================================================
+// Connexion web validée depuis l'application mobile
+//
+// Le navigateur demande une connexion pour un numéro ; l'application
+// (déjà connectée) affiche la demande et l'utilisateur choisit le code
+// affiché par le navigateur parmi trois (anti-validation par réflexe).
+// Le navigateur sonde avec un secret (haché ici) et reçoit la session
+// une seule fois. Numéro inconnu : demande « leurre » sans utilisateur,
+// même réponse (pas d'énumération des comptes).
+// =====================================================================
+
+enum StatutDemandeConnexionWeb {
+  en_attente
+  approuvee
+  refusee
+  consommee
+}
+
+model DemandeConnexionWeb {
+  demande_connexion_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id      String?                   @db.Uuid
+  secret_hache        String                    @db.VarChar(64)
+  code_correspondance String                    @db.VarChar(2)
+  // Trois codes proposés dans l'application (dont le bon), ex. « 12,47,83 ».
+  codes_proposes      String                    @db.VarChar(20)
+  statut              StatutDemandeConnexionWeb @default(en_attente)
+  user_agent          String?                   @db.VarChar(255)
+  adresse_ip          String?                   @db.VarChar(45)
+  expire_le           DateTime
+  date_decision       DateTime?
+
+  date_creation DateTime @default(now())
+
+  utilisateur Utilisateur? @relation(fields: [utilisateur_id], references: [utilisateur_id], onDelete: Cascade)
+
+  @@index([utilisateur_id, statut, expire_le])
+  @@index([date_creation])
+  @@map("demande_connexion_web")
 }

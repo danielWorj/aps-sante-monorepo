@@ -31,7 +31,9 @@ class AuthGate extends ConsumerWidget {
         if (session == null) {
           return const LoginScreen();
         }
-        return HomeRouterForRole(role: session.utilisateur.role);
+        // Session restaurée : dernier espace utilisé (ou choix s'il n'y
+        // en a aucun de retenu), voir AccueilCompte.
+        return const AccueilCompte();
       },
     );
   }

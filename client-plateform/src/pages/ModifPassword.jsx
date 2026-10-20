@@ -4,11 +4,12 @@ import { useToast } from '../components/feedback';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import med7 from '../assets/img/med7.jpg';
 import { useAuth } from '../context/AuthContext';
+import { accueilParRole } from '../utils/roles';
 
 export default function ModifPassword() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { changerMotDePasseInitial } = useAuth();
+  const { changerMotDePasseInitial, user } = useAuth();
 
   // ─── Mode "changement forcé" (première connexion / mot de passe
   // temporaire) ────────────────────────────────────────────────────
@@ -104,10 +105,11 @@ export default function ModifPassword() {
         // AuthContext.changerMotDePasseInitial() appelle le service puis
         // ouvre déjà la session locale (access_token + user + status),
         // exactement comme connecter() — rien à refaire ici.
-        await changerMotDePasseInitial(navState.token, form.newPassword);
+        const utilisateur = await changerMotDePasseInitial(navState.token, form.newPassword);
         setLoading(false);
         toast.succes('Mot de passe mis à jour avec succès.');
-        navigate('/portail/medecin-agenda', { replace: true });
+        // Tableau de bord du rôle connecté (et non une page fixe).
+        navigate(accueilParRole(utilisateur?.role), { replace: true });
       } catch (err) {
         setLoading(false);
         // Token expiré/déjà utilisé/invalide côté serveur : impossible
@@ -133,7 +135,7 @@ export default function ModifPassword() {
     setTimeout(() => {
       setLoading(false);
       toast.succes('Mot de passe mis à jour avec succès.');
-      navigate('/portail/medecin-agenda');
+      navigate(accueilParRole(user?.role));
     }, 900);
   };
 
@@ -156,7 +158,7 @@ export default function ModifPassword() {
             className="col-md-5 d-none d-md-flex"
             style={{
               backgroundColor: 'var(--primary-dark)',
-              backgroundImage: `linear-gradient(160deg, rgba(58,124,100,.92), rgba(47,165,127,.88)), url(${med7})`,
+              backgroundImage: `linear-gradient(160deg, rgba(15,107,76,.92), rgba(47,165,127,.88)), url(${med7})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               backgroundRepeat: 'no-repeat',
@@ -178,7 +180,7 @@ export default function ModifPassword() {
               </div>
               <span
                 className="eyebrow"
-                style={{ background: 'rgba(255,255,255,.16)', color: '#8FE8C6' }}
+                style={{ background: 'rgba(255,255,255,.16)', color: '#CDEEDD' }}
               >
                 {isInitialChange ? 'Première connexion' : 'Sécurité du compte'}
               </span>
@@ -204,15 +206,15 @@ export default function ModifPassword() {
               }}
             >
               <li className="trust-item" style={{ color: 'rgba(255,255,255,.9)' }}>
-                <i className="fa-solid fa-shield-halved" style={{ color: '#6FE0B0' }} />
+                <i className="fa-solid fa-shield-halved" style={{ color: '#9FDCC1' }} />
                 Données médicales chiffrées et protégées
               </li>
               <li className="trust-item" style={{ color: 'rgba(255,255,255,.9)' }}>
-                <i className="fa-solid fa-right-from-bracket" style={{ color: '#6FE0B0' }} />
+                <i className="fa-solid fa-right-from-bracket" style={{ color: '#9FDCC1' }} />
                 Déconnexion automatique des autres appareils
               </li>
               <li className="trust-item" style={{ color: 'rgba(255,255,255,.9)' }}>
-                <i className="fa-solid fa-bell" style={{ color: '#6FE0B0' }} />
+                <i className="fa-solid fa-bell" style={{ color: '#9FDCC1' }} />
                 Alerte de sécurité envoyée à chaque modification
               </li>
             </ul>

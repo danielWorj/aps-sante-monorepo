@@ -61,7 +61,8 @@ Future<void> ouvrirMonEspace(BuildContext context) async {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => HomeRouterForRole(role: session.utilisateur.role),
+        // Session déjà ouverte : retour direct dans le dernier espace.
+        builder: (_) => const AccueilCompte(),
       ),
     );
     return;
@@ -87,8 +88,8 @@ Future<void> ouvrirMonEspace(BuildContext context) async {
           // connecté, pour ne pas laisser le login dans l'historique.
           Navigator.of(routeContext).pushReplacement(
             MaterialPageRoute(
-              builder: (_) =>
-                  HomeRouterForRole(role: nouvelleSession.utilisateur.role),
+              // Vraie connexion : « Choisir mon espace » s'il y en a plusieurs.
+              builder: (_) => const AccueilCompte(choisir: true),
             ),
           );
         },

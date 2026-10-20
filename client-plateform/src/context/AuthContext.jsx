@@ -43,6 +43,13 @@ const AuthContext = createContext(undefined);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [status, setStatus] = useState('loading');
+  // Espaces du compte (patient, médecin, structure gérée, publicités…),
+  // le dernier utilisé en premier. Voir « Choisir mon espace ».
+  const [espaces, setEspaces] = useState([]);
+  // Vrai après « Se déconnecter » (et jusqu'à la prochaine connexion) :
+  // RequireAuth ne mémorise alors pas la page quittée comme page de retour,
+  // sinon le compte suivant serait renvoyé vers l'espace du précédent.
+  const [deconnexionVolontaire, setDeconnexionVolontaire] = useState(false);
 
   // Restauration de session au premier montage de l'app.
   useEffect(() => {
@@ -53,8 +60,10 @@ export function AuthProvider({ children }) {
         const { access_token } = await authService.rafraichirToken();
         setAccessToken(access_token);
         const utilisateur = await authService.obtenirProfilCourant();
+        const listeEspaces = await authService.listerEspaces().catch(() => []);
         if (annule) return;
         setUser(utilisateur);
+        setEspaces(listeEspaces);
         setStatus('authenticated');
       } catch {
         // Pas de session valide (jamais connecté, refresh token
@@ -81,6 +90,7 @@ export function AuthProvider({ children }) {
     setUnauthorizedHandler(() => {
       setAccessToken(null);
       setUser(null);
+      setEspaces([]);
       setStatus('unauthenticated');
     });
     return () => setUnauthorizedHandler(null);
@@ -113,8 +123,64 @@ export function AuthProvider({ children }) {
 
     setAccessToken(data.access_token);
     setUser(data.utilisateur);
+    setEspaces(data.espaces ?? []);
     setStatus('authenticated');
+    setDeconnexionVolontaire(false);
     return data;
+  }, []);
+
+  /**
+   * POST /auth/login-pin : connexion numéro + code PIN. Même contrat que
+   * connecter() : avec un PIN provisoire (pin_a_changer: true), aucune
+   * session n'est ouverte et la réponse est renvoyée telle quelle.
+   */
+  const connecterParPin = useCallback(async (telephone, pays_iso2, pin) => {
+    const data = await authService.connecterParPin(telephone, pays_iso2, pin);
+    if (data?.pin_a_changer) return data;
+    setAccessToken(data.access_token);
+    setUser(data.utilisateur);
+    setEspaces(data.espaces ?? []);
+    setStatus('authenticated');
+    setDeconnexionVolontaire(false);
+    return data;
+  }, []);
+
+  /** POST /auth/changer-pin-initial : remplace le PIN provisoire et ouvre la session. */
+  const changerPinInitial = useCallback(async (tokenChangementPin, nouveauPin) => {
+    const data = await authService.changerPinInitial(tokenChangementPin, nouveauPin);
+    setAccessToken(data.access_token);
+    setUser(data.utilisateur);
+    setEspaces(data.espaces ?? []);
+    setStatus('authenticated');
+    setDeconnexionVolontaire(false);
+    return data;
+  }, []);
+
+  /** POST /auth/pin : choisir (ou changer) son numéro de connexion et son PIN. */
+  const definirPin = useCallback(async (donnees) => {
+    const data = await authService.definirPin(donnees);
+    setUser(data.utilisateur);
+    return data;
+  }, []);
+
+  /**
+   * Ouvre l'espace choisi : le serveur émet une nouvelle session sur cet
+   * espace (rôle de l'espace). Pour un espace professionnel, le code PIN
+   * peut être demandé (GardePin, géré par apiClient).
+   */
+  const choisirEspace = useCallback(async (cle) => {
+    const data = await authService.choisirEspace(cle);
+    setAccessToken(data.access_token);
+    setUser(data.utilisateur);
+    setEspaces(data.espaces ?? []);
+    return data.espace;
+  }, []);
+
+  /** Recharge la liste des espaces (ex. après la création d'une fiche). */
+  const rafraichirEspaces = useCallback(async () => {
+    const liste = await authService.listerEspaces().catch(() => null);
+    if (liste) setEspaces(liste);
+    return liste;
   }, []);
 
   /**
@@ -133,7 +199,9 @@ export function AuthProvider({ children }) {
       );
       setAccessToken(access_token);
       setUser(utilisateur);
+      setEspaces(await authService.listerEspaces().catch(() => []));
       setStatus('authenticated');
+      setDeconnexionVolontaire(false);
       return utilisateur;
     },
     []
@@ -148,6 +216,8 @@ export function AuthProvider({ children }) {
     setAccessToken(access_token);
     setUser(utilisateur);
     setStatus('authenticated');
+    setDeconnexionVolontaire(false);
+    authService.listerEspaces().then(setEspaces).catch(() => {});
   }, []);
 
   /**
@@ -162,6 +232,8 @@ export function AuthProvider({ children }) {
     } finally {
       setAccessToken(null);
       setUser(null);
+      setEspaces([]);
+      setDeconnexionVolontaire(true);
       setStatus('unauthenticated');
     }
   }, []);
@@ -181,14 +253,22 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       status,
+      espaces,
       isAuthenticated: status === 'authenticated',
+      deconnexionVolontaire,
       connecter,
+      connecterParPin,
       changerMotDePasseInitial,
+      changerPinInitial,
+      definirPin,
+      choisirEspace,
+      rafraichirEspaces,
       ouvrirSession,
       deconnecter,
       rafraichirUtilisateur,
     }),
-    [user, status, connecter, changerMotDePasseInitial, ouvrirSession, deconnecter, rafraichirUtilisateur]
+    [user, status, espaces, deconnexionVolontaire, connecter, connecterParPin, changerMotDePasseInitial, changerPinInitial, definirPin,
+      choisirEspace, rafraichirEspaces, ouvrirSession, deconnecter, rafraichirUtilisateur]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

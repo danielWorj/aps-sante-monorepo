@@ -88,6 +88,10 @@ import PortailAnnonceur from './pages/PortailAnnonceur.jsx';
 
 //ANNONCES 
 import FicheAnnonce from './pages/FicheAnnonce.jsx';
+// CONNEXION NUMÉRO + PIN, ESPACES
+import CreerPin from './pages/CreerPin.jsx';
+import ChoisirEspace from './pages/ChoisirEspace.jsx';
+import PinOublie from './pages/PinOublie.jsx';
 import { AssuranceAnnonces, EspaceAnnonces, MedecinAnnonces, PatientAnnonces } from './components/portails/components/portail-annonces.jsx';
 
 export const router = createBrowserRouter([
@@ -131,6 +135,14 @@ export const router = createBrowserRouter([
       { path: '/pricing', element: <Abonnement /> },
       { path: '/login', element: <Login /> },
       { path: '/modifier-mot-de-passe', element: <ModifPassword /> },
+      // Créer / changer son code PIN (session ouverte), ou remplacer un PIN
+      // provisoire (token restreint dans le state) : la page gère les deux.
+      { path: '/creer-mon-pin', element: <CreerPin /> },
+      { path: '/pin-oublie', element: <PinOublie /> },
+      {
+        element: <RequireAuth roles={ROLES_ESPACE.compte} />,
+        children: [{ path: '/choisir-espace', element: <ChoisirEspace /> }],
+      },
       // ASSURANCE
       { path: '/assurance', element: <Assurance /> },
       { path: "/assurances/:id", element: <FicheAssurance /> }, 

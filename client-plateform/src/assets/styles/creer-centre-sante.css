@@ -79,9 +79,9 @@
 }
 
 .form-step.is-active .form-step-number {
-  background: var(--primary, #0066cc);
+  background: var(--primary, var(--primary));
   color: white;
-  border-color: var(--primary, #0066cc);
+  border-color: var(--primary, var(--primary));
 }
 
 .form-step.is-done .form-step-number {
@@ -153,26 +153,11 @@
   font-weight: bold;
 }
 
-.form-control,
-.form-select {
-  border: 1px solid var(--gray-light, #ddd);
-  border-radius: 0.375rem;
-  padding: 0.6rem 0.75rem;
-  font-size: 0.95rem;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
-}
 
-.form-control:focus,
-.form-select:focus {
-  border-color: var(--primary, #0066cc);
-  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
-  outline: none;
-}
 
-.form-select:disabled {
-  background-color: var(--gray-light, #f0f0f0);
-  cursor: not-allowed;
-}
+
+
+
 
 /* ───────────────────────────────────────────────────────────────────
    Checkboxes
@@ -189,7 +174,7 @@
   height: 1.25rem;
   margin-top: 0.2rem;
   cursor: pointer;
-  accent-color: var(--primary, #0066cc);
+  accent-color: var(--primary, var(--primary));
 }
 
 .form-check-label {
@@ -199,7 +184,7 @@
 }
 
 .form-check-label a {
-  color: var(--primary, #0066cc);
+  color: var(--primary, var(--primary));
   text-decoration: none;
 }
 
@@ -221,12 +206,12 @@
 }
 
 .dropzone:hover {
-  border-color: var(--primary, #0066cc);
+  border-color: var(--primary, var(--primary));
   background: rgba(0, 102, 204, 0.02);
 }
 
 .dropzone.hover {
-  border-color: var(--primary, #0066cc);
+  border-color: var(--primary, var(--primary));
   background: rgba(0, 102, 204, 0.05);
   box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
 }
@@ -238,7 +223,7 @@
 
 .dropzone-icon {
   font-size: 2.5rem;
-  color: var(--primary, #0066cc);
+  color: var(--primary, var(--primary));
   margin-bottom: 1rem;
   display: block;
 }
@@ -271,7 +256,7 @@
 ─────────────────────────────────────────────────────────────────── */
 .summary-section {
   background: var(--bg-light, #fafafa);
-  border-left: 4px solid var(--primary, #0066cc);
+  border-left: 4px solid var(--primary, var(--primary));
   padding: 1rem;
   border-radius: 0.375rem;
   margin-bottom: 1rem;
@@ -333,8 +318,8 @@
 }
 
 .structure-type-badge.is-clinique {
-  background: #e3f2fd;
-  color: #1565c0;
+  background: var(--primary-tint);
+  color: var(--primary-dark);
 }
 
 .structure-type-badge.is-hopital {
@@ -361,8 +346,8 @@
    Info card et hints
 ─────────────────────────────────────────────────────────────────── */
 .info-card {
-  background: #e3f2fd;
-  border-left: 4px solid var(--primary, #0066cc);
+  background: var(--primary-tint);
+  border-left: 4px solid var(--primary, var(--primary));
   padding: 1rem;
   border-radius: 0.375rem;
   margin-bottom: 1rem;
@@ -371,7 +356,7 @@
 .info-card h4 {
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--primary, #0066cc);
+  color: var(--primary, var(--primary));
   margin-bottom: 0.75rem;
   margin-top: 0;
 }
@@ -383,7 +368,7 @@
 
 .info-card li {
   margin-bottom: 0.5rem;
-  color: #1565c0;
+  color: var(--primary-dark);
   font-size: 0.9rem;
 }
 
@@ -407,83 +392,31 @@
   border-top: 1px solid var(--gray-light, #ddd);
 }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1.5rem;
-  border: none;
-  border-radius: 0.375rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-decoration: none;
-}
 
-.btn-primary {
-  background: var(--primary, #0066cc);
-  color: white;
-}
 
-.btn-primary:hover:not(:disabled) {
-  background: #0052a3;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
-}
 
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 
-.btn-outline-primary {
-  border: 1px solid var(--primary, #0066cc);
-  color: var(--primary, #0066cc);
-  background: white;
-}
 
-.btn-outline-primary:hover:not(:disabled) {
-  background: rgba(0, 102, 204, 0.1);
-}
 
-.btn-outline-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 
-.btn i {
-  font-size: 1rem;
-}
+
+
+
+
+
+
+
+
 
 /* ───────────────────────────────────────────────────────────────────
    Alertes
 ─────────────────────────────────────────────────────────────────── */
-.alert {
-  padding: 1rem;
-  border-radius: 0.375rem;
-  margin-bottom: 1rem;
-  border-left: 4px solid;
-}
 
-.alert-danger {
-  background: #fee;
-  color: #c0392b;
-  border-color: #c0392b;
-}
 
-.alert-info {
-  background: #e3f2fd;
-  color: #1565c0;
-  border-color: #0066cc;
-}
 
-.alert code {
-  background: rgba(0, 0, 0, 0.05);
-  padding: 0.2rem 0.4rem;
-  border-radius: 0.2rem;
-  font-family: 'Courier New', monospace;
-}
+
+
+
 
 /* ───────────────────────────────────────────────────────────────────
    Carte de succès

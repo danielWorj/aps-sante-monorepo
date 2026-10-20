@@ -12,6 +12,7 @@ import { creerCentreSante } from '../../services/structureSanteService';
 import { listerPays, listerVilles } from '../../services/geoService';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import GoogleMapPicker from '../maps/GoogleMapPicker';
+import { useAuth } from '../../context/AuthContext';
 
 // ───────────────────────────────────────────────────────────────────
 // Ce formulaire calque EXACTEMENT le contrat de creationPharmacie.jsx,
@@ -65,6 +66,7 @@ const TYPES_ETABLISSEMENT = [
 ];
 
 const CreationCentreSante = () => {
+  const { rafraichirEspaces } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -103,6 +105,8 @@ const CreationCentreSante = () => {
     longitude: '',
 
     // Étape 3 — agent responsable
+    // Responsable = l'auteur connecté (fiche rattachée à son compte).
+    responsable_moi: true,
     fonction: '',
     agent_nom: '',
     agent_prenom: '',
@@ -218,6 +222,7 @@ const CreationCentreSante = () => {
       }
       case 3:
         if (!formData.fonction.trim()) return "La fonction de l'agent est obligatoire.";
+        if (formData.responsable_moi) return null;
         if (!formData.agent_nom.trim()) return "Le nom de l'agent est obligatoire.";
         if (!formData.agent_prenom.trim()) return "Le prénom de l'agent est obligatoire.";
         if (!formData.agent_email.trim()) return "L'e-mail de l'agent est obligatoire.";
@@ -286,12 +291,14 @@ const CreationCentreSante = () => {
         agent_prenom: formData.agent_prenom.trim(),
         agent_email: formData.agent_email.trim(),
         agent_telephone: formData.agent_telephone.trim() || undefined,
+        responsable_moi: formData.responsable_moi ? 'true' : undefined,
         image_centre: formData.image_centre,
         piece_identite: formData.piece_identite,
         document_autorisation: formData.document_autorisation,
       });
 
       const { centreSante, agent } = resultat;
+      if (agent?.rattache_au_compte) rafraichirEspaces();
 
       setCentreCree({
         message: resultat.message,
@@ -666,6 +673,26 @@ const CreationCentreSante = () => {
                     {/* Étape 3 : Agent responsable */}
                     {currentStep === 3 && (
                       <div className="form-page active">
+                        {/* Responsable = moi : la fiche est rattachée à mon compte
+                            (nouvel espace), sans compte agent ni mot de passe. */}
+                        <div className="form-check mb-3" style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start' }}>
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id="responsable_moi"
+                            name="responsable_moi"
+                            checked={formData.responsable_moi}
+                            onChange={handleChange}
+                          />
+                          <label className="form-check-label" htmlFor="responsable_moi">
+                            <strong>Je suis le responsable de cette fiche.</strong>{' '}
+                            <span className="form-hint" style={{ display: 'block', margin: 0 }}>
+                              Elle sera rattachée à mon compte : je la retrouverai dans « Changer d’espace », sans nouveau mot de passe.
+                              Décochez pour créer le compte d’une autre personne.
+                            </span>
+                          </label>
+                        </div>
+
                         <p className="form-hint" style={{ marginBottom: '1rem' }}>
                           Un compte est créé pour la personne qui aura la charge
                           de ce centre de santé (pas forcément vous). Un mot de
@@ -687,7 +714,7 @@ const CreationCentreSante = () => {
                               required
                             />
                           </div>
-                          <div className="col-md-6">
+                          <div className="col-md-6" hidden={formData.responsable_moi}>
                             <label className="form-label-aps">
                               Téléphone de l'agent
                             </label>
@@ -699,7 +726,7 @@ const CreationCentreSante = () => {
                               onChange={handleChange}
                             />
                           </div>
-                          <div className="col-md-6">
+                          <div className="col-md-6" hidden={formData.responsable_moi}>
                             <label className="form-label-aps">
                               Nom <span className="required-mark">*</span>
                             </label>
@@ -712,7 +739,7 @@ const CreationCentreSante = () => {
                               required
                             />
                           </div>
-                          <div className="col-md-6">
+                          <div className="col-md-6" hidden={formData.responsable_moi}>
                             <label className="form-label-aps">
                               Prénom <span className="required-mark">*</span>
                             </label>
@@ -725,7 +752,7 @@ const CreationCentreSante = () => {
                               required
                             />
                           </div>
-                          <div className="col-md-6">
+                          <div className="col-md-6" hidden={formData.responsable_moi}>
                             <label className="form-label-aps">
                               Adresse e-mail <span className="required-mark">*</span>
                             </label>

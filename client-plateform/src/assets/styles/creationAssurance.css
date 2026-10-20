@@ -9,18 +9,18 @@
    ───────────────────────────────────────────────────────────────── */
 
 :root {
-  --primary-color: #0066cc;
-  --primary-hover: #0052a3;
-  --danger-color: #dc3545;
-  --success-color: #28a745;
-  --warning-color: #ffc107;
-  --info-color: #17a2b8;
-  --light-gray: #f8f9fa;
-  --border-color: #dee2e6;
-  --ink: #212529;
-  --ink-soft: #6c757d;
-  --border-radius: 8px;
-  --transition: all 0.3s ease;
+  /* Alignés sur les jetons globaux de style.css (refonte UI web 2026).
+     Ne pas redéfinir ici --ink / --ink-soft / --primary-hover : ce :root
+     est global et écraserait la palette de toute l'application. */
+  --primary-color: var(--primary);
+  --danger-color: var(--urgence);
+  --success-color: var(--primary);
+  --warning-color: var(--orange);
+  --info-color: var(--info);
+  --light-gray: var(--surface-alt);
+  --border-color: var(--line-strong);
+  --border-radius: 10px;
+  --transition: all 0.2s ease;
 }
 
 /* ─────────────────────────────────────────────────────────────────
@@ -268,36 +268,13 @@
   color: var(--danger-color);
 }
 
-.form-control,
-.form-select {
-  display: block;
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  font-size: 0.95rem;
-  font-family: inherit;
-  transition: var(--transition);
-  background-color: #fff;
-}
 
-.form-control:focus,
-.form-select:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
-}
 
-.form-control::placeholder {
-  color: var(--ink-soft);
-}
 
-.form-control:disabled,
-.form-select:disabled {
-  background-color: var(--light-gray);
-  color: var(--ink-soft);
-  cursor: not-allowed;
-}
+
+
+
+
 
 textarea.form-control {
   resize: vertical;
@@ -483,27 +460,10 @@ textarea.form-control {
    ALERTES ET BANNIÈRES
    ───────────────────────────────────────────────────────────────── */
 
-.alert {
-  padding: 1rem;
-  border-radius: var(--border-radius);
-  margin-bottom: 1rem;
-  border-left: 4px solid;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
 
-.alert-danger {
-  background-color: #fdf8f8;
-  color: var(--danger-color);
-  border-left-color: var(--danger-color);
-}
 
-.alert-info {
-  background-color: #f0f8ff;
-  color: var(--primary-color);
-  border-left-color: var(--primary-color);
-}
+
+
 
 /* Variante utilisée pour le récapitulatif des identifiants (étape de confirmation) :
    ce bloc contient plusieurs <p> empilés (pas juste icône + texte), donc on
@@ -517,27 +477,14 @@ textarea.form-control {
   margin-bottom: 0.5rem;
 }
 
-.alert i {
-  font-size: 1.1rem;
-  flex-shrink: 0;
-  margin-top: 0.125rem;
-}
 
-.alert p {
-  margin: 0.5rem 0;
-  font-size: 0.95rem;
-}
 
-.alert code {
-  background-color: rgba(0, 0, 0, 0.08);
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  font-size: 0.9rem;
-}
+
+
+
 
 .banner-info {
-  background: linear-gradient(135deg, #e8f4f8 0%, #f0fafb 100%);
+  background: var(--surface-sunk);
   border-left: 4px solid var(--info-color);
   padding: 1rem;
   border-radius: var(--border-radius);
@@ -558,55 +505,20 @@ textarea.form-control {
    BOUTONS
    ───────────────────────────────────────────────────────────────── */
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: var(--border-radius);
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition);
-  text-decoration: none;
-  white-space: nowrap;
-  justify-content: center;
-}
 
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 
-.btn-primary {
-  background-color: var(--primary-color);
-  color: #fff;
-}
 
-.btn-primary:hover:not(:disabled) {
-  background-color: var(--primary-hover);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.2);
-}
 
-.btn-outline-primary {
-  background-color: transparent;
-  color: var(--primary-color);
-  border: 2px solid var(--primary-color);
-}
 
-.btn-outline-primary:hover:not(:disabled) {
-  background-color: rgba(0, 102, 204, 0.05);
-}
 
-.btn i {
-  font-size: 0.9rem;
-}
 
-.btn-block-aps {
-  width: 100%;
-}
+
+
+
+
+
+
+
 
 /* ─────────────────────────────────────────────────────────────────
    NAVIGATION FORMULAIRE
@@ -642,7 +554,7 @@ textarea.form-control {
 .success-card {
   text-align: center;
   padding: 3rem 2rem;
-  background: linear-gradient(135deg, #f0fdf4 0%, #f8fafb 100%);
+  background: var(--surface-sunk);
   border-radius: var(--border-radius);
   border: 2px solid var(--success-color);
 }
@@ -681,11 +593,6 @@ textarea.form-control {
    UTILITAIRES
    ───────────────────────────────────────────────────────────────── */
 
-.container-aps {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-}
 
 .main-aps {
   min-height: 100vh;

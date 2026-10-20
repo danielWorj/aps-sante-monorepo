@@ -31,10 +31,12 @@ function estAdmin(utilisateur) {
  */
 async function estAgentDeLaPharmacie(utilisateur, pharmacieId) {
   if (!utilisateur) return false;
-  const agent = await prisma.agentPharmacie.findUnique({
-    where: { utilisateur_id: utilisateur.utilisateur_id },
+  // Un compte peut gérer plusieurs pharmacies (espaces multiples).
+  const agent = await prisma.agentPharmacie.findFirst({
+    where: { utilisateur_id: utilisateur.utilisateur_id, pharmacie_id: pharmacieId },
+    select: { agent_id: true },
   });
-  return !!agent && agent.pharmacie_id === pharmacieId;
+  return !!agent;
 }
 
 async function autoriserAccesPharmacie(utilisateur, pharmacieId) {

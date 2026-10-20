@@ -13,8 +13,26 @@ import {
   amorcerSuperAdmin,
 } from "../controllers/authentification.controller.js";
 import {
+  connecterParPinCtrl,
+  changerPinInitialCtrl,
+  definirPinCtrl,
+  verifierPinCtrl,
+  listerEspacesCtrl,
+  choisirEspaceCtrl,
+} from "../controllers/pin.controller.js";
+import {
+  configurationConnexionCtrl,
+  reinitialiserPinCtrl,
+  verifierTelephoneCtrl,
+  demanderConnexionApplicationCtrl,
+  sonderConnexionApplicationCtrl,
+  demandesConnexionCtrl,
+  repondreDemandeConnexionCtrl,
+} from "../controllers/connexionApplication.controller.js";
+import {
   authentifier,
   exigerTokenChangementMotDePasse,
+  exigerTokenChangementPin,
 } from "../middlewares/auth.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
 
@@ -36,6 +54,33 @@ router.post(
   changerMotDePasseInitial
 );
 router.post("/refresh", rafraichirToken);
+
+// ─── Connexion numéro + code PIN (à côté de l'email + mot de passe) ──
+// login-pin : public, limité en débit (index.js) et par compte (5 essais).
+// changer-pin-initial : token restreint du PIN provisoire uniquement.
+router.post("/login-pin", connecterParPinCtrl);
+router.post("/changer-pin-initial", exigerTokenChangementPin, changerPinInitialCtrl);
+// Choisir / changer son numéro de connexion et son PIN (session ouverte).
+router.post("/pin", authentifier, definirPinCtrl);
+// Confirmer son PIN (actions sensibles, déverrouillage de l'application) :
+// nouveau jeton valable 5 min pour les actions protégées par exigerPinRecent.
+router.post("/pin/verifier", authentifier, verifierPinCtrl);
+// Espaces du compte (patient, médecin, structure gérée, publicités…).
+router.get("/espaces", authentifier, listerEspacesCtrl);
+router.post("/espaces/choisir", authentifier, choisirEspaceCtrl);
+
+// Ce que les écrans doivent proposer (vérification du numéro par code…).
+router.get("/configuration-connexion", configurationConnexionCtrl);
+// Vérification du numéro par code (VERIFICATION_TELEPHONE_ACTIVE=true) :
+// code PIN oublié (public, limité en débit) et numéro d'un compte existant.
+router.post("/pin/reinitialiser", reinitialiserPinCtrl);
+router.post("/telephone/verifier", authentifier, verifierTelephoneCtrl);
+
+// Connexion web validée depuis l'application mobile.
+router.post("/connexion-application", demanderConnexionApplicationCtrl);
+router.post("/connexion-application/:id/statut", sonderConnexionApplicationCtrl);
+router.get("/connexion-application/demandes", authentifier, demandesConnexionCtrl);
+router.post("/connexion-application/demandes/:id/repondre", authentifier, repondreDemandeConnexionCtrl);
 router.post("/logout", authentifier, deconnecter);
 router.get("/me", authentifier, profil);
 

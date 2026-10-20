@@ -302,6 +302,7 @@ class PharmacieRepository {
     String? agentTelephone,
     double? latitude,
     double? longitude,
+    bool responsableMoi = false,
   }) async {
     if ((latitude == null) != (longitude == null)) {
       throw const ApiException(
@@ -320,6 +321,8 @@ class PharmacieRepository {
       'agent_prenom': agentPrenom,
       'agent_email': agentEmail,
       if (agentTelephone != null) 'agent_telephone': agentTelephone,
+      // Fiche rattachée au compte connecté (« Je suis le responsable »).
+      if (responsableMoi) 'responsable_moi': 'true',
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
     };

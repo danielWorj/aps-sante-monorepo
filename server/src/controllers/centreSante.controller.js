@@ -43,6 +43,7 @@ import {
   filtrerStructure,
 } from "../lib/droitsPresence.js";
 import { enregistrerVueFiche } from "../services/vuesFiche.service.js";
+import { estResponsableMoi, rattacherCompteConnecte } from "../services/rattachementAgent.service.js";
 
 const SALT_ROUNDS = 10; // valeur identique à authentification.controller.js
 
@@ -415,14 +416,17 @@ export async function creerCentreSante(req, res, next) {
           "Champs requis manquants : nom, pays_id, ville_id, telephone, type_structure.",
       });
     }
-    if (!fonction || !fonction.trim() || !agent_nom || !agent_nom.trim() ||
-        !agent_prenom || !agent_prenom.trim() || !agent_email || !agent_email.trim()) {
+    // Responsable = auteur connecté : la fiche est rattachée à son compte
+    // (rattachementAgent.service.js), aucun compte agent à créer.
+    const responsableMoi = estResponsableMoi(req);
+    if (!responsableMoi && (!fonction || !fonction.trim() || !agent_nom || !agent_nom.trim() ||
+        !agent_prenom || !agent_prenom.trim() || !agent_email || !agent_email.trim())) {
       return res.status(400).json({
         message:
           "Champs requis manquants pour l'agent du centre : fonction, agent_nom, agent_prenom, agent_email.",
       });
     }
-    if (!REGEX_EMAIL.test(agent_email.trim())) {
+    if (!responsableMoi && !REGEX_EMAIL.test(agent_email.trim())) {
       return res.status(400).json({ message: "agent_email invalide." });
     }
 
@@ -446,7 +450,7 @@ export async function creerCentreSante(req, res, next) {
     // Un agent = un compte dédié, jamais partagé (contrainte unique
     // Utilisateur.email) — on le vérifie avant tout upload Cloudinary
     // pour échouer vite, sans envoyer inutilement les 3 fichiers.
-    const emailAgentDisponible = await verifierEmailAgentDisponible(agent_email.trim().toLowerCase());
+    const emailAgentDisponible = responsableMoi || await verifierEmailAgentDisponible(agent_email.trim().toLowerCase());
     if (!emailAgentDisponible) {
       return res.status(409).json({
         message: "Un compte existe déjà avec cet email : impossible de créer le compte agent.",
@@ -530,7 +534,12 @@ export async function creerCentreSante(req, res, next) {
         });
 
         const { utilisateur, agent: agentCree, motDePasseTemporaire: mdp } =
-          await creerCompteAgentPourStructure(tx, {
+          responsableMoi
+            ? await rattacherCompteConnecte(tx, {
+              modele: "agentStructureSante", fk: "structure_id", id: structureCreee.structure_id,
+              utilisateur_id: req.utilisateur.utilisateur_id, fonction,
+            })
+            : await creerCompteAgentPourStructure(tx, {
             structureId: structureCreee.structure_id,
             fonction: fonction.trim(),
             nom: agent_nom.trim(),
@@ -580,6 +589,8 @@ export async function creerCentreSante(req, res, next) {
         email: utilisateurAgent.email,
       },
       mot_de_passe_temporaire: motDePasseTemporaire,
+      // Fiche rattachée au compte connecté : nouvel espace, aucun secret.
+      rattache_au_compte: responsableMoi,
     };
 
     if (erreurGeo) {
@@ -594,7 +605,9 @@ export async function creerCentreSante(req, res, next) {
     }
 
     return res.status(201).json({
-      message: "Centre de santé créé avec succès. Compte agent créé — communiquez-lui le mot de passe temporaire.",
+      message: responsableMoi
+        ? "Centre de santé créé avec succès. Elle est rattachée à votre compte : retrouvez-la dans « Changer d’espace »."
+        : "Centre de santé créé avec succès. Compte agent créé — communiquez-lui le mot de passe temporaire.",
       centreSante,
       agent: reponseAgent,
     });

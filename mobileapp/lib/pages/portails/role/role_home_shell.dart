@@ -6,6 +6,7 @@ import '../../../controllers/authentification_controller.dart';
 import '../../../models/authentification_models.dart' show RoleUtilisateur;
 import '../../../components/navigation/role-bottom-navigation.dart';
 import '../annonces/portail_annonces.dart';
+import '../../espaces/carte_connexion_compte.dart';
 
 /// Shell (Scaffold + RoleBottomNavigationBar) affiché pour tout rôle
 /// qui n'a pas de shell dédié (admin, superadmin, agent_structure_sante,
@@ -87,6 +88,7 @@ class _EnTeteEspace extends ConsumerWidget {
               ],
             ),
           ),
+          const BoutonChangerEspace(),
           const BoutonAnnonces(),
           const SizedBox(width: 8),
           const BoutonDeconnexion(),

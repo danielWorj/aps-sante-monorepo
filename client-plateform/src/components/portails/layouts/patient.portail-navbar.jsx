@@ -1,83 +1,24 @@
-// patient.portail-navbar.jsx
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../../../context/AuthContext";
-import NotificationsBell from "../components/notifications-bell";
+// patient.portail-navbar.jsx — barre du portail patient : bouton Menu +
+// panneau vertical (voir portail-topbar.jsx).
+import PortailTopbar from "./portail-topbar";
 import { useAnnoncesNonLues } from "../../annonces/annoncesVues";
 
-const PatientPortailNavbar = ({ activePage = "" }) => {
-  const navigate = useNavigate();
-  const { deconnecter } = useAuth();
-  const [menuOuvert, setMenuOuvert] = useState(false);
-  const annoncesNonLues = useAnnoncesNonLues();
+const LIENS = [
+  { label: "Mes rendez-vous", to: "/portail/patient-rdv", icon: "fa-calendar-check" },
+  { label: "Demandes express", to: "/portail/patient-demandes", icon: "fa-bullhorn" },
+  { label: "Annonces", to: "/portail/patient-annonces", icon: "fa-bell", badge: "annonces" },
+  { label: "Profil", to: "/portail/patient-profil", icon: "fa-user" },
+];
 
-  const navLinks = [
-    { label: "Rendez-vous", to: "/portail/patient-rdv", key: "rdv", icon: "fa-calendar-check" },
-    { label: "Demande rapide", to: "/portail/patient-demandes", key: "demandes", icon: "fa-bullhorn" },
-    { label: "Messages", to: "/portail/patient-messages", key: "messages", icon: "fa-comment-medical" },
-    { label: "Annonces", to: "/portail/patient-annonces", key: "annonces", icon: "fa-bell" },
-    { label: "Profil", to: "/portail/patient-profil", key: "profil", icon: "fa-user" },
-    { label: "Site public", to: "/", key: "site", icon: "fa-house" },
-  ];
-
-  const handleLogout = async () => {
-    await deconnecter();
-    navigate("/login", { replace: true });
-  };
-
-  return (
-    <header className="aps-navbar">
-      <div className="container-aps">
-        <div className="navbar-inner">
-          <Link className="aps-logo" to="/">
-            <span className="mark">
-              <i className="fa-solid fa-heart-pulse"></i>
-            </span>
-            ApSa
-          </Link>
-
-          <nav aria-label="Navigation du portail">
-            <ul className={`aps-nav-links ${menuOuvert ? "is-open" : ""}`}>
-              {navLinks.map((link) => (
-                <li key={link.key}>
-                  <Link
-                    to={link.to}
-                    className={activePage === link.key ? "text-primary" : ""}
-                    onClick={() => setMenuOuvert(false)}
-                  >
-                    <i className={`fa-solid ${link.icon}`}></i> {link.label}
-                    {link.key === "annonces" && annoncesNonLues > 0 && (
-                      <span className="nav-badge ms-1">{annoncesNonLues}</span>
-                    )}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-
-          <div className="aps-nav-actions">
-            <NotificationsBell cheminRdv="/portail/patient-rdv" />
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="btn btn-outline-primary btn-sm-aps"
-            >
-              <i className="fa-solid fa-arrow-right-from-bracket"></i> Déconnexion
-            </button>
-            <button
-              type="button"
-              className="navbar-toggler-aps"
-              aria-expanded={menuOuvert}
-              aria-label="Ouvrir le menu"
-              onClick={() => setMenuOuvert((v) => !v)}
-            >
-              <i className="fa-solid fa-bars"></i>
-            </button>
-          </div>
-        </div>
-      </div>
-    </header>
-  );
-};
+// eslint-disable-next-line no-unused-vars
+const PatientPortailNavbar = ({ activePage }) => (
+  <PortailTopbar
+    espace="Espace patient"
+    accueil="/portail/patient-rdv"
+    liens={LIENS}
+    badges={{ annonces: useAnnoncesNonLues() }}
+    cheminNotifications="/portail/patient-rdv"
+  />
+);
 
 export default PatientPortailNavbar;

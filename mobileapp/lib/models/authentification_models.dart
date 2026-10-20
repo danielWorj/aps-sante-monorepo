@@ -134,6 +134,18 @@ class Utilisateur {
   final bool motDePasseTemporaire;
   final DateTime? motDePasseExpireLe;
 
+  /// Connexion numéro + code PIN : vrai si le compte a choisi son PIN.
+  final bool pinDefini;
+
+  /// Numéro de connexion normalisé (international sans « + »), ou null.
+  final String? telephoneConnexion;
+
+  /// Numéro de connexion confirmé par un code reçu (SMS / WhatsApp).
+  final bool telephoneVerifie;
+
+  /// Espace actif de la session (« patient », « pharmacie:<id> »…).
+  final String? espaceActif;
+
   const Utilisateur({
     required this.utilisateurId,
     required this.nom,
@@ -145,6 +157,10 @@ class Utilisateur {
     required this.statutCompte,
     this.motDePasseTemporaire = false,
     this.motDePasseExpireLe,
+    this.pinDefini = false,
+    this.telephoneConnexion,
+    this.telephoneVerifie = false,
+    this.espaceActif,
   });
 
   factory Utilisateur.fromJson(Map<String, dynamic> json) {
@@ -162,6 +178,10 @@ class Utilisateur {
       motDePasseExpireLe: json['mot_de_passe_expire_le'] is String
           ? DateTime.tryParse(json['mot_de_passe_expire_le'] as String)
           : null,
+      pinDefini: _lire<bool>(json, 'pin_defini') ?? false,
+      telephoneConnexion: _lire<String>(json, 'telephone_connexion'),
+      telephoneVerifie: _lire<bool>(json, 'telephone_verifie') ?? false,
+      espaceActif: _lire<String>(json, 'espace_actif'),
     );
   }
 
@@ -176,6 +196,10 @@ class Utilisateur {
     'statut_compte': statutCompte.toApi(),
     'mot_de_passe_temporaire': motDePasseTemporaire,
     'mot_de_passe_expire_le': motDePasseExpireLe?.toIso8601String(),
+    'pin_defini': pinDefini,
+    'telephone_connexion': telephoneConnexion,
+    'telephone_verifie': telephoneVerifie,
+    'espace_actif': espaceActif,
   };
 
   /// Nom complet, pratique pour l'affichage (AppBar, profil, etc.).
@@ -192,6 +216,10 @@ class Utilisateur {
     StatutCompte? statutCompte,
     bool? motDePasseTemporaire,
     DateTime? motDePasseExpireLe,
+    bool? pinDefini,
+    String? telephoneConnexion,
+    bool? telephoneVerifie,
+    String? espaceActif,
   }) {
     return Utilisateur(
       utilisateurId: utilisateurId ?? this.utilisateurId,
@@ -204,6 +232,10 @@ class Utilisateur {
       statutCompte: statutCompte ?? this.statutCompte,
       motDePasseTemporaire: motDePasseTemporaire ?? this.motDePasseTemporaire,
       motDePasseExpireLe: motDePasseExpireLe ?? this.motDePasseExpireLe,
+      pinDefini: pinDefini ?? this.pinDefini,
+      telephoneConnexion: telephoneConnexion ?? this.telephoneConnexion,
+      telephoneVerifie: telephoneVerifie ?? this.telephoneVerifie,
+      espaceActif: espaceActif ?? this.espaceActif,
     );
   }
 
@@ -232,6 +264,9 @@ class InscriptionPayload {
   final String paysId;
   final DateTime dateNaissance;
 
+  /// Code PIN (6 chiffres) de la connexion par numéro ; exige [telephone].
+  final String? pin;
+
   const InscriptionPayload({
     required this.nom,
     required this.prenom,
@@ -240,6 +275,7 @@ class InscriptionPayload {
     required this.motDePasse,
     required this.paysId,
     required this.dateNaissance,
+    this.pin,
   });
 
   Map<String, dynamic> toJson() => {
@@ -251,6 +287,7 @@ class InscriptionPayload {
     'pays_id': paysId,
     // Date pure (YYYY-MM-DD) : le serveur fait `new Date(date_naissance)`.
     'date_naissance': dateNaissance.toIso8601String().split('T').first,
+    if (pin != null) 'pin': pin,
   };
 }
 
@@ -286,6 +323,64 @@ class ConnexionPayload {
   };
 }
 
+/// ─────────────────────────────────────────────────────────────────
+/// POST /api/auth/login-pin — connexion numéro + code PIN (même forme
+/// de réponse que /login, voir [ConnexionResultat]).
+/// ─────────────────────────────────────────────────────────────────
+class ConnexionPinPayload {
+  final String telephone;
+
+  /// Pays servant à compléter un numéro local (ex. « CM »).
+  final String? paysIso2;
+  final String pin;
+
+  const ConnexionPinPayload({required this.telephone, this.paysIso2, required this.pin});
+
+  Map<String, dynamic> toJson() => {
+    'telephone': telephone,
+    if (paysIso2 != null) 'pays_iso2': paysIso2,
+    'pin': pin,
+  };
+}
+
+/// Espace d'un compte (GET /api/auth/espaces) : une personne = un compte,
+/// avec un ou plusieurs espaces (patient, médecin, structure, publicités).
+class EspaceCompte {
+  /// « patient », « medecin », « pharmacie:<id> », « publicites »…
+  final String cle;
+
+  /// patient | medecin | pharmacie | structure | assurance | publicites | ambulance | pompes_funebres
+  final String type;
+  final String libelle;
+  final String? detail;
+  final bool professionnel;
+
+  /// Dernier espace utilisé (proposé en premier).
+  final bool dernier;
+
+  const EspaceCompte({
+    required this.cle,
+    required this.type,
+    required this.libelle,
+    this.detail,
+    this.professionnel = false,
+    this.dernier = false,
+  });
+
+  factory EspaceCompte.fromJson(Map<String, dynamic> json) => EspaceCompte(
+    cle: json['cle'] as String,
+    type: json['type'] as String,
+    libelle: json['libelle'] as String? ?? '',
+    detail: _lire<String>(json, 'detail'),
+    professionnel: _lire<bool>(json, 'professionnel') ?? false,
+    dernier: _lire<bool>(json, 'dernier') ?? false,
+  );
+
+  static List<EspaceCompte> listeDepuisJson(dynamic json) => json is List
+      ? [for (final e in json) if (e is Map<String, dynamic>) EspaceCompte.fromJson(e)]
+      : const [];
+}
+
 /// Résultat de /login. Deux issues possibles côté serveur :
 ///   1. Session complète (mot_de_passe_temporaire=false) :
 ///      access_token + utilisateur sont renseignés, motDePasseAChanger
@@ -309,6 +404,14 @@ class ConnexionResultat {
   final DateTime? tokenChangementMotDePasseExpireLe;
   final DateTime? motDePasseExpireLe;
 
+  // ─ Connexion numéro + PIN : PIN provisoire à remplacer ─
+  final bool pinAChanger;
+  final String? tokenChangementPin;
+
+  /// Espaces du compte (patient, médecin, structure gérée, publicités…),
+  /// le dernier utilisé en premier. Vide si aucune session.
+  final List<EspaceCompte> espaces;
+
   const ConnexionResultat({
     required this.message,
     required this.motDePasseAChanger,
@@ -317,6 +420,9 @@ class ConnexionResultat {
     this.tokenChangementMotDePasse,
     this.tokenChangementMotDePasseExpireLe,
     this.motDePasseExpireLe,
+    this.pinAChanger = false,
+    this.tokenChangementPin,
+    this.espaces = const [],
   });
 
   factory ConnexionResultat.fromJson(Map<String, dynamic> json) {
@@ -337,11 +443,14 @@ class ConnexionResultat {
       motDePasseExpireLe: json['mot_de_passe_expire_le'] is String
           ? DateTime.tryParse(json['mot_de_passe_expire_le'] as String)
           : null,
+      pinAChanger: _lire<bool>(json, 'pin_a_changer') ?? false,
+      tokenChangementPin: _lire<String>(json, 'token_changement_pin'),
+      espaces: EspaceCompte.listeDepuisJson(json['espaces']),
     );
   }
 
   /// Session immédiatement utilisable (access_token présent).
-  bool get sessionOuverte => !motDePasseAChanger && accessToken != null;
+  bool get sessionOuverte => !motDePasseAChanger && !pinAChanger && accessToken != null;
 }
 
 /// ─────────────────────────────────────────────────────────────────
@@ -556,7 +665,10 @@ class ErreurAuthentification implements Exception {
   final int codeHttp;
   final String message;
 
-  const ErreurAuthentification({required this.codeHttp, required this.message});
+  /// Code métier du serveur (« PIN_REQUIS », « PIN_BLOQUE »…), ou null.
+  final String? code;
+
+  const ErreurAuthentification({required this.codeHttp, required this.message, this.code});
 
   factory ErreurAuthentification.fromJson(int codeHttp, Map<String, dynamic> json) {
     return ErreurAuthentification(
@@ -571,4 +683,37 @@ class ErreurAuthentification implements Exception {
 
   @override
   String toString() => 'ErreurAuthentification($codeHttp: $message)';
+}
+
+/// Configuration de la connexion (GET /api/auth/configuration-connexion).
+class ConfigurationConnexion {
+  /// Vérification du numéro par code (SMS / WhatsApp) active sur le serveur.
+  final bool verificationTelephone;
+  final List<String> canaux;
+
+  const ConfigurationConnexion({this.verificationTelephone = false, this.canaux = const ['sms']});
+
+  factory ConfigurationConnexion.fromJson(Map<String, dynamic> json) => ConfigurationConnexion(
+    verificationTelephone: _lire<bool>(json, 'verification_telephone') ?? false,
+    canaux: json['canaux'] is List ? [for (final c in json['canaux'] as List) '$c'] : const ['sms'],
+  );
+}
+
+/// Demande de connexion web à valider dans l'application.
+class DemandeConnexionWeb {
+  final String demandeId;
+
+  /// Trois codes proposés : l'utilisateur choisit celui affiché à l'écran.
+  final List<String> codes;
+  final String? navigateur;
+  final DateTime? expireLe;
+
+  const DemandeConnexionWeb({required this.demandeId, required this.codes, this.navigateur, this.expireLe});
+
+  factory DemandeConnexionWeb.fromJson(Map<String, dynamic> json) => DemandeConnexionWeb(
+    demandeId: json['demande_id'] as String,
+    codes: [for (final c in (json['codes'] as List? ?? const [])) '$c'],
+    navigateur: _lire<String>(json, 'navigateur'),
+    expireLe: json['expire_le'] is String ? DateTime.tryParse(json['expire_le'] as String) : null,
+  );
 }

@@ -169,7 +169,7 @@ async function fraisCampay(montant) {
 export async function obtenirMonActeur(req, res, next) {
   try {
     const { type } = req.params;
-    const id = await acteur(type).acteurDeUtilisateur(req.utilisateur.utilisateur_id);
+    const id = await acteur(type).acteurDeUtilisateur(req.utilisateur.utilisateur_id, req.utilisateur.espace);
     if (!id) return res.status(404).json({ message: `Aucune fiche ${acteur(type).libelle} rattachée à ce compte.` });
     const fiche = await chargerFicheOuErreur(prisma, type, id);
     return res.status(200).json({

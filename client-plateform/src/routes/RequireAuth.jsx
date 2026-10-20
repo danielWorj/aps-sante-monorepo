@@ -11,7 +11,8 @@
 //   ne redirige surtout pas vers /login (ça déconnecterait à tort
 //   quelqu'un dont la session cookie est en fait valide).
 // - Non authentifié : redirige vers /login (en mémorisant la page
-//   demandée dans `state.from` pour y revenir après connexion).
+//   demandée dans `state.from` pour y revenir après connexion, sauf
+//   juste après une déconnexion volontaire).
 // - Authentifié mais avec un rôle absent de `roles` : renvoie vers
 //   l'accueil de SON espace (un patient ne peut pas ouvrir le portail
 //   médecin, ni l'inverse). `roles` est obligatoire : une route privée
@@ -23,7 +24,7 @@ import { useToast } from '../components/feedback';
 import { accueilParRole, aUnRole } from '../utils/roles';
 
 export default function RequireAuth({ roles }) {
-  const { status, user } = useAuth();
+  const { status, user, deconnexionVolontaire } = useAuth();
   const location = useLocation();
   const toast = useToast();
   const refuse = status === 'authenticated' && !aUnRole(user, roles ?? []);
@@ -51,7 +52,11 @@ export default function RequireAuth({ roles }) {
   }
 
   if (status === 'unauthenticated') {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    // Après « Se déconnecter », la page quittée n'est pas une page de
+    // retour : React Router v7 navigue en transition, donc ce rendu passe
+    // AVANT le navigate('/login') du bouton et l'emporterait, renvoyant le
+    // compte suivant vers l'espace du précédent.
+    return <Navigate to="/login" replace state={deconnexionVolontaire ? undefined : { from: location }} />;
   }
 
   if (refuse) {

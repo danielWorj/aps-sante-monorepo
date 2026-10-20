@@ -250,6 +250,82 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
   }
 
   // ───────────────────────────────────────────────────────────────
+  // POST /api/auth/login-pin — connexion numéro + code PIN.
+  // Même contrat que [connecter] : avec un PIN provisoire
+  // (`resultat.pinAChanger`), AUCUNE session n'est ouverte et l'écran
+  // doit ouvrir le choix du PIN avec `resultat.tokenChangementPin`.
+  // ───────────────────────────────────────────────────────────────
+  Future<ConnexionResultat> connecterParPin(ConnexionPinPayload payload) async {
+    state = const AsyncLoading<SessionUtilisateur?>();
+    try {
+      final resultat = await _repo.connecterParPin(payload);
+      if (resultat.sessionOuverte) {
+        await _ouvrirSession(SessionUtilisateur(
+          accessToken: resultat.accessToken!,
+          utilisateur: resultat.utilisateur!,
+        ));
+      } else {
+        state = AsyncData(state.value);
+      }
+      return resultat;
+    } catch (e, pile) {
+      state = AsyncError<SessionUtilisateur?>(e, pile);
+      rethrow;
+    }
+  }
+
+  // POST /api/auth/changer-pin-initial — remplace le PIN provisoire et
+  // ouvre la session.
+  Future<ConnexionResultat> changerPinInitial(String nouveauPin, {required String tokenChangementPin}) async {
+    final resultat = await _repo.changerPinInitial(nouveauPin, tokenChangementPin: tokenChangementPin);
+    await _ouvrirSession(SessionUtilisateur(
+      accessToken: resultat.accessToken!,
+      utilisateur: resultat.utilisateur!,
+    ));
+    return resultat;
+  }
+
+  // POST /api/auth/pin — choisir / changer son numéro de connexion et
+  // son code PIN (session ouverte). Met à jour l'utilisateur en session.
+  Future<void> definirPin({String? telephone, String? paysIso2, required String pin, String? ancienPin, String? preuveTelephone}) async {
+    final utilisateur = await appelAuthentifie((token) => _repo.definirPin(
+      accessToken: token,
+      telephone: telephone,
+      paysIso2: paysIso2,
+      pin: pin,
+      ancienPin: ancienPin,
+      preuveTelephone: preuveTelephone,
+    ));
+    final session = state.value;
+    if (session == null) return;
+    await _persisterUtilisateur(utilisateur);
+    state = AsyncData(SessionUtilisateur(accessToken: session.accessToken, utilisateur: utilisateur));
+  }
+
+  // POST /api/auth/espaces/choisir — nouvelle session sur l'espace choisi
+  // (rôle de cet espace). Espace professionnel : le serveur peut exiger
+  // le PIN (ErreurAuthentification.code == 'PIN_REQUIS') ; le passer dans [pin].
+  Future<void> choisirEspace(String cle, {String? pin}) async {
+    final resultat = await appelAuthentifie((token) => _repo.choisirEspace(cle, accessToken: token, pin: pin));
+    await _ouvrirSession(SessionUtilisateur(
+      accessToken: resultat.accessToken!,
+      utilisateur: resultat.utilisateur!,
+    ));
+    ref.invalidate(espacesCompteProvider);
+  }
+
+  // POST /api/auth/pin/verifier — confirme le PIN (action sensible,
+  // déverrouillage) : le nouveau jeton (valable 5 min pour les actions
+  // sensibles) remplace celui de la session et est renvoyé.
+  Future<String> verifierPin(String pin) async {
+    final session = state.value;
+    if (session == null) throw const ErreurAuthentification(codeHttp: 401, message: 'Session expirée.');
+    final jeton = await appelAuthentifie((token) => _repo.verifierPin(pin, accessToken: token));
+    await _ouvrirSession(SessionUtilisateur(accessToken: jeton, utilisateur: session.utilisateur));
+    return jeton;
+  }
+
+  // ───────────────────────────────────────────────────────────────
   // POST /api/auth/changer-mot-de-passe-initial
   // Ouvre directement une session complète en cas de succès, comme un
   // login classique.
@@ -584,6 +660,26 @@ final authUtilisateurProvider = Provider<Utilisateur?>((ref) {
 /// initiale plutôt que de rediriger prématurément vers /login.
 final estConnecteProvider = Provider<bool>((ref) {
   return ref.watch(sessionControllerProvider).value != null;
+});
+
+/// Configuration de la connexion (vérification du numéro active ou non).
+final configurationConnexionProvider = FutureProvider<ConfigurationConnexion>((ref) async {
+  try {
+    return await ref.read(authentificationRepositoryProvider).configurationConnexion();
+  } catch (_) {
+    return const ConfigurationConnexion();
+  }
+});
+
+/// Espaces du compte connecté (patient, médecin, structure, publicités…),
+/// le dernier utilisé en premier ; liste vide si déconnecté.
+final espacesCompteProvider = FutureProvider<List<EspaceCompte>>((ref) async {
+  final id = ref.watch(authUtilisateurProvider.select((u) => u?.utilisateurId));
+  if (id == null) return const [];
+  final repo = ref.read(authentificationRepositoryProvider);
+  return ref.read(sessionControllerProvider.notifier).appelAuthentifie(
+        (token) => repo.listerEspaces(accessToken: token),
+      );
 });
 
 /// Rôle de l'utilisateur courant, ou `null` si déconnecté. Pratique

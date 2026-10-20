@@ -59,6 +59,7 @@ import { enregistrerVueFiche } from "../services/vuesFiche.service.js";
 import { STATUTS_DEMANDE, notifierDemandeRecue } from "../services/portailAssurance.service.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt"; // même bibliothèque que authentification.controller.js
+import { estResponsableMoi, rattacherCompteConnecte } from "../services/rattachementAgent.service.js";
 
 const SALT_ROUNDS = 10; // valeur identique à authentification.controller.js / pharmacie.controller.js
 
@@ -444,7 +445,7 @@ export async function obtenirServiceAssurance(req, res, next) {
  */
 export async function obtenirMonServiceAssurance(req, res, next) {
   try {
-    const serviceAssuranceId = await serviceAssuranceDeLAgent(req.utilisateur.utilisateur_id);
+    const serviceAssuranceId = await serviceAssuranceDeLAgent(req.utilisateur.utilisateur_id, req.utilisateur.espace);
     if (!serviceAssuranceId) {
       return res.status(404).json({ message: "Aucune fiche d'assurance rattachée à ce compte." });
     }
@@ -628,18 +629,20 @@ export async function creerServiceAssurance(req, res, next) {
         message: `type_acteur invalide. Valeurs acceptées : ${TYPES_ACTEUR_ASSURANCE.join(", ")}.`,
       });
     }
-    if (
-      !fonction || !fonction.trim() ||
+    // Responsable = auteur connecté : la fiche est rattachée à son compte
+    // (rattachementAgent.service.js), aucun compte agent à créer.
+    const responsableMoi = estResponsableMoi(req);
+    if (!responsableMoi && (!fonction || !fonction.trim() ||
       !agent_nom || !agent_nom.trim() ||
       !agent_prenom || !agent_prenom.trim() ||
       !agent_email || !agent_email.trim()
-    ) {
+    )) {
       return res.status(400).json({
         message:
           "Champs requis manquants pour l'agent du service d'assurance : fonction, agent_nom, agent_prenom, agent_email.",
       });
     }
-    if (!REGEX_EMAIL.test(agent_email.trim())) {
+    if (!responsableMoi && !REGEX_EMAIL.test(agent_email.trim())) {
       return res.status(400).json({ message: "agent_email invalide." });
     }
 
@@ -654,7 +657,7 @@ export async function creerServiceAssurance(req, res, next) {
     // Un agent = un compte dédié, jamais partagé (contrainte unique
     // Utilisateur.email) — vérifié avant tout upload Cloudinary pour
     // échouer vite, sans envoyer inutilement le fichier.
-    const emailAgentDisponible = await verifierEmailAgentDisponible(agent_email.trim().toLowerCase());
+    const emailAgentDisponible = responsableMoi || await verifierEmailAgentDisponible(agent_email.trim().toLowerCase());
     if (!emailAgentDisponible) {
       return res.status(409).json({
         message: "Un compte existe déjà avec cet email : impossible de créer le compte agent.",
@@ -720,7 +723,12 @@ export async function creerServiceAssurance(req, res, next) {
         });
 
         const { utilisateur, agent: agentCree, motDePasseTemporaire: mdp } =
-          await creerCompteAgentPourServiceAssurance(tx, {
+          responsableMoi
+            ? await rattacherCompteConnecte(tx, {
+              modele: "agentAssurance", fk: "service_assurance_id", id: service.service_assurance_id,
+              utilisateur_id: req.utilisateur.utilisateur_id, fonction,
+            })
+            : await creerCompteAgentPourServiceAssurance(tx, {
             serviceAssuranceId: service.service_assurance_id,
             fonction: fonction.trim(),
             nom: agent_nom.trim(),
@@ -769,6 +777,8 @@ export async function creerServiceAssurance(req, res, next) {
         email: utilisateurAgent.email,
       },
       mot_de_passe_temporaire: motDePasseTemporaire,
+      // Fiche rattachée au compte connecté : nouvel espace, aucun secret.
+      rattache_au_compte: responsableMoi,
     };
 
     if (erreurGeo) {
@@ -780,7 +790,9 @@ export async function creerServiceAssurance(req, res, next) {
     }
 
     return res.status(201).json({
-      message: "Service d'assurance créé avec succès. Compte agent créé — communiquez-lui le mot de passe temporaire.",
+      message: responsableMoi
+        ? "Service d'assurance créé avec succès. Elle est rattachée à votre compte : retrouvez-la dans « Changer d’espace »."
+        : "Service d'assurance créé avec succès. Compte agent créé — communiquez-lui le mot de passe temporaire.",
       service_assurance: serviceAssurance,
       agent: reponseAgent,
     });

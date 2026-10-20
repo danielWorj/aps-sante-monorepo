@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import ApsSelect from "../components/ui/ApsSelect";
 
 import pharmaPlaceholder from "../assets/img/pharma1.jpg";
 import SliderPublicite from '../components/publicite/SliderPublicite';
 import { PAGES_PUBLICITE } from '../services/publiciteService';
+import "../assets/styles/annuaire-2026.css";
 
 import { listerPharmacies, listerGardesPharmacie } from "../services/pharmacieService";
 import { listerPays, listerVilles } from "../services/geoService";
@@ -53,78 +55,59 @@ function PharmacyCard({ pharmacy, enGarde, positionActuelle, demanderPosition })
   const hrefItineraire = lienItineraire(destLat, destLng, positionActuelle);
 
   return (
-    <div className="pharmacy-card">
-      {/* Zone cliquable : ouvre la fiche détaillée de la pharmacie.
-          display:contents pour que la photo et le bloc infos gardent
-          exactement la même disposition qu'avant (le lien n'ajoute pas
-          de boîte dans le flex du .pharmacy-card). */}
+    <article className="aps-dc is-wide">
+      <img src={pharmacy.image_url || pharmaPlaceholder} alt="" loading="lazy" />
+      {/* Zone cliquable : ouvre la fiche détaillée de la pharmacie. */}
       <Link
         to={`/pharmacie/${pharmacy.pharmacie_id}`}
-        style={{ display: "contents", color: "inherit", textDecoration: "none" }}
-      >
-        <div className="pharmacy-photo">
-          <img src={pharmacy.image_url || pharmaPlaceholder} alt={pharmacy.nom} />
-        </div>
-        <div>
-          <span className={`pharmacy-status ${enGarde ? "is-garde" : "is-open"}`}>
-            <i className={enGarde ? "fa-solid fa-moon" : "fa-solid fa-circle-check"} />{" "}
-            {enGarde ? "De garde en ce moment" : "Fiche vérifiée"}
-          </span>
-          <h3>{pharmacy.nom}</h3>
-          <div className="practitioner-meta">
-            {localisation && (
-              <>
-                <span>
-                  <i className="fa-solid fa-location-dot" /> {localisation}
-                </span>
-                <span>&middot;</span>
-              </>
-            )}
-            <span>
-              <i className="fa-solid fa-id-card" /> N° ordre {pharmacy.numero_ordre_titulaire}
-            </span>
-            {typeof pharmacy.distance_km === "number" && (
-              <>
-                <span>&middot;</span>
-                <span>
-                  <i className="fa-solid fa-route" /> {pharmacy.distance_km.toFixed(1)} km
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-      </Link>
-      <div className="practitioner-actions" style={{ marginLeft: "auto" }}>
-        {/* Bouton d'appel : seulement si le serveur expose le contact (abonnement de présence). */}
-        {pharmacy.telephone && (
-          <a
-            href={`tel:${pharmacy.telephone}`}
-            className="btn btn-urgence btn-sm-aps"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <i className="fa-solid fa-phone" /> Appeler
-          </a>
-        )}
+        className="aps-dc-lien"
+        aria-label={`Voir la fiche de ${pharmacy.nom}`}
+      />
+      <div className="aps-dc-top">
+        <span className={`aps-pill ${enGarde ? "is-violet" : "is-white"}`}>
+          {enGarde ? <i className="fa-solid fa-moon" /> : <span className="d" />}
+          {enGarde ? "De garde en ce moment" : "Fiche vérifiée"}
+        </span>
         {hrefItineraire && (
           <a
             href={hrefItineraire}
             target="_blank"
             rel="noreferrer"
-            className="btn btn-outline-primary btn-sm-aps"
-            onClick={(e) => {
-              e.stopPropagation();
+            className="aps-dc-fav"
+            title="Itinéraire"
+            aria-label="Itinéraire"
+            onClick={() => {
               // Si on n'a pas encore la position de l'utilisateur, on la
               // demande pour les prochains clics (celui-ci s'ouvre sans
-              // origin — Google Maps la demandera lui-même le temps
-              // qu'on l'obtienne côté app).
+              // origin — Google Maps la demandera lui-même).
               if (!positionActuelle) demanderPosition();
             }}
           >
-            <i className="fa-solid fa-diamond-turn-right" /> Itinéraire
+            <i className="fa-solid fa-diamond-turn-right" />
           </a>
         )}
       </div>
-    </div>
+      <div className="aps-dc-info">
+        <div className="d-flex align-items-center gap-2">
+          <div className="flex-grow-1" style={{ minWidth: 0 }}>
+            <div className="aps-dc-nm text-truncate">{pharmacy.nom}</div>
+            <div className="aps-dc-sp text-truncate">
+              {[localisation, typeof pharmacy.distance_km === "number" ? `${pharmacy.distance_km.toFixed(1)} km` : null]
+                .filter(Boolean)
+                .join(" · ") || `N° ordre ${pharmacy.numero_ordre_titulaire}`}
+            </div>
+          </div>
+          {/* Bouton d'appel : seulement si le serveur expose le contact (abonnement de présence). */}
+          {pharmacy.telephone ? (
+            <a href={`tel:${pharmacy.telephone}`} className="aps-dc-go" title="Appeler" aria-label={`Appeler ${pharmacy.nom}`}>
+              <i className="fa-solid fa-phone" />
+            </a>
+          ) : (
+            <span className="aps-dc-go"><i className="fa-solid fa-arrow-right" /></span>
+          )}
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -249,168 +232,189 @@ export default function Pharmacie() {
     setRecherche(rechercheSaisie.trim());
   }
 
+  const nomVille = villesListe.find((v) => String(v.ville_id) === String(villeId))?.nom;
+  const nbFiltresActifs = [paysId, recherche, gardeOnly, autourDeMoi].filter(Boolean).length;
+
+  function reinitialiserFiltres() {
+    setPaysId("");
+    setVilleId("");
+    setRecherche("");
+    setRechercheSaisie("");
+    setGardeOnly(false);
+    setAutourDeMoi(false);
+  }
+
   return (
     <>
-      {/* ============================ EN-TÊTE PAGE ============================ */}
-      <section style={{ padding: "2.5rem 0 0" }}>
+      {/* ============================ EN-TÊTE + RECHERCHE ============================ */}
+      <div className="annuaire26-tete">
         <div className="container-aps">
-          <span className="eyebrow">Annuaire</span>
-          <h1 style={{ fontSize: "1.9rem", marginTop: ".5rem" }}>
-            Trouver une pharmacie
-          </h1>
-          <p className="mt-2" style={{ maxWidth: 620 }}>
-            Pharmacies vérifiées et pharmacies de garde près de chez vous,
-            avec appel direct et itinéraire.
-          </p>
+          <div className="aps-t-xs">
+            <Link to="/home" className="annuaire26-fil">Accueil</Link> / Pharmacies
+          </div>
+          <div className="annuaire26-titre">
+            <h1 className="aps-h3">
+              {gardeOnly ? "Pharmacies de garde" : "Pharmacies"}{nomVille ? ` à ${nomVille}` : ""}
+            </h1>
+            {!chargement && !erreurChargement && (
+              <span className="aps-t-s">
+                <b style={{ color: "var(--primary-hover)" }}>{listeAffichee.length}</b>{" "}
+                {listeAffichee.length > 1 ? "pharmacies trouvées" : "pharmacie trouvée"}
+                {gardePharmacieIds.size > 0 && (
+                  <> · <b style={{ color: "var(--primary-hover)" }}>{gardePharmacieIds.size} de garde</b></>
+                )}
+              </span>
+            )}
+          </div>
+          <form className="aps-sbar annuaire26-sbar" onSubmit={soumettreFiltres}>
+            <div className="aps-sbar-f">
+              <i className="fa-solid fa-prescription-bottle-medical" />
+              <div>
+                <label htmlFor="f-recherche">Pharmacie</label>
+                <input
+                  id="f-recherche"
+                  value={rechercheSaisie}
+                  onChange={(e) => setRechercheSaisie(e.target.value)}
+                  placeholder="Nom de la pharmacie"
+                />
+              </div>
+            </div>
+            <div className="aps-sbar-f">
+              <i className="fa-solid fa-location-dot" />
+              <div>
+                <label htmlFor="f-ville-tete">Ville</label>
+                <ApsSelect variante="nu"
+                  id="f-ville-tete"
+                  value={villeId}
+                  onChange={(e) => setVilleId(e.target.value)}
+                  disabled={!paysId}
+                  title={!paysId ? "Choisissez d'abord un pays dans les filtres" : undefined}
+                >
+                  <option value="">{paysId ? "Toutes les villes" : "Choisissez un pays"}</option>
+                  {villesListe.map((v) => (
+                    <option key={v.ville_id} value={v.ville_id}>{v.nom}</option>
+                  ))}
+                </ApsSelect>
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary btn-lg-aps">
+              <i className="fa-solid fa-magnifying-glass" /> Rechercher
+            </button>
+          </form>
         </div>
-      </section>
+      </div>
 
-      {/* ============================ FILTRES + RESULTATS + PUBLICITE ============================ */}
-      <section style={{ paddingTop: "1.5rem" }}>
+      {/* ============================ FILTRES + RÉSULTATS ============================ */}
+      <section className="annuaire26-corps">
         <div className="container-aps">
-          <div className="row g-4">
-            {/* Colonne filtres */}
-            <div className="col-md-3">
-              <div className="filter-bar filter-sidebar">
-                <h3 style={{ marginBottom: "1rem" }}>
-                  <i className="fa-solid fa-sliders" /> Filtrer
-                </h3>
-                <form onSubmit={soumettreFiltres}>
-                  <div className="mb-3">
-                    <label className="form-label-aps" htmlFor="f-recherche">
-                      Nom
-                    </label>
-                    <input
-                      id="f-recherche"
-                      className="form-control"
-                      value={rechercheSaisie}
-                      onChange={(e) => setRechercheSaisie(e.target.value)}
-                      placeholder="Rechercher une pharmacie"
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label-aps" htmlFor="f-pays">
-                      Pays
-                    </label>
-                    <select
-                      className="form-select"
-                      id="f-pays"
-                      value={paysId}
-                      onChange={(e) => setPaysId(e.target.value)}
-                    >
-                      <option value="">Tous les pays</option>
-                      {paysListe.map((p) => (
-                        <option key={p.pays_id} value={p.pays_id}>
-                          {p.nom}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label-aps" htmlFor="f-ville">
-                      Ville / Quartier
-                    </label>
-                    <select
-                      className="form-select"
-                      id="f-ville"
-                      value={villeId}
-                      onChange={(e) => setVilleId(e.target.value)}
-                      disabled={!paysId}
-                    >
-                      <option value="">Toutes les villes</option>
-                      {villesListe.map((v) => (
-                        <option key={v.ville_id} value={v.ville_id}>
-                          {v.nom}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="d-flex flex-column gap-2 mb-3">
-                    <label className="chip chip-verifie" style={{ cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={gardeOnly}
-                        onChange={(e) => setGardeOnly(e.target.checked)}
-                        style={{ marginRight: ".35rem" }}
-                      />
-                      <i className="fa-solid fa-circle" /> Pharmacies de garde
-                      uniquement
-                    </label>
-                    <label className="chip chip-verifie" style={{ cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={autourDeMoi}
-                        onChange={(e) => handleToggleAutourDeMoi(e.target.checked)}
-                        style={{ marginRight: ".35rem" }}
-                      />
-                      <i className="fa-solid fa-location-crosshairs" /> Autour de
-                      moi
-                    </label>
-                  </div>
-                  {autourDeMoi && (
-                    <div className="mb-3">
-                      <label className="form-label-aps" htmlFor="f-rayon">
-                        Rayon de recherche
-                      </label>
-                      <select
-                        className="form-select"
-                        id="f-rayon"
-                        value={rayonKm}
-                        onChange={(e) => setRayonKm(Number(e.target.value))}
-                      >
-                        {RAYONS_KM.map((km) => (
-                          <option key={km} value={km}>
-                            {km} km
-                          </option>
-                        ))}
-                      </select>
-                      {geoEnCours && (
-                        <p className="minimal-note mt-2">Localisation en cours…</p>
-                      )}
-                      {geoErreur && (
-                        <p className="minimal-note mt-2">
-                          <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  <button type="submit" className="btn btn-primary btn-block-aps">
-                    <i className="fa-solid fa-magnifying-glass" /> Rechercher
+            <div className="aps-card annuaire26-filtres is-horizontal">
+              <div className="d-flex justify-content-between align-items-center">
+                <h2 className="aps-h4" style={{ fontSize: "1.07rem" }}>Filtres</h2>
+                {nbFiltresActifs > 0 && (
+                  <button type="button" className="aps-reset" onClick={reinitialiserFiltres}>
+                    <i className="fa-solid fa-rotate-left" /> Réinitialiser
                   </button>
-                </form>
+                )}
+              </div>
+              <div className="annuaire26-filtre">
+                <label className="form-label-aps" htmlFor="f-pays">Pays</label>
+                <ApsSelect id="f-pays" value={paysId} onChange={(e) => setPaysId(e.target.value)}>
+                  <option value="">Tous les pays</option>
+                  {paysListe.map((p) => (
+                    <option key={p.pays_id} value={p.pays_id}>{p.nom}</option>
+                  ))}
+                </ApsSelect>
+              </div>
+
+              <div className="annuaire26-sep" />
+              <div className="d-flex justify-content-between align-items-center gap-2">
+                <label htmlFor="f-garde" className="annuaire26-switch-lib">
+                  <b>De garde uniquement</b>
+                  <span className="aps-t-xs">Ouvertes en ce moment</span>
+                </label>
+                <div className="form-check form-switch m-0">
+                  <input className="form-check-input" type="checkbox" role="switch" id="f-garde"
+                    checked={gardeOnly} onChange={(e) => setGardeOnly(e.target.checked)} />
+                </div>
+              </div>
+              <div className="d-flex justify-content-between align-items-center gap-2 mt-3">
+                <label htmlFor="f-autour" className="annuaire26-switch-lib">
+                  <b>Autour de moi</b>
+                  <span className="aps-t-xs">Selon votre position</span>
+                </label>
+                <div className="form-check form-switch m-0">
+                  <input className="form-check-input" type="checkbox" role="switch" id="f-autour"
+                    checked={autourDeMoi} onChange={(e) => handleToggleAutourDeMoi(e.target.checked)} />
+                </div>
+              </div>
+              {autourDeMoi && (
+                <div className="annuaire26-filtre">
+                  <span className="form-label-aps">Rayon de recherche</span>
+                  <div className="d-flex flex-wrap gap-2">
+                    {RAYONS_KM.map((km) => (
+                      <button type="button" key={km}
+                        className={`aps-chip is-sm ${rayonKm === km ? "is-on" : ""}`}
+                        onClick={() => setRayonKm(km)}>
+                        {km} km
+                      </button>
+                    ))}
+                  </div>
+                  {geoEnCours && <p className="minimal-note mt-2">Localisation en cours…</p>}
+                  {geoErreur && (
+                    <p className="minimal-note mt-2">
+                      <i className="fa-solid fa-triangle-exclamation" /> {geoErreur}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+          <div className="annuaire26-grille">
+          <div className="annuaire26-resultats">
+            <div className="annuaire26-barre">
+              <div className="d-flex flex-wrap gap-2">
+                {gardeOnly && (
+                  <button type="button" className="aps-chip is-sm is-active-filter" onClick={() => setGardeOnly(false)}>
+                    De garde <i className="fa-solid fa-xmark" />
+                  </button>
+                )}
+                {nomVille && (
+                  <button type="button" className="aps-chip is-sm is-active-filter" onClick={() => setVilleId("")}>
+                    {nomVille} <i className="fa-solid fa-xmark" />
+                  </button>
+                )}
+                {recherche && (
+                  <button type="button" className="aps-chip is-sm is-active-filter"
+                    onClick={() => { setRecherche(""); setRechercheSaisie(""); }}>
+                    « {recherche} » <i className="fa-solid fa-xmark" />
+                  </button>
+                )}
+                {autourDeMoi && (
+                  <button type="button" className="aps-chip is-sm is-active-filter" onClick={() => setAutourDeMoi(false)}>
+                    ≤ {rayonKm} km <i className="fa-solid fa-xmark" />
+                  </button>
+                )}
+              </div>
+              <div className="ms-auto">
+                <button type="button" className="btn btn-primary btn-sm-aps" onClick={() => navigate("/pharmacie/creation")}>
+                  <i className="fa-solid fa-plus" /> Déclarer une pharmacie
+                </button>
               </div>
             </div>
 
-            {/* Colonne résultats */}
-            <div className="col-md-6">
-              <button
-                type="button"
-                className="btn btn-primary btn-block-aps mb-3"
-                onClick={() => navigate("/pharmacie/creation")}
-              >
-                <i className="fa-solid fa-plus" /> Déclarer une pharmacie
-              </button>
+            {chargement && <div className="info-card annuaire26-etat">Chargement des pharmacies…</div>}
 
-              <div className="results-toolbar" style={{ marginTop: 0 }}>
-                <span className="text-muted-soft" style={{ fontSize: ".9rem" }}>
-                  <strong style={{ color: "var(--ink)" }}>{listeAffichee.length}</strong>{" "}
-                  pharmacies trouvées
-                </span>
-              </div>
+            {!chargement && erreurChargement && (
+              <div className="info-card annuaire26-etat" style={{ color: "var(--danger)" }}>{erreurChargement}</div>
+            )}
 
-              {chargement && <p className="text-muted-soft">Chargement des pharmacies…</p>}
+            {!chargement && !erreurChargement && listeAffichee.length === 0 && (
+              <div className="info-card annuaire26-etat">Aucune pharmacie ne correspond à ces critères.</div>
+            )}
 
-              {!chargement && erreurChargement && (
-                <p className="text-muted-soft">{erreurChargement}</p>
-              )}
-
-              {!chargement && !erreurChargement && listeAffichee.length === 0 && (
-                <p className="text-muted-soft">Aucune pharmacie ne correspond à ces critères.</p>
-              )}
-
-              {!chargement &&
-                !erreurChargement &&
-                listeAffichee.map((p) => (
+            {!chargement && !erreurChargement && listeAffichee.length > 0 && (
+              <div className="annuaire26-cartes is-larges">
+                {listeAffichee.map((p) => (
                   <PharmacyCard
                     key={p.pharmacie_id}
                     pharmacy={p}
@@ -419,14 +423,14 @@ export default function Pharmacie() {
                     demanderPosition={demanderPosition}
                   />
                 ))}
-            </div>
-
-            {/* Colonne publicité */}
-            <div className="col-md-3">
-              <div className="ad-col">
-                <SliderPublicite code={PAGES_PUBLICITE.pharmacie} />
               </div>
+            )}
+          </div>
+          <aside className="annuaire26-pubs" aria-label="Publicités">
+            <div className="ad-col">
+              <SliderPublicite code={PAGES_PUBLICITE.pharmacie} />
             </div>
+          </aside>
           </div>
         </div>
       </section>
