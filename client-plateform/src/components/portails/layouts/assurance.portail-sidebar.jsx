@@ -5,6 +5,7 @@
 import { Link, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import { LIENS_PORTAIL_ASSURANCE } from "./assurance.liens";
+import { useAnnoncesNonLues } from "../../annonces/annoncesVues";
 
 const TYPE_ACTEUR = { compagnie: "Compagnie d'assurance", courtier: "Courtier en assurance" };
 const STATUT_FICHE = {
@@ -28,6 +29,7 @@ export default function AssurancePortailSidebar() {
   const navigate = useNavigate();
   const { deconnecter } = useAuth();
   const { fiche, nouvellesDemandes } = useOutletContext();
+  const badges = { demandes: nouvellesDemandes, annonces: useAnnoncesNonLues() };
   const statut = STATUT_FICHE[fiche.statut_verification] ?? STATUT_FICHE.non_publie;
 
   const handleDeconnexion = async (e) => {
@@ -58,7 +60,7 @@ export default function AssurancePortailSidebar() {
             <Link key={lien.to} to={lien.to} className={pathname === lien.to ? "active" : undefined}
               aria-current={pathname === lien.to ? "page" : undefined}>
               <i className={`fa-solid ${lien.icon}`}></i> {lien.label}
-              {lien.badge && nouvellesDemandes > 0 ? <span className="nav-badge">{nouvellesDemandes}</span> : null}
+              {badges[lien.badge] > 0 ? <span className="nav-badge">{badges[lien.badge]}</span> : null}
             </Link>
           ))}
         </nav>

@@ -29,8 +29,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../controllers/authentification_controller.dart';
 import '../pages/home_router_for_role.dart';
+import '../pages/public/Medecinpage.dart' show medecinProviderContainer;
 import '../pages/public/demande_rapide_page.dart';
 import '../pages/public/login.dart';
+import '../pages/public/utils/createassurancepage.dart';
+import '../pages/public/utils/createcentresantepage.dart';
+import '../pages/public/utils/createmedecinpage.dart';
+import '../pages/public/utils/createpharmaciepage.dart';
 
 /// Ouvre la « Demande rapide » (RDV aléatoire) depuis l'espace public :
 /// écran ouvert à tous, avec création du compte patient ou connexion sur
@@ -91,3 +96,52 @@ Future<void> ouvrirMonEspace(BuildContext context) async {
     ),
   );
 }
+
+/// Ouvre [destination] si une session est ouverte ; sinon affiche
+/// [LoginScreen] et, une fois connecté, remplace le login par
+/// [destination] pour que le professionnel ne perde pas son intention.
+/// Évite qu'un visiteur remplisse toutes les étapes avant d'apprendre
+/// à l'envoi que la route exige une connexion.
+Future<void> ouvrirAvecSession(BuildContext context, WidgetBuilder destination) async {
+  final container = ProviderScope.containerOf(context, listen: false);
+  // Attendre la restauration du démarrage (jeton persisté).
+  final session = await attendreSession(container);
+  if (!context.mounted) return;
+  if (session != null) {
+    Navigator.of(context).push(MaterialPageRoute(builder: destination));
+    return;
+  }
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (routeContext) => LoginScreen(
+        onLoginSuccess: () {
+          if (container.read(sessionControllerProvider).value == null) return;
+          Navigator.of(routeContext).pushReplacement(
+            MaterialPageRoute(builder: destination),
+          );
+        },
+      ),
+    ),
+  );
+}
+
+/// « Devenir médecin » : création de fiche (POST /medecins, publique).
+/// Même [ProviderContainer] que l'annuaire, pour qu'il se rafraîchisse.
+void ouvrirDevenirMedecin(BuildContext context) {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => CreateMedecinScreen(container: medecinProviderContainer),
+    ),
+  );
+}
+
+/// Déclaration d'une pharmacie / d'un centre de santé / d'une assurance :
+/// ces routes exigent une session (connexion d'abord si besoin).
+void ouvrirDeclarerPharmacie(BuildContext context) =>
+    ouvrirAvecSession(context, (_) => const CreatePharmacieScreen());
+
+void ouvrirDeclarerCentreSante(BuildContext context) =>
+    ouvrirAvecSession(context, (_) => const CreateCentreSanteScreen());
+
+void ouvrirDeclarerAssurance(BuildContext context) =>
+    ouvrirAvecSession(context, (_) => const CreateAssuranceScreen());

@@ -203,7 +203,8 @@ const APS_MENU = [
       { key: "referentiel-pays", label: "Référentiel pays", icon: "fa-solid fa-earth-africa", to: "/referentiel" }, 
       { key: "moyen-paiement", label: "Moyens de paiement", icon: "fa-solid fa-credit-card", to: "/moyen-paiement" },
       { key: "apk", label: "Gestion APK", icon: "fa-solid fa-mobile-alt", to: "/apk" },
-      { key: "whatsapp", label: "WhatsApp", icon: "fa-brands fa-whatsapp", to: "/whatsapp" }
+      { key: "whatsapp", label: "WhatsApp", icon: "fa-brands fa-whatsapp", to: "/whatsapp" },
+      { key: "sms", label: "SMS", icon: "fa-solid fa-comment-sms", to: "/sms" }
       // { key: "parametrage-local", label: "Paramétrage local", icon: "fa-solid fa-sliders", to: "/parametrage-local" },
       // { key: "equipe-admin", label: "Équipe & rôles admin", icon: "fa-solid fa-user-shield", to: "/equipe-admin" }
     ]

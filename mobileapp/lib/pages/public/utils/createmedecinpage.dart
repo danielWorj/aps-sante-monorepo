@@ -35,15 +35,9 @@
 // backend : à brancher sur son propre module dès qu'il existera
 // (ex. paiement_models.dart / paiement_repository.dart).
 //
-// ⚠️ Étape 1 « Pays / Ville d'exercice » : le module médecin attend des
-// identifiants réels (`pays_id`, `pays_exercice_id`, `ville_exercice_id`)
-// provenant du référentiel géographique de l'application (Pays/Ville),
-// qui n'est pas fourni dans le périmètre de ces fichiers
-// (voir referentiel_models.dart mentionné en commentaire dans
-// medecin_models.dart). En l'absence de ce référentiel ici, la liste
-// pays/villes reste statique et les identifiants envoyés au backend
-// sont dérivés localement (TODO ci-dessous) : à remplacer par un vrai
-// picker branché sur le référentiel dès qu'il est disponible.
+// Étape 1 « Pays / Ville d'exercice » : branchée sur le référentiel réel
+// via [ApsPaysVilleFields] (GET /referentiels/pays et /villes) — le backend
+// attend des UUID (`pays_id`, `pays_exercice_id`, `ville_exercice_id`).
 //
 // S'appuie sur le design system déjà défini dans `lib/components/`
 // (AppColors, AppTextStyles, AppRadius, PrimaryButton, SecondaryButton)
@@ -71,8 +65,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Si votre projet utilise des imports package (ex: package:aps/...),
 // remplacez les lignes ci-dessous par les équivalents package:aps/...
 import '../../../components/components.dart';
+import '../../../components/dialogs/dialogue_copie_identifiants.dart';
 import '../../../controllers/medecin_controller.dart';
 import '../../../models/medecin_models.dart';
+import '../../../models/referentiel_models.dart' show Pays, Ville;
+import 'aps_pays_ville_fields.dart';
 
 /// Container Riverpod de repli, utilisé uniquement si
 /// [CreateMedecinScreen.container] n'est pas fourni — voir la note sur
@@ -133,26 +130,15 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
   final _prenomCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _telCtrl = TextEditingController();
-  String? _pays;
-  String? _ville;
+  // Référentiel réel (GET /referentiels/pays, /villes) : le backend
+  // attend des UUID pour pays_id / pays_exercice_id / ville_exercice_id.
+  // L'ancienne liste statique envoyait des libellés (« Cameroun »,
+  // « Douala ») et faisait échouer POST /medecins en erreur interne.
+  Pays? _pays;
+  Ville? _ville;
 
   List<int>? _photoBytes;
   String? _photoFileName;
-
-  // TODO(referentiel): remplacer par un vrai référentiel Pays/Ville
-  // (referentiel_models.dart / referentiel_controller.dart, hors
-  // périmètre des fichiers fournis) exposant de vrais UUID pays_id /
-  // ville_id. En attendant, la map ci-dessous sert à la fois d'affichage
-  // ET de source d'identifiants (clé = nom = id local), ce qui NE
-  // FONCTIONNERA correctement côté backend QUE si ce référentiel utilise
-  // les mêmes libellés comme identifiants — sinon adapter _paysIdDepuis /
-  // _villeIdDepuis dès que le vrai référentiel est branché.
-  static const Map<String, List<String>> _paysVilles = {
-    'Cameroun': ['Douala', 'Yaoundé', 'Garoua', 'Bafoussam', 'Bamenda', 'Maroua'],
-    "Côte d'Ivoire": ['Abidjan', 'Bouaké', 'Yamoussoukro'],
-    'Sénégal': ['Dakar', 'Thiès', 'Saint-Louis'],
-    'Gabon': ['Libreville', 'Port-Gentil'],
-  };
 
   // ---- Étape 2 — Spécialité & Ordre -----------------------------------
   final _step2FormKey = GlobalKey<FormState>();
@@ -309,13 +295,11 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
       prenom: _prenomCtrl.text.trim(),
       email: _emailCtrl.text.trim(),
       telephone: _telCtrl.text.trim().isEmpty ? null : _telCtrl.text.trim(),
-      // TODO(referentiel): remplacer par les vrais pays_id / ville_id
-      // (voir la note en tête de fichier).
-      paysId: _pays!,
+      paysId: _pays!.paysId,
       specialiteId: specialite.specialiteId,
       numeroOrdre: _numeroOrdreCtrl.text.trim(),
-      paysExerciceId: _pays!,
-      villeExerciceId: _ville!,
+      paysExerciceId: _pays!.paysId,
+      villeExerciceId: _ville!.villeId,
       teleconsultationActivee: _teleconsultation,
       tarifIndicatif: double.tryParse(_tarifCtrl.text.trim()) ?? 0,
       biographie: _bioCtrl.text.trim(),
@@ -339,6 +323,16 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
         if (resultat == null) return;
         setState(() => _resultatCreation = resultat);
         _goToStep(_stepCount - 1);
+        // Par-dessus le récapitulatif : copie obligatoire du mot de passe
+        // temporaire, affiché une seule fois.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          exigerCopieIdentifiants(
+            context,
+            email: resultat.utilisateur.email,
+            motDePasseTemporaire: resultat.utilisateur.motDePasseTemporaire,
+          );
+        });
       },
       error: (erreur, _) => _showError(_messageErreur(erreur)),
       loading: () {},
@@ -575,32 +569,16 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
               keyboardType: TextInputType.phone,
             ),
           ),
-          _AppFormField(
-            label: 'Pays',
-            required: true,
-            child: _AppDropdown<String>(
-              value: _pays,
-              hint: 'Sélectionner…',
-              items: _paysVilles.keys.toList(),
-              onChanged: (value) {
-                setState(() {
-                  _pays = value;
-                  _ville = null;
-                });
-              },
-            ),
-          ),
-          _AppFormField(
-            label: "Ville d'exercice",
-            required: true,
-            hint: "Votre pays de résidence et d'exercice.",
-            child: _AppDropdown<String>(
-              value: _ville,
-              hint: _pays == null ? "Choisissez d'abord un pays" : 'Sélectionner…',
-              items: _pays == null ? const [] : _paysVilles[_pays]!,
-              enabled: _pays != null,
-              onChanged: (value) => setState(() => _ville = value),
-            ),
+          ApsPaysVilleFields(
+            paysId: _pays?.paysId,
+            villeId: _ville?.villeId,
+            villeLabel: "Ville d'exercice",
+            villeHint: "Votre pays de résidence et d'exercice.",
+            onPaysChanged: (p) => setState(() {
+              _pays = p;
+              _ville = null;
+            }),
+            onVilleChanged: (v) => setState(() => _ville = v),
           ),
           _StepActions(
             showBack: false,
@@ -935,7 +913,7 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
         : ('${_prenomCtrl.text} ${_nomCtrl.text}').trim();
     final displayName = nomComplet.isEmpty ? 'Dr —' : 'Dr $nomComplet';
     final specialiteLabel = medecin?.specialite?.nom ?? _specialite?.nom ?? '—';
-    final villeLabel = _ville != null && _pays != null ? '$_ville, $_pays' : '—';
+    final villeLabel = _ville != null && _pays != null ? '${_ville!.nom}, ${_pays!.nom}' : '—';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),

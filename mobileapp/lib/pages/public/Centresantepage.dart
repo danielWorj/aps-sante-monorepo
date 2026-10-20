@@ -117,7 +117,9 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
 
   String _query = '';
   TypeStructure? _selectedType; // null = « Tous les types »
-  String? _selectedVilleId; // null = « Toutes les villes »
+  // Pays / ville : envoyés au serveur via [filtresCentresSanteProvider]
+  // (identifiants du référentiel, comme l'annuaire des médecins).
+  String _tri = 'pertinence';
 
   /// Comportement PAR DÉFAUT de la barre de navigation basse, utilisé
   /// uniquement si l'écran parent n'a pas fourni `widget.onBottomNavTap`
@@ -179,32 +181,37 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
     super.dispose();
   }
 
-  /// Villes disponibles pour le filtre, dérivées de la liste actuellement
-  /// chargée (déjà limitée aux fiches publiées côté serveur). Clé =
-  /// `ville_id` réel (fiable, contrairement à un nom qui peut se répéter
-  /// entre pays) ; valeur = libellé affiché.
-  Map<String, String> _villesDisponibles(List<CentreSante> centres) {
-    final villes = <String, String>{};
-    for (final c in centres) {
-      final ville = c.ville;
-      if (ville != null) villes[ville.villeId] = ville.nom;
-    }
-    return villes;
+  CentresSanteFiltre get _filtresServeur =>
+      ref.read(filtresCentresSanteProvider) ?? const CentresSanteFiltre();
+
+  /// Pays / ville côté serveur ; le filtre « publiées » posé à
+  /// l'ouverture de l'écran est conservé.
+  void _appliquerPaysVille(String? paysId, String? villeId) {
+    final actuel = _filtresServeur;
+    ref.read(filtresCentresSanteProvider.notifier).state = CentresSanteFiltre(
+      paysId: paysId,
+      villeId: villeId,
+      typeStructure: actuel.typeStructure,
+      statutVerification: actuel.statutVerification,
+      recherche: actuel.recherche,
+    );
   }
 
   List<CentreSante> _filtrer(List<CentreSante> centres) {
     final query = _query.trim().toLowerCase();
-    return centres.where((c) {
+    final liste = centres.where((c) {
       final matchType =
           _selectedType == null || c.typeStructure == _selectedType;
-      final matchVille =
-          _selectedVilleId == null || c.villeId == _selectedVilleId;
       final matchQuery = query.isEmpty ||
           c.nom.toLowerCase().contains(query) ||
           (c.ville?.nom.toLowerCase().contains(query) ?? false) ||
           (c.pays?.nom.toLowerCase().contains(query) ?? false);
-      return matchType && matchVille && matchQuery;
+      return matchType && matchQuery;
     }).toList();
+    if (_tri == 'nom') {
+      liste.sort((a, b) => a.nom.toLowerCase().compareTo(b.nom.toLowerCase()));
+    }
+    return liste;
   }
 
   String get _typeLabel => _selectedType?.libelle ?? 'Tous les types';
@@ -321,6 +328,13 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
           widget.adBanner!,
         ],
         const SizedBox(height: 16),
+        ApsInvitationPro(
+          question: 'Vous gérez une structure ?',
+          libelle: 'Inscrire ma structure',
+          icone: Icons.local_hospital_outlined,
+          onPressed: () => ouvrirDeclarerCentreSante(context),
+        ),
+        const SizedBox(height: 14),
         Row(
           children: [
             Expanded(
@@ -338,7 +352,20 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
           ],
         ),
         const SizedBox(height: 10),
-        if (resultats.isEmpty) _buildEmptyState() else ..._buildList(resultats),
+        if (resultats.isEmpty)
+          _buildEmptyState()
+        else
+          // 5 structures par page, pagination sous la liste.
+          ApsListePaginee<CentreSante>(
+            elements: resultats,
+            cleReinitialisation: Object.hash(
+              identityHashCode(centresBruts),
+              _selectedType,
+              _tri,
+              _query,
+            ),
+            construirePage: (context, page) => _buildList(page),
+          ),
       ],
       ),
     );
@@ -364,9 +391,9 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
   }
 
   Widget _buildFilterChips(List<CentreSante> centresBruts) {
-    final villesDisponibles = _villesDisponibles(centresBruts);
+    final f = ref.watch(filtresCentresSanteProvider);
     return ApsFilterBar(
-      onOpen: () => _ouvrirFiltres(villesDisponibles),
+      onOpen: _ouvrirFiltres,
       actifs: [
         if (_selectedType != null)
           (
@@ -374,11 +401,23 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
             icon: Icons.local_hospital_outlined,
             onRemove: () => setState(() => _selectedType = null),
           ),
-        if (_selectedVilleId != null)
+        if (f?.paysId != null)
           (
-            label: villesDisponibles[_selectedVilleId!] ?? 'Ville',
+            label: apsNomPays(ref, f!.paysId!),
+            icon: Icons.public_rounded,
+            onRemove: () => _appliquerPaysVille(null, null),
+          ),
+        if (f?.paysId != null && f?.villeId != null)
+          (
+            label: apsNomVille(ref, f!.paysId!, f.villeId!),
             icon: Icons.location_on_outlined,
-            onRemove: () => setState(() => _selectedVilleId = null),
+            onRemove: () => _appliquerPaysVille(f.paysId, null),
+          ),
+        if (_tri != 'pertinence')
+          (
+            label: apsLibellesTriAnnuaire[_tri]!,
+            icon: Icons.sort_rounded,
+            onRemove: () => setState(() => _tri = 'pertinence'),
           ),
       ],
     );
@@ -390,6 +429,7 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
           (c) => CardStructure(
         nom: c.nom,
         ville: _villePays(c),
+        imageUrl: c.imageUrl,
         type: _typeAffichageCarte(c.typeStructure),
         verifiee: c.statutVerification == StatutVerificationStructure.publie,
         onAppeler: () => _appeler(c),
@@ -441,12 +481,15 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
       title: 'Aucun résultat',
       message: 'Aucune structure ne correspond à votre recherche.',
       actionLabel: 'Réinitialiser les filtres',
-      onAction: () => setState(() {
-        _selectedType = null;
-        _selectedVilleId = null;
-        _query = '';
-        _searchController.clear();
-      }),
+      onAction: () {
+        setState(() {
+          _selectedType = null;
+          _tri = 'pertinence';
+          _query = '';
+          _searchController.clear();
+        });
+        _appliquerPaysVille(null, null);
+      },
     );
   }
 
@@ -454,20 +497,19 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
   // Sélection des filtres
   // ---------------------------------------------------------------------
 
-  Future<void> _ouvrirFiltres(Map<String, String> villesDisponibles) async {
-    final villes = villesDisponibles.entries.toList()
-      ..sort((a, b) => a.value.compareTo(b.value));
-
-    final choix = await showApsFilterSheet<({TypeStructure? type, String? villeId})>(
+  /// Feuille de filtres, sur le modèle de celle des médecins.
+  Future<void> _ouvrirFiltres() async {
+    final f = _filtresServeur;
+    final choix = await showApsFilterSheet<_FiltresCentreSheet>(
       context: context,
-      initial: (type: _selectedType, villeId: _selectedVilleId),
-      reset: (type: null, villeId: null),
-      builder: (f, maj) => [
+      initial: (type: _selectedType, paysId: f.paysId, villeId: f.villeId, tri: _tri),
+      reset: (type: null, paysId: null, villeId: null, tri: 'pertinence'),
+      builder: (c, maj) => [
         ApsFilterSection(
           title: 'Type de structure',
           child: ApsFilterChoices<TypeStructure?>(
-            value: f.type,
-            onChanged: (v) => maj((type: v, villeId: f.villeId)),
+            value: c.type,
+            onChanged: (v) => maj((type: v, paysId: c.paysId, villeId: c.villeId, tri: c.tri)),
             options: [
               const ApsFilterOption(null, 'Tous les types'),
               for (final t in TypeStructure.values)
@@ -475,15 +517,19 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
             ],
           ),
         ),
+        ApsFiltrePaysVille(
+          paysId: c.paysId,
+          villeId: c.villeId,
+          onChanged: (paysId, villeId) =>
+              maj((type: c.type, paysId: paysId, villeId: villeId, tri: c.tri)),
+        ),
         ApsFilterSection(
-          title: 'Ville',
-          child: ApsFilterChoices<String?>(
-            value: f.villeId,
-            onChanged: (v) => maj((type: f.type, villeId: v)),
+          title: 'Trier par',
+          child: ApsFilterChoices<String>(
+            value: c.tri,
+            onChanged: (v) => maj((type: c.type, paysId: c.paysId, villeId: c.villeId, tri: v)),
             options: [
-              const ApsFilterOption(null, 'Toutes les villes'),
-              for (final v in villes)
-                ApsFilterOption(v.key, v.value, icon: Icons.location_on_outlined),
+              for (final e in apsLibellesTriAnnuaire.entries) ApsFilterOption(e.key, e.value),
             ],
           ),
         ),
@@ -492,8 +538,11 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
     if (choix == null || !mounted) return;
     setState(() {
       _selectedType = choix.type;
-      _selectedVilleId = choix.villeId;
+      _tri = choix.tri;
     });
+    if (choix.paysId != f.paysId || choix.villeId != f.villeId) {
+      _appliquerPaysVille(choix.paysId, choix.villeId);
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -540,4 +589,10 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
   }
 }
 
-
+/// Brouillon de la feuille de filtres de [CentreSantePage].
+typedef _FiltresCentreSheet = ({
+  TypeStructure? type,
+  String? paysId,
+  String? villeId,
+  String tri,
+});

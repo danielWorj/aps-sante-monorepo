@@ -3,6 +3,7 @@ import { Link, NavLink } from 'react-router-dom';
 import logoApsa from '../assets/img/logoapsa.jpeg';
 import { useAuth } from '../context/AuthContext';
 import { aUnRole, ROLES_ESPACE } from '../utils/roles';
+import { useAnnoncesNonLues } from './annonces/annoncesVues';
 
 function navLinkClass({ isActive }) {
   return isActive ? 'active' : undefined;
@@ -13,6 +14,7 @@ export default function Navbar() {
   const [servicesOpen, setServicesOpen] = useState(false); // dropdown Services
   const servicesRef = useRef(null);
   const { user } = useAuth();
+  const annoncesNonLues = useAnnoncesNonLues();
 
   // Ferme le dropdown Services si on clique en dehors
   useEffect(() => {
@@ -117,6 +119,14 @@ export default function Navbar() {
                   onClick={closeAll}
                 >
                   <i className="fa-solid fa-store" /> Mon espace
+                </NavLink>
+              </li>
+            )}
+            {aUnRole(user, ROLES_ESPACE.annonces) && (
+              <li>
+                <NavLink to="/mes-annonces" className={navLinkClass} onClick={closeAll}>
+                  <i className="fa-solid fa-bell" /> Annonces
+                  {annoncesNonLues > 0 && <span className="nav-badge ms-1">{annoncesNonLues}</span>}
                 </NavLink>
               </li>
             )}

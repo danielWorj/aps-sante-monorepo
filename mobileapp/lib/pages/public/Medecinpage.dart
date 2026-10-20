@@ -404,18 +404,36 @@ class _MedecinPageState extends State<MedecinPage> {
                       _buildFilterChips(),
                       const SizedBox(height: 12),
                       const _BandeauDemandeRapide(),
+                      const SizedBox(height: 8),
+                      ApsInvitationPro(
+                        question: 'Vous êtes médecin ?',
+                        libelle: 'Devenir médecin',
+                        icone: Icons.medical_services_outlined,
+                        onPressed: () => ouvrirDevenirMedecin(context),
+                      ),
                       _buildResultHeader(resultats.length),
                       if (resultats.isEmpty)
                         _buildEmptyState()
                       else
-                        for (var i = 0; i < resultats.length; i++) ...[
-                          // Publicité de PAGE_MEDECIN glissée après les
-                          // deux premiers résultats.
-                          if (i == 2) _buildPublicites(),
-                          _carte(resultats[i]),
-                        ],
-                      if (resultats.isNotEmpty && resultats.length <= 2)
-                        _buildPublicites(),
+                        // 5 médecins par page, pagination sous la liste.
+                        ApsListePaginee<Medecin>(
+                          elements: resultats,
+                          cleReinitialisation: Object.hash(
+                            identityHashCode(medecins),
+                            _tri,
+                            _filtreVerifie,
+                            _filtreTele,
+                          ),
+                          construirePage: (context, page) => [
+                            for (var i = 0; i < page.length; i++) ...[
+                              // Publicité de PAGE_MEDECIN glissée après
+                              // les deux premiers résultats de la page.
+                              if (i == 2) _buildPublicites(),
+                              _carte(page[i]),
+                            ],
+                            if (page.length <= 2) _buildPublicites(),
+                          ],
+                        ),
                     ],
                   );
                 },

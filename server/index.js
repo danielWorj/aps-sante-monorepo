@@ -39,6 +39,7 @@ import abonnementAssuranceRoutes from "./src/routes/abonnementAssurance.routes.j
 import abonnementPresenceRoutes from "./src/routes/abonnementPresence.routes.js";
 import offreRdvRoutes from "./src/routes/offreRdv.routes.js";
 import whatsappRoutes from "./src/routes/whatsapp.routes.js";
+import smsRoutes from "./src/routes/sms.routes.js";
 import { demarrerScheduler } from "./src/lib/scheduler.js";
 
 const app = express();
@@ -126,6 +127,17 @@ const limiteurGoogleMaps = rateLimit({
 });
 app.use("/api/google-maps", limiteurGoogleMaps);
 
+// Chaque code de vérification envoyé est un SMS facturé : limite IP en
+// plus des plafonds par numéro / IP tenus en base (verificationTelephone.service.js).
+const limiteurVerificationTelephone = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Trop de tentatives de vérification, réessayez plus tard." },
+});
+app.use("/api/verification-telephone", limiteurVerificationTelephone);
+
 // ─── Route de test ────────────────────────────────────────────
 app.get("/", (_req, res) => {
   res.json({ message: "Serveur lancé sans erreur" });
@@ -169,6 +181,8 @@ app.use("/api", abonnementPresenceRoutes);
 app.use("/api", offreRdvRoutes);
 // WhatsApp : numéros expéditeurs, message de test, journal des envois.
 app.use("/api", whatsappRoutes);
+// SMS (Twilio) : administration, rappel de statut, vérification de numéro par code.
+app.use("/api", smsRoutes);
 // NB : le webhook Stripe (paiementWebhookRoutes) est déjà monté plus
 // haut, avant express.json() — voir commentaire à cet endroit.
 

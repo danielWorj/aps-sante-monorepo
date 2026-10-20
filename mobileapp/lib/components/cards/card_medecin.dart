@@ -69,9 +69,11 @@ class CardMedecin extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Photo mise en avant (64 px) ; initiales à défaut.
               ApsAvatar(
                 name: nom,
                 photoUrl: photoUrl,
+                size: 64,
                 online: disponibleAujourdhui,
               ),
               const SizedBox(width: 12),

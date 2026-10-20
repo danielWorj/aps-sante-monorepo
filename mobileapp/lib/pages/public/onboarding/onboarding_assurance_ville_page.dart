@@ -6,6 +6,7 @@ import '../../../controllers/referentiel_controller.dart';
 import '../../../models/referentiel_models.dart';
 import 'onboarding_assurance_type_page.dart';
 import 'onboarding_progress.dart';
+import 'onboarding_passer.dart';
 
 /// Écran 1.3.1 — Choix de la ville (étape 1/2 du sous-parcours
 /// « Assurances »), même principe que le sous-parcours « Médecins et
@@ -89,6 +90,7 @@ class _OnboardingAssuranceVillePageState
         backgroundColor: AppColors.paper,
         elevation: 0,
         foregroundColor: AppColors.ink,
+        actions: const [OnboardingPasser()],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

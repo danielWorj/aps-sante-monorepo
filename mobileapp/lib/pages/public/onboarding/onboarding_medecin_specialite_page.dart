@@ -7,6 +7,7 @@ import '../../../models/medecin_models.dart';
 import '../Medecinpage.dart' show MedecinPage, medecinProviderContainer;
 import 'onboarding_medecin_ville_page.dart';
 import 'onboarding_progress.dart';
+import 'onboarding_passer.dart';
 
 /// Écran 1.1.2 — Choix de la spécialité (étape 2/2 du sous-parcours
 /// « Médecins et professionnels », après la ville — voir
@@ -91,6 +92,7 @@ class _OnboardingMedecinSpecialitePageState
         backgroundColor: AppColors.paper,
         elevation: 0,
         foregroundColor: AppColors.ink,
+        actions: const [OnboardingPasser()],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

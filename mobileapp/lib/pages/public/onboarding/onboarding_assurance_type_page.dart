@@ -6,6 +6,7 @@ import '../../../controllers/assurance_controller.dart';
 import '../../../models/assurance_models.dart';
 import '../Assurancepage.dart';
 import 'onboarding_progress.dart';
+import 'onboarding_passer.dart';
 
 /// Écran 1.3.2 — Choix du type d'acteur (étape 2/2 du sous-parcours
 /// « Assurances », après la ville — voir
@@ -64,6 +65,7 @@ class _OnboardingAssuranceTypePageState
         backgroundColor: AppColors.paper,
         elevation: 0,
         foregroundColor: AppColors.ink,
+        actions: const [OnboardingPasser()],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

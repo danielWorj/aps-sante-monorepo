@@ -168,6 +168,7 @@ class _DoctorStrip extends StatelessWidget {
                   ],
                 ),
               ),
+              const BoutonDeconnexion(),
             ],
           ),
         );
@@ -215,18 +216,19 @@ class _StatLine extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: ApsCard(
-                          color: AppColors.ink,
+                          // Même vert que la carte « prochain RDV » de l'accueil.
+                          gradient: AppColors.gradientForest,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text("Aujourd'hui",
-                                  style: AppTextStyles.xs.copyWith(color: Colors.white60)),
+                                  style: AppTextStyles.xs.copyWith(color: Colors.white.withValues(alpha: 0.8))),
                               Text.rich(
                                 TextSpan(children: [
                                   TextSpan(text: '$aujourd_hui '),
                                   const TextSpan(
                                     text: 'RDV',
-                                    style: TextStyle(fontSize: 13, color: Colors.white60),
+                                    style: TextStyle(fontSize: 13, color: Colors.white70),
                                   ),
                                 ]),
                                 style: const TextStyle(
@@ -247,8 +249,8 @@ class _StatLine extends ConsumerWidget {
                                         height: 5,
                                         decoration: BoxDecoration(
                                           color: aujourd_hui == 0
-                                              ? Colors.white24
-                                              : AppColors.mint,
+                                              ? Colors.white30
+                                              : Colors.white,
                                           borderRadius: BorderRadius.circular(5),
                                         ),
                                       ),

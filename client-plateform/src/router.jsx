@@ -88,6 +88,7 @@ import PortailAnnonceur from './pages/PortailAnnonceur.jsx';
 
 //ANNONCES 
 import FicheAnnonce from './pages/FicheAnnonce.jsx';
+import { AssuranceAnnonces, EspaceAnnonces, MedecinAnnonces, PatientAnnonces } from './components/portails/components/portail-annonces.jsx';
 
 export const router = createBrowserRouter([
   {
@@ -186,6 +187,12 @@ export const router = createBrowserRouter([
           { path: '/portail/annonceur/publicites/:id', element: <PortailAnnonceur /> },
         ],
       },
+      // Annonces reçues des espaces sans portail dédié (pharmacie, structure,
+      // annonceur) ; patient, médecin et assurance les ont dans leur portail.
+      {
+        element: <RequireAuth roles={ROLES_ESPACE.annonces} />,
+        children: [{ path: '/mes-annonces', element: <EspaceAnnonces /> }],
+      },
     ],
   },
   {
@@ -201,6 +208,7 @@ export const router = createBrowserRouter([
           { path: '/portail/medecin-demandes', element: <MedecinDemandes /> },
           { path: '/portail/medecin-tableau-de-bord', element: <MedecinTableauDeBord /> },
           { path: '/portail/medecin-avis', element: <MedecinAvis /> },
+          { path: '/portail/medecin-annonces', element: <MedecinAnnonces /> },
         ]
       },
     ],
@@ -214,6 +222,7 @@ export const router = createBrowserRouter([
           { path: '/portail/patient-rdv', element: <PatientRdv /> },
           { path: '/portail/patient-demandes', element: <PatientDemandes /> },
           { path: '/portail/patient-profil', element: <PatientProfil /> },
+          { path: '/portail/patient-annonces', element: <PatientAnnonces /> },
         ]
       },
     ],
@@ -238,6 +247,7 @@ export const router = createBrowserRouter([
           { path: '/portail/assurance-profil', element: <AssuranceProfil /> },
           { path: '/portail/assurance-medias', element: <AssuranceMedias /> },
           { path: '/portail/assurance-abonnement', element: <AssuranceAbonnement /> },
+          { path: '/portail/assurance-annonces', element: <AssuranceAnnonces /> },
         ],
       },
     ],

@@ -93,6 +93,7 @@ class PortailPatientAccueil extends ConsumerWidget {
                       ],
                     ),
                   ),
+                  const BoutonDeconnexion(),
                 ],
               ),
             ),

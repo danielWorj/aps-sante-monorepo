@@ -10,11 +10,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../controllers/annonce_controller.dart';
 import '../../controllers/reputation_medecin_controller.dart';
 import '../../controllers/notification_controller.dart';
 import '../../controllers/offre_rdv_controller.dart';
 import '../../controllers/rendez_vous_controller.dart';
 import '../../models/rendez_vous_models.dart';
+import '../../pages/portails/annonces/portail_annonces.dart';
 import '../../utils/fonds.dart';
 import '../style/colors.dart';
 import '../style/text_styles.dart';
@@ -112,7 +114,9 @@ class NotificationsBell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final nonLues = ref.watch(notificationsNonLuesProvider);
+    // Les annonces nouvelles comptent dans la pastille : on les ouvre
+    // depuis la feuille (pas de place pour une 2e icône dans les en-têtes).
+    final int nonLues = ref.watch(notificationsNonLuesProvider) + ref.watch(annoncesNonLuesProvider);
 
     return Semantics(
       button: true,
@@ -169,6 +173,10 @@ class NotificationsBell extends ConsumerWidget {
           Navigator.of(feuille).pop();
           _marquerEtAllerAuxRendezVous(ref, notification);
         },
+        onOuvrirAnnonces: () {
+          Navigator.of(feuille).pop();
+          ouvrirAnnonces(context);
+        },
       ),
     );
   }
@@ -202,8 +210,9 @@ class NotificationsBell extends ConsumerWidget {
 /// Contenu de la feuille : en-tête + « Tout marquer comme lu » + liste.
 class _FeuilleNotifications extends ConsumerWidget {
   final void Function(NotificationApp) onOuvrir;
+  final VoidCallback onOuvrirAnnonces;
 
-  const _FeuilleNotifications({required this.onOuvrir});
+  const _FeuilleNotifications({required this.onOuvrir, required this.onOuvrirAnnonces});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -243,6 +252,8 @@ class _FeuilleNotifications extends ConsumerWidget {
                 ],
               ),
             ),
+            _LigneAnnonces(nouvelles: ref.watch(annoncesNonLuesProvider), onTap: onOuvrirAnnonces),
+            const Divider(height: 1, color: AppColors.line),
             if (etat.notifications.isEmpty)
               const ApsEmptyState(
                 icon: Icons.notifications_none_rounded,
@@ -266,6 +277,46 @@ class _FeuilleNotifications extends ConsumerWidget {
                   ),
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Entrée « Annonces » en tête de la feuille.
+class _LigneAnnonces extends StatelessWidget {
+  final int nouvelles;
+  final VoidCallback onTap;
+
+  const _LigneAnnonces({required this.nouvelles, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 10, 14, 12),
+        child: Row(
+          children: [
+            ApsIconTile(Icons.campaign_outlined, tone: nouvelles > 0 ? ApsTone.green : ApsTone.neutral),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Annonces', style: AppTextStyles.strong.copyWith(fontSize: 13)),
+                  const SizedBox(height: 2),
+                  Text(
+                    nouvelles > 0
+                        ? "$nouvelles nouvelle${nouvelles > 1 ? 's' : ''} annonce${nouvelles > 1 ? 's' : ''} d'APS Santé"
+                        : "Les informations publiées par APS Santé",
+                    style: AppTextStyles.small.copyWith(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.ink3),
           ],
         ),
       ),

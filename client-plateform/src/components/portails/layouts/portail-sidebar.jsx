@@ -29,12 +29,14 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import { deconnecter as deconnecterApi } from "../../../services/authService";
+import { useAnnoncesNonLues } from "../../annonces/annoncesVues";
 
 const LIENS = [
   { to: "/portail/medecin-tableau-de-bord", icone: "fa-chart-line", label: "Tableau de bord" },
   { to: "/portail/medecin-rdv", icone: "fa-calendar-check", label: "Rendez-vous", badgeKey: "rdvBadge" },
   { to: "/portail/medecin-demandes", icone: "fa-bullhorn", label: "Demandes patients" },
   { to: "/portail/medecin-avis", icone: "fa-star", label: "Avis & notes" },
+  { to: "/portail/medecin-annonces", icone: "fa-bell", label: "Annonces", badgeKey: "annoncesBadge" },
   { to: "/portail/medecin-profil", icone: "fa-user-doctor", label: "Profil" },
   { to: "/portail/medecin-agenda", icone: "fa-calendar-days", label: "Agenda" },
   { to: "/portail/medecin-abonnement", icone: "fa-id-card-clip", label: "Abonnement" },
@@ -80,7 +82,7 @@ const PortailSidebar = ({
   const specialiteAffichee = specialite ?? medecin?.specialite?.nom ?? "";
   const estVerifie = verifie ?? (medecin ? medecin.statut_verification === "publie" : false);
 
-  const badges = { rdvBadge };
+  const badges = { rdvBadge, annoncesBadge: useAnnoncesNonLues() };
 
   const handleDeconnexion = async (e) => {
     e.preventDefault();

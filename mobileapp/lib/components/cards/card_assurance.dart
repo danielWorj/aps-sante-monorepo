@@ -24,6 +24,7 @@ class CardAssurance extends StatelessWidget {
     super.key,
     required this.nom,
     required this.sigle,
+    this.imageUrl,
     required this.ville,
     required this.description,
     this.numeroAgrement,
@@ -39,6 +40,9 @@ class CardAssurance extends StatelessWidget {
 
   /// Sigle affiché dans le logo (ex : « AXA », « BE »).
   final String sigle;
+
+  /// Logo de la fiche ; à défaut, le sigle.
+  final String? imageUrl;
   final String ville;
   final String description;
   final String? numeroAgrement;
@@ -59,18 +63,23 @@ class CardAssurance extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(color: fondLogo, borderRadius: BorderRadius.circular(10)),
-                alignment: Alignment.center,
-                child: Text(
-                  sigle,
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.fontDisplay,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12.5,
-                    color: couleurLogo,
+              ApsVignette(
+                imageUrl: imageUrl,
+                size: 52,
+                radius: 10,
+                repli: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(color: fondLogo, borderRadius: BorderRadius.circular(10)),
+                  alignment: Alignment.center,
+                  child: Text(
+                    sigle,
+                    style: TextStyle(
+                      fontFamily: AppTextStyles.fontDisplay,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12.5,
+                      color: couleurLogo,
+                    ),
                   ),
                 ),
               ),

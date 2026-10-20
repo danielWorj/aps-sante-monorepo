@@ -41,6 +41,9 @@ export const ROLES_ESPACE = Object.freeze({
     ROLES.AGENT_PHARMACIE,
     ROLES.AGENT_STRUCTURE_SANTE,
   ],
+  // /mes-annonces : espaces sans portail dédié (les autres rôles ont la
+  // rubrique dans leur portail).
+  annonces: [ROLES.AGENT_PHARMACIE, ROLES.AGENT_STRUCTURE_SANTE, ROLES.ANNONCEUR],
 });
 
 const ACCUEIL_PAR_ROLE = Object.freeze({

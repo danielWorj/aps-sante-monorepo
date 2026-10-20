@@ -17,12 +17,13 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import { deconnecter as deconnecterApi } from "../../../services/authService";
+import { useAnnoncesNonLues } from "../../annonces/annoncesVues";
 
 const LIENS = [
   { to: "/portail/patient-rdv", icone: "fa-calendar-check", label: "Rendez-vous", badgeKey: "rdvBadge" },
   { to: "/portail/patient-demandes", icone: "fa-bullhorn", label: "Demande rapide" },
   { to: "/portail/patient-messages", icone: "fa-comment-medical", label: "Messages", badgeKey: "messagesBadge" },
-  { to: "/portail/patient-annonces", icone: "fa-bullhorn", label: "Annonces", badgeKey: "annoncesBadge" },
+  { to: "/portail/patient-annonces", icone: "fa-bell", label: "Annonces", badgeKey: "annoncesBadge" },
   { to: "/portail/patient-profil", icone: "fa-user", label: "Profil" },
 ];
 
@@ -39,7 +40,7 @@ const PatientPortailSidebar = ({
   // backend n'expose pas encore les données patient dédiées).
   rdvBadge = 0,
   messagesBadge = 0,
-  annoncesBadge = 0,
+  annoncesBadge,
   solde,
 }) => {
   const { pathname } = useLocation();
@@ -59,7 +60,8 @@ const PatientPortailSidebar = ({
     : "—";
   const initiales = user ? calculerInitiales(user.prenom, user.nom) : "…";
 
-  const badges = { rdvBadge, messagesBadge, annoncesBadge };
+  const annoncesNonLues = useAnnoncesNonLues();
+  const badges = { rdvBadge, messagesBadge, annoncesBadge: annoncesBadge ?? annoncesNonLues };
 
   const handleDeconnexion = async (e) => {
     e.preventDefault();

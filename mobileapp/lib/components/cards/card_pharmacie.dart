@@ -28,6 +28,7 @@ class CardPharmacie extends StatelessWidget {
     super.key,
     required this.nom,
     required this.quartier,
+    this.imageUrl,
     this.deGarde = false,
     this.verifiee = false,
     this.numeroOrdre,
@@ -39,6 +40,9 @@ class CardPharmacie extends StatelessWidget {
 
   final String nom;
   final String quartier;
+
+  /// Photo de la fiche ; à défaut, l'icône pharmacie.
+  final String? imageUrl;
   final bool deGarde;
   final bool verifiee;
   final String? numeroOrdre;
@@ -58,18 +62,21 @@ class CardPharmacie extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: [
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              color: deGarde ? AppColors.b1 : AppColors.bg,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              Icons.local_pharmacy_rounded,
-              color: deGarde ? AppColors.b6 : AppColors.ink3,
-              size: 26,
+          ApsVignette(
+            imageUrl: imageUrl,
+            repli: Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: deGarde ? AppColors.b1 : AppColors.bg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.local_pharmacy_rounded,
+                color: deGarde ? AppColors.b6 : AppColors.ink3,
+                size: 26,
+              ),
             ),
           ),
           const SizedBox(width: 12),

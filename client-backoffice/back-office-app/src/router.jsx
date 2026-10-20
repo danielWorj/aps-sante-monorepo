@@ -60,6 +60,8 @@ import StructureSante from './pages/StructureSante';
 import GestionApk from './pages/GestionApk';
 // WHATSAPP
 import WhatsApp from './pages/WhatsApp';
+// SMS (Twilio)
+import Sms from './pages/Sms';
 // import Medecin from './pages/Medecin';
 // import StructureSante from './pages/StructureSante';
 // import Pharmacie from './pages/Pharmacie';
@@ -140,6 +142,8 @@ export const router = createBrowserRouter([
           { path: '/apk', element: <GestionApk /> },
           // WHATSAPP : numéro expéditeur, test, journal des envois
           { path: '/whatsapp', element: <WhatsApp /> },
+          // SMS (Twilio) : configuration, test, journal des envois
+          { path: '/sms', element: <Sms /> },
           
           //   { path: '/pharmacie', element: <Pharmacie /> },
           //   { path: '/structure-sante', element: <StructureSante /> },

@@ -184,6 +184,9 @@ class ApiRealEndpoints {
   static String publicitesParCodePage(String code) =>
       '${baseUrl}/publicites/par-page/$code';
 
+  // ─── Annonces (publiées par APS Santé, route publique) ───────────────
+  static const String annonces = '${baseUrl}/annonces';
+
   // ─── Patients (fiche patient — module transverse "Gestion des
   // médecins") ────────────────────────────────────────────────────────
   // Voir patient.routes.js : contrairement à /medecins (annuaire

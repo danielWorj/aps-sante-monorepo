@@ -1,0 +1,28 @@
+/* Annonces reçues (ListeAnnonces.jsx) — portails patient, médecin, assurance, espaces. */
+.annonces-liste{ display:flex; flex-direction:column; gap:.9rem; }
+.annonces-liste > .tdb-segment{ align-self:flex-start; }
+
+.annonce-carte{ display:flex; gap:1rem; padding:1rem; margin:0; }
+.annonce-carte.is-expiree{ opacity:.65; }
+.annonce-visuel{
+  flex:0 0 140px; height:96px; border-radius:var(--radius-md); overflow:hidden;
+  background:var(--surface-sunk); display:flex; align-items:center; justify-content:center;
+}
+.annonce-visuel img{ width:100%; height:100%; object-fit:cover; }
+.annonce-visuel > i{ font-size:1.6rem; color:var(--ink-faint); }
+
+.annonce-corps{ flex:1; min-width:0; }
+.annonce-entete{ display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+.annonce-entete h2{ font-size:1rem; margin:0; }
+.annonce-meta{ display:flex; flex-wrap:wrap; gap:.4rem 1rem; margin-top:.3rem; font-size:.78rem; color:var(--ink-soft); }
+.annonce-meta i{ color:var(--ink-faint); margin-right:.2rem; }
+.annonce-texte{
+  margin:.5rem 0 0; font-size:.88rem; line-height:1.55; color:var(--ink-soft);
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
+}
+.annonce-actions{ display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.7rem; }
+
+@media (max-width:576px){
+  .annonce-carte{ flex-direction:column; }
+  .annonce-visuel{ flex-basis:auto; width:100%; height:140px; }
+}

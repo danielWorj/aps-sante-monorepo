@@ -25,6 +25,7 @@ class CardStructure extends StatelessWidget {
     super.key,
     required this.nom,
     required this.ville,
+    this.imageUrl,
     this.type = StructureType.hopital,
     this.verifiee = false,
     required this.onAppeler,
@@ -34,6 +35,9 @@ class CardStructure extends StatelessWidget {
 
   final String nom;
   final String ville;
+
+  /// Photo de la fiche ; à défaut, l'icône de la structure.
+  final String? imageUrl;
   final StructureType type;
   final bool verifiee;
   final VoidCallback onAppeler;
@@ -68,7 +72,10 @@ class CardStructure extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: [
-          ApsIconTile(Icons.local_hospital_outlined, tone: _tone, size: 58),
+          ApsVignette(
+            imageUrl: imageUrl,
+            repli: ApsIconTile(Icons.local_hospital_outlined, tone: _tone, size: 58),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
