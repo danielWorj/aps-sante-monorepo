@@ -159,7 +159,7 @@ class _CreerPinScreenState extends ConsumerState<CreerPinScreen> {
                   const SizedBox(height: 14),
                 ],
                 if (!_initial) ...[
-                  DropdownButtonFormField<String>(
+                  ApsSelectField<String>(
                     initialValue: pays.any((p) => p.codeIso2 == _paysIso2) || pays.isEmpty ? _paysIso2 : pays.first.codeIso2,
                     decoration: const InputDecoration(labelText: 'Pays du numéro', prefixIcon: Icon(Icons.public_rounded, size: 19)),
                     items: (pays.isEmpty ? const [('CM', 'Cameroun')] : [for (final p in pays) (p.codeIso2, p.nom)])

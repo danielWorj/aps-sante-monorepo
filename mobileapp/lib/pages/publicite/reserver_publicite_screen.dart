@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../components/style/colors.dart';
+import '../../components/ui/aps_select.dart';
 import '../../components/style/text_styles.dart';
 import '../../controllers/annonceur_publicite_controller.dart';
 import '../../controllers/authentification_controller.dart';
@@ -324,7 +325,7 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
             ),
           _Bloc(numero: 1, titre: 'Page, position et durée', enfants: [
             if (invite) ...[
-              DropdownButtonFormField<String>(
+              ApsSelectField<String>(
                 initialValue: _paysId,
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Pays de diffusion *', border: OutlineInputBorder()),
@@ -340,7 +341,7 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
               ),
               const SizedBox(height: 12),
             ],
-            DropdownButtonFormField<String>(
+            ApsSelectField<String>(
               initialValue: _page,
               decoration: const InputDecoration(labelText: 'Page', border: OutlineInputBorder()),
               items: [

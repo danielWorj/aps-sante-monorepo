@@ -20,6 +20,7 @@ import '../../../components/alert/app_alert.dart';
 import '../../../components/buttons/bouton_payer_rdv.dart';
 import '../../../components/cards/badge_chip.dart';
 import '../../../components/style/colors.dart';
+import '../../../components/ui/aps_select.dart';
 import '../../../components/style/text_styles.dart';
 import '../../../components/ui/aps_ui.dart';
 import '../../../controllers/authentification_controller.dart';
@@ -256,7 +257,7 @@ class _FormulaireDemandeState extends ConsumerState<_FormulaireDemande> {
         Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          DropdownButtonFormField<String>(
+          ApsSelectField<String>(
             initialValue: _specialiteId,
             isExpanded: true,
             decoration: _deco('Spécialité', Icons.medical_services_outlined),
@@ -267,7 +268,7 @@ class _FormulaireDemandeState extends ConsumerState<_FormulaireDemande> {
             onChanged: (v) => setState(() => _specialiteId = v),
           ),
           const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
+          ApsSelectField<String>(
             initialValue: _villeId,
             isExpanded: true,
             decoration: _deco('Ville', Icons.location_on_outlined),

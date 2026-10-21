@@ -20,6 +20,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../components/alert/app_alert.dart';
 import '../../components/style/colors.dart';
+import '../../components/ui/aps_select.dart';
 import '../../components/style/text_styles.dart';
 import '../../components/ui/aps_ui.dart';
 import '../../controllers/authentification_controller.dart';
@@ -244,7 +245,7 @@ class _DemandeRapidePageState extends ConsumerState<DemandeRapidePage> {
 
               /* ---------------------------- Besoin ---------------------------- */
               const ApsSectionTitle('Votre besoin'),
-              DropdownButtonFormField<String>(
+              ApsSelectField<String>(
                 initialValue: _specialiteId,
                 isExpanded: true,
                 decoration: _deco('Spécialité', Icons.medical_services_outlined),
@@ -255,7 +256,7 @@ class _DemandeRapidePageState extends ConsumerState<DemandeRapidePage> {
                 onChanged: (v) => setState(() => _specialiteId = v),
               ),
               const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
+              ApsSelectField<String>(
                 key: ValueKey('pays-$paysId'),
                 initialValue: paysId,
                 isExpanded: true,
@@ -269,7 +270,7 @@ class _DemandeRapidePageState extends ConsumerState<DemandeRapidePage> {
                 }),
               ),
               const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
+              ApsSelectField<String>(
                 key: ValueKey('ville-$paysId'),
                 initialValue: villes.any((v) => v.villeId == _villeId) ? _villeId : null,
                 isExpanded: true,

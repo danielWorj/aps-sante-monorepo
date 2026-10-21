@@ -211,14 +211,14 @@ export default function Teleconsultation() {
     setPhase("terminee");
   }, []);
 
-  // PATIENT : l'autre participant est sorti — si le médecin a clôturé la
-  // consultation, on raccroche proprement (sinon il s'est peut-être juste
+  // PATIENT : l'autre participant est sorti — si le médecin a terminé
+  // l'appel, on raccroche proprement (sinon il s'est peut-être juste
   // déconnecté : on reste dans la salle).
   const verifierClotureMedecin = useCallback(async () => {
     if (estLeMedecin || phaseRef.current !== "session") return;
     try {
       const bilan = await obtenirBilanVisio(id);
-      if (!bilan.termine || phaseRef.current !== "session") return;
+      if (!(bilan.visio_cloturee || bilan.termine) || phaseRef.current !== "session") return;
       try {
         apiRef.current?.executeCommand("hangup");
       } catch {
@@ -277,7 +277,8 @@ export default function Teleconsultation() {
             apiRef.current = api;
           }}
           onCallEnded={gererFinAppel}
-          onParticipantLeft={verifierClotureMedecin}
+          // La clôture du médecin peut suivre de peu son départ : relectures.
+          onParticipantLeft={() => [0, 3000, 8000].forEach((d) => setTimeout(verifierClotureMedecin, d))}
         />
       </div>
     );

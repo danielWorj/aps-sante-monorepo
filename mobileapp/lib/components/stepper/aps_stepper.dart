@@ -37,6 +37,7 @@ import 'package:flutter/services.dart';
 
 import '../buttons/app_buttons.dart';
 import '../style/colors.dart';
+import '../ui/aps_select.dart';
 import '../style/text_styles.dart';
 
 // ========================================================================
@@ -629,7 +630,7 @@ class ApsDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<T>(
+    return ApsSelectField<T>(
       // `value` (et non `initialValue`) : la valeur doit suivre les
       // réinitialisations faites par le parent (ex. ville remise à zéro
       // quand le pays change).

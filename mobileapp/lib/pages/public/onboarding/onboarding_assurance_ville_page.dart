@@ -107,7 +107,7 @@ class _OnboardingAssuranceVillePageState
               const SizedBox(height: 22),
               Text('Pays', style: AppTextStyles.cardMeta),
               const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
+              ApsSelectField<String>(
                 key: ValueKey('assurance-pays-$_paysId'),
                 value: _paysId,
                 isExpanded: true,
@@ -123,7 +123,7 @@ class _OnboardingAssuranceVillePageState
               const SizedBox(height: 16),
               Text('Ville', style: AppTextStyles.cardMeta),
               const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
+              ApsSelectField<String>(
                 key: ValueKey('assurance-ville-$_paysId-$_villeId'),
                 value: _villeId,
                 isExpanded: true,

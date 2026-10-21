@@ -14,6 +14,7 @@ import 'package:flutter/services.dart';
 
 import '../../repositories/retrait_repository.dart' show NumeroMobileMoney;
 import '../style/colors.dart';
+import '../ui/aps_select.dart';
 
 /// Saisie validée du formulaire de retrait.
 class SaisieRetrait {
@@ -116,7 +117,7 @@ class _DialogueRetraitState extends State<_DialogueRetrait> {
             Text('Solde disponible : ${_fcfa(widget.solde)}',
                 style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 14),
-            DropdownButtonFormField<String>(
+            ApsSelectField<String>(
               initialValue: _numeroId,
               isExpanded: true,
               decoration: const InputDecoration(

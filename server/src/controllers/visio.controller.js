@@ -92,9 +92,21 @@ export async function obtenirTokenVisio(req, res, next) {
       roomName
     );
 
+    // Le médecin (re)rejoint : l'appel n'est plus considéré comme clôturé,
+    // sinon le patient serait aussitôt raccroché par sa vérification.
+    if (estLeMedecin && rdv.visio_cloturee_le && !rdv.termine_le) {
+      await prisma.rendezVous.update({ where: { rdv_id }, data: { visio_cloturee_le: null } });
+    }
+
+    // Titre affiché dans Jitsi (sinon il affiche le nom technique de la salle).
+    const interlocuteur = estLeMedecin ? rdv.patient.utilisateur : rdv.medecin.utilisateur;
+    const nomInterlocuteur = [interlocuteur.prenom, interlocuteur.nom].filter(Boolean).join(" ");
+    const sujet = `Téléconsultation avec ${estLeMedecin ? "" : "Dr "}${nomInterlocuteur}`;
+
     res.json({
       token,
       roomName,
+      sujet,
       domain: process.env.JITSI_PUBLIC_DOMAIN || "localhost:8000",
     });
   } catch (err) {
@@ -304,6 +316,9 @@ async function bilanCloture(rdv_id, role, raison = null) {
     statut: rdv.statut,
     termine,
     termine_le: rdv.termine_le,
+    // Le médecin a terminé l'appel : le patient raccroche, même si la fin de
+    // consultation (paiement) n'a pas pu être constatée.
+    visio_cloturee: termine || Boolean(rdv.visio_cloturee_le),
     raison_non_terminee,
     delai_liberation_heures: delai,
     date_liberation:
@@ -356,6 +371,8 @@ async function chargerRdvParticipant(req, res) {
  * `muc-room-destroyed`, qui reste le filet de sécurité) — fin constatée si
  * les deux parties ont été présentes, T figé, fonds en séquestre T heures,
  * patient invité à noter. Idempotent.
+ * Dans tous les cas, la sortie du médecin pose `visio_cloturee_le` : le
+ * patient raccroche alors, même si la fin n'a pas pu être constatée.
  * PATIENT : sa sortie ne clôt rien (il peut avoir perdu la connexion) ;
  * l'appel renvoie seulement le bilan.
  */
@@ -366,6 +383,10 @@ export async function cloturerVisio(req, res, next) {
     const { rdv, role } = charge;
 
     let raison = null;
+    // Signal de fin d'appel pour le patient, posé avant toute règle de paiement.
+    if (role === "medecin" && !rdv.visio_cloturee_le) {
+      await prisma.rendezVous.update({ where: { rdv_id: rdv.rdv_id }, data: { visio_cloturee_le: new Date() } });
+    }
     if (role === "medecin" && !rdv.termine_le && STATUTS_AUTORISES_VISIO.includes(rdv.statut)) {
       if (rdv.medecin_present_le && rdv.patient_present_le) {
         try {

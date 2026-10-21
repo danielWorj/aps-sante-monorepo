@@ -14,9 +14,9 @@
 // deux). Même logique de modération que statut_verification sur
 // pharmacie.controller.js / medecin.controller.js.
 // Création : tout utilisateur authentifié (patient inclus) peut
-// déposer un avis sur une pharmacie ou sur un médecin. Toujours créé
-// "en_attente", quelle que soit la valeur envoyée (aucun rôle ne peut
-// publier directement son propre avis).
+// déposer un avis sur une pharmacie ou sur un médecin. Avis pharmacie :
+// toujours créé "en_attente". Avis médecin : publié directement (il porte
+// sur une consultation terminée du patient) ; l'admin peut le rejeter.
 // Modification : l'auteur peut corriger note/commentaire tant que
 // l'avis n'a pas encore été modéré (statut "en_attente" seulement —
 // une fois publié/rejeté, seul un admin/superadmin peut encore agir,
@@ -335,8 +335,8 @@ export async function obtenirAvisMedecin(req, res, next) {
  * Body : { rdv_id, note, note_ponctualite?, note_ecoute?, note_explications?,
  *          recommande?, commentaire?, anonyme? }
  * Réservé au PATIENT d'une consultation terminée (voir
- * verifierEligibiliteAvis) ; le médecin est déduit du RDV. Toujours créé
- * "en_attente" (modération), quel que soit le rôle.
+ * verifierEligibiliteAvis) ; le médecin est déduit du RDV. Publié
+ * directement (moyenne recalculée, médecin notifié) ; l'admin peut le rejeter.
  */
 export async function creerAvisMedecin(req, res, next) {
   try {
@@ -369,7 +369,10 @@ export async function creerAvisMedecin(req, res, next) {
           utilisateur_id: req.utilisateur.utilisateur_id,
           medecin_id: rdv.medecin_id,
           rdv_id: rdv.rdv_id,
-          statut_moderation: "en_attente",
+          // Publication directe (décision du 21/10) : l'avis porte sur une
+          // consultation réellement terminée, vérifiée ci-dessus. L'admin
+          // peut toujours le retirer (rejete), le médecin le signaler.
+          statut_moderation: "publie",
         },
       });
     } catch (err) {
@@ -380,8 +383,11 @@ export async function creerAvisMedecin(req, res, next) {
       throw err;
     }
 
+    await recalculerNoteMedecin(avis.medecin_id);
+    notifierAvisPublie(avis);
+
     return res.status(201).json({
-      message: "Merci ! Votre avis sera visible après une rapide vérification par notre équipe.",
+      message: "Merci ! Votre avis est publié sur la fiche du médecin.",
       avis,
     });
   } catch (err) {
