@@ -261,7 +261,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ],
 
                   if (_modePin) ...[
-                    DropdownButtonFormField<String>(
+                    ApsSelectField<String>(
                       initialValue: _paysIso2,
                       decoration: const InputDecoration(
                         labelText: 'Pays',

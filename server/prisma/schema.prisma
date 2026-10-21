@@ -2247,6 +2247,10 @@ model RendezVous {
   // date de libération se RECALCULE (termine_le + delai_liberation_heures),
   // elle n'est jamais stockée. NULL = consultation pas encore terminée.
   termine_le              DateTime?
+  // Le médecin a quitté / terminé la visio (POST /visio/:id/cloture) : signal
+  // de fin d'APPEL pour le patient, indépendant de termine_le (qui exige les
+  // deux présences). Remis à NULL si le médecin rejoint de nouveau la salle.
+  visio_cloturee_le       DateTime?
   // T (en heures) figé à la validation, lu dans parametre_delai_liberation
   // (comme taux_applique pour les amendes) : une modification ultérieure
   // de T ne touche pas les RDV déjà terminés.

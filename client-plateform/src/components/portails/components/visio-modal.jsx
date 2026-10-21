@@ -19,11 +19,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ConsultationRoom from "./../../visio/ConsultationRoom";
 import ClotureConsultation from "./../../visio/ClotureConsultation";
-import { obtenirBilanVisio } from "../../../services/visioService";
+import { cloturerVisio, obtenirBilanVisio } from "../../../services/visioService";
 import { useConfirmation } from "../../feedback";
 
 // Filet de sécurité côté patient : relecture du bilan pendant l'appel.
 const INTERVALLE_VERIFICATION_MS = 20_000;
+// Après la sortie d'un participant : la clôture du médecin peut arriver une
+// fraction de seconde après son départ de la salle, on relit donc à nouveau.
+const RELECTURES_APRES_SORTIE_MS = [0, 3_000, 8_000];
 
 function extraireInitiales(nom) {
   if (!nom) return "?";
@@ -84,7 +87,11 @@ const VisioModal = ({ rdv, patientNom, role = "medecin", onClose }) => {
     setPhase("cloture");
   }, []);
 
-  const raccrocher = useCallback((pourTous) => {
+  const raccrocher = useCallback(async (pourTous) => {
+    // Médecin : signale la fin AVANT de quitter, pour que le patient soit
+    // raccroché dès qu'il voit le médecin sortir (idempotent, renvoyé par la
+    // carte de clôture ensuite).
+    if (pourTous) await cloturerVisio(rdv.rdv_id).catch(() => {});
     const api = apiRef.current;
     if (!api) {
       surFinAppel();
@@ -103,18 +110,24 @@ const VisioModal = ({ rdv, patientNom, role = "medecin", onClose }) => {
     }
     // Si Jitsi n'émet aucun événement de sortie, on clôt quand même.
     setTimeout(surFinAppel, 2500);
-  }, [surFinAppel]);
+  }, [rdv.rdv_id, surFinAppel]);
 
-  // PATIENT : le médecin a-t-il clôturé ? Si oui, on quitte proprement l'appel.
+  // PATIENT : le médecin a-t-il terminé l'appel ? Si oui, on quitte proprement
+  // (même si la consultation n'est pas encore validée pour le paiement).
   const verifierClotureMedecin = useCallback(async () => {
     if (estMedecin || phaseRef.current !== "appel") return;
     try {
       const bilan = await obtenirBilanVisio(rdv.rdv_id);
-      if (bilan.termine && phaseRef.current === "appel") raccrocher(false);
+      if ((bilan.visio_cloturee || bilan.termine) && phaseRef.current === "appel") raccrocher(false);
     } catch {
       // Silencieux : on réessaiera au prochain événement / passage.
     }
   }, [estMedecin, rdv.rdv_id, raccrocher]);
+
+  const surSortieParticipant = useCallback(() => {
+    if (estMedecin) return;
+    RELECTURES_APRES_SORTIE_MS.forEach((delai) => setTimeout(verifierClotureMedecin, delai));
+  }, [estMedecin, verifierClotureMedecin]);
 
   useEffect(() => {
     if (estMedecin || phase !== "appel" || !enDirect) return undefined;
@@ -231,7 +244,7 @@ const VisioModal = ({ rdv, patientNom, role = "medecin", onClose }) => {
               }}
               onReady={() => setEnDirect(true)}
               onCallEnded={surFinAppel}
-              onParticipantLeft={verifierClotureMedecin}
+              onParticipantLeft={surSortieParticipant}
             />
           ) : (
             <ClotureConsultation

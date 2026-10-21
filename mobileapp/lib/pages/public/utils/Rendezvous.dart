@@ -1274,7 +1274,7 @@ class _RendezVousPageState extends State<RendezVousPage> {
               enfant: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  DropdownButtonFormField<String>(
+                  ApsSelectField<String>(
                     // `value` doit exister dans `items` : si le référentiel
                     // réel a fini de charger et ne contient pas le pays
                     // encore sélectionné depuis la liste de repli

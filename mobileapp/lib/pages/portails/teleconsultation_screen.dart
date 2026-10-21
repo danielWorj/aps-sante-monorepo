@@ -141,7 +141,7 @@ class _TeleconsultationScreenState
         ? widget.rdv.patient?.utilisateur
         : widget.rdv.medecin?.utilisateur;
     final sujet = interlocuteur != null
-        ? 'Consultation avec ${interlocuteur.prenom} ${interlocuteur.nom}'
+        ? "Téléconsultation avec ${_estMedecin ? '' : 'Dr '}${interlocuteur.prenom} ${interlocuteur.nom}"
         : 'Téléconsultation APS Santé';
 
     final options = JitsiMeetConferenceOptions(
@@ -152,6 +152,8 @@ class _TeleconsultationScreenState
         'startWithAudioMuted': false,
         'startWithVideoMuted': false,
         'subject': sujet,
+        // Affiché chez chacun (subject n'est appliqué que par le modérateur).
+        'localSubject': sujet,
         'prejoinPageEnabled': false,
         'disableModeratorIndicator': true,
       },
@@ -169,7 +171,12 @@ class _TeleconsultationScreenState
 
     final listener = JitsiMeetEventListener(
       conferenceJoined: (_) => _demarrerVerification(),
-      participantLeft: (_) => _verifierClotureMedecin(),
+      // La clôture du médecin peut suivre de peu son départ : relectures.
+      participantLeft: (_) {
+        for (final s in const [0, 3, 8]) {
+          Future<void>.delayed(Duration(seconds: s), _verifierClotureMedecin);
+        }
+      },
       conferenceTerminated: (url, error) => _surFinConference(),
       readyToClose: () => _surFinConference(),
     );
@@ -195,7 +202,7 @@ class _TeleconsultationScreenState
           .appelAuthentifie((token) => ref
               .read(visioRepositoryProvider)
               .obtenirBilan(rdvId: widget.rdv.rdvId, token: token));
-      if (bilan.termine && mounted && _etat == _EtatEcran.enConference) {
+      if (bilan.visioCloturee && mounted && _etat == _EtatEcran.enConference) {
         await _jitsiMeet.hangUp();
         _surFinConference();
       }
@@ -603,7 +610,7 @@ class _CarteClotureState extends ConsumerState<_CarteCloture> {
       var b = await _appel((t) => repo.cloturer(rdvId: widget.rdvId, token: t));
       // Le médecin clôt en quittant : le patient relit le bilan ~20 s.
       for (var i = 0;
-          !widget.estMedecin && !b.termine && b.enAttenteMedecin && i < _essaisAttente;
+          !widget.estMedecin && !b.visioCloturee && b.enAttenteMedecin && i < _essaisAttente;
           i++) {
         await Future<void>.delayed(_intervalleAttente);
         if (!mounted) return;
@@ -852,6 +859,32 @@ class _BilanPatient extends StatelessWidget {
   Widget build(BuildContext context) {
     final nomMedecin = 'Dr ${bilan.interlocuteurPrenom} ${bilan.interlocuteurNom}'.trim();
 
+    // Le médecin a terminé l'appel, consultation encore à valider : pas de
+    // « Rejoindre ».
+    if (!bilan.termine && bilan.visioCloturee) {
+      return Column(
+        children: [
+          const _Pastille(icone: Icons.check_circle_outline_rounded),
+          Text('Consultation terminée', style: _style(20, FontWeight.w800, AppColors.ink)),
+          const SizedBox(height: 8),
+          Text(
+            '$nomMedecin a mis fin à la téléconsultation. Merci de votre confiance.',
+            textAlign: TextAlign.center,
+            style: _style(13.5, FontWeight.w500, AppColors.ink2, hauteur: 1.5),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'La consultation est en cours de vérification. Vous pourrez noter le médecin '
+            'depuis vos rendez-vous dès qu’elle sera validée.',
+            textAlign: TextAlign.center,
+            style: _style(12, FontWeight.w500, AppColors.ink3, hauteur: 1.45),
+          ),
+          const SizedBox(height: 18),
+          _BoutonBleu(label: 'Fermer', onPressed: onFermer),
+        ],
+      );
+    }
+
     if (!bilan.termine) {
       return Column(
         children: [
@@ -972,7 +1005,7 @@ class _FormulaireAvisState extends ConsumerState<_FormulaireAvis> {
         enfants: [
           Text('Merci pour votre avis !', style: _style(14.5, FontWeight.w800, AppColors.bleuSanteFonce)),
           const SizedBox(height: 3),
-          Text('Il sera publié sur la fiche du médecin après vérification par APS Santé.',
+          Text('Il est désormais visible sur la fiche du médecin.',
               style: _style(12.5, FontWeight.w500, AppColors.ink2, hauteur: 1.45)),
         ],
       );

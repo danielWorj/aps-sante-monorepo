@@ -88,7 +88,7 @@ class _PinOublieScreenState extends ConsumerState<PinOublieScreen> {
                   AppAlert(type: AppAlertType.danger, message: _erreur!, onClose: () => setState(() => _erreur = null)),
                   const SizedBox(height: 12),
                 ],
-                DropdownButtonFormField<String>(
+                ApsSelectField<String>(
                   initialValue: _paysIso2,
                   decoration: const InputDecoration(labelText: 'Pays', prefixIcon: Icon(Icons.public_rounded, size: 19)),
                   items: (pays.isEmpty ? const [('CM', 'Cameroun')] : [for (final p in pays) (p.codeIso2, p.nom)])

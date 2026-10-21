@@ -13,6 +13,7 @@ export 'style/app_theme.dart';
 // Primitives de la refonte 2026
 export 'ui/aps_ui.dart';
 export 'ui/aps_filter_sheet.dart';
+export 'ui/aps_select.dart';
 export 'ui/aps_pagination.dart';
 export 'ui/aps_invitation_pro.dart';
 export 'ui/aps_filtre_pays_ville.dart';

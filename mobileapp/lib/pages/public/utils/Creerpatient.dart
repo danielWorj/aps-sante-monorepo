@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 
 import '../../../components/style/colors.dart';
+import '../../../components/ui/aps_select.dart';
 
 /// ============================================================
 /// PALETTE — reprise des variables CSS de ui-mobile.html
@@ -294,7 +295,7 @@ class _CreerPatientPageState extends State<CreerPatientPage> {
               _FormField(
                 label: 'Pays',
                 required: true,
-                child: DropdownButtonFormField<String>(
+                child: ApsSelectField<String>(
                   value: _pays,
                   isExpanded: true,
                   icon: const Icon(Icons.keyboard_arrow_down_rounded,

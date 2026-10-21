@@ -27,6 +27,10 @@ class BilanClotureVisio {
   final String role;
   final bool termine;
 
+  /// Le médecin a terminé l'appel (le patient raccroche), même si la fin de
+  /// consultation n'a pas encore pu être validée.
+  final bool visioCloturee;
+
   /// `en_attente_medecin`, `presences_incompletes`,
   /// `parametre_delai_absent`, `statut_incompatible`… ; null si terminée.
   final String? raisonNonTerminee;
@@ -43,6 +47,7 @@ class BilanClotureVisio {
     required this.rdvId,
     required this.role,
     required this.termine,
+    this.visioCloturee = false,
     this.raisonNonTerminee,
     this.delaiLiberationHeures,
     this.dateLiberation,
@@ -69,6 +74,7 @@ class BilanClotureVisio {
       rdvId: json['rdv_id'] as String,
       role: json['role'] as String? ?? 'patient',
       termine: json['termine'] == true,
+      visioCloturee: json['visio_cloturee'] == true || json['termine'] == true,
       raisonNonTerminee: json['raison_non_terminee'] as String?,
       delaiLiberationHeures: delai is num ? delai.toInt() : null,
       dateLiberation: dateLib is String ? DateTime.tryParse(dateLib) : null,

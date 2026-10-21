@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../components/style/colors.dart';
+import '../../../components/ui/aps_select.dart';
 import '../../../components/style/text_styles.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/portail_assurance_controller.dart';
@@ -284,7 +285,7 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
               style: AppTextStyles.cardMeta,
             ),
             const SizedBox(height: 8),
-            DropdownButtonFormField<int>(
+            ApsSelectField<int>(
               initialValue: _duree,
               decoration: const InputDecoration(labelText: 'Durée', border: OutlineInputBorder(), isDense: true),
               items: [

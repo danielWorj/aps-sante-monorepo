@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../components/stepper/aps_stepper.dart' show apsChoisirFichier, ApsFichier, ApsFichierException;
 import '../../../components/style/colors.dart';
+import '../../../components/ui/aps_select.dart';
 import '../../../components/style/text_styles.dart';
 import '../../../controllers/assurance_controller.dart' show assuranceRepositoryProvider;
 import '../../../controllers/authentification_controller.dart';
@@ -186,7 +187,7 @@ class _FormulaireFicheState extends ConsumerState<_FormulaireFiche> {
             const SizedBox(height: 12),
             TextFormField(controller: _nom, decoration: _deco('Dénomination'), validator: _requis),
             const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
+            ApsSelectField<String>(
               initialValue: _type,
               decoration: _deco('Type'),
               items: const [
@@ -217,7 +218,7 @@ class _FormulaireFicheState extends ConsumerState<_FormulaireFiche> {
               error: (_, _) => Text('Ville : ${widget.g.villeNom ?? '—'}', style: AppTextStyles.body),
               data: (liste) {
                 final ids = liste.map((v) => v.villeId).toSet();
-                return DropdownButtonFormField<String>(
+                return ApsSelectField<String>(
                   initialValue: ids.contains(_villeId) ? _villeId : null,
                   isExpanded: true,
                   decoration: _deco('Ville du siège'),

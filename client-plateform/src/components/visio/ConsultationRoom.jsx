@@ -81,6 +81,11 @@ function ConsultationRoom({ rdvId, onCallEnded, onReady, onApi, onParticipantLef
           liveStreamingEnabled: false,
           prejoinPageEnabled: false,
           disableModeratorIndicator: true,
+          // Titre lisible (« Téléconsultation avec Dr … ») au lieu du nom
+          // technique de la salle (rdv-<uuid>) ; localSubject vaut pour
+          // chacun, subject n'est appliqué que par le modérateur.
+          subject: visioData.sujet || "Téléconsultation APS Santé",
+          localSubject: visioData.sujet || "Téléconsultation APS Santé",
         }}
         interfaceConfigOverwrite={{
           TOOLBAR_BUTTONS: ["microphone", "camera", "hangup", "chat", "tileview"],

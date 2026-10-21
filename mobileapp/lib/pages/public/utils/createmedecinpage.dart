@@ -1550,7 +1550,7 @@ class _AppDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<T>(
+    return ApsSelectField<T>(
       value: value,
       isExpanded: true,
       icon: Icon(Icons.keyboard_arrow_down_rounded,

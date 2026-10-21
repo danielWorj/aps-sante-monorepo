@@ -57,7 +57,7 @@ export default function ClotureConsultation({ rdvId, role, onFermer, onRejoindre
   const charger = useCallback(async () => {
     try {
       let b = await cloturerVisio(rdvId);
-      for (let i = 0; role === "patient" && !b.termine && b.raison_non_terminee === "en_attente_medecin" && i < ESSAIS_ATTENTE; i += 1) {
+      for (let i = 0; role === "patient" && !b.visio_cloturee && b.raison_non_terminee === "en_attente_medecin" && i < ESSAIS_ATTENTE; i += 1) {
         await new Promise((r) => setTimeout(r, INTERVALLE_ATTENTE_MS));
         if (!monte.current) return;
         b = await obtenirBilanVisio(rdvId);
@@ -175,6 +175,32 @@ function BilanPatient({ bilan, onFermer, onRejoindre }) {
   const m = bilan.interlocuteur || {};
   const nomMedecin = `Dr ${[m.prenom, m.nom].filter(Boolean).join(" ")}`.trim();
 
+  // Le médecin a terminé l'appel mais la consultation reste à valider
+  // (présences non confirmées par la visio…) : pas de « Rejoindre ».
+  if (!bilan.termine && bilan.visio_cloturee) {
+    return (
+      <>
+        <div className="tcc-pastille"><i className="fa-solid fa-circle-check" /></div>
+        <h2 id="tcc-titre" className="tcc-titre">Consultation terminée</h2>
+        <p className="tcc-texte">
+          {nomMedecin} a mis fin à la téléconsultation. Merci de votre confiance.
+        </p>
+        <div className="tcc-encart is-neutre">
+          <i className="fa-solid fa-circle-info" />
+          <div>
+            <span>
+              La consultation est en cours de vérification. Vous pourrez noter le médecin depuis vos
+              rendez-vous dès qu&apos;elle sera validée.
+            </span>
+          </div>
+        </div>
+        <div className="tcc-actions">
+          <button type="button" className="tcc-btn" onClick={onFermer}>Fermer</button>
+        </div>
+      </>
+    );
+  }
+
   if (!bilan.termine) {
     return (
       <>
@@ -240,7 +266,7 @@ function FormulaireAvis({ rdvId }) {
         <i className="fa-solid fa-heart" />
         <div>
           <strong>Merci pour votre avis !</strong>
-          <span>Il sera publié sur la fiche du médecin après vérification par APS Santé.</span>
+          <span>Il est désormais visible sur la fiche du médecin.</span>
         </div>
       </div>
     );
