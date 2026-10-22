@@ -40,6 +40,14 @@ const InscriptionPortail = () => {
       path: '/structure-sante/creation',
     },
     {
+      id: 'laboratoire',
+      title: "Laboratoire d'analyses",
+      description: 'Laboratoires de biologie et centres de prélèvement',
+      icon: 'fa-flask-vial',
+      color: 'var(--teal)',
+      path: '/laboratoires/creation',
+    },
+    {
       id: 'assurance',
       title: 'Compagnie d\'Assurance',
       description: 'Assurances santé et mutuelles',

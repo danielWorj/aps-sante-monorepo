@@ -632,6 +632,7 @@ class _RendezVousPageState extends State<RendezVousPage> {
       motDePasse: motDePasse,
       paysId: _paysId!,
       dateNaissance: _dateNaissance!,
+      accepteCgu: _accepteConditions,
     );
 
     // POST /auth/register — ne renvoie JAMAIS de token (voir
@@ -1372,9 +1373,7 @@ class _RendezVousPageState extends State<RendezVousPage> {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text(
-                        "J'accepte les conditions d'utilisation et la "
-                            "politique de confidentialité.",
+                      child: TexteAcceptationLegale(
                         style: AppTextStyles.body.copyWith(fontSize: 11.5),
                       ),
                     ),

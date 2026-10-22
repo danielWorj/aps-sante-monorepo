@@ -18,10 +18,12 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import ConnexionModale from '../components/auth/ConnexionModale';
 import { useToast } from '../components/feedback';
 import { useAuth } from '../context/AuthContext';
+import { usePays } from '../context/PaysContext';
 import { inscrirePatient } from '../services/authService';
 import { listerPays, listerVilles } from '../services/geoService';
 import { listerSpecialites } from '../services/medecinService';
 import { publierOffre } from '../services/offreRdvService';
+import CaseAcceptationLegale, { MESSAGE_CGU_REQUISES } from '../components/legal/CaseAcceptationLegale';
 
 const TYPES_RDV = [
   { valeur: 'physique', libelle: 'Au cabinet', icone: 'fa-stethoscope' },
@@ -53,6 +55,9 @@ export default function DemandeRapide() {
   const estPatient = isAuthenticated && user?.role === 'patient';
   const autreRole = isAuthenticated && user?.role && user.role !== 'patient';
 
+  // Pays détecté ou choisi sur le site (PaysContext).
+  const { paysId: paysSite } = usePays();
+
   // Référentiels
   const [specialites, setSpecialites] = useState([]);
   const [listePays, setListePays] = useState([]);
@@ -83,8 +88,8 @@ export default function DemandeRapide() {
       .catch(() => setListePays([]));
   }, []);
 
-  // Pays par défaut : celui du patient connecté, sinon le premier du référentiel.
-  const paysParDefaut = user?.pays_id || listePays[0]?.pays_id || '';
+  // Pays détecté ou choisi sur le site (PaysContext), sinon celui du compte.
+  const paysParDefaut = paysSite || user?.pays_id || listePays[0]?.pays_id || '';
   const paysId = besoin.pays_id || paysParDefaut;
 
   useEffect(() => {
@@ -106,6 +111,7 @@ export default function DemandeRapide() {
 
   const majBesoin = (champ) => (e) => setBesoin((b) => ({ ...b, [champ]: e.target.value }));
   const majInsc = (champ) => (e) => setInsc((f) => ({ ...f, [champ]: e.target.value }));
+  const [accepteCgu, setAccepteCgu] = useState(false);
 
   const villeNom = villes.find((v) => v.ville_id === besoin.ville_id)?.nom;
 
@@ -116,6 +122,10 @@ export default function DemandeRapide() {
     const { specialite_id, ville_id, type_rdv, jour, heure, motif } = besoin;
     if (!specialite_id || !ville_id || !jour || !heure) {
       setErreur("Choisissez la spécialité, la ville, le jour et l'heure.");
+      return;
+    }
+    if (!isAuthenticated && !accepteCgu) {
+      setErreur(MESSAGE_CGU_REQUISES);
       return;
     }
     setEnvoi(true);
@@ -130,6 +140,7 @@ export default function DemandeRapide() {
           mot_de_passe: insc.mot_de_passe,
           pays_id: insc.pays_id || paysId,
           date_naissance: insc.date_naissance,
+          accepte_cgu: accepteCgu,
         });
         await connecter(insc.email.trim(), insc.mot_de_passe);
       }
@@ -191,7 +202,7 @@ export default function DemandeRapide() {
             <div className="info-card mb-3 d-flex align-items-center gap-3 flex-wrap">
               <i className="fa-solid fa-circle-info" style={{ color: 'var(--primary)' }} />
               <div className="flex-grow-1">
-                Vous êtes connecté avec un compte « {user.role} ». La demande rapide est réservée aux patients.
+                Vous êtes connecté avec un compte professionnel. La demande rapide est réservée aux patients.
               </div>
               <button type="button" className="btn btn-outline-primary btn-sm-aps" onClick={() => deconnecter()}>
                 <i className="fa-solid fa-right-from-bracket" /> Se déconnecter
@@ -379,6 +390,10 @@ export default function DemandeRapide() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {!isAuthenticated && (
+              <CaseAcceptationLegale id="dr-cgu" className="form-check mb-3" checked={accepteCgu} onChange={setAccepteCgu} />
             )}
 
             {erreur && (

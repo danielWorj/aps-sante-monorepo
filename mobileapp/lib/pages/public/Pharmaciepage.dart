@@ -26,6 +26,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../components/components.dart';
+import '../../services/pays_utilisateur_service.dart';
 import '../../controllers/pharmacie_controller.dart';
 import '../../models/pharmacie_models.dart';
 import '../../utils/mon_espace_navigation.dart';
@@ -77,6 +78,8 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _paysParDefaut());
+    PaysUtilisateurService.instance.addListener(_paysParDefaut);
     // Charge les gardes en cours (instant = maintenant) dès l'ouverture de
     // l'écran, pour pouvoir afficher le badge/le filtre "De garde" sans
     // attendre une action de l'utilisateur.
@@ -88,6 +91,7 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
 
   @override
   void dispose() {
+    PaysUtilisateurService.instance.removeListener(_paysParDefaut);
     _debounce?.cancel();
     _searchCtrl.dispose();
     super.dispose();
@@ -144,7 +148,29 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
       ref.read(filtresPharmaciesProvider) ?? const PharmaciesFiltre();
 
   /// Pays / ville côté serveur, en conservant la recherche en cours.
-  void _appliquerPaysVille(String? paysId, String? villeId) {
+
+  /// Vrai dès que l'utilisateur agit sur le filtre « Pays » de cet écran :
+  /// le pays détecté ([PaysUtilisateurService]) n'est alors plus imposé.
+  bool _paysTouche = false;
+
+  /// Ouvre l'annuaire sur le pays de l'utilisateur (détecté ou choisi),
+  /// et le suit tant que l'utilisateur n'a pas choisi lui-même.
+  void _paysParDefaut() {
+    if (!mounted || _paysTouche) return;
+    final service = PaysUtilisateurService.instance;
+    final id = service.paysId;
+    final actuel = _filtresServeur.paysId;
+    if (id == null || actuel == id) return;
+    if (actuel != null && actuel != service.paysPrecedent) return;
+    _appliquerPaysVille(id, null, parUtilisateur: false);
+  }
+
+  void _appliquerPaysVille(String? paysId, String? villeId, {bool parUtilisateur = true}) {
+    if (parUtilisateur) {
+      _paysTouche = true;
+      // Un pays choisi vaut pour toute l'application ; « Tous » pour cet écran.
+      PaysUtilisateurService.instance.choisir(paysId);
+    }
     final actuel = _filtresServeur;
     ref.read(filtresPharmaciesProvider.notifier).state = PharmaciesFiltre(
       paysId: paysId,

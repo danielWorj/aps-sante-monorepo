@@ -498,7 +498,7 @@ export default function ProfilMedecin() {
 
               <div className="info-card">
                 <h3><i className="fa-solid fa-lock" /> Paiement sécurisé</h3>
-                <p style={{ fontSize: '.85rem' }}>Vos honoraires sont conservés sous séquestre (escrow) et libérés uniquement après la consultation.</p>
+                <p style={{ fontSize: '.85rem' }}>Vos honoraires sont conservés sous séquestre et libérés uniquement après la consultation.</p>
               </div>
             </div>
           </div>

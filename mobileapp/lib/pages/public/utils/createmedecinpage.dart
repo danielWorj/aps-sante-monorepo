@@ -165,6 +165,7 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
   // ---- Étape 5 — Trésorerie --------------------------------------------
   // ⚠️ Non envoyée à POST /medecins — voir en-tête du fichier.
   _PaymentMethod _paymentMethod = _PaymentMethod.plusTard;
+  bool _acceptCgu = false;
   final _banqueCtrl = TextEditingController();
   final _titulaireCtrl = TextEditingController();
   final _compteCtrl = TextEditingController();
@@ -270,6 +271,10 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
             return;
           }
         }
+        if (!_acceptCgu) {
+          _showError('Vous devez accepter les CGU et la politique de confidentialité.');
+          return;
+        }
         _submitAccount();
         return;
     }
@@ -303,6 +308,7 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
       teleconsultationActivee: _teleconsultation,
       tarifIndicatif: double.tryParse(_tarifCtrl.text.trim()) ?? 0,
       biographie: _bioCtrl.text.trim(),
+      accepteCgu: _acceptCgu,
     );
 
     await _container.read(creationMedecinControllerProvider.notifier).soumettre(
@@ -874,6 +880,14 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
             color: AppColors.inkFaint,
             height: 1.5,
           ),
+        ),
+        const SizedBox(height: 14),
+        ApsCheckRow(
+          label: "J'accepte les Conditions générales d'utilisation et la "
+              'Politique de confidentialité.',
+          checked: _acceptCgu,
+          contenu: const TexteAcceptationLegale(),
+          onTap: () => setState(() => _acceptCgu = !_acceptCgu),
         ),
         const SizedBox(height: 14),
         if (_creationState.hasError)

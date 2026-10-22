@@ -342,6 +342,40 @@ table{max-width:100%; display:block; overflow-x:auto;}
   align-items:center; justify-content:center;
 }
 
+/* Tiroir responsive de la navigation publique (gabarit portail-tiroir de
+   portail-medecin.css) : bouton Menu à gauche du logo, sous 992 px. */
+.aps-nav-burger{display:none;}
+.portail-tiroir-nav a.aps-nav-tiroir-urgence, .portail-tiroir-nav a.aps-nav-tiroir-urgence i{color:var(--urgence);}
+.aps-nav-tiroir-actions{flex:none; display:flex; flex-direction:column; gap:.5rem; margin:0 1rem 1rem;}
+@media (min-width:992px){ .aps-nav-tiroir{display:none !important;} }
+
+/* Menu déroulant « Services » (centres de santé, pharmacies, laboratoires) */
+.aps-nav-sous{position:relative;}
+.aps-nav-sous-btn{
+  color:var(--ink-soft); font-size:1rem; font-weight:600;
+  display:inline-flex; align-items:center; gap:.4rem;
+  padding:.6rem .9rem; border:0; border-radius:8px; background:transparent;
+  white-space:nowrap; cursor:pointer; position:relative;
+  transition:color .15s ease, background-color .15s ease;
+}
+.aps-nav-sous-btn:hover, .aps-nav-sous.is-open .aps-nav-sous-btn{color:var(--ink); background:var(--surface-alt);}
+.aps-nav-sous-btn.active{color:var(--ink); background:var(--surface-sunk);}
+.aps-nav-sous-btn.active::after{
+  content:''; position:absolute; left:.9rem; right:.9rem; bottom:.3rem;
+  height:2px; border-radius:2px; background:var(--primary);
+}
+.aps-nav-sous-chevron{font-size:.7rem; color:var(--ink-faint); transition:transform .15s ease;}
+.aps-nav-sous.is-open .aps-nav-sous-chevron{transform:rotate(180deg);}
+.aps-nav-sous-menu{
+  display:none; list-style:none; margin:0; padding:.35rem;
+  position:absolute; top:calc(100% + 6px); left:0; min-width:220px; z-index:1050;
+  background:var(--surface); border:1px solid var(--line); border-radius:10px;
+  box-shadow:var(--shadow-md);
+}
+.aps-nav-sous.is-open .aps-nav-sous-menu{display:block;}
+.aps-nav-links .aps-nav-sous-menu a{display:flex; width:100%; padding:.6rem .75rem; font-size:.95rem;}
+.aps-nav-links .aps-nav-sous-menu a.active::after{display:none;}
+
 @media (max-width:1199px){
   .navbar-inner{gap:1rem;}
   .aps-nav-links a{padding:.55rem .65rem; font-size:.95rem;}
@@ -368,11 +402,16 @@ table{max-width:100%; display:block; overflow-x:auto;}
   .aps-nav-links li{width:100%;}
   .aps-nav-links a{padding:.85rem 1rem; width:100%; font-size:1rem;}
   .aps-nav-links a.active::after, .aps-nav-links a.text-primary::after{left:0; right:auto; top:.7rem; bottom:.7rem; width:3px; height:auto;}
+  .aps-nav-sous-btn{width:100%; justify-content:space-between; padding:.85rem 1rem;}
+  .aps-nav-sous-btn.active::after{left:0; right:auto; top:.7rem; bottom:.7rem; width:3px; height:auto;}
+  .aps-nav-sous-menu{position:static; box-shadow:none; border:0; border-left:2px solid var(--line); border-radius:0; margin:0 0 .25rem 1rem; padding:0 0 0 .25rem; min-width:0;}
+  .aps-nav-links .aps-nav-sous-menu a{padding:.7rem 1rem;}
   .aps-nav-mobile-only{display:block;}
   .aps-nav-mobile-actions{display:flex; gap:.5rem; padding-top:.6rem; margin-top:.4rem; border-top:1px solid var(--line);}
   .aps-nav-mobile-actions .btn{flex:1;}
   .aps-nav-desktop-only{display:none !important;}
   .navbar-toggler-aps{display:flex;}
+  .aps-nav-burger{display:flex;}
 }
 
 /* ---------------------------- HERO ---------------------------- */

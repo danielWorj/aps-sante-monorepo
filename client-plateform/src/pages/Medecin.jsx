@@ -13,6 +13,7 @@ import {
 // source unique (routes génériques /pays, /villes, partagées par tous
 // les modules annuaire) — voir src/services/geoService.js.
 import { listerPays, listerVilles } from '../services/geoService';
+import { usePaysFiltre } from '../context/PaysContext';
 import { useGeolocation } from '../hooks/useGeolocation';
 import GoogleMapListe from '../components/maps/GoogleMapListe';
 import BanniereExpress from '../components/medecin/BanniereExpress';
@@ -74,9 +75,11 @@ export default function Medecin() {
   // Filtres — envoyés tels quels aux query params de GET /medecins
   // (voir listerMedecins dans medecin.controller.js : specialite_id,
   // ville_exercice_id, pays_exercice_id, recherche).
+  // Pays : celui de l'URL, sinon le pays détecté de l'utilisateur (PaysContext).
+  const [paysFiltre, choisirPays] = usePaysFiltre(searchParams.get('pays_exercice_id') || '');
   const [filtres, setFiltres] = useState({
     specialite_id: searchParams.get('specialite_id') || '',
-    pays_exercice_id: searchParams.get('pays_exercice_id') || '',
+    pays_exercice_id: paysFiltre,
     ville_exercice_id: searchParams.get('ville_exercice_id') || '',
     recherche: searchParams.get('recherche') || '',
   });
@@ -119,6 +122,12 @@ export default function Medecin() {
     }
     return filtres;
   }, [filtres, autourDeMoi, positionActuelle, rayonKm]);
+
+  useEffect(() => {
+    setFiltres((f) =>
+      f.pays_exercice_id === paysFiltre ? f : { ...f, pays_exercice_id: paysFiltre, ville_exercice_id: '' }
+    );
+  }, [paysFiltre]);
 
   /* ---------------------------------------------------------------
      Chargement des référentiels (spécialités, pays) au montage
@@ -229,6 +238,7 @@ export default function Medecin() {
 
   function reinitialiserFiltres() {
     setFiltres({ specialite_id: '', pays_exercice_id: '', ville_exercice_id: '', recherche: '' });
+    choisirPays('');
     setAutourDeMoi(false);
   }
 
@@ -305,9 +315,7 @@ export default function Medecin() {
                 <ApsSelect
                   id="f-pays"
                   value={filtres.pays_exercice_id}
-                  onChange={(e) =>
-                    setFiltres((f) => ({ ...f, pays_exercice_id: e.target.value, ville_exercice_id: '' }))
-                  }
+                  onChange={(e) => choisirPays(e.target.value)}
                 >
                   <option value="">Tous les pays</option>
                   {pays.map((p) => (

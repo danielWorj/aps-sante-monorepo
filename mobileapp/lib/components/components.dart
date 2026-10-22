@@ -45,3 +45,4 @@ export 'onboarding/onboarding_nav_actions.dart';
 
 // Stepper réutilisable (parcours de création multi-étapes)
 export 'stepper/aps_stepper.dart';
+export 'legal/texte_acceptation_legale.dart';

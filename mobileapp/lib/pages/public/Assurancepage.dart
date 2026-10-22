@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../components/components.dart';
+import '../../services/pays_utilisateur_service.dart';
 import '../../controllers/assurance_controller.dart';
 import '../../controllers/authentification_controller.dart' show authTokenProvider;
 import '../../controllers/publicite_controller.dart';
@@ -48,7 +49,15 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
   bool _verifieesUniquement = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _paysParDefaut());
+    PaysUtilisateurService.instance.addListener(_paysParDefaut);
+  }
+
+  @override
   void dispose() {
+    PaysUtilisateurService.instance.removeListener(_paysParDefaut);
     _searchController.dispose();
     super.dispose();
   }
@@ -58,7 +67,29 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
   ServicesAssuranceFiltre get _filtresServeur =>
       ref.read(filtresServicesAssuranceProvider) ?? const ServicesAssuranceFiltre();
 
-  void _appliquerPaysVille(String? paysId, String? villeId) {
+
+  /// Vrai dès que l'utilisateur agit sur le filtre « Pays » de cet écran :
+  /// le pays détecté ([PaysUtilisateurService]) n'est alors plus imposé.
+  bool _paysTouche = false;
+
+  /// Ouvre l'annuaire sur le pays de l'utilisateur (détecté ou choisi),
+  /// et le suit tant que l'utilisateur n'a pas choisi lui-même.
+  void _paysParDefaut() {
+    if (!mounted || _paysTouche) return;
+    final service = PaysUtilisateurService.instance;
+    final id = service.paysId;
+    final actuel = _filtresServeur.paysId;
+    if (id == null || actuel == id) return;
+    if (actuel != null && actuel != service.paysPrecedent) return;
+    _appliquerPaysVille(id, null, parUtilisateur: false);
+  }
+
+  void _appliquerPaysVille(String? paysId, String? villeId, {bool parUtilisateur = true}) {
+    if (parUtilisateur) {
+      _paysTouche = true;
+      // Un pays choisi vaut pour toute l'application ; « Tous » pour cet écran.
+      PaysUtilisateurService.instance.choisir(paysId);
+    }
     final actuel = _filtresServeur;
     ref.read(filtresServicesAssuranceProvider.notifier).state = ServicesAssuranceFiltre(
       paysId: paysId,

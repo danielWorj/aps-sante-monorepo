@@ -1,5 +1,6 @@
 // portail-footer.jsx
 import React from "react";
+import { Link } from "react-router-dom";
 
 // `espace` : libellé du portail (médecin par défaut ; le portail assurance
 // n'a pas de paiement sous séquestre, d'où la mention propre aux RDV omise).
@@ -12,9 +13,9 @@ const PortailFooter = ({ espace }) => {
           {espace ?? "Espace médecin · Paiement sous séquestre à chaque étape"}
         </span>
         <span className="d-flex gap-3">
-          <a href="#">Support</a>
-          <a href="#">CGU</a>
-          <a href="#">Confidentialité</a>
+          <Link to="/contact">Support</Link>
+          <Link to="/cgu">CGU</Link>
+          <Link to="/confidentialite">Confidentialité</Link>
         </span>
       </div>
     </footer>

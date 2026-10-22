@@ -19,6 +19,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../components/alert/app_alert.dart';
+import '../../components/legal/texte_acceptation_legale.dart';
+import '../../components/stepper/aps_stepper.dart' show ApsCheckRow;
 import '../../components/style/colors.dart';
 import '../../components/ui/aps_select.dart';
 import '../../components/style/text_styles.dart';
@@ -32,6 +34,7 @@ import '../../models/offre_rdv_models.dart';
 import '../../models/referentiel_models.dart';
 import '../../utils/fonds.dart' show jourLongLocal;
 import '../portails/patient/patient_home_shell.dart';
+import '../../services/pays_utilisateur_service.dart';
 
 String _deuxChiffres(int n) => n.toString().padLeft(2, '0');
 
@@ -63,6 +66,7 @@ class _DemandeRapidePageState extends ConsumerState<DemandeRapidePage> {
   final _telephone = TextEditingController();
   final _motDePasse = TextEditingController();
   DateTime? _dateNaissance;
+  bool _acceptCgu = false;
   bool _masquerMotDePasse = true;
 
   bool _envoi = false;
@@ -123,6 +127,10 @@ class _DemandeRapidePageState extends ConsumerState<DemandeRapidePage> {
         setState(() => _erreur = 'Choisissez votre pays.');
         return;
       }
+      if (!_acceptCgu) {
+        setState(() => _erreur = 'Vous devez accepter les CGU et la politique de confidentialité.');
+        return;
+      }
     }
     setState(() {
       _envoi = true;
@@ -141,6 +149,7 @@ class _DemandeRapidePageState extends ConsumerState<DemandeRapidePage> {
               motDePasse: _motDePasse.text,
               paysId: paysId!,
               dateNaissance: _dateNaissance!,
+              accepteCgu: _acceptCgu,
             ));
         final resultat = await session.connecter(ConnexionPayload(email: email, motDePasse: _motDePasse.text));
         if (!resultat.sessionOuverte) {
@@ -206,7 +215,11 @@ class _DemandeRapidePageState extends ConsumerState<DemandeRapidePage> {
 
     final specialites = ref.watch(listeSpecialitesControllerProvider).value ?? const [];
     final List<Pays> pays = ref.watch(listePaysProvider).value ?? const [];
-    final paysId = _paysId ?? utilisateur?.paysId ?? (pays.isNotEmpty ? pays.first.paysId : null);
+    // Pays choisi ici, sinon celui de l'utilisateur (détecté ou choisi dans l'application).
+    final paysId = _paysId ??
+        PaysUtilisateurService.instance.paysId ??
+        utilisateur?.paysId ??
+        (pays.isNotEmpty ? pays.first.paysId : null);
     final List<Ville> villes =
         paysId == null ? const [] : (ref.watch(villesParPaysProvider(paysId)).value ?? const []);
     final villeNom = villes.where((v) => v.villeId == _villeId).map((v) => v.nom).firstOrNull;
@@ -389,6 +402,14 @@ class _DemandeRapidePageState extends ConsumerState<DemandeRapidePage> {
                 Text(
                   'Pays de résidence : celui choisi plus haut.',
                   style: AppTextStyles.xs.copyWith(color: AppColors.ink3),
+                ),
+                const SizedBox(height: 10),
+                ApsCheckRow(
+                  label: "J'accepte les Conditions générales d'utilisation et la "
+                      'Politique de confidentialité.',
+                  checked: _acceptCgu,
+                  contenu: const TexteAcceptationLegale(),
+                  onTap: () => setState(() => _acceptCgu = !_acceptCgu),
                 ),
               ],
 

@@ -20,6 +20,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../components/legal/texte_acceptation_legale.dart';
+import '../../components/stepper/aps_stepper.dart' show ApsCheckRow;
 import '../../components/style/colors.dart';
 import '../../components/ui/aps_select.dart';
 import '../../components/style/text_styles.dart';
@@ -55,6 +57,7 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
   Uint8List? _visuel;
   String? _nomVisuel;
   bool _envoi = false;
+  bool _acceptCgu = false;
   String? _erreur;
   bool _compteExistant = false;
 
@@ -206,6 +209,9 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
     } else if (_nom.text.trim().isEmpty || _whatsapp.text.trim().isEmpty) {
       probleme = 'Votre nom et votre numéro WhatsApp sont obligatoires.';
     }
+    if (probleme == null && !_acceptCgu) {
+      probleme = 'Vous devez accepter les CGU et la politique de confidentialité.';
+    }
     if (probleme != null) {
       setState(() { _erreur = probleme; _compteExistant = false; });
       return;
@@ -214,6 +220,7 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
     final reservation = {
       'forfait_publicitaire_id': f!.id,
       'date_debut': jourIso(_debut!),
+      'accepte_cgu': 'true',
       'titre': _titre.text,
       'description': _description.text,
       'telephone_contact': _tel.text,
@@ -474,6 +481,14 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
                   aide: 'La décision et le lien de paiement vous seront envoyés sur ce numéro.'),
               _Champ(controleur: _emailAnnonceur, libelle: 'E-mail', clavier: TextInputType.emailAddress, max: 150),
             ]),
+          const SizedBox(height: 12),
+          ApsCheckRow(
+            label: "J'accepte les Conditions générales d'utilisation et la "
+                'Politique de confidentialité.',
+            checked: _acceptCgu,
+            contenu: const TexteAcceptationLegale(),
+            onTap: () => setState(() => _acceptCgu = !_acceptCgu),
+          ),
           if (_erreur != null)
             Padding(
               padding: const EdgeInsets.only(top: 12),

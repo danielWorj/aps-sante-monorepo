@@ -324,6 +324,7 @@ const CreationMedecin = () => {
     try {
       // Corps exact attendu par POST /medecins (creerMedecin)
       const donneesMedecin = {
+        accepte_cgu: formData.acceptCGU,
         nom: formData.nom.trim(),
         prenom: formData.prenom.trim(),
         email: formData.email.trim(),
@@ -1216,8 +1217,8 @@ if (isSubmitted) {
                             htmlFor="acceptCGU"
                           >
                             J'accepte les{' '}
-                            <a href="#">Conditions générales d'utilisation</a> et
-                            la <a href="#">Politique de confidentialité</a>.
+                            <a href="/cgu" target="_blank" rel="noopener noreferrer">Conditions générales d'utilisation</a> et
+                            la <a href="/confidentialite" target="_blank" rel="noopener noreferrer">Politique de confidentialité</a>.
                           </label>
                         </div>
                       </div>

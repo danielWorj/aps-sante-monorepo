@@ -194,6 +194,7 @@ const CreerPatient = () => {
       // confirmation_mot_de_passe n'existe pas côté backend, elle ne
       // sert qu'à la validation du formulaire et n'est jamais envoyée.
       const donneesPatient = {
+        accepte_cgu: formData.acceptCGU,
         nom: formData.nom.trim(),
         prenom: formData.prenom.trim(),
         email: formData.email.trim(),
@@ -575,8 +576,8 @@ const CreerPatient = () => {
                           />
                           <label className="form-check-label" htmlFor="acceptCGU">
                             J'accepte les{' '}
-                            <a href="#">Conditions générales d'utilisation</a> et
-                            la <a href="#">Politique de confidentialité</a>.
+                            <a href="/cgu" target="_blank" rel="noopener noreferrer">Conditions générales d'utilisation</a> et
+                            la <a href="/confidentialite" target="_blank" rel="noopener noreferrer">Politique de confidentialité</a>.
                           </label>
                         </div>
                       </div>

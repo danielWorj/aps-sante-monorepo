@@ -26,6 +26,8 @@ IconData iconeEspace(String type) {
       return Icons.local_hospital_outlined;
     case 'assurance':
       return Icons.shield_outlined;
+    case 'laboratoire':
+      return Icons.biotech_outlined;
     case 'publicites':
       return Icons.campaign_outlined;
     default:

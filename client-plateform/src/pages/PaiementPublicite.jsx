@@ -14,6 +14,7 @@ import { FactureAdaptateur } from '../components/paiement/FactureRecapitulative'
 import { adaptateurPublicite } from '../components/paiement/adaptateurs';
 import { libellePosition, obtenirDevisPublicite } from '../services/publiciteService';
 import { dateHeure } from '../utils/fonds';
+import { LiensLegaux } from '../components/legal/CaseAcceptationLegale';
 import './Publicite.css';
 
 const formatJour = (iso) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' }) : '');
@@ -87,12 +88,15 @@ export default function PaiementPublicite() {
               <h2 className="h5 mb-3">Facture récapitulative</h2>
               <FactureAdaptateur adaptateur={adaptateur} agregateur="stripe" telechargeable={false} />
               <p className="form-hint mt-2">
-                Les frais d’agrégateur dépendent du moyen de paiement (carte ou Mobile Money) : le détail exact est
+                Les frais de paiement dépendent du moyen choisi (carte ou Mobile Money) : le détail exact est
                 affiché à l’étape suivante.
               </p>
               <button type="button" className="btn btn-primary btn-lg-aps w-100 mt-2" onClick={() => setEtape('choix')}>
                 <i className="fa-solid fa-lock" /> Payer ma publicité
               </button>
+              <p className="form-hint mt-2 mb-0 text-center">
+                En payant, vous acceptez les <LiensLegaux />.
+              </p>
             </div>
           </div>
         </div>

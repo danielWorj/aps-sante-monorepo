@@ -84,8 +84,15 @@ class OnboardingProChoixPage extends StatelessWidget {
               _ProChoiceCard(
                 icon: Icons.local_hospital_outlined,
                 title: 'Déclarer mon centre de santé',
-                subtitle: 'Clinique, hôpital, laboratoire, dispensaire…',
+                subtitle: 'Clinique, hôpital, dispensaire…',
                 onTap: () => ouvrirDeclarerCentreSante(context),
+              ),
+              const SizedBox(height: 14),
+              _ProChoiceCard(
+                icon: Icons.biotech_outlined,
+                title: 'Inscrire mon laboratoire',
+                subtitle: "Laboratoire d'analyses — examens et centres de prélèvement",
+                onTap: () => ouvrirDeclarerLaboratoire(context),
               ),
               const SizedBox(height: 14),
               _ProChoiceCard(

@@ -426,6 +426,9 @@ class CreerMedecinPayload {
   final double tarifIndicatif;
   final String biographie;
 
+  /// Case CGU / confidentialité cochée (le serveur enregistre la version acceptée).
+  final bool accepteCgu;
+
   const CreerMedecinPayload({
     required this.nom,
     required this.prenom,
@@ -439,6 +442,7 @@ class CreerMedecinPayload {
     required this.teleconsultationActivee,
     required this.tarifIndicatif,
     required this.biographie,
+    this.accepteCgu = false,
   });
 
   /// Champs texte du multipart/form-data (hors fichiers). Les valeurs
@@ -457,6 +461,7 @@ class CreerMedecinPayload {
     'teleconsultation_activee': teleconsultationActivee,
     'tarif_indicatif': tarifIndicatif,
     'biographie': biographie,
+    if (accepteCgu) 'accepte_cgu': true,
   };
 }
 

@@ -45,6 +45,7 @@ export const ROLES_ADMINISTRABLES = [
   'agent_ambulance',
   'agent_pompes_funebres',
   'agent_assurance',
+  'agent_laboratoire',
 ];
 
 // Rôles "agent_xxx" pour lesquels le backend exige reference_id

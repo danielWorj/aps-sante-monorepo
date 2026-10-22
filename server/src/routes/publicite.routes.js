@@ -114,8 +114,8 @@ const limiteurReservationPublique = rateLimit({ windowMs: 60 * 60_000, limit: 10
 // ─── Emplacements publicitaires ─────────────────────────────────
 router.get("/emplacements-publicitaires", listerEmplacementsPublicitaires);
 router.get("/emplacements-publicitaires/:id", obtenirEmplacementPublicitaire);
-router.post("/emplacements-publicitaires", authentifier, autoriser("admin", "superadmin"), creerEmplacementPublicitaire);
-router.put("/emplacements-publicitaires/:id", authentifier, autoriser("admin", "superadmin"), modifierEmplacementPublicitaire);
+router.post("/emplacements-publicitaires", authentifier, autoriser("superadmin"), creerEmplacementPublicitaire);
+router.put("/emplacements-publicitaires/:id", authentifier, autoriser("superadmin"), modifierEmplacementPublicitaire);
 router.delete("/emplacements-publicitaires/:id", authentifier, autoriser("superadmin"), supprimerEmplacementPublicitaire);
 
 // ─── Forfaits publicitaires ──────────────────────────────────────

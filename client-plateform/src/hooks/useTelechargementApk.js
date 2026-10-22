@@ -25,6 +25,10 @@ export function useTelechargementApk() {
   const [erreur, setErreur] = useState(null);
   // Octets reçus : affichés en Mo quand aucune taille totale n'est connue.
   const [octetsRecus, setOctetsRecus] = useState(0);
+  // APK reçue et gardée en mémoire : ouvre la modale « Téléchargement
+  // terminé » (ApkPreteModal) ; l'enregistrement ne part qu'au clic sur
+  // « Installer », pour que le navigateur affiche aussitôt sa barre « Ouvrir ».
+  const [fichierPret, setFichierPret] = useState(null);
   const tailleInconnue = !taille && progression === 0 && octetsRecus > 0;
   const enCours = progression !== null;
 
@@ -51,7 +55,7 @@ export function useTelechargementApk() {
     setProgression(0);
     try {
       const { blob, nomFichier } = await telechargerApkAvecProgression(url, setProgression, taille, setOctetsRecus);
-      declencherSauvegardeBlob(blob, nomFichier);
+      setFichierPret({ blob, nomFichier, taille: blob.size });
       return true;
     } catch (err) {
       setErreur(err?.message || 'Le téléchargement a échoué. Réessayez dans quelques instants.');
@@ -66,5 +70,18 @@ export function useTelechargementApk() {
     ? `${(octetsRecus / 1024 / 1024).toFixed(1)} Mo`
     : `${progression ?? 0}%`;
 
-  return { disponible: Boolean(url), enCours, progression, tailleInconnue, libelleProgression, erreur, lancer };
+  /** Enregistre l'APK déjà reçue : à appeler depuis un clic (geste utilisateur). */
+  function installer() {
+    if (fichierPret) declencherSauvegardeBlob(fichierPret.blob, fichierPret.nomFichier);
+  }
+
+  /** Ferme la modale et libère le fichier gardé en mémoire. */
+  function fermer() {
+    setFichierPret(null);
+  }
+
+  return {
+    disponible: Boolean(url), enCours, progression, tailleInconnue, libelleProgression, erreur, lancer,
+    fichierPret, installer, fermer,
+  };
 }

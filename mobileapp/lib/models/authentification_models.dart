@@ -45,6 +45,7 @@ enum RoleUtilisateur {
   agentAmbulance,
   agentPompesFunebres,
   agentAssurance,
+  agentLaboratoire,
   // Compte créé depuis le formulaire de réservation publicitaire.
   annonceur;
 
@@ -68,6 +69,8 @@ enum RoleUtilisateur {
         return RoleUtilisateur.agentPompesFunebres;
       case 'agent_assurance':
         return RoleUtilisateur.agentAssurance;
+      case 'agent_laboratoire':
+        return RoleUtilisateur.agentLaboratoire;
       case 'annonceur':
         return RoleUtilisateur.annonceur;
       default:
@@ -97,6 +100,8 @@ enum RoleUtilisateur {
         return 'agent_pompes_funebres';
       case RoleUtilisateur.agentAssurance:
         return 'agent_assurance';
+      case RoleUtilisateur.agentLaboratoire:
+        return 'agent_laboratoire';
       case RoleUtilisateur.annonceur:
         return 'annonceur';
     }
@@ -267,6 +272,10 @@ class InscriptionPayload {
   /// Code PIN (6 chiffres) de la connexion par numéro ; exige [telephone].
   final String? pin;
 
+  /// Case « J'accepte les CGU et la politique de confidentialité » cochée :
+  /// le serveur enregistre alors la version acceptée.
+  final bool accepteCgu;
+
   const InscriptionPayload({
     required this.nom,
     required this.prenom,
@@ -276,6 +285,7 @@ class InscriptionPayload {
     required this.paysId,
     required this.dateNaissance,
     this.pin,
+    this.accepteCgu = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -288,6 +298,7 @@ class InscriptionPayload {
     // Date pure (YYYY-MM-DD) : le serveur fait `new Date(date_naissance)`.
     'date_naissance': dateNaissance.toIso8601String().split('T').first,
     if (pin != null) 'pin': pin,
+    if (accepteCgu) 'accepte_cgu': true,
   };
 }
 

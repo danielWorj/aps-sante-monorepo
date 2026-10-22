@@ -26,7 +26,8 @@ import { authentifier } from "../middlewares/auth.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
 
 const router = Router();
-const lecture = [authentifier, autoriser("admin", "superadmin")];
+// Configuration globale (sans pays) : superadmin seul.
+const lecture = [authentifier, autoriser("superadmin")];
 const gestion = [authentifier, autoriser("superadmin")];
 
 router.get("/whatsapp/configuration", ...lecture, obtenirConfigurationWhatsappCtrl);

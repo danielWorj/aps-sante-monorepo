@@ -120,7 +120,11 @@ export default function Navbar({ notificationCount = 10, onSearch }) {
             <div className="aps-topbar__user-avatar">{initials}</div>
             <div className="aps-topbar__user-meta">
               <div className="name">{userName}</div>
-              <div className="role">{userRole}</div>
+              <div className="role">
+                {userRole}
+                {/* ABAC : périmètre de l'admin (superadmin : tous les pays). */}
+                {user?.role === "superadmin" ? " · tous les pays" : user?.pays?.nom ? ` · ${user.pays.nom}` : ""}
+              </div>
             </div>
             <i
               className={

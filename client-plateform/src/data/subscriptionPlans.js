@@ -67,10 +67,6 @@ export const clientTypes = [
         ],
       },
     ],
-    notes: [
-      "Pas de badge « Sponsorisé » ni de mise en avant payante : votre abonnement enrichit votre fiche, dans le respect des règles de votre profession.",
-      "Votre position dans les résultats dépend uniquement de la pertinence, de la distance et de votre note — jamais de votre abonnement.",
-    ],
   },
   {
     id: "clinique",
@@ -134,10 +130,6 @@ export const clientTypes = [
         ],
       },
     ],
-    notes: [
-      "Votre abonnement enrichit votre fiche, jamais votre classement : la position dans les résultats reste basée sur la pertinence, la distance et les avis.",
-      "Une facture est automatiquement générée et vous est transmise à chaque paiement.",
-    ],
   },
   {
     id: "pharmacie",
@@ -200,10 +192,6 @@ export const clientTypes = [
         ],
       },
     ],
-    notes: [
-      "Le statut « pharmacie de garde » provient exclusivement du planning officiel : aucun abonnement ne peut faire passer une officine hors garde devant une pharmacie de garde active.",
-      "Dans les pays où la publicité officinale est prohibée, seul l'abonnement de présence est proposé — pas de boost commercial.",
-    ],
   },
   {
     id: "assurance",
@@ -265,10 +253,6 @@ export const clientTypes = [
         ],
       },
     ],
-    notes: [
-      "Présentation seulement : ni comparateur, ni souscription en ligne, ni gestion de sinistre sur APS. La mise en relation se fait directement avec l'assureur.",
-      "Sans abonnement actif, seules les informations minimales sont exposées et le formulaire de mise en relation n'est pas proposé.",
-    ],
   },
   {
     id: "annonceur",
@@ -322,11 +306,6 @@ export const clientTypes = [
         badge: "Meilleure valeur",
         features: ["Tous les avantages de la formule mensuelle", "Tarif le plus avantageux"],
       },
-    ],
-    notes: [
-      "Votre logo est mis en avant dans un espace dédié, pensé pour rester lisible et discret.",
-      "Votre campagne démarre dès la confirmation du paiement, et une facture vous est transmise.",
-      "Les pages Urgences et Pharmacies de garde restent, elles, entièrement sans publicité — pour ne jamais ralentir l'accès aux soins.",
     ],
   },
 ];

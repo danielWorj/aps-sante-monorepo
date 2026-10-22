@@ -5,8 +5,8 @@
 // (POST /api/auth/comptes).
 //
 // ─── Modèle de permissions (voir aussi utilisateurs.controller.js) ──
-//  - Lecture (GET)         : "admin" ET "superadmin"
-//  - Écriture (POST/PATCH) : "superadmin" SEUL
+//  - Lecture (GET)         : "admin" (comptes admin de SON pays) ET "superadmin"
+//  - Écriture (POST/PATCH/DELETE) : "superadmin" SEUL
 //
 // Toutes les routes de ce composant exigent d'être authentifié — il
 // n'existe aucune route publique ici, contrairement à
@@ -19,6 +19,8 @@ import {
   modifierUtilisateur,
   suspendreUtilisateur,
   reactiverUtilisateur,
+  supprimerUtilisateur,
+  reinitialiserMotDePasseUtilisateur,
 } from "../controllers/utilisateurs.controller.js";
 import { authentifier } from "../middlewares/auth.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
@@ -42,5 +44,7 @@ router.post("/", autoriser("superadmin"), creerUtilisateur);
 router.patch("/:id", autoriser("superadmin"), modifierUtilisateur);
 router.patch("/:id/suspendre", autoriser("superadmin"), suspendreUtilisateur);
 router.patch("/:id/reactiver", autoriser("superadmin"), reactiverUtilisateur);
+router.patch("/:id/mot-de-passe", autoriser("superadmin"), reinitialiserMotDePasseUtilisateur);
+router.delete("/:id", autoriser("superadmin"), supprimerUtilisateur);
 
 export default router;

@@ -9,6 +9,7 @@ import {
 import { getAccessToken } from "../lib/apiClient";
 import GoogleMapView from "../components/maps/GoogleMapView";
 import { listerMediasPublics } from "../services/portailAssuranceService";
+import { obtenirPosition } from "../lib/geolocConsentement";
 
 // Fiche assurance — page de détail d'une compagnie d'assurance ou d'un
 // courtier, avec ses activités (catalogue produits), ses agences et
@@ -152,10 +153,6 @@ function SiegeMinimal({ insurer }) {
             </tr>
           </tbody>
         </table>
-        <p className="minimal-note mt-3 mb-0">
-          <i className="fa-solid fa-circle-info" /> Cette compagnie n'a pas activé sa
-          présence enrichie.
-        </p>
       </div>
     </div>
   );
@@ -230,7 +227,7 @@ function AgencesPanel({ agences, chargement }) {
       return;
     }
     setGeoStatus("loading");
-    navigator.geolocation.getCurrentPosition(
+    obtenirPosition(
       (pos) => {
         setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         setGeoStatus("idle");

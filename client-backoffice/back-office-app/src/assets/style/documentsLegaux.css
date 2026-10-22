@@ -1,0 +1,52 @@
+/* Documents légaux (DocumentsLegaux.jsx) : liste des versions, éditeur
+   TipTap (EditeurDocumentLegal.jsx) et aperçu. L'aperçu reprend la
+   hiérarchie du site public sans en copier toute la charte. */
+
+.dl-versions { list-style: none; margin: 0; padding: 0; }
+.dl-versions li + li { border-top: 1px solid var(--aps-border); }
+.dl-versions button {
+  display: block; width: 100%; text-align: left; background: none; border: 0;
+  padding: .75rem 1rem; color: var(--aps-text-700);
+}
+.dl-versions button:hover { background: var(--aps-bg); }
+.dl-versions button.is-active { background: var(--aps-primary-100); box-shadow: inset 3px 0 0 var(--aps-primary); }
+.dl-versions-ligne { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.dl-versions-meta { display: block; font-size: 12px; margin-top: 2px; }
+
+/* ----- Éditeur ----- */
+.edl { border: 1px solid var(--aps-border-strong); border-radius: var(--aps-radius); background: var(--aps-surface); }
+.edl-barre {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px;
+  padding: 6px; border-bottom: 1px solid var(--aps-border);
+  position: sticky; top: var(--aps-topbar-height); z-index: 2; background: var(--aps-surface);
+}
+.edl-btn {
+  min-width: 32px; height: 32px; padding: 0 8px; border: 1px solid transparent; border-radius: var(--aps-radius-sm);
+  background: none; color: var(--aps-text-700); font-size: 13px; font-weight: 600;
+}
+.edl-btn:hover:not(:disabled) { background: var(--aps-bg); }
+.edl-btn.is-active { background: var(--aps-primary-100); border-color: var(--aps-primary); color: var(--aps-primary-600); }
+.edl-btn:disabled { opacity: .4; }
+.edl-sep { width: 1px; height: 20px; background: var(--aps-border); margin: 0 4px; }
+.edl-zone .ProseMirror { min-height: 420px; padding: 1rem 1.25rem; outline: none; }
+.edl-zone .ProseMirror:focus-visible { box-shadow: inset 0 0 0 2px var(--aps-primary-100); }
+
+/* ----- Typographie commune éditeur / aperçu ----- */
+.doc-legal-texte { color: var(--aps-text-700); line-height: 1.65; font-size: 15px; }
+.doc-legal-texte h2 { font-size: 1.25rem; font-weight: 700; color: var(--aps-text-900); margin: 1.6rem 0 .6rem; }
+.doc-legal-texte h3 { font-size: 1.08rem; font-weight: 700; color: var(--aps-text-900); margin: 1.2rem 0 .5rem; }
+.doc-legal-texte h4 { font-size: 1rem; font-weight: 700; color: var(--aps-text-700); margin: 1rem 0 .4rem; }
+.doc-legal-texte > :first-child, .doc-legal-texte .ProseMirror > :first-child { margin-top: 0; }
+.doc-legal-texte p { margin: 0 0 .75rem; }
+.doc-legal-texte ul, .doc-legal-texte ol { padding-left: 1.4rem; margin: 0 0 .75rem; }
+.doc-legal-texte li p { margin: 0; }
+.doc-legal-texte blockquote {
+  margin: 0 0 .75rem; padding: .6rem 1rem; border-left: 3px solid var(--aps-primary);
+  background: var(--aps-primary-100); color: var(--aps-text-700);
+}
+.doc-legal-texte blockquote p:last-child { margin-bottom: 0; }
+.doc-legal-texte a { color: var(--aps-primary-600); text-decoration: underline; }
+.doc-legal-texte hr { margin: 1.4rem 0; border-color: var(--aps-border-strong); }
+
+.dl-apercu { border: 1px solid var(--aps-border); border-radius: var(--aps-radius); padding: 1.25rem 1.5rem; }
+.dl-apercu-titre { font-size: 1.5rem; font-weight: 800; color: var(--aps-text-900); margin-bottom: 1rem; }

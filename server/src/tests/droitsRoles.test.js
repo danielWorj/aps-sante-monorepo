@@ -51,6 +51,7 @@ const ROLES = [
   "agent_ambulance",
   "agent_pompes_funebres",
   "agent_assurance",
+  "agent_laboratoire",
   "annonceur",
   "admin",
   "superadmin",

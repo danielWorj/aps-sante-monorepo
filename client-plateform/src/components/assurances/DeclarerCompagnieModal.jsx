@@ -9,8 +9,10 @@
 
 import { useState, useRef } from "react";
 import { creerServiceAssurance } from "../../services/assuranceService";
+import CaseAcceptationLegale, { MESSAGE_CGU_REQUISES } from "../legal/CaseAcceptationLegale";
 import { listerPays, listerVilles } from "../../services/geoService";
 import GoogleMapPicker from "../maps/GoogleMapPicker";
+import { obtenirPosition } from "../../lib/geolocConsentement";
 
 const ETAPES = [
   { id: 1, label: "Identité" },
@@ -42,6 +44,7 @@ export default function DeclarerCompagnieModal({ open, onClose, onCreated }) {
   const [etape, setEtape] = useState(1);
   const [form, setForm] = useState(ETAT_INITIAL);
   const [fichierImage, setFichierImage] = useState(null);
+  const [accepteCgu, setAccepteCgu] = useState(false);
   const [pays, setPays] = useState([]);
   const [villes, setVilles] = useState([]);
   const [geoStatus, setGeoStatus] = useState("idle"); // idle | loading | error | done
@@ -85,7 +88,7 @@ export default function DeclarerCompagnieModal({ open, onClose, onCreated }) {
       return;
     }
     setGeoStatus("loading");
-    navigator.geolocation.getCurrentPosition(
+    obtenirPosition(
       (pos) => {
         setForm((f) => ({
           ...f,
@@ -144,6 +147,10 @@ export default function DeclarerCompagnieModal({ open, onClose, onCreated }) {
 
   const soumettre = async () => {
     if (!validerEtape()) return;
+    if (!accepteCgu) {
+      setErreur(MESSAGE_CGU_REQUISES);
+      return;
+    }
     setEnvoi(true);
     setErreur("");
     try {
@@ -152,6 +159,7 @@ export default function DeclarerCompagnieModal({ open, onClose, onCreated }) {
         latitude: form.latitude ?? undefined,
         longitude: form.longitude ?? undefined,
         image_assurance: fichierImage,
+        accepte_cgu: true,
       });
       setResultat(reponse);
       onCreated?.(reponse.service_assurance);
@@ -165,6 +173,7 @@ export default function DeclarerCompagnieModal({ open, onClose, onCreated }) {
   const fermerEtReinitialiser = () => {
     setForm(ETAT_INITIAL);
     setFichierImage(null);
+    setAccepteCgu(false);
     setResultat(null);
     setEtape(1);
     setErreur("");
@@ -419,6 +428,7 @@ export default function DeclarerCompagnieModal({ open, onClose, onCreated }) {
                   <i className="fa-solid fa-circle-info" /> La fiche sera soumise à
                   vérification avant publication dans l'annuaire.
                 </p>
+                <CaseAcceptationLegale id="dc-cgu" checked={accepteCgu} onChange={setAccepteCgu} />
               </div>
             )}
 

@@ -267,6 +267,7 @@ const CreationAssurance = () => {
     try {
       // Préparation des données
       const dataToSend = {
+        accepte_cgu: formData.acceptCGU,
         nom: formData.nom,
         type_acteur: formData.type_acteur,
         pays_id: formData.pays_id,
@@ -913,8 +914,8 @@ const CreationAssurance = () => {
                             />
                             <label className="form-check-label" htmlFor="acceptCGU">
                               J'accepte les{' '}
-                              <a href="#">Conditions générales d'utilisation</a> et la{' '}
-                              <a href="#">Politique de confidentialité</a>.
+                              <a href="/cgu" target="_blank" rel="noopener noreferrer">Conditions générales d'utilisation</a> et la{' '}
+                              <a href="/confidentialite" target="_blank" rel="noopener noreferrer">Politique de confidentialité</a>.
                             </label>
                           </div>
                         </div>

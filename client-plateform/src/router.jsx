@@ -1,10 +1,11 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { Navigate, createBrowserRouter } from 'react-router-dom';
 import App from './App';
 import RacineNavigation from './components/RacineNavigation';
 import Home from './pages/Home';
 import Medecin from './pages/Medecin';
 import APropos from './pages/APropos';
 import Contact from './pages/Contact';
+import DocumentLegal from './pages/DocumentLegal';
 import CreerPatient from './components/patient/creerPatient.jsx'
 import CreationMedecin from './components/medecin/creationMedecin';
 import InscriptionPortail from './pages/inscriptionportail.jsx';
@@ -80,6 +81,17 @@ import AssuranceMedias from './components/portails/assurance/assurance-medias.js
 import AssuranceDemandes from './components/portails/assurance/assurance-demandes.jsx';
 import AssuranceAbonnement from './components/portails/assurance/assurance-abonnement.jsx';
 
+// LABORATOIRES D'ANALYSES : annuaire, fiche, inscription et portail du gérant
+import Laboratoire from './pages/Laboratoire';
+import FicheLaboratoire from './pages/FicheLaboratoire.jsx';
+import CreationLaboratoire from './components/laboratoire/creationLaboratoire.jsx';
+import PortailLaboratoireLayout from './Layouts/PortailLaboratoireLayout.jsx';
+import LaboratoireDashboard from './components/portails/laboratoire/laboratoire-dashboard.jsx';
+import LaboratoireExamens from './components/portails/laboratoire/laboratoire-examens.jsx';
+import LaboratoireCentres from './components/portails/laboratoire/laboratoire-centres.jsx';
+import LaboratoireMedias from './components/portails/laboratoire/laboratoire-medias.jsx';
+import LaboratoireProfil from './components/portails/laboratoire/laboratoire-profil.jsx';
+
 //PORTAIL PATIENT
 import PatientRdv from './components/portails/components/patient-rdv';
 import PatientProfil from './components/portails/components/patient-profil';
@@ -96,7 +108,7 @@ import FicheAnnonce from './pages/FicheAnnonce.jsx';
 import CreerPin from './pages/CreerPin.jsx';
 import ChoisirEspace from './pages/ChoisirEspace.jsx';
 import PinOublie from './pages/PinOublie.jsx';
-import { AssuranceAnnonces, EspaceAnnonces, MedecinAnnonces, PatientAnnonces } from './components/portails/components/portail-annonces.jsx';
+import { AssuranceAnnonces, EspaceAnnonces, LaboratoireAnnonces, MedecinAnnonces, PatientAnnonces } from './components/portails/components/portail-annonces.jsx';
 
 export const router = createBrowserRouter([
   {
@@ -122,6 +134,9 @@ export const router = createBrowserRouter([
       { path: '/home', element: <Home /> },
       { path: '/a-propos', element: <APropos /> },
       { path: '/contact', element: <Contact /> },
+      { path: '/cgu', element: <DocumentLegal key="cgu" type="cgu" /> },
+      { path: '/conditions', element: <Navigate to="/cgu" replace /> },
+      { path: '/confidentialite', element: <DocumentLegal key="confidentialite" type="confidentialite" /> },
       { path: '/inscription', element: <InscriptionPortail /> },
       { path: '/medecin', element: <Medecin /> },
       { path: '/devenir-medecin', element: <CreationMedecin /> },
@@ -157,6 +172,10 @@ export const router = createBrowserRouter([
       { path: '/assurance', element: <Assurance /> },
       { path: "/assurances/:id", element: <FicheAssurance /> }, 
       { path: '/assurances/creation', element: <CreationAssurance /> }, 
+      // LABORATOIRES (« creation » déclarée avant « :id »)
+      { path: '/laboratoires', element: <Laboratoire /> },
+      { path: '/laboratoires/creation', element: <CreationLaboratoire /> },
+      { path: '/laboratoires/:id', element: <FicheLaboratoire /> },
 
       //ANNONCE 
       {path: '/annonces/:id', element: <FicheAnnonce />},
@@ -271,6 +290,22 @@ export const router = createBrowserRouter([
           { path: '/portail/assurance-medias', element: <AssuranceMedias /> },
           { path: '/portail/assurance-abonnement', element: <AssuranceAbonnement /> },
           { path: '/portail/assurance-annonces', element: <AssuranceAnnonces /> },
+        ],
+      },
+    ],
+  },
+  {
+    element: <RequireAuth roles={ROLES_ESPACE.laboratoire} />,
+    children: [
+      {
+        element: <PortailLaboratoireLayout />,
+        children: [
+          { path: '/portail/laboratoire', element: <LaboratoireDashboard /> },
+          { path: '/portail/laboratoire-examens', element: <LaboratoireExamens /> },
+          { path: '/portail/laboratoire-centres', element: <LaboratoireCentres /> },
+          { path: '/portail/laboratoire-medias', element: <LaboratoireMedias /> },
+          { path: '/portail/laboratoire-profil', element: <LaboratoireProfil /> },
+          { path: '/portail/laboratoire-annonces', element: <LaboratoireAnnonces /> },
         ],
       },
     ],

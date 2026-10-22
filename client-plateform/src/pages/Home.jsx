@@ -6,11 +6,15 @@ import parcoursImg from '../assets/img/structure2.jpg';
 import pharmaImg from '../assets/img/pharma1.jpg';
 import structureImg from '../assets/img/structure1.jpg';
 import assuranceImg from '../assets/img/structure3.jpg';
+import laboratoireImg from '../assets/img/structure4.jpg';
 import medecinParDefaut from '../assets/img/med1.jpg';
 import mobileApp from '../assets/img/mobileapp.png';
 import { useTelechargementApk } from '../hooks/useTelechargementApk';
+import ApkPreteModal from '../components/apk/ApkPreteModal';
 import { listerMedecins, listerSpecialites } from '../services/medecinService';
 import '../assets/styles/home-2026.css';
+import { usePays } from '../context/PaysContext';
+import ChoixPays from '../components/geoloc/ChoixPays';
 import { aUnTarif, libelleTarif } from '../utils/tarif';
 
 // Accueil public — refonte UI web 2026 (mobile/new-web-ui.html, écran 01) :
@@ -143,29 +147,45 @@ export default function Home() {
   const [specialiteId, setSpecialiteId] = useState('');
   const [recherche, setRecherche] = useState('');
   const [medecins, setMedecins] = useState([]);
+  // Pays de l'utilisateur (détecté ou choisi) et ses villes.
+  const { paysId, villes } = usePays();
+  const [villeId, setVilleId] = useState('');
+
+  useEffect(() => { setVilleId(''); }, [paysId]);
 
   useEffect(() => {
     let annule = false;
     listerSpecialites()
       .then((s) => { if (!annule) setSpecialites(s || []); })
       .catch(() => {});
-    // Aperçu de l'annuaire : priorité aux fiches publiées, puis aux mieux notées.
-    listerMedecins({})
-      .then((liste) => {
-        if (annule) return;
-        const tries = [...(liste || [])].sort((a, b) =>
-          (b.statut_verification === 'publie') - (a.statut_verification === 'publie')
-          || (Number(b.note_moyenne) || 0) - (Number(a.note_moyenne) || 0));
-        setMedecins(tries.slice(0, NB_MEDECINS_ACCUEIL));
-      })
-      .catch(() => {});
     return () => { annule = true; };
   }, []);
+
+  // Aperçu de l'annuaire : médecins du pays de l'utilisateur (tous les pays
+  // s'il n'y en a encore aucun), fiches publiées puis mieux notées d'abord.
+  useEffect(() => {
+    let annule = false;
+    const trier = (liste) => [...(liste || [])].sort((a, b) =>
+      (b.statut_verification === 'publie') - (a.statut_verification === 'publie')
+      || (Number(b.note_moyenne) || 0) - (Number(a.note_moyenne) || 0));
+    (async () => {
+      try {
+        let liste = await listerMedecins(paysId ? { pays_exercice_id: paysId } : {});
+        if (paysId && !liste?.length) liste = await listerMedecins({});
+        if (!annule) setMedecins(trier(liste).slice(0, NB_MEDECINS_ACCUEIL));
+      } catch {
+        // Aperçu facultatif.
+      }
+    })();
+    return () => { annule = true; };
+  }, [paysId]);
 
   function rechercher(e, idSpecialite = specialiteId) {
     e?.preventDefault();
     const params = new URLSearchParams();
     if (idSpecialite) params.set('specialite_id', idSpecialite);
+    if (paysId) params.set('pays_exercice_id', paysId);
+    if (paysId && villeId) params.set('ville_exercice_id', villeId);
     if (recherche.trim()) params.set('recherche', recherche.trim());
     const qs = params.toString();
     navigate(`/medecin${qs ? `?${qs}` : ''}`);
@@ -203,6 +223,20 @@ export default function Home() {
                     </ApsSelect>
                   </div>
                 </div>
+                {villes.length > 0 && (
+                  <div className="aps-sbar-f">
+                    <i className="fa-solid fa-location-dot" />
+                    <div>
+                      <label htmlFor="h-ville">Ville</label>
+                      <ApsSelect variante="nu" id="h-ville" value={villeId} onChange={(e) => setVilleId(e.target.value)}>
+                        <option value="">Toutes les villes</option>
+                        {villes.map((v) => (
+                          <option key={v.ville_id} value={v.ville_id}>{v.nom}</option>
+                        ))}
+                      </ApsSelect>
+                    </div>
+                  </div>
+                )}
                 <div className="aps-sbar-f">
                   <i className="fa-solid fa-user-doctor" />
                   <div>
@@ -220,6 +254,8 @@ export default function Home() {
                   <i className="fa-solid fa-magnifying-glass" /> Rechercher
                 </button>
               </form>
+
+              <ChoixPays id="h-pays" className="home26-pays" />
 
               {specialites.length > 0 && (
                 <div className="home26-populaires">
@@ -381,11 +417,11 @@ export default function Home() {
           <div className="aps-sec-head">
             <div>
               <span className="aps-over">Près de chez vous</span>
-              <h2 className="aps-h2 mt-2">Pharmacies, hôpitaux, assureurs</h2>
+              <h2 className="aps-h2 mt-2">Pharmacies, hôpitaux, laboratoires, assureurs</h2>
             </div>
             <Link to="/pharmacie" className="aps-lnk">Pharmacies de garde <i className="fa-solid fa-arrow-right" /></Link>
           </div>
-          <div className="aps-grid-3">
+          <div className="aps-grid-4">
             <Link to="/pharmacie" className="aps-dc is-wide">
               <img src={pharmaImg} alt="" loading="lazy" />
               <div className="aps-dc-top"><span className="aps-pill is-white"><span className="d" /> Gardes en direct</span></div>
@@ -407,6 +443,19 @@ export default function Home() {
                   <div className="flex-grow-1">
                     <div className="aps-dc-nm">Structures de santé</div>
                     <div className="aps-dc-sp">Hôpitaux, cliniques, laboratoires</div>
+                  </div>
+                  <span className="aps-dc-go"><i className="fa-solid fa-arrow-right" /></span>
+                </div>
+              </div>
+            </Link>
+            <Link to="/laboratoires" className="aps-dc is-wide">
+              <img src={laboratoireImg} alt="" loading="lazy" />
+              <div className="aps-dc-top"><span className="aps-pill is-white"><span className="d" /> Examens &amp; tarifs</span></div>
+              <div className="aps-dc-info">
+                <div className="d-flex align-items-center gap-2">
+                  <div className="flex-grow-1">
+                    <div className="aps-dc-nm">Laboratoires</div>
+                    <div className="aps-dc-sp">Analyses et centres de prélèvement</div>
                   </div>
                   <span className="aps-dc-go"><i className="fa-solid fa-arrow-right" /></span>
                 </div>
@@ -493,6 +542,7 @@ export default function Home() {
                   {apk.erreur}
                 </div>
               )}
+              <ApkPreteModal apk={apk} />
             </div>
 
             <div className="home26-app-visuel">
@@ -529,6 +579,7 @@ export default function Home() {
               <Link to="/devenir-medecin"><i className="fa-solid fa-stethoscope" /><b>Devenir médecin partenaire</b><i className="fa-solid fa-arrow-right" /></Link>
               <Link to="/pharmacie/creation"><i className="fa-solid fa-prescription-bottle-medical" /><b>Inscrire ma pharmacie</b><i className="fa-solid fa-arrow-right" /></Link>
               <Link to="/structure-sante/creation"><i className="fa-solid fa-hospital" /><b>Inscrire ma structure de santé</b><i className="fa-solid fa-arrow-right" /></Link>
+              <Link to="/laboratoires/creation"><i className="fa-solid fa-flask-vial" /><b>Inscrire mon laboratoire</b><i className="fa-solid fa-arrow-right" /></Link>
               <Link to="/assurances/creation"><i className="fa-solid fa-shield-heart" /><b>Inscrire mon assurance</b><i className="fa-solid fa-arrow-right" /></Link>
             </div>
           </div>

@@ -1,0 +1,58 @@
+/* ==========================================================================
+   APS — Laboratoires d'analyses (laboratoire.css)
+   Fiche publique (examens, avis, contact) et portail du laboratoire.
+   Uniquement des classes préfixées « labo- » : aucune règle générique
+   (.btn, .form-control, :root…) — le thème reste celui de theme-2026.css.
+   ========================================================================== */
+
+/* ---------- Fiche publique : examens ---------- */
+.labo-filtres-examens { display: flex; flex-direction: column; gap: .75rem; }
+.labo-examens { display: flex; flex-direction: column; gap: .6rem; }
+.labo-examen {
+  background: #fff;
+  border: 1px solid var(--line, #E3E8E5);
+  border-radius: 10px;
+  padding: .85rem 1rem;
+}
+.labo-examen-tete { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; }
+.labo-examen-tete strong { font-size: .92rem; }
+.labo-examen-prix { font-weight: 700; color: var(--primary-hover, #117A56); white-space: nowrap; font-size: .9rem; }
+.labo-examen-desc { font-size: .85rem; margin: .35rem 0 .3rem; color: var(--ink-soft, #4A5551); }
+.labo-examen.is-indisponible { opacity: .6; }
+
+/* ---------- Fiche publique : synthèse des avis ---------- */
+.labo-resume-avis { display: grid; grid-template-columns: 160px 1fr; gap: 1.25rem; align-items: center; }
+.labo-resume-note { display: flex; flex-direction: column; align-items: flex-start; gap: .2rem; }
+.labo-resume-note strong { font-size: 2.1rem; line-height: 1; }
+.labo-resume-barres { display: flex; flex-direction: column; gap: .3rem; font-size: .8rem; }
+.labo-barre { display: flex; align-items: center; gap: .5rem; }
+.labo-barre > span:first-child { width: 12px; }
+.labo-barre > span:last-child { width: 26px; text-align: right; }
+
+/* ---------- Fiche publique : contact ---------- */
+.labo-contact .btn + .btn { margin-top: .5rem; }
+
+/* ---------- Portail : tableau de bord ---------- */
+.labo-engagements { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .6rem; }
+.labo-engagement {
+  border: 1px solid var(--line, #E3E8E5);
+  border-radius: 10px;
+  padding: .7rem .8rem;
+  background: #fff;
+}
+.labo-engagement-valeur { font-size: 1.25rem; font-weight: 700; }
+.labo-engagement-libelle { font-size: .78rem; color: var(--ink-soft, #4A5551); }
+
+/* ---------- Portail : listes d'examens et de centres ---------- */
+.labo-ligne {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem;
+  padding: .75rem 0; border-bottom: 1px solid var(--line, #E3E8E5);
+}
+.labo-ligne:last-child { border-bottom: 0; }
+.labo-ligne-actions { display: flex; gap: .25rem; flex: none; }
+.labo-ligne.is-indisponible > div:first-child { opacity: .6; }
+
+@media (max-width: 640px) {
+  .labo-resume-avis { grid-template-columns: 1fr; }
+  .labo-examen-tete { flex-direction: column; gap: .2rem; }
+}

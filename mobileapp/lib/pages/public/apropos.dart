@@ -600,10 +600,11 @@ class _TeamCard extends StatelessWidget {
 class _LegalLinksCard extends StatelessWidget {
   const _LegalLinksCard();
 
+  // Pages du site web, ouvertes dans le navigateur du téléphone.
   static const _links = [
-    (Icons.description_outlined, "Conditions d'utilisation"),
-    (Icons.privacy_tip_outlined, 'Politique de confidentialité'),
-    (Icons.chat_bubble_outline, 'Nous contacter'),
+    (Icons.description_outlined, "Conditions d'utilisation", '/cgu'),
+    (Icons.privacy_tip_outlined, 'Politique de confidentialité', '/confidentialite'),
+    (Icons.chat_bubble_outline, 'Nous contacter', '/contact'),
   ];
 
   @override
@@ -618,9 +619,7 @@ class _LegalLinksCard extends StatelessWidget {
               icon: link.$1,
               label: link.$2,
               isLast: link == _links.last,
-              onTap: () {
-                // TODO: naviguer vers l'écran correspondant.
-              },
+              onTap: () => ouvrirPageLegale(context, link.$3),
             ),
         ],
       ),

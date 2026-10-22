@@ -23,6 +23,7 @@ import {
 import { donneesPinCreation, ErreurPin, genererPinProvisoire } from "../services/pin.service.js";
 import { espaceParDefaut, listerEspaces, trouverEspace } from "../services/espaces.service.js";
 import { ouvrirSessionEspace } from "../services/compte.service.js";
+import { MESSAGE_CGU_REFUSEES, cguRefusees, enregistrerAcceptationsLegales } from "../services/documentLegal.service.js";
 
 // Délai laissé au titulaire d'un mot de passe temporaire pour le
 // changer, à compter de sa toute première connexion réussie.
@@ -68,6 +69,7 @@ const ROLES_CREABLES_PAR = {
     "agent_ambulance",
     "agent_pompes_funebres",
     "agent_assurance",
+    "agent_laboratoire",
   ],
   admin: [
     "patient",
@@ -77,6 +79,7 @@ const ROLES_CREABLES_PAR = {
     "agent_ambulance",
     "agent_pompes_funebres",
     "agent_assurance",
+    "agent_laboratoire",
   ],
 };
 
@@ -95,6 +98,7 @@ const TYPES_AGENT = {
     fk: "pompes_funebres_id",
   },
   agent_assurance: { model: "agentAssurance", fk: "service_assurance_id" },
+  agent_laboratoire: { model: "agentLaboratoire", fk: "laboratoire_id" },
 };
 
 /**
@@ -118,6 +122,10 @@ export async function inscrire(req, res, next) {
       pin,
       preuve_telephone,
     } = req.body;
+
+    if (cguRefusees(req.body)) {
+      return res.status(400).json({ message: MESSAGE_CGU_REFUSEES });
+    }
 
     if (!nom || !prenom || !emailBrut || !mot_de_passe || !pays_id || !date_naissance) {
       return res.status(400).json({
@@ -203,6 +211,10 @@ export async function inscrire(req, res, next) {
       });
 
       return nouvelUtilisateur;
+    });
+
+    await enregistrerAcceptationsLegales({
+      utilisateurId: utilisateur.utilisateur_id, req, contexte: "inscription_patient",
     });
 
     return res.status(201).json({
@@ -483,6 +495,10 @@ async function verifierReferenceAgent(roleLibelle, reference_id) {
         await prisma.serviceAssurance.findUnique({
           where: { service_assurance_id: reference_id },
         })
+      );
+    case "agent_laboratoire":
+      return Boolean(
+        await prisma.laboratoire.findUnique({ where: { laboratoire_id: reference_id } })
       );
     default:
       return false;
@@ -860,7 +876,8 @@ export async function profil(req, res, next) {
   try {
     const utilisateur = await prisma.utilisateur.findUnique({
       where: { utilisateur_id: req.utilisateur.utilisateur_id },
-      include: { role: true },
+      // Pays : périmètre affiché dans le back-office (ABAC admin).
+      include: { role: true, pays: { select: { pays_id: true, nom: true, code_iso2: true } } },
     });
 
     if (!utilisateur) {

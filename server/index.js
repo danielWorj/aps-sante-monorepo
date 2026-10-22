@@ -1,5 +1,6 @@
 import express from "express";
 import "dotenv/config";
+import { poserPerimetrePays, ErreurHorsPerimetre } from "./src/lib/perimetrePays.js";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
@@ -13,11 +14,13 @@ import abonnementRoutes from "./src/routes/abonnement.routes.js";
 import publiciteRoutes from "./src/routes/publicite.routes.js";
 import assuranceRoutes from "./src/routes/assurance.routes.js";
 import portailAssuranceRoutes from "./src/routes/portailAssurance.routes.js";
+import laboratoireRoutes from "./src/routes/laboratoire.routes.js";
 import urgencesRoutes from "./src/routes/urgences.routes.js";
 import medecinRoutes from "./src/routes/medecin.routes.js";
 import patientRoutes from "./src/routes/patient.routes.js";
 import moyenPaiementRoutes from "./src/routes/moyenPaiement.routes.js";
 import contactRoutes from "./src/routes/contact.routes.js";
+import documentLegalRoutes from "./src/routes/documentLegal.routes.js";
 import visioRoutes from "./src/routes/visio.routes.js";
 import utilisateursRoutes from "./src/routes/utilisateurs.routes.js";
 import gestionApkRoutes from "./src/routes/gestionapk.routes.js"; // Importer les routes de gestion des APKs
@@ -152,6 +155,9 @@ app.get("/", (_req, res) => {
 });
 
 // ─── Routes ───────────────────────────────────────────────────
+// ABAC : un admin ne voit que les données de son pays (contexte posé
+// pour toute la requête, lu par l'extension Prisma — voir perimetrePays.js).
+app.use(poserPerimetrePays);
 app.use("/api/auth", authentificationRoutes);
 app.use("/api/referentiels", referentielsRoutes);
 app.use("/api", centreSanteRoutes);
@@ -161,12 +167,16 @@ app.use("/api", abonnementRoutes);
 app.use("/api", publiciteRoutes);
 app.use("/api", assuranceRoutes);
 app.use("/api", portailAssuranceRoutes);
+// Annuaire et portail des laboratoires d'analyses.
+app.use("/api", laboratoireRoutes);
 app.use("/api", urgencesRoutes);
 app.use("/api", medecinRoutes);
 app.use("/api", patientRoutes);
 app.use("/api", moyenPaiementRoutes);
 // Formulaire public « Contactez-nous » et boîte de réception admin.
 app.use("/api", contactRoutes);
+// Documents légaux (CGU, confidentialité) : lecture publique, rédaction superadmin.
+app.use("/api", documentLegalRoutes);
 app.use("/api", visioRoutes);
 app.use("/api/utilisateurs", utilisateursRoutes);
 app.use("/api/apks", gestionApkRoutes);
@@ -198,6 +208,14 @@ app.use("/api", smsRoutes);
 
 // ─── Gestion d'erreurs centralisée ─────────────────────────────
 app.use((err, _req, res, _next) => {
+  if (err instanceof ErreurHorsPerimetre) {
+    return res.status(403).json({ message: err.message });
+  }
+  // Enregistrement absent… ou hors du périmètre pays de l'admin (filtré
+  // par l'extension Prisma) : même réponse, on ne confirme rien.
+  if (err?.code === "P2025") {
+    return res.status(404).json({ message: "Élément introuvable." });
+  }
   console.error(err);
   res.status(500).json({ message: "Erreur interne du serveur." });
 });

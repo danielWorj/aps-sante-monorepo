@@ -30,9 +30,9 @@ import { TYPES_ACTEUR_PRESENCE } from "../lib/acteursPresence.js";
 const FENETRE_REVUE_MINUTES = 30;
 
 // Fiches comptées : celles des abonnements de présence, plus les fiches
-// assurance (tableau de bord du portail assurance — moteur d'abonnement
-// distinct, même compteur).
-const TYPES_COMPTES = [...TYPES_ACTEUR_PRESENCE, "assurance"];
+// assurance et laboratoire (tableaux de bord de leurs portails — sans
+// abonnement de présence, même compteur).
+const TYPES_COMPTES = [...TYPES_ACTEUR_PRESENCE, "assurance", "laboratoire"];
 const ROBOTS = /bot|crawl|spider|slurp|facebookexternalhit|whatsapp|telegram|preview|headless|lighthouse|curl|wget|python-requests|httpclient|monitor|uptime/i;
 
 // Secret de l'empreinte : à fixer en production (sinon un secret

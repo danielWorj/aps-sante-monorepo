@@ -671,11 +671,15 @@ class ApsCheckRow extends StatelessWidget {
     required this.label,
     required this.checked,
     required this.onTap,
+    this.contenu,
   });
 
   final String label;
   final bool checked;
   final VoidCallback onTap;
+
+  /// Remplace le texte [label] (ex. TexteAcceptationLegale, avec liens).
+  final Widget? contenu;
 
   @override
   Widget build(BuildContext context) {
@@ -709,8 +713,7 @@ class ApsCheckRow extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                label,
+              child: DefaultTextStyle.merge(
                 style: const TextStyle(
                   fontFamily: AppTextStyles.fontDisplay,
                   fontSize: 12,
@@ -718,6 +721,7 @@ class ApsCheckRow extends StatelessWidget {
                   color: AppColors.ink,
                   height: 1.4,
                 ),
+                child: contenu ?? Text(label),
               ),
             ),
           ],

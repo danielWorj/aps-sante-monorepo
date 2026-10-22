@@ -323,6 +323,8 @@ class PharmacieRepository {
       if (agentTelephone != null) 'agent_telephone': agentTelephone,
       // Fiche rattachée au compte connecté (« Je suis le responsable »).
       if (responsableMoi) 'responsable_moi': 'true',
+      // Le formulaire de création impose la case CGU / confidentialité.
+      'accepte_cgu': 'true',
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
     };

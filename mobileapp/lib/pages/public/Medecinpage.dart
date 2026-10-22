@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 // Si votre projet utilise des imports package (ex: package:aps/...),
 // remplacez les lignes ci-dessous par les équivalents package:aps/...
 import '../../components/components.dart';
+import '../../services/pays_utilisateur_service.dart';
 import '../../controllers/medecin_controller.dart';
 import '../../controllers/referentiel_controller.dart';
 import '../../models/referentiel_models.dart';
@@ -184,6 +185,8 @@ class _MedecinPageState extends State<MedecinPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _paysParDefaut());
+    PaysUtilisateurService.instance.addListener(_paysParDefaut);
     // S'abonne manuellement au provider (pas de ConsumerWidget
     // disponible sans flutter_riverpod) : chaque changement d'état
     // déclenche un setState avec la nouvelle AsyncValue.
@@ -238,6 +241,7 @@ class _MedecinPageState extends State<MedecinPage> {
 
   @override
   void dispose() {
+    PaysUtilisateurService.instance.removeListener(_paysParDefaut);
     _medecinsSub.close();
     _debounce?.cancel();
     _searchController.dispose();
@@ -513,13 +517,43 @@ class _MedecinPageState extends State<MedecinPage> {
     );
   }
 
+
+  /// Vrai dès que l'utilisateur agit sur le filtre « Pays » de cet écran :
+  /// le pays détecté ([PaysUtilisateurService]) n'est alors plus imposé.
+  bool _paysTouche = false;
+
+  /// Ouvre l'annuaire sur le pays de l'utilisateur (détecté ou choisi),
+  /// et le suit tant que l'utilisateur n'a pas choisi lui-même.
+  void _paysParDefaut() {
+    if (!mounted || _paysTouche) return;
+    final service = PaysUtilisateurService.instance;
+    final id = service.paysId;
+    final actuel = _filtresServeur.paysExerciceId;
+    if (id == null || actuel == id) return;
+    if (actuel != null && actuel != service.paysPrecedent) return;
+    final f = _filtresServeur;
+    _appliquerFiltresServeur(
+      specialiteId: f.specialiteId,
+      paysId: id,
+      villeId: null,
+      position: _positionActuelle,
+      parUtilisateur: false,
+    );
+  }
+
   /// Remplace les filtres serveur en gardant la recherche texte.
   void _appliquerFiltresServeur({
     String? specialiteId,
     String? paysId,
     String? villeId,
     ({double latitude, double longitude})? position,
+    bool parUtilisateur = true,
   }) {
+    if (parUtilisateur && paysId != _filtresServeur.paysExerciceId) {
+      _paysTouche = true;
+      // Un pays choisi vaut pour toute l'application ; « Tous » pour cet écran.
+      PaysUtilisateurService.instance.choisir(paysId);
+    }
     _container.read(filtresMedecinsProvider.notifier).state = MedecinFiltres(
       specialiteId: specialiteId,
       paysExerciceId: paysId,

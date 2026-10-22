@@ -9,6 +9,7 @@ import "../assets/styles/annuaire-2026.css";
 
 import { listerPharmacies, listerGardesPharmacie } from "../services/pharmacieService";
 import { listerPays, listerVilles } from "../services/geoService";
+import { usePaysFiltre } from "../context/PaysContext";
 import { useGeolocation } from "../hooks/useGeolocation";
 
 // Rayons proposés pour le filtre "Autour de moi" (voir
@@ -123,7 +124,8 @@ export default function Pharmacie() {
   const [paysListe, setPaysListe] = useState([]);
   const [villesListe, setVillesListe] = useState([]);
 
-  const [paysId, setPaysId] = useState("");
+  // Pays : par défaut celui de l'utilisateur (détecté ou choisi, PaysContext).
+  const [paysId, setPaysId] = usePaysFiltre();
   const [villeId, setVilleId] = useState("");
   const [recherche, setRecherche] = useState("");
   const [rechercheSaisie, setRechercheSaisie] = useState("");
@@ -318,7 +320,7 @@ export default function Pharmacie() {
               </div>
               <div className="annuaire26-filtre">
                 <label className="form-label-aps" htmlFor="f-pays">Pays</label>
-                <ApsSelect id="f-pays" value={paysId} onChange={(e) => setPaysId(e.target.value)}>
+                <ApsSelect id="f-pays" value={paysId} onChange={(e) => { setPaysId(e.target.value); setVilleId(""); }}>
                   <option value="">Tous les pays</option>
                   {paysListe.map((p) => (
                     <option key={p.pays_id} value={p.pays_id}>{p.nom}</option>

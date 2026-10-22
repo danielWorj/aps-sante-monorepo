@@ -286,15 +286,6 @@ export default function Abonnement() {
             />
           )}
 
-          {client.notes && client.notes.length > 0 && (
-            <ul className="plan-notes">
-              {client.notes.map((n, i) => (
-                <li key={i}>
-                  <i className="fa-solid fa-circle-info" /> {n}
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       </section>
 
