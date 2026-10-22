@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useToast } from '../components/feedback';
+import { useConfirmation, useSaisie, useToast } from '../components/feedback';
 import UtilisateurService, {
   ROLES_UTILISATEUR,
   MOT_DE_PASSE_LONGUEUR_MIN,
@@ -57,6 +57,8 @@ function messageErreur(err, repli = "Une erreur est survenue.") {
 export default function Utilisateurs() {
   const { user: moi } = useAuth() ?? {};
   const peutEcrire = moi?.role === 'superadmin';
+  // ABAC : un admin ne voit que les admins de son pays (filtré côté serveur).
+  const paysMoi = moi?.pays?.nom;
 
   // ─── Liste + filtres ────────────────────────────────────────────
   const [utilisateurs, setUtilisateurs] = useState([]);
@@ -65,7 +67,7 @@ export default function Utilisateurs() {
   const [erreurListe, setErreurListe] = useState(null);
 
   const [searchInput, setSearchInput] = useState('');
-  const [filtres, setFiltres] = useState({ role: 'all', statut: 'all', recherche: '', page: 1 });
+  const [filtres, setFiltres] = useState({ role: 'all', statut: 'all', pays_id: 'all', recherche: '', page: 1 });
 
   // ─── KPI (vue d'ensemble, indépendante des filtres de la table) ──
   const [stats, setStats] = useState(null);
@@ -88,6 +90,8 @@ export default function Utilisateurs() {
 
   const [actionEnCours, setActionEnCours] = useState(null); // id de l'utilisateur en cours de suspension/réactivation
   const toast = useToast();
+  const confirmer = useConfirmation();
+  const saisir = useSaisie();
 
   // Débounce de la recherche texte : on ne déclenche l'appel API
   // qu'après une pause de frappe, pour éviter une requête par lettre.
@@ -122,6 +126,7 @@ export default function Utilisateurs() {
       const reponse = await UtilisateurService.listerUtilisateurs({
         role: filtres.role === 'all' ? undefined : filtres.role,
         statut: filtres.statut === 'all' ? undefined : filtres.statut,
+        pays_id: filtres.pays_id === 'all' ? undefined : filtres.pays_id,
         recherche: filtres.recherche || undefined,
         page: filtres.page,
         limite: pagination.limite,
@@ -146,7 +151,9 @@ export default function Utilisateurs() {
         UtilisateurService.listerUtilisateurs({ limite: 1 }),
         UtilisateurService.listerUtilisateurs({ statut: 'actif', limite: 1 }),
         UtilisateurService.listerUtilisateurs({ statut: 'suspendu', limite: 1 }),
-        UtilisateurService.listerUtilisateurs({ role: 'superadmin', limite: 1 }),
+        peutEcrire
+          ? UtilisateurService.listerUtilisateurs({ role: 'superadmin', limite: 1 })
+          : Promise.resolve({ pagination: { total: 0 } }),
       ]);
       setStats({
         total: tousRes.pagination.total,
@@ -269,6 +276,54 @@ export default function Utilisateurs() {
     }
   }
 
+  async function reinitialiserMotDePasse(u) {
+    setOpenMenuId(null);
+    const mot_de_passe = await saisir({
+      titre: `Réinitialiser le mot de passe de ${u.prenom} ${u.nom}`,
+      message: 'Ce mot de passe sera temporaire : il devra être changé à la prochaine connexion. Les sessions ouvertes du compte seront fermées.',
+      label: 'Nouveau mot de passe temporaire',
+      type: 'text',
+      obligatoire: true,
+      labelConfirmer: 'Réinitialiser',
+      valider: (v) =>
+        v.length < MOT_DE_PASSE_LONGUEUR_MIN
+          ? `Au moins ${MOT_DE_PASSE_LONGUEUR_MIN} caractères.`
+          : null,
+    });
+    if (mot_de_passe === null) return;
+    setActionEnCours(u.utilisateur_id);
+    try {
+      await UtilisateurService.reinitialiserMotDePasse(u.utilisateur_id, mot_de_passe);
+      toast.succes('Mot de passe réinitialisé. Communiquez-le à la personne de façon sécurisée.');
+    } catch (err) {
+      toast.erreur(messageErreur(err));
+    } finally {
+      setActionEnCours(null);
+    }
+  }
+
+  async function supprimer(u) {
+    setOpenMenuId(null);
+    const ok = await confirmer({
+      titre: 'Supprimer le compte',
+      message: `Le compte de ${u.prenom} ${u.nom} sera supprimé définitivement. Si ce compte a déjà un historique, suspendez-le plutôt.`,
+      labelConfirmer: 'Supprimer',
+      variante: 'danger',
+    });
+    if (!ok) return;
+    setActionEnCours(u.utilisateur_id);
+    try {
+      await UtilisateurService.supprimerUtilisateur(u.utilisateur_id);
+      toast.succes('Compte supprimé.');
+      await chargerListe();
+      await chargerStats();
+    } catch (err) {
+      toast.erreur(messageErreur(err));
+    } finally {
+      setActionEnCours(null);
+    }
+  }
+
   return (
     <main className="aps-content">
       {/* Header de page */}
@@ -292,8 +347,8 @@ export default function Utilisateurs() {
       {!peutEcrire && (
         <div className="alert alert-info">
           <i className="fa-solid fa-circle-info me-2" />
-          Vous êtes connecté en tant qu&apos;admin : cette page est en lecture seule. Seul un
-          superadmin peut créer, modifier, suspendre ou réactiver un compte.
+          Vous voyez les administrateurs {paysMoi ? <>du pays <strong>{paysMoi}</strong></> : 'de votre pays'}.
+          Seul un superadmin peut créer, modifier, suspendre ou supprimer un compte.
         </div>
       )}
 
@@ -339,8 +394,8 @@ export default function Utilisateurs() {
                 <i className="fa-solid fa-user-shield" />
               </div>
             </div>
-            <div className="aps-kpi__label">Superadmins</div>
-            <div className="aps-kpi__value">{stats ? stats.superadmins : '—'}</div>
+            <div className="aps-kpi__label">{peutEcrire ? 'Superadmins' : 'Périmètre'}</div>
+            <div className="aps-kpi__value">{peutEcrire ? (stats ? stats.superadmins : '—') : (paysMoi ?? '—')}</div>
           </div>
         </div>
       </div>
@@ -359,17 +414,32 @@ export default function Utilisateurs() {
                 onChange={(e) => setSearchInput(e.target.value)}
               />
             </div>
-            <select
-              className="form-select form-select-sm"
-              style={{ width: 'auto' }}
-              value={filtres.role}
-              onChange={(e) => setFiltres((f) => ({ ...f, role: e.target.value, page: 1 }))}
-            >
-              <option value="all">Tous les rôles</option>
-              {ROLES_UTILISATEUR.map((r) => (
-                <option key={r.valeur} value={r.valeur}>{r.libelle}</option>
-              ))}
-            </select>
+            {peutEcrire && (
+              <select
+                className="form-select form-select-sm"
+                style={{ width: 'auto' }}
+                value={filtres.role}
+                onChange={(e) => setFiltres((f) => ({ ...f, role: e.target.value, page: 1 }))}
+              >
+                <option value="all">Tous les rôles</option>
+                {ROLES_UTILISATEUR.map((r) => (
+                  <option key={r.valeur} value={r.valeur}>{r.libelle}</option>
+                ))}
+              </select>
+            )}
+            {peutEcrire && (
+              <select
+                className="form-select form-select-sm"
+                style={{ width: 'auto' }}
+                value={filtres.pays_id}
+                onChange={(e) => setFiltres((f) => ({ ...f, pays_id: e.target.value, page: 1 }))}
+              >
+                <option value="all">Tous les pays</option>
+                {paysListe.map((p) => (
+                  <option key={p.pays_id ?? p.id} value={p.pays_id ?? p.id}>{p.nom ?? p.libelle}</option>
+                ))}
+              </select>
+            )}
             <select
               className="form-select form-select-sm"
               style={{ width: 'auto' }}
@@ -474,7 +544,7 @@ export default function Utilisateurs() {
                       </span>
                     </td>
                     <td>{u.telephone || '—'}</td>
-                    <td>{paysParId.get(u.pays_id) ?? u.pays_id ?? '—'}</td>
+                    <td>{u.pays?.nom ?? paysParId.get(u.pays_id) ?? '—'}</td>
                     <td>
                       <span className={`aps-badge ${statutMeta?.badge ?? 'is-neutral'}`}>
                         <i className="fa-solid fa-circle" />
@@ -525,6 +595,20 @@ export default function Utilisateurs() {
                                   )}
                                 </button>
                               </li>
+                              {!estMoi && (
+                                <li>
+                                  <button className="dropdown-item" onClick={() => reinitialiserMotDePasse(u)}>
+                                    <i className="fa-solid fa-key me-2" />Réinitialiser le mot de passe
+                                  </button>
+                                </li>
+                              )}
+                              {!estMoi && (
+                                <li>
+                                  <button className="dropdown-item text-danger" onClick={() => supprimer(u)}>
+                                    <i className="fa-solid fa-trash me-2" />Supprimer
+                                  </button>
+                                </li>
+                              )}
                             </ul>
                           </>
                         )}
@@ -638,7 +722,7 @@ export default function Utilisateurs() {
                       )}
                     </div>
                     <div className="col-md-6">
-                      <label className="form-label">Pays</label>
+                      <label className="form-label">Pays géré</label>
                       <select
                         className="form-select"
                         required
@@ -652,6 +736,9 @@ export default function Utilisateurs() {
                           </option>
                         ))}
                       </select>
+                      <div className="form-text">
+                        Un admin ne voit et ne gère que les données de ce pays. Un superadmin gère tous les pays.
+                      </div>
                     </div>
                     {!form.utilisateur_id && (
                       <div className="col-md-6">

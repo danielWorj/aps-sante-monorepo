@@ -34,6 +34,7 @@ import {
 import { listerPays } from '../services/geoService';
 import { montantDevise } from '../utils/fonds';
 import './Publicite.css';
+import CaseAcceptationLegale, { MESSAGE_CGU_REQUISES } from '../components/legal/CaseAcceptationLegale';
 
 const NOMS_PAGES = {
   [PAGES_PUBLICITE.accueil]: "Page d'accueil",
@@ -190,6 +191,8 @@ export default function ReserverPublicite() {
     lecteur.readAsDataURL(fichier);
   };
 
+  const [accepteCgu, setAccepteCgu] = useState(false);
+
   const soumettre = async (e) => {
     e.preventDefault();
     setErreur(null);
@@ -198,6 +201,7 @@ export default function ReserverPublicite() {
     if (!dateDebut) return setErreur('Choisissez la date de début de diffusion.');
     if (conflit) return setErreur('Cette position est déjà réservée sur la période choisie.');
     if (!visuel) return setErreur('Ajoutez le flyer ou l’image de votre publicité.');
+    if (!accepteCgu) return setErreur(MESSAGE_CGU_REQUISES);
     if (invite) {
       if (!compte.prenom.trim() || !compte.nom.trim()) return setErreur('Indiquez votre prénom et votre nom.');
       if (!compte.email.trim()) return setErreur('Indiquez votre e-mail : il servira d’identifiant de connexion.');
@@ -208,7 +212,9 @@ export default function ReserverPublicite() {
     }
     setEnvoi(true);
     try {
-      const reservation = { ...champs, forfait_publicitaire_id: forfait.forfait_publicitaire_id, date_debut: dateDebut };
+      const reservation = {
+        ...champs, forfait_publicitaire_id: forfait.forfait_publicitaire_id, date_debut: dateDebut, accepte_cgu: true,
+      };
       let r;
       if (invite) {
         // Le nom et l'e-mail de l'annonceur sont ceux du compte créé.
@@ -514,6 +520,8 @@ export default function ReserverPublicite() {
               )}
             </div>
           )}
+
+          <CaseAcceptationLegale id="pub-cgu" className="form-check mb-3" checked={accepteCgu} onChange={setAccepteCgu} />
 
           <div className="pub-form-pied">
             {forfait && (

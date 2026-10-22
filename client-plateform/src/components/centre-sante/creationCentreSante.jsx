@@ -278,6 +278,7 @@ const CreationCentreSante = () => {
       // statut_verification n'est volontairement jamais envoyé : le
       // serveur l'ignore de toute façon pour un appelant non admin.
       const resultat = await creerCentreSante({
+        accepte_cgu: formData.acceptCGU,
         nom: formData.nom.trim(),
         type_etablissement: formData.type_etablissement,
         telephone: formData.telephone.trim(),
@@ -865,8 +866,8 @@ const CreationCentreSante = () => {
                             required
                           />
                           <label className="form-check-label" htmlFor="acceptCGU">
-                            J'accepte les <a href="#">Conditions générales d'utilisation</a> et
-                            la <a href="#">Politique de confidentialité</a>.
+                            J'accepte les <a href="/cgu" target="_blank" rel="noopener noreferrer">Conditions générales d'utilisation</a> et
+                            la <a href="/confidentialite" target="_blank" rel="noopener noreferrer">Politique de confidentialité</a>.
                           </label>
                         </div>
                       </div>

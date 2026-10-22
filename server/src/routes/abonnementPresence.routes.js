@@ -59,6 +59,8 @@ import { catalogueAbonnementPresence } from "../controllers/catalogueAbonnement.
 
 const router = Router();
 const admin = [authentifier, autoriser("admin", "superadmin")];
+// Catalogue commun à tous les pays (niveaux, remises de durée) : superadmin seul.
+const catalogue = [authentifier, autoriser("superadmin")];
 
 router.param("type", (req, res, next, type) => {
   if (!estTypeActeurPresence(type)) {
@@ -91,15 +93,15 @@ router.get("/abonnements-presence/:id/facture", authentifier, obtenirFacture);
 const base = "/admin/abonnements-presence/:type";
 
 router.get(`${base}/niveaux`, ...admin, listerNiveaux);
-router.post(`${base}/niveaux`, ...admin, creerNiveau);
-router.put(`${base}/niveaux/:id`, ...admin, modifierNiveau);
+router.post(`${base}/niveaux`, ...catalogue, creerNiveau);
+router.put(`${base}/niveaux/:id`, ...catalogue, modifierNiveau);
 
 router.get(`${base}/tarifs`, ...admin, listerTarifs);
 router.put(`${base}/tarifs`, ...admin, enregistrerTarif);
 
 router.get(`${base}/remises`, ...admin, listerRemises);
-router.put(`${base}/remises`, ...admin, enregistrerRemises);
-router.delete(`${base}/remises/:duree`, ...admin, supprimerRemise);
+router.put(`${base}/remises`, ...catalogue, enregistrerRemises);
+router.delete(`${base}/remises/:duree`, ...catalogue, supprimerRemise);
 
 // Gratuité, grâce et (médecins) obligation de souscrire, par pays.
 router.get(`${base}/configs`, ...admin, listerConfigs);

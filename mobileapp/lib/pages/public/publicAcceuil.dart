@@ -11,14 +11,17 @@ import 'package:url_launcher/url_launcher.dart';
 // Assurances) et sont ici branchés sur de VRAIES navigations
 // (`Navigator.push`), pas de simples callbacks vides.
 import '../../components/components.dart';
+import '../../controllers/mise_a_jour_controller.dart';
 import '../../controllers/publicite_controller.dart';
 import '../../models/publicite_models.dart' show Publicite;
 import '../../utils/mon_espace_navigation.dart';
 import 'Medecinpage.dart';
 import 'Pharmaciepage.dart';
+import 'Laboratoirepage.dart';
 import 'Centresantepage.dart';
 import 'Assurancepage.dart';
 import 'urgence.dart';
+import '../mise_a_jour/mise_a_jour_page.dart';
 
 /// Écran d'accueil public de l'application APS Santé.
 ///
@@ -272,6 +275,16 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
                     onTap: () {
                       Navigator.pop(sheetContext);
                       _ouvrirStructures();
+                    },
+                  ),
+                  _SearchChoiceTile(
+                    icon: Icons.biotech_outlined,
+                    label: 'Un laboratoire',
+                    meta: 'Analyses et centres de prélèvement',
+                    tone: ApsTone.coral,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const LaboratoirePage()));
                     },
                   ),
                   _SearchChoiceTile(
@@ -644,6 +657,7 @@ class _HomeHeader extends StatelessWidget {
               ],
             ),
           ),
+          const _BoutonMiseAJour(),
           const SizedBox(width: 10),
           ApsIconButton(
             icon: Icons.notifications_none_rounded,
@@ -651,6 +665,26 @@ class _HomeHeader extends StatelessWidget {
             onPressed: onCompte,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Raccourci vers « Mises à jour », affiché seulement quand une nouvelle
+/// version de l'application est publiée.
+class _BoutonMiseAJour extends ConsumerWidget {
+  const _BoutonMiseAJour();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(miseAJourProvider.select((e) => e.nouvelleVersion))) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(left: 10),
+      child: ApsIconButton(
+        icon: Icons.system_update_rounded,
+        dot: true,
+        tooltip: 'Mise à jour disponible',
+        onPressed: () => ouvrirMisesAJour(context),
       ),
     );
   }

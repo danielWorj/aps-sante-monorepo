@@ -55,6 +55,7 @@ import {
 } from "../lib/droitsPresence.js";
 import { enregistrerVueFiche } from "../services/vuesFiche.service.js";
 import { estResponsableMoi, rattacherCompteConnecte } from "../services/rattachementAgent.service.js";
+import { MESSAGE_CGU_REFUSEES, cguRefusees, enregistrerAcceptationsAuteur } from "../services/documentLegal.service.js";
 
 const SALT_ROUNDS = 10; // valeur identique à authentification.controller.js
 
@@ -400,6 +401,10 @@ export async function obtenirPharmacie(req, res, next) {
  */
 export async function creerPharmacie(req, res, next) {
   try {
+    if (cguRefusees(req.body)) {
+      return res.status(400).json({ message: MESSAGE_CGU_REFUSEES });
+    }
+
     const {
       nom,
       pays_id,
@@ -574,6 +579,8 @@ export async function creerPharmacie(req, res, next) {
       }
       throw errTransaction;
     }
+
+    await enregistrerAcceptationsAuteur(req, "creation_pharmacie");
 
     const erreurGeo = await geoPharmacie.appliquer(pharmacieCreee.pharmacie_id, latitude, longitude);
 

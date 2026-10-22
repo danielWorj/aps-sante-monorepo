@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, changerMotDePasseInitial } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: '', password: '', remember: true });
@@ -15,6 +15,10 @@ export default function Login() {
   // Message posé par RequireAuth quand un compte non administrateur a été refusé.
   const [serverError, setServerError] = useState(location.state?.erreur ?? '');
   const [loading, setLoading] = useState(false);
+  // Mot de passe temporaire : token restreint reçu au login, puis saisie
+  // du nouveau mot de passe (POST /auth/changer-mot-de-passe-initial).
+  const [tokenChangement, setTokenChangement] = useState(null);
+  const [nouveau, setNouveau] = useState({ mot_de_passe: '', confirmation: '' });
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -45,9 +49,38 @@ export default function Login() {
       const destination = location.state?.from?.pathname ?? '/';
       navigate(destination, { replace: true });
     } catch (err) {
+      if (err.code === 'MOT_DE_PASSE_A_CHANGER' && err.token) {
+        setTokenChangement(err.token);
+        setServerError('');
+        return;
+      }
       // Messages renvoyés par authentification.controller.js#connecter :
       // 401 "Identifiants invalides." / 403 "Compte suspendu."
       setServerError(err.data?.message || 'Impossible de se connecter. Réessayez.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const soumettreNouveauMotDePasse = async (e) => {
+    e.preventDefault();
+    setServerError('');
+    if (nouveau.mot_de_passe.length < 8) {
+      setErrors({ nouveau: 'Le mot de passe doit contenir au moins 8 caractères.' });
+      return;
+    }
+    if (nouveau.mot_de_passe !== nouveau.confirmation) {
+      setErrors({ nouveau: 'Les deux mots de passe ne correspondent pas.' });
+      return;
+    }
+    setErrors({});
+    setLoading(true);
+    try {
+      await changerMotDePasseInitial(tokenChangement, nouveau.mot_de_passe);
+      navigate(location.state?.from?.pathname ?? '/', { replace: true });
+    } catch (err) {
+      setServerError(err.data?.message || 'Impossible de changer le mot de passe. Reconnectez-vous.');
+      if (err.status === 401) setTokenChangement(null);
     } finally {
       setLoading(false);
     }
@@ -186,6 +219,57 @@ export default function Login() {
               </div>
             )}
 
+            {tokenChangement ? (
+              <form onSubmit={soumettreNouveauMotDePasse} noValidate>
+                <div className="aps-notice is-info" style={{ marginBottom: 18 }}>
+                  <i className="fa-solid fa-key" />
+                  <span>Votre mot de passe est temporaire. Choisissez-en un nouveau pour accéder au back-office.</span>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label" htmlFor="nouveau-mdp">Nouveau mot de passe</label>
+                  <input
+                    type="password"
+                    id="nouveau-mdp"
+                    className="form-control"
+                    autoComplete="new-password"
+                    value={nouveau.mot_de_passe}
+                    onChange={(e) => setNouveau((n) => ({ ...n, mot_de_passe: e.target.value }))}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label" htmlFor="confirmation-mdp">Confirmer le mot de passe</label>
+                  <input
+                    type="password"
+                    id="confirmation-mdp"
+                    className="form-control"
+                    autoComplete="new-password"
+                    value={nouveau.confirmation}
+                    onChange={(e) => setNouveau((n) => ({ ...n, confirmation: e.target.value }))}
+                  />
+                  {errors.nouveau && (
+                    <p className="form-text" style={{ color: 'var(--aps-danger)', marginTop: 6 }}>
+                      <i className="fa-solid fa-circle-exclamation" /> {errors.nouveau}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ width: '100%', padding: '11px 16px', fontSize: 14 }}
+                  disabled={loading}
+                >
+                  {loading ? <><i className="fa-solid fa-spinner fa-spin" /> Enregistrement…</> : <><i className="fa-solid fa-check" /> Enregistrer et continuer</>}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-light"
+                  style={{ width: '100%', marginTop: 10 }}
+                  onClick={() => { setTokenChangement(null); setNouveau({ mot_de_passe: '', confirmation: '' }); }}
+                >
+                  Retour à la connexion
+                </button>
+              </form>
+            ) : (
             <form onSubmit={handleSubmit} noValidate>
               <div className="mb-3">
                 <label className="form-label" htmlFor="login-email">Adresse e-mail</label>
@@ -315,6 +399,7 @@ export default function Login() {
                 )}
               </button>
             </form>
+            )}
 
             <p style={{ fontSize: 12, color: 'var(--aps-text-400)', marginTop: 22, textAlign: 'center' }}>
               Accès réservé au personnel autorisé d&apos;APS. En cas de difficulté, contactez

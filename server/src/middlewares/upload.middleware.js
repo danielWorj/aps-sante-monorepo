@@ -277,3 +277,38 @@ export function gererTeleversementMediaAssurance(req, res, next) {
     next();
   });
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Laboratoire — 3 fichiers requis à la création (optionnels en
+// modification, voir laboratoire.controller.js) :
+//   - image_laboratoire : logo / photo du laboratoire (image seulement)
+//   - piece_identite    : CNI du responsable (image ou PDF)
+//   - document_agrement : agrément officiel (image ou PDF)
+// ─────────────────────────────────────────────────────────────────
+const televersementLaboratoire = multer({
+  storage: stockage,
+  limits: { fileSize: TAILLE_MAX_OCTETS },
+  fileFilter: (req, file, cb) => {
+    if (file.fieldname === "image_laboratoire") return filtreFichierVisuel(req, file, cb);
+    return filtreFichier(req, file, cb);
+  },
+}).fields([
+  { name: "image_laboratoire", maxCount: 1 },
+  { name: "piece_identite", maxCount: 1 },
+  { name: "document_agrement", maxCount: 1 },
+]);
+
+export function gererTeleversementLaboratoire(req, res, next) {
+  televersementLaboratoire(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        message: err.message || "Erreur lors du téléversement des fichiers.",
+      });
+    }
+    next();
+  });
+}
+
+// Médiathèque d'une fiche laboratoire : mêmes règles que la médiathèque
+// assurance (une photo ou une vidéo par requête, champ "fichier").
+export const gererTeleversementMediaLaboratoire = gererTeleversementMediaAssurance;

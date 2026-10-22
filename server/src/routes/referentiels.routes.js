@@ -50,23 +50,23 @@ const router = Router();
 // ─── Langues ──────────────────────────────────────────────────
 router.get("/langues", listerLangues);
 router.get("/langues/:id", obtenirLangue);
-router.post("/langues", authentifier, autoriser("admin", "superadmin"), creerLangue);
-router.put("/langues/:id", authentifier, autoriser("admin", "superadmin"), modifierLangue);
+router.post("/langues", authentifier, autoriser("superadmin"), creerLangue);
+router.put("/langues/:id", authentifier, autoriser("superadmin"), modifierLangue);
 router.delete("/langues/:id", authentifier, autoriser("superadmin"), supprimerLangue);
 
 // ─── Devises ──────────────────────────────────────────────────
 router.get("/devises", listerDevises);
 router.get("/devises/:id", obtenirDevise);
-router.post("/devises", authentifier, autoriser("admin", "superadmin"), creerDevise);
-router.put("/devises/:id", authentifier, autoriser("admin", "superadmin"), modifierDevise);
+router.post("/devises", authentifier, autoriser("superadmin"), creerDevise);
+router.put("/devises/:id", authentifier, autoriser("superadmin"), modifierDevise);
 router.delete("/devises/:id", authentifier, autoriser("superadmin"), supprimerDevise);
 
 // ─── Pays ─────────────────────────────────────────────────────
 router.get("/pays", listerPays);
 router.get("/pays/detecter", detecterPaysParPosition);
 router.get("/pays/:id", obtenirPays);
-router.post("/pays", authentifier, autoriser("admin", "superadmin"), creerPays);
-router.put("/pays/:id", authentifier, autoriser("admin", "superadmin"), modifierPays);
+router.post("/pays", authentifier, autoriser("superadmin"), creerPays);
+router.put("/pays/:id", authentifier, autoriser("superadmin"), modifierPays);
 router.delete("/pays/:id", authentifier, autoriser("superadmin"), supprimerPays);
 
 // ─── Villes ───────────────────────────────────────────────────

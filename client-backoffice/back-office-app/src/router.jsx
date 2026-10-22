@@ -21,6 +21,9 @@ import Dashboard from './pages/Dashboard';
 import Referentiel from './pages/Referentiel';
 import MoyenPaiement from './pages/Moyenpaiement';
 import Pharmacie from './pages/Pharmacie';
+// LABORATOIRES D'ANALYSES
+import Laboratoires from './pages/Laboratoires';
+import AvisLaboratoire from './pages/AvisLaboratoire';
 // PUBLICTE 
 import Publicite from './pages/Publicite';
 import EmplacementForfaire from './pages/EmplacementForfaire';
@@ -63,6 +66,7 @@ import WhatsApp from './pages/WhatsApp';
 // SMS (Twilio)
 import Sms from './pages/Sms';
 import MessagesContact from './pages/MessagesContact';
+import DocumentsLegaux from './pages/DocumentsLegaux';
 // import Medecin from './pages/Medecin';
 // import StructureSante from './pages/StructureSante';
 // import Pharmacie from './pages/Pharmacie';
@@ -100,6 +104,8 @@ export const router = createBrowserRouter([
           { path: '/moyen-paiement', element: <MoyenPaiement /> },
           { path: '/pharmacie', element: <Pharmacie /> },
           { path: '/avis-pharmacie', element: <AvisPharmacie /> },
+          { path: '/laboratoires', element: <Laboratoires /> },
+          { path: '/avis-laboratoire', element: <AvisLaboratoire /> },
           { path: '/utilisateurs', element: <Utilisateurs /> },
           { path: '/structure-sante', element: <StructureSante /> },
           // //   PUBLICITE,
@@ -146,6 +152,7 @@ export const router = createBrowserRouter([
           // SMS (Twilio) : configuration, test, journal des envois
           { path: '/sms', element: <Sms /> },
           { path: '/messages-contact', element: <MessagesContact /> },
+          { path: '/documents-legaux', element: <DocumentsLegaux /> },
           
           //   { path: '/pharmacie', element: <Pharmacie /> },
           //   { path: '/structure-sante', element: <StructureSante /> },

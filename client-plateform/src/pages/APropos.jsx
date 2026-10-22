@@ -235,13 +235,6 @@ export default function APropos() {
               </div>
             ))}
           </div>
-          <div className="aps-note mt-4">
-            <i className="fa-solid fa-circle-info" />
-            <span>
-              Visibilité et publicité sont strictement séparées : un abonnement enrichit une fiche sans jamais modifier
-              le classement, et les contenus sponsorisés sont toujours signalés comme tels.
-            </span>
-          </div>
         </div>
       </section>
 

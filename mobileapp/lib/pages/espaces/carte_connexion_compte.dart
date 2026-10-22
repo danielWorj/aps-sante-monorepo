@@ -1,7 +1,8 @@
 // lib/pages/espaces/carte_connexion_compte.dart
 //
 // Carte « Connexion » des profils : code PIN de connexion (créer /
-// changer) et « Changer d'espace » quand le compte en a plusieurs.
+// changer), « Changer d'espace » quand le compte en a plusieurs, et
+// « Mises à jour » de l'application.
 // [BoutonChangerEspace] : même accès en icône, pour les en-têtes.
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../components/components.dart';
 import '../../controllers/authentification_controller.dart';
+import '../../controllers/mise_a_jour_controller.dart';
+import '../mise_a_jour/mise_a_jour_page.dart';
 import '../public/creer_pin_screen.dart';
 import '../verrou/verrou_application.dart';
 import 'choisir_espace_screen.dart';
@@ -49,8 +52,29 @@ class CarteConnexionCompte extends ConsumerWidget {
               subtitle: 'Patient, médecin, structures, publicités…',
               onTap: () => ouvrirChoisirEspace(context),
             ),
+          const LigneMisesAJour(),
         ],
       ),
+    );
+  }
+}
+
+/// Entrée « Mises à jour » (masquée hors Android), signalée quand une
+/// nouvelle version est publiée.
+class LigneMisesAJour extends ConsumerWidget {
+  const LigneMisesAJour({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final etat = ref.watch(miseAJourProvider);
+    if (etat.phase == PhaseMiseAJour.indisponible) return const SizedBox.shrink();
+    return ApsMenuItem(
+      icon: Icons.system_update_rounded,
+      tone: etat.nouvelleVersion ? ApsTone.amber : ApsTone.green,
+      title: 'Mises à jour',
+      subtitle: sousTitreMisesAJour(etat),
+      trailing: etat.nouvelleVersion ? const ApsPill('Nouveau', tone: ApsTone.amber) : null,
+      onTap: () => ouvrirMisesAJour(context),
     );
   }
 }

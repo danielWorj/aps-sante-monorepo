@@ -121,6 +121,39 @@ export function AuthProvider({ children }) {
     };
   }, [deconnecterLocalement]);
 
+  // Adopte la session renvoyée par /auth/login ou par le changement de
+  // mot de passe initial — seulement pour un compte administrateur.
+  const adopterSession = useCallback(async (data) => {
+    if (!estAdministrateur(data.utilisateur)) {
+      // La session vient d'être ouverte côté serveur pour ce compte non
+      // administrateur : on la révoque aussitôt.
+      setAccessToken(data.access_token);
+      try {
+        await apiFetch('/auth/logout', { method: 'POST', skipAuthRetry: true });
+      } catch {
+        // Révocation au mieux : l'accès reste refusé localement.
+      }
+      setAccessToken(null);
+      throw Object.assign(new Error(MESSAGE_ACCES_REFUSE), {
+        status: 403,
+        data: { message: MESSAGE_ACCES_REFUSE },
+      });
+    }
+
+    setAccessToken(data.access_token);
+    // Le login ne renvoie pas le pays : /auth/me le fournit (périmètre affiché).
+    let utilisateur = data.utilisateur;
+    try {
+      const moi = await apiFetch('/auth/me', { skipAuthRetry: true });
+      if (moi?.utilisateur) utilisateur = moi.utilisateur;
+    } catch {
+      // Profil enrichi indisponible : on garde celui du login.
+    }
+    setUser(utilisateur);
+    setStatus('authenticated');
+    return utilisateur;
+  }, []);
+
   // ===================== LOGIN ======================
   const login = useCallback(async (email, mot_de_passe) => {
     setError(null);
@@ -134,51 +167,35 @@ export function AuthProvider({ children }) {
         skipAuthRetry: true,
       });
 
-      // Réponse attendue :
-      // {
-      //   access_token: "eyJhbGc...",
-      //   refresh_token: "eyJhbGc..." (stocké en httpOnly cookie par le serveur),
-      //   utilisateur: { prenom, nom, email, role, ... }
-      // }
-
-      // Mot de passe temporaire : le serveur n'ouvre pas de session (pas
-      // d'access_token), le changement se fait depuis la plateforme.
+      // Mot de passe temporaire (compte créé ou réinitialisé par un
+      // superadmin) : le serveur n'ouvre pas de session mais renvoie un
+      // token restreint, consommé par changerMotDePasseInitial.
       if (data?.mot_de_passe_a_changer) {
         throw Object.assign(new Error('Changement de mot de passe requis'), {
-          data: {
-            message:
-              'Votre mot de passe est temporaire : changez-le avant de vous connecter au back-office.',
-          },
+          code: 'MOT_DE_PASSE_A_CHANGER',
+          token: data.token_changement_mot_de_passe,
+          data: { message: 'Votre mot de passe est temporaire : choisissez-en un nouveau pour continuer.' },
         });
       }
 
-      if (!estAdministrateur(data.utilisateur)) {
-        // La session vient d'être ouverte côté serveur pour ce compte non
-        // administrateur : on la révoque aussitôt.
-        setAccessToken(data.access_token);
-        try {
-          await apiFetch('/auth/logout', { method: 'POST', skipAuthRetry: true });
-        } catch {
-          // Révocation au mieux : l'accès reste refusé localement.
-        }
-        setAccessToken(null);
-        throw Object.assign(new Error(MESSAGE_ACCES_REFUSE), {
-          status: 403,
-          data: { message: MESSAGE_ACCES_REFUSE },
-        });
-      }
-
-      setAccessToken(data.access_token);
-      setUser(data.utilisateur);
-      setStatus('authenticated');
-
-      return data.utilisateur;
+      return await adopterSession(data);
     } catch (err) {
       const message = err.data?.message || err.message || 'Connexion échouée';
       setError(message);
       throw err;
     }
-  }, []);
+  }, [adopterSession]);
+
+  // Remplace le mot de passe temporaire puis ouvre la session.
+  const changerMotDePasseInitial = useCallback(async (token, nouveau_mot_de_passe) => {
+    const data = await apiFetch('/auth/changer-mot-de-passe-initial', {
+      method: 'POST',
+      body: { nouveau_mot_de_passe },
+      headers: { Authorization: `Bearer ${token}` },
+      skipAuthRetry: true,
+    });
+    return adopterSession(data);
+  }, [adopterSession]);
 
   // ===================== LOGOUT ======================
   const logout = useCallback(async () => {
@@ -206,8 +223,9 @@ export function AuthProvider({ children }) {
       error,
       login,
       logout,
+      changerMotDePasseInitial,
     }),
-    [user, status, error, login, logout]
+    [user, status, error, login, logout, changerMotDePasseInitial]
   );
 
   return (

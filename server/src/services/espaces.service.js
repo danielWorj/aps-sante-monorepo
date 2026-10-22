@@ -29,6 +29,7 @@ export const ROLE_PAR_TYPE_ESPACE = {
   pharmacie: "agent_pharmacie",
   structure: "agent_structure_sante",
   assurance: "agent_assurance",
+  laboratoire: "agent_laboratoire",
   ambulance: "agent_ambulance",
   pompes_funebres: "agent_pompes_funebres",
   publicites: "annonceur",
@@ -65,6 +66,7 @@ export async function listerEspaces(utilisateur_id) {
       agents_pharmacie: { select: { pharmacie: { select: { pharmacie_id: true, nom: true, statut_verification: true } } } },
       agents_structure_sante: { select: { structure: { select: { structure_id: true, nom: true, statut_verification: true } } } },
       agents_assurance: { select: { service_assurance: { select: { service_assurance_id: true, nom: true, statut_verification: true } } } },
+      agents_laboratoire: { select: { laboratoire: { select: { laboratoire_id: true, nom: true, statut_verification: true } } } },
       agents_ambulance: { select: { service_ambulance_id: true } },
       agents_pompes_funebres: { select: { pompes_funebres_id: true } },
       _count: { select: { publicites: true } },
@@ -90,6 +92,9 @@ export async function listerEspaces(utilisateur_id) {
   }
   for (const { service_assurance: a } of u.agents_assurance) {
     espaces.push(espace("assurance", `assurance:${a.service_assurance_id}`, a.nom, joindre("Assurance", libelleStatut(a.statut_verification)), true));
+  }
+  for (const { laboratoire: l } of u.agents_laboratoire ?? []) {
+    espaces.push(espace("laboratoire", `laboratoire:${l.laboratoire_id}`, l.nom, joindre("Laboratoire", libelleStatut(l.statut_verification)), true));
   }
   for (const a of u.agents_ambulance) {
     espaces.push(espace("ambulance", `ambulance:${a.service_ambulance_id}`, "Service d'ambulance", null, true));

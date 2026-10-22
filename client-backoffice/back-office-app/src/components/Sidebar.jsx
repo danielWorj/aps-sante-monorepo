@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { estRouteSuperadmin, estSuperadmin } from "../utils/roles";
 
 /* ==========================================================================
    Sidebar.jsx
@@ -69,6 +70,17 @@ const APS_MENU = [
         ]
       },
       {
+        // Laboratoires d'analyses : fiches (vérification, publication,
+        // contenus) et modération des avis.
+        key: "laboratoires",
+        label: "Laboratoires",
+        icon: "fa-solid fa-flask-vial",
+        to: "/laboratoires",
+        children: [
+          { key: "avis-laboratoire", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-laboratoire" }
+        ]
+      },
+      {
         // Nouveau : /medecin, /avis-medecin, /abonnement-medecin et
         // /ordonnance sont bien déclarées dans router.jsx -> l'entité
         // remplace l'ancien placeholder "professionnels" (jamais routé).
@@ -114,7 +126,8 @@ const APS_MENU = [
     ],
     items: [
       { key: "utilisateurs", label: "Utilisateurs", icon: "fa-solid fa-users", to: "/utilisateurs" },
-      { key: "messages-contact", label: "Messages de contact", icon: "fa-solid fa-envelope-open-text", to: "/messages-contact" }
+      { key: "messages-contact", label: "Messages de contact", icon: "fa-solid fa-envelope-open-text", to: "/messages-contact" },
+      { key: "documents-legaux", label: "Documents légaux", icon: "fa-solid fa-file-contract", to: "/documents-legaux" }
     ]
   },
    {
@@ -217,6 +230,20 @@ const APS_MENU = [
   // "Pilotage"                 -> /reporting, /securite
   // À réintroduire dès que les pages + routes seront ajoutées dans router.jsx.
 ];
+
+/* Menu vu par l'utilisateur connecté : un admin (périmètre pays) ne voit
+   pas les écrans communs à tous les pays (voir ROUTES_SUPERADMIN). */
+function menuPour(user) {
+  if (estSuperadmin(user)) return APS_MENU;
+  const visible = (lien) => !estRouteSuperadmin(lien.to);
+  return APS_MENU.map((section) => ({
+    ...section,
+    entities: section.entities
+      ?.filter(visible)
+      .map((e) => ({ ...e, children: e.children?.filter(visible) })),
+    items: section.items?.filter(visible),
+  })).filter((section) => section.entities?.length || section.items?.length);
+}
 
 function closeMobileMenu() {
   var appRoot = document.getElementById("apsApp");
@@ -380,7 +407,7 @@ export default function Sidebar() {
         </div>
 
         <nav className="aps-sidebar__scroll">
-          {APS_MENU.map((section, idx) => (
+          {menuPour(user).map((section, idx) => (
             <NavSection
               key={section.group || "root-" + idx}
               section={section}
@@ -394,7 +421,10 @@ export default function Sidebar() {
           <div className="aps-sidebar__foot-avatar">{initials}</div>
           <div className="aps-sidebar__foot-text">
             <div className="name">{userName}</div>
-            <div className="role">{userRole}</div>
+            <div className="role">
+              {userRole}
+              {user?.role === "admin" && user?.pays?.nom ? ` · ${user.pays.nom}` : ""}
+            </div>
           </div>
         </div>
       </aside>

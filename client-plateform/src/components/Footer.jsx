@@ -3,6 +3,7 @@ import logoApsa from '../assets/img/logoapsa.jpeg';
 import '../assets/styles/footer-2026.css';
 import { useTelechargementApk } from '../hooks/useTelechargementApk';
 import { useToast } from './feedback';
+import ApkPreteModal from './apk/ApkPreteModal';
 
 // Pied de page public — refonte UI web 2026 (mobile/new-web-ui.html).
 // Le bouton « Télécharger l'APK » télécharge directement l'APK active
@@ -51,6 +52,7 @@ export default function Footer() {
             <ul className="footer-links">
               <li><Link to="/pharmacie">Pharmacies</Link></li>
               <li><Link to="/structure-sante">Structures de santé</Link></li>
+              <li><Link to="/laboratoires">Laboratoires d'analyses</Link></li>
               <li><Link to="/assurance">Assurances</Link></li>
             </ul>
           </div>
@@ -71,6 +73,8 @@ export default function Footer() {
               <li><Link to="/a-propos">À propos</Link></li>
               <li><Link to="/contact">Contactez-nous</Link></li>
               <li><Link to="/contact#faq">Questions fréquentes</Link></li>
+              <li><Link to="/cgu">Conditions d&apos;utilisation</Link></li>
+              <li><Link to="/confidentialite">Confidentialité</Link></li>
             </ul>
           </div>
 
@@ -105,6 +109,7 @@ export default function Footer() {
                 />
               </div>
             )}
+            <ApkPreteModal apk={apk} />
             <div className="aps-footer-urgence">
               En cas d&apos;urgence : <Link to="/urgences">numéros de votre pays</Link>
             </div>

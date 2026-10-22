@@ -12,6 +12,6 @@ import { autoriser } from "../middlewares/autorisation.middleware.js";
 const router = Router();
 
 router.get("/frais-agregateur", authentifier, autoriser("admin", "superadmin"), listerFraisAgregateur);
-router.post("/frais-agregateur", authentifier, autoriser("admin", "superadmin"), creerFraisAgregateur);
+router.post("/frais-agregateur", authentifier, autoriser("superadmin"), creerFraisAgregateur);
 
 export default router;

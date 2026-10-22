@@ -21,6 +21,7 @@
 // correspondant). C'est à l'appelant de s'en servir pour appeler les
 // endpoints backend (`?lat=&lng=&rayon_km=`) ou remplir un formulaire.
 
+import { obtenirPosition } from '../lib/geolocConsentement';
 import { useCallback, useRef, useState } from 'react';
 
 // Options par défaut passées à getCurrentPosition. Le back accepte des
@@ -76,7 +77,7 @@ export function useGeolocation(options) {
     setError(null);
     setPermissionDenied(false);
 
-    navigator.geolocation.getCurrentPosition(
+    obtenirPosition(
       (resultat) => {
         enCoursRef.current = false;
         setLoading(false);
@@ -92,7 +93,11 @@ export function useGeolocation(options) {
 
         // Codes standards GeolocationPositionError :
         //  1 = PERMISSION_DENIED, 2 = POSITION_UNAVAILABLE, 3 = TIMEOUT
-        if (erreur.code === 1) {
+        if (erreur.code === 1 && erreur.reporte) {
+          // « Plus tard » dans la modale d'explication (geolocConsentement.js).
+          setPermissionDenied(true);
+          setError("Localisation non activée : les résultats ne sont pas triés par distance.");
+        } else if (erreur.code === 1) {
           setPermissionDenied(true);
           setError(
             "Vous avez refusé l'accès à votre position. Vous pouvez saisir vos coordonnées manuellement, ou autoriser la géolocalisation dans les réglages de votre navigateur."

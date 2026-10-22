@@ -21,7 +21,8 @@ import { authentifier } from "../middlewares/auth.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
 
 const router = Router();
-const lecture = [authentifier, autoriser("admin", "superadmin")];
+// Configuration globale (sans pays) : superadmin seul.
+const lecture = [authentifier, autoriser("superadmin")];
 
 router.get("/sms/configuration", ...lecture, obtenirConfigurationSmsCtrl);
 router.post("/sms/test", ...lecture, envoyerSmsTestCtrl);

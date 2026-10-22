@@ -7,6 +7,7 @@ import ListeAnnonces from '../../annonces/ListeAnnonces';
 import PortailSidebar from '../layouts/portail-sidebar';
 import PatientPortailSidebar from '../layouts/patient.portail-sidebar';
 import { AssurancePortailPage } from '../layouts/assurance.portail-sidebar';
+import { LaboratoirePortailPage } from '../layouts/laboratoire.portail-sidebar';
 
 const INTRO = 'Les informations publiées par APS Santé à destination de ses utilisateurs.';
 
@@ -60,5 +61,13 @@ export function AssuranceAnnonces() {
     <AssurancePortailPage titre="Annonces" description={INTRO}>
       <ListeAnnonces />
     </AssurancePortailPage>
+  );
+}
+
+export function LaboratoireAnnonces() {
+  return (
+    <LaboratoirePortailPage titre="Annonces" description={INTRO}>
+      <ListeAnnonces />
+    </LaboratoirePortailPage>
   );
 }

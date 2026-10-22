@@ -1,0 +1,16 @@
+/* Bandeau « Pays » (ChoixPays.jsx) — primitives refonte 2026. */
+.choix-pays{
+  display:flex; align-items:center; flex-wrap:wrap; gap:.4rem .6rem;
+  font-size:.93rem; color:var(--ink-soft);
+}
+.choix-pays-ic{ color:var(--primary); }
+.choix-pays-lbl{ font-weight:600; color:var(--ink); margin:0; }
+.choix-pays-sel{ min-width:10rem; }
+.choix-pays-orig{ font-size:.8rem; color:var(--muted, var(--ink-soft)); }
+.choix-pays-loc{
+  display:inline-flex; align-items:center; gap:.35rem;
+  background:none; border:0; padding:.2rem .3rem;
+  color:var(--primary); font-weight:600; font-size:.86rem; cursor:pointer;
+}
+.choix-pays-loc:hover{ text-decoration:underline; }
+.choix-pays-loc:disabled{ opacity:.6; cursor:default; }

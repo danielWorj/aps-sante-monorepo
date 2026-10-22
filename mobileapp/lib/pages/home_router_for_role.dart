@@ -5,6 +5,7 @@ import '../controllers/authentification_controller.dart';
 import '../models/authentification_models.dart' show EspaceCompte, RoleUtilisateur;
 import 'espaces/choisir_espace_screen.dart';
 import 'portails/assurance/assurance_home_shell.dart';
+import 'portails/laboratoire/laboratoire_home_shell.dart';
 import 'portails/medecin/medecin_home_shell.dart';
 import 'portails/patient/patient_home_shell.dart';
 import 'portails/role/role_home_shell.dart';
@@ -15,6 +16,7 @@ import 'publicite/mes_publicites_screen.dart';
 ///   - patient  -> PatientHomeShell  (components/patient-bottom-navigation.dart)
 ///   - medecin  -> MedecinHomeShell  (components/medecin-bottom-navigation-bar.dart)
 ///   - agent_assurance -> AssuranceHomeShell (portail assurance)
+///   - agent_laboratoire -> LaboratoireHomeShell (portail laboratoire)
 ///   - annonceur -> MesPublicitesScreen (portail annonceur, avec déconnexion)
 ///   - tout autre rôle (admin, superadmin, agent_structure_sante,
 ///     agent_pharmacie, agent_ambulance, agent_pompes_funebres,
@@ -33,6 +35,8 @@ class HomeRouterForRole extends StatelessWidget {
         return const MedecinHomeShell();
       case RoleUtilisateur.agentAssurance:
         return const AssuranceHomeShell();
+      case RoleUtilisateur.agentLaboratoire:
+        return const LaboratoireHomeShell();
       case RoleUtilisateur.annonceur:
         return const MesPublicitesScreen(espaceAnnonceur: true);
       default:
@@ -50,6 +54,8 @@ Widget ecranEspace(EspaceCompte espace, RoleUtilisateur role) {
       return const MedecinHomeShell();
     case 'assurance':
       return const AssuranceHomeShell();
+    case 'laboratoire':
+      return const LaboratoireHomeShell();
     case 'publicites':
       return const MesPublicitesScreen(espaceAnnonceur: true);
     default:

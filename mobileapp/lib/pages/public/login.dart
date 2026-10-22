@@ -421,20 +421,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text.rich(
-                    const TextSpan(children: [
-                      TextSpan(text: 'En continuant, vous acceptez les '),
-                      TextSpan(
-                        text: 'Conditions',
-                        style: TextStyle(color: AppColors.b6, fontWeight: FontWeight.w700),
-                      ),
-                      TextSpan(text: ' et la '),
-                      TextSpan(
-                        text: 'Politique de confidentialité',
-                        style: TextStyle(color: AppColors.b6, fontWeight: FontWeight.w700),
-                      ),
-                      TextSpan(text: '.'),
-                    ]),
+                  TexteAcceptationLegale(
+                    debut: 'En continuant, vous acceptez les ',
                     textAlign: TextAlign.center,
                     style: AppTextStyles.xs.copyWith(height: 1.5),
                   ),

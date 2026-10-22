@@ -26,7 +26,7 @@ const limiteurContact = rateLimit({
 router.get("/contact/coordonnees", obtenirCoordonneesContact);
 router.post("/contact", limiteurContact, authentifierOptionnel, envoyerMessageContact);
 
-router.get("/admin/messages-contact", authentifier, autoriser("admin", "superadmin"), listerMessagesContact);
-router.put("/admin/messages-contact/:id", authentifier, autoriser("admin", "superadmin"), modifierMessageContact);
+router.get("/admin/messages-contact", authentifier, autoriser("superadmin"), listerMessagesContact);
+router.put("/admin/messages-contact/:id", authentifier, autoriser("superadmin"), modifierMessageContact);
 
 export default router;

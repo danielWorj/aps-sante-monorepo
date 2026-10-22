@@ -27,6 +27,7 @@ import prisma from "../lib/prisma.js";
 // vs 100 Mo côté middleware, ou l'inverse) qui laissait un gros
 // fichier être entièrement envoyé avant d'être rejeté a posteriori.
 import { TAILLE_MAX_APK } from "../middlewares/upload_apk.middleware.js";
+import { lireVersionApk, numeroBuild } from "../utils/apkVersion.js";
 
 // Récupérer le répertoire racine du projet
 const __filename = fileURLToPath(import.meta.url);
@@ -96,6 +97,33 @@ function validerFichierApk(file) {
   }
 
   return { valide: true, erreur: null };
+}
+
+/**
+ * Lit la version dans le manifeste de l'APK (voir utils/apkVersion.js).
+ * Une APK dont la version est illisible est refusée : l'application mobile
+ * ne pourrait pas savoir si elle est plus récente que la version installée.
+ * Retourne { version: { version_name, version_code } } ou { erreur }.
+ */
+function lireVersionFichierApk(file) {
+  try {
+    const { versionName, versionCode } = lireVersionApk(file.buffer);
+    if (!Number.isInteger(versionCode)) {
+      return { erreur: "Numéro de version (versionCode) introuvable dans l'APK." };
+    }
+    return { version: { version_name: versionName, version_code: versionCode } };
+  } catch (err) {
+    return { erreur: `APK illisible : ${err.message}` };
+  }
+}
+
+/** Ajoute aux réponses l'URL de téléchargement et le numéro de build comparable. */
+function serialiserApk(apk) {
+  return {
+    ...apk,
+    file_url: construireUrlTelechargement(apk.id, apk.file_url),
+    numero_build: numeroBuild(apk.version_code),
+  };
 }
 
 /**
@@ -184,6 +212,11 @@ export async function creerApk(req, res, next) {
       return res.status(400).json({ message: validation.erreur });
     }
 
+    const lecture = lireVersionFichierApk(fichier);
+    if (lecture.erreur) {
+      return res.status(400).json({ message: lecture.erreur });
+    }
+
     const statutLu = status !== undefined ? lireStatut(status) : true;
     if (statutLu === null) {
       return res.status(400).json({ message: "Le 'status' doit valoir true ou false." });
@@ -217,6 +250,7 @@ export async function creerApk(req, res, next) {
             description: description ? String(description).trim() : null,
             file_url: nomFichierSecurise,
             status: statutLu,
+            ...lecture.version,
           },
         });
       });
@@ -232,10 +266,7 @@ export async function creerApk(req, res, next) {
     // Répondre avec l'APK créée (ajouter l'URL de téléchargement)
     return res.status(201).json({
       message: "APK créée avec succès.",
-      apk: {
-        ...apkCreee,
-        file_url: construireUrlTelechargement(apkCreee.id, apkCreee.file_url),
-      },
+      apk: serialiserApk(apkCreee),
     });
   } catch (err) {
     next(err);
@@ -306,10 +337,7 @@ export async function listerApks(req, res, next) {
     });
 
     // Enrichir les URLs de téléchargement
-    const apksAvecUrl = apks.map((apk) => ({
-      ...apk,
-      file_url: construireUrlTelechargement(apk.id, apk.file_url),
-    }));
+    const apksAvecUrl = apks.map(serialiserApk);
 
     return res.status(200).json({
       message: "APKs listées.",
@@ -362,11 +390,7 @@ export async function obtenirApkActive(req, res, next) {
 
     return res.status(200).json({
       message: "APK active trouvée.",
-      apk: {
-        ...apk,
-        file_url: construireUrlTelechargement(apk.id, apk.file_url),
-        taille,
-      },
+      apk: { ...serialiserApk(apk), taille },
     });
   } catch (err) {
     next(err);
@@ -400,10 +424,7 @@ export async function obtenirApk(req, res, next) {
 
     return res.status(200).json({
       message: "APK trouvée.",
-      apk: {
-        ...apk,
-        file_url: construireUrlTelechargement(apk.id, apk.file_url),
-      },
+      apk: serialiserApk(apk),
     });
   } catch (err) {
     next(err);
@@ -482,6 +503,11 @@ export async function modifierApk(req, res, next) {
         return res.status(400).json({ message: validation.erreur });
       }
 
+      const lecture = lireVersionFichierApk(fichier);
+      if (lecture.erreur) {
+        return res.status(400).json({ message: lecture.erreur });
+      }
+
       const nomFichierSecurise = genererNomFichierSecurise(fichier.originalname);
       const cheminFichier = path.join(APK_STORAGE_DIR, nomFichierSecurise);
 
@@ -489,6 +515,7 @@ export async function modifierApk(req, res, next) {
         await fs.writeFile(cheminFichier, fichier.buffer);
         ancienNomFichier = apkExistante.file_url;
         miseAJour.file_url = nomFichierSecurise;
+        Object.assign(miseAJour, lecture.version);
       } catch (errEcriture) {
         console.error(`❌ Erreur lors de l'écriture du fichier : ${errEcriture.message}`);
         return res.status(500).json({
@@ -535,10 +562,7 @@ export async function modifierApk(req, res, next) {
 
     return res.status(200).json({
       message: "APK modifiée avec succès.",
-      apk: {
-        ...apkModifiee,
-        file_url: construireUrlTelechargement(apkModifiee.id, apkModifiee.file_url),
-      },
+      apk: serialiserApk(apkModifiee),
     });
   } catch (err) {
     next(err);

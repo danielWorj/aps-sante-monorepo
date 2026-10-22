@@ -8,7 +8,11 @@
 // SÉCURITÉ — Modèle de permissions
 //
 //  - Lecture (lister / obtenir) : accessible à "admin" ET "superadmin".
-//  - Écriture (créer / modifier / suspendre / réactiver) : réservée au
+//    ABAC : un admin ne voit que les comptes admin de SON pays (filtre
+//    posé par l'extension Prisma, voir lib/perimetrePays.js) et jamais
+//    les superadmins ; un superadmin voit tout et peut filtrer par pays.
+//  - Écriture (créer / modifier / suspendre / réactiver / supprimer /
+//    réinitialiser le mot de passe) : réservée au
 //    SEUL "superadmin". Un "admin" ne peut jamais créer ni modifier un
 //    compte admin ou superadmin (pas d'auto-élévation, pas de
 //    modification latérale entre admins).
@@ -45,7 +49,9 @@ const ROLES_GERES = ["admin", "superadmin"];
  */
 export async function listerUtilisateurs(req, res, next) {
   try {
-    const { role, statut, recherche } = req.query;
+    const { statut, recherche, pays_id } = req.query;
+    // Un admin ne voit jamais les superadmins (ni leur nombre).
+    const role = req.utilisateur.role === "superadmin" ? req.query.role : "admin";
 
     if (role && !ROLES_GERES.includes(role)) {
       return res.status(400).json({
@@ -65,6 +71,7 @@ export async function listerUtilisateurs(req, res, next) {
     const where = {
       role: { libelle: role ? role : { in: ROLES_GERES } },
       ...(statut && { statut_compte: statut }),
+      ...(pays_id && { pays_id }),
       ...(recherche && {
         OR: [
           { nom: { contains: recherche, mode: "insensitive" } },
@@ -78,7 +85,7 @@ export async function listerUtilisateurs(req, res, next) {
       prisma.utilisateur.count({ where }),
       prisma.utilisateur.findMany({
         where,
-        include: { role: true },
+        include: INCLUDE_UTILISATEUR,
         orderBy: { nom: "asc" },
         skip: (page - 1) * limite,
         take: limite,
@@ -115,10 +122,10 @@ export async function obtenirUtilisateur(req, res, next) {
 
     const utilisateur = await prisma.utilisateur.findUnique({
       where: { utilisateur_id: id },
-      include: { role: true },
+      include: INCLUDE_UTILISATEUR,
     });
 
-    if (!utilisateur || !ROLES_GERES.includes(utilisateur.role.libelle)) {
+    if (!utilisateur || !rolesVisibles(req).includes(utilisateur.role.libelle)) {
       return res.status(404).json({ message: "Utilisateur introuvable." });
     }
 
@@ -208,8 +215,10 @@ export async function creerUtilisateur(req, res, next) {
         role_id: roleRecord.role_id,
         pays_id,
         statut_compte: "actif",
+        // Mot de passe choisi par le superadmin : à changer à la 1re connexion.
+        mot_de_passe_temporaire: true,
       },
-      include: { role: true },
+      include: INCLUDE_UTILISATEUR,
     });
 
     return res.status(201).json({
@@ -306,7 +315,7 @@ export async function modifierUtilisateur(req, res, next) {
     const utilisateur = await prisma.utilisateur.update({
       where: { utilisateur_id: id },
       data: donnees,
-      include: { role: true },
+      include: INCLUDE_UTILISATEUR,
     });
 
     return res.status(200).json({
@@ -360,11 +369,15 @@ export async function suspendreUtilisateur(req, res, next) {
       }
     }
 
-    const utilisateur = await prisma.utilisateur.update({
-      where: { utilisateur_id: id },
-      data: { statut_compte: "suspendu" },
-      include: { role: true },
-    });
+    const [utilisateur] = await prisma.$transaction([
+      prisma.utilisateur.update({
+        where: { utilisateur_id: id },
+        data: { statut_compte: "suspendu" },
+        include: INCLUDE_UTILISATEUR,
+      }),
+      // Un compte suspendu perd ses sessions ouvertes (refresh tokens).
+      revoquerSessions(id),
+    ]);
 
     return res.status(200).json({
       message: "Compte suspendu.",
@@ -406,7 +419,7 @@ export async function reactiverUtilisateur(req, res, next) {
     const utilisateur = await prisma.utilisateur.update({
       where: { utilisateur_id: id },
       data: { statut_compte: "actif" },
-      include: { role: true },
+      include: INCLUDE_UTILISATEUR,
     });
 
     return res.status(200).json({
@@ -418,9 +431,149 @@ export async function reactiverUtilisateur(req, res, next) {
   }
 }
 
+/**
+ * PATCH /api/utilisateurs/:id/mot-de-passe
+ * Réinitialise le mot de passe d'un compte admin / superadmin.
+ * Réservé au superadmin. Le nouveau mot de passe est TEMPORAIRE : le
+ * titulaire devra le changer à sa prochaine connexion, et ses sessions
+ * ouvertes sont fermées.
+ *
+ * Corps attendu : mot_de_passe.
+ */
+export async function reinitialiserMotDePasseUtilisateur(req, res, next) {
+  try {
+    if (req.utilisateur.role !== "superadmin") {
+      return res.status(403).json({
+        message: "Seul un superadmin peut réinitialiser le mot de passe d'un compte admin.",
+      });
+    }
+
+    const { id } = req.params;
+    const { mot_de_passe } = req.body ?? {};
+
+    if (id === req.utilisateur.utilisateur_id) {
+      return res.status(400).json({
+        message: "Pour votre propre compte, changez votre mot de passe depuis votre profil.",
+      });
+    }
+
+    const erreurMotDePasse = validerMotDePasse(mot_de_passe);
+    if (erreurMotDePasse) {
+      return res.status(400).json({ message: erreurMotDePasse });
+    }
+
+    const cible = await prisma.utilisateur.findUnique({
+      where: { utilisateur_id: id },
+      include: { role: true },
+    });
+    if (!cible || !ROLES_GERES.includes(cible.role.libelle)) {
+      return res.status(404).json({ message: "Utilisateur introuvable." });
+    }
+
+    const mot_de_passe_hash = await bcrypt.hash(mot_de_passe, SALT_ROUNDS);
+    const [utilisateur] = await prisma.$transaction([
+      prisma.utilisateur.update({
+        where: { utilisateur_id: id },
+        data: { mot_de_passe_hash, mot_de_passe_temporaire: true, mot_de_passe_expire_le: null },
+        include: INCLUDE_UTILISATEUR,
+      }),
+      revoquerSessions(id),
+    ]);
+
+    return res.status(200).json({
+      message: "Mot de passe réinitialisé. Il devra être changé à la prochaine connexion.",
+      utilisateur: serialiserUtilisateur(utilisateur),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /api/utilisateurs/:id
+ * Supprime définitivement un compte admin / superadmin. Réservé au
+ * superadmin. Interdit sur soi-même et sur le dernier superadmin actif.
+ * Si le compte a déjà un historique (publications, journal…), la base
+ * refuse la suppression : on renvoie 409 en invitant à le suspendre.
+ */
+export async function supprimerUtilisateur(req, res, next) {
+  try {
+    if (req.utilisateur.role !== "superadmin") {
+      return res.status(403).json({
+        message: "Seul un superadmin peut supprimer un compte admin ou superadmin.",
+      });
+    }
+
+    const { id } = req.params;
+
+    if (id === req.utilisateur.utilisateur_id) {
+      return res.status(400).json({ message: "Vous ne pouvez pas supprimer votre propre compte." });
+    }
+
+    const cible = await prisma.utilisateur.findUnique({
+      where: { utilisateur_id: id },
+      include: { role: true },
+    });
+    if (!cible || !ROLES_GERES.includes(cible.role.libelle)) {
+      return res.status(404).json({ message: "Utilisateur introuvable." });
+    }
+
+    if (cible.role.libelle === "superadmin" && cible.statut_compte === "actif") {
+      const superadminsActifs = await compterSuperadminsActifs();
+      if (superadminsActifs <= 1) {
+        return res.status(409).json({
+          message: "Impossible de supprimer le dernier superadmin actif.",
+        });
+      }
+    }
+
+    try {
+      await prisma.$transaction([
+        // Traces purement techniques du compte : supprimées avec lui.
+        prisma.refreshToken.deleteMany({ where: { utilisateur_id: id } }),
+        prisma.jetonRevoque.deleteMany({ where: { utilisateur_id: id } }),
+        prisma.notification.deleteMany({ where: { utilisateur_id: id } }),
+        prisma.appareilPush.deleteMany({ where: { utilisateur_id: id } }),
+        prisma.demandeConnexionWeb.deleteMany({ where: { utilisateur_id: id } }),
+        prisma.utilisateur.delete({ where: { utilisateur_id: id } }),
+      ]);
+    } catch (err) {
+      if (err?.code === "P2003") {
+        return res.status(409).json({
+          message:
+            "Ce compte a déjà un historique sur la plateforme et ne peut pas être supprimé. Suspendez-le plutôt.",
+        });
+      }
+      throw err;
+    }
+
+    return res.status(200).json({ message: "Compte supprimé." });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ---------------------------------------------------------------------
 // Utilitaires internes
 // ---------------------------------------------------------------------
+
+// Pays renvoyé avec chaque compte (affichage du périmètre dans le BO).
+const INCLUDE_UTILISATEUR = {
+  role: true,
+  pays: { select: { pays_id: true, nom: true, code_iso2: true } },
+};
+
+// Un admin ne voit que les comptes admin ; un superadmin voit les deux.
+function rolesVisibles(req) {
+  return req.utilisateur.role === "superadmin" ? ROLES_GERES : ["admin"];
+}
+
+function revoquerSessions(utilisateur_id) {
+  return prisma.refreshToken.updateMany({
+    where: { utilisateur_id, statut: "actif" },
+    data: { statut: "revoque", date_revocation: new Date() },
+  });
+}
 
 function normaliserEmail(email) {
   return String(email).trim().toLowerCase();

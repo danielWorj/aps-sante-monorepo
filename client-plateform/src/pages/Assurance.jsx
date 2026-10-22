@@ -2,6 +2,7 @@
 // Dynamisée : les fiches proviennent de GET /api/services-assurance.
 
 import { useEffect, useMemo, useState } from "react";
+import { usePays, usePaysFiltre } from "../context/PaysContext";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import ApsSelect from "../components/ui/ApsSelect";
 import SliderPublicite from '../components/publicite/SliderPublicite';
@@ -119,7 +120,9 @@ export default function Assurance() {
   const [page, setPage] = useState(1);
 
   const [typeActeur, setTypeActeur] = useState(searchParams.get("type_acteur") || "");
-  const [paysId, setPaysId] = useState(searchParams.get("pays_id") || "");
+  // Pays : celui de l'URL, sinon le pays détecté de l'utilisateur (PaysContext).
+  const [paysId, setPaysId] = usePaysFiltre(searchParams.get("pays_id") || "");
+  const { listePays } = usePays();
   const [villeId, setVilleId] = useState(searchParams.get("ville_id") || "");
   const [recherche, setRecherche] = useState("");
 
@@ -169,10 +172,11 @@ export default function Assurance() {
     }
   };
 
+  // Au montage puis à chaque changement de pays (détecté ou choisi).
   useEffect(() => {
     charger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [paysId]);
 
   // Relance automatiquement la recherche dès qu'une position est
   // obtenue pendant que "Autour de moi" est actif (la demande de
@@ -185,13 +189,12 @@ export default function Assurance() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positionActuelle]);
 
-  // Options pays/villes dérivées des résultats déjà chargés — évite de
-  // dépendre d'un endpoint géo dédié pour le simple filtrage de la liste.
-  const paysOptions = useMemo(() => {
-    const map = new Map();
-    services.forEach((s) => s.pays && map.set(s.pays.pays_id, s.pays.nom));
-    return [...map.entries()];
-  }, [services]);
+  // Pays : tout le référentiel (la liste chargée est déjà filtrée sur un
+  // pays). Villes : dérivées des résultats déjà chargés.
+  const paysOptions = useMemo(
+    () => listePays.map((p) => [String(p.pays_id), p.nom]),
+    [listePays]
+  );
 
   const villeOptions = useMemo(() => {
     const map = new Map();

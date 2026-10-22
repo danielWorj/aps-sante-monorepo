@@ -16,6 +16,7 @@ import {
   listerCentresSante,
 } from "../services/structureSanteService";
 import { listerPays, listerVilles } from "../services/geoService";
+import { usePaysFiltre } from "../context/PaysContext";
 import { useGeolocation } from "../hooks/useGeolocation";
 
 // Page "Structures de santé" — annuaire des hôpitaux, cliniques et
@@ -144,8 +145,10 @@ export default function StructureSante() {
   const [erreur, setErreur] = useState(null);
   const [pays, setPays] = useState([]);
   const [villesFiltre, setVillesFiltre] = useState([]);
+  // Pays : par défaut celui de l'utilisateur (détecté ou choisi, PaysContext).
+  const [paysFiltre, choisirPays] = usePaysFiltre();
   const [filtres, setFiltres] = useState({
-    pays_id: "",
+    pays_id: paysFiltre,
     ville_id: "",
     type_structure: "",
     recherche: "",
@@ -171,6 +174,10 @@ export default function StructureSante() {
       demanderPosition();
     }
   }
+
+  useEffect(() => {
+    setFiltres((f) => (f.pays_id === paysFiltre ? f : { ...f, pays_id: paysFiltre, ville_id: "" }));
+  }, [paysFiltre]);
 
   /* Référentiels (pays) au montage — route publique. */
   useEffect(() => {
@@ -237,6 +244,7 @@ export default function StructureSante() {
 
   function reinitialiserFiltres() {
     setFiltres({ pays_id: "", ville_id: "", type_structure: "", recherche: "" });
+    choisirPays("");
     setAutourDeMoi(false);
   }
 
@@ -311,7 +319,7 @@ export default function StructureSante() {
                 <ApsSelect
                   id="f-pays"
                   value={filtres.pays_id}
-                  onChange={(e) => setFiltres((f) => ({ ...f, pays_id: e.target.value, ville_id: "" }))}
+                  onChange={(e) => choisirPays(e.target.value)}
                 >
                   <option value="">Tous les pays</option>
                   {pays.map((p) => (

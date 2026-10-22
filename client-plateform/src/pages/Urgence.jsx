@@ -10,6 +10,8 @@
 // Les données ne sont plus codées en dur : elles proviennent de l'API.
 
 import { useEffect, useMemo, useState } from "react";
+import { usePays } from "../context/PaysContext";
+import ChoixPays from "../components/geoloc/ChoixPays";
 import pub2 from "../assets/img/ads/pub2.jpg";
 import urgenceServices from "./../services/urgenceService";
 
@@ -199,6 +201,9 @@ export default function Urgence() {
   const [rechargementTypes, setRechargementTypes] = useState(0);
   const [rechargementUrgences, setRechargementUrgences] = useState(0);
 
+  // Numéros du pays de l'utilisateur (détecté ou choisi, PaysContext).
+  const { paysId } = usePays();
+
   const activeType = useMemo(() => {
     return typesUrgence.find(
       (type) => type.type_urgence_id === activeTypeId
@@ -269,6 +274,7 @@ export default function Urgence() {
       try {
         const reponse = await urgenceServices.listerUrgences({
           type_urgence_id: activeTypeId,
+          pays_id: paysId || undefined,
         });
 
         if (!actif) return;
@@ -295,7 +301,7 @@ export default function Urgence() {
     return () => {
       actif = false;
     };
-  }, [activeTypeId, rechargementUrgences]);
+  }, [activeTypeId, rechargementUrgences, paysId]);
 
   /* ---------------------------------------------------------------
      Actions UI
@@ -426,12 +432,7 @@ export default function Urgence() {
           </div>
 
           <div className="geoloc-strip">
-            <i className="fa-solid fa-location-crosshairs" />
-            <span>
-              Localisation activée (avec votre consentement) — Douala,
-              Cameroun. À l'étranger, ces services basculent automatiquement
-              sur le pays où vous vous trouvez.
-            </span>
+            <ChoixPays id="urgence-pays" libelle="Numéros du pays" />
           </div>
         </div>
       </section>
@@ -573,23 +574,6 @@ export default function Urgence() {
                 </button>
               </div>
 
-              <div className="offline-note mb-3">
-                <i className="fa-solid fa-wifi" />
-                <span>
-                  <strong>Mode hors connexion.</strong> Les numéros d'urgence
-                  officiels du pays restent accessibles depuis l'application
-                  même sans connexion internet.
-                </span>
-              </div>
-
-              <div className="offline-note">
-                <i className="fa-solid fa-earth-africa" />
-                <span>
-                  <strong>À l'étranger ?</strong> Le module bascule
-                  automatiquement sur les numéros et services officiels du
-                  pays où vous vous trouvez.
-                </span>
-              </div>
             </div>
           </div>
         </div>

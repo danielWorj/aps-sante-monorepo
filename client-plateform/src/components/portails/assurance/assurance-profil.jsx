@@ -13,6 +13,7 @@ import ActivitesAssurance from '../../assurances/gestion/ActivitesAssurance';
 import { obtenirGestionServiceAssurance } from '../../../services/abonnementAssuranceService';
 import { modifierServiceAssurance } from '../../../services/assuranceService';
 import { listerVilles } from '../../../services/geoService';
+import { obtenirPosition } from '../../../lib/geolocConsentement';
 
 function versFormulaire(f) {
   return {
@@ -44,7 +45,7 @@ function FormulaireFiche({ fiche, onEnregistre }) {
 
   const positionActuelle = () => {
     if (!navigator.geolocation) return setErreur("La géolocalisation n'est pas disponible sur cet appareil.");
-    navigator.geolocation.getCurrentPosition(
+    obtenirPosition(
       (p) => setForm((f) => ({ ...f, latitude: p.coords.latitude.toFixed(6), longitude: p.coords.longitude.toFixed(6) })),
       () => setErreur('Position introuvable : saisissez-la à la main ou autorisez la localisation.')
     );

@@ -362,6 +362,9 @@ model Pays {
   // v8 : Annuaire assurances (diagramme 08_annuaire_assurances).
   services_assurance ServiceAssurance[]
 
+  // Annuaire laboratoires d'analyses.
+  laboratoires Laboratoire[]
+
   // Module Urgences (diagramme APS — Module : Urgences).
   urgences Urgence[]
 
@@ -426,9 +429,12 @@ model Ville {
   gardes_pharmacie  GardePharmacie[]
 
   // v8 : Annuaire assurances (diagramme 08_annuaire_assurances).
-  services_assurance ServiceAssurance[]
+  services_assurance  ServiceAssurance[]
+  // Annuaire laboratoires d'analyses (siège et centres de prélèvement).
+  laboratoires        Laboratoire[]
+  centres_laboratoire CentreLaboratoire[]
   // RDV aléatoire : offres publiées dans cette ville.
-  offres_rdv         OffreRdv[]
+  offres_rdv          OffreRdv[]
 
   @@index([pays_id])
   @@map("ville")
@@ -528,7 +534,9 @@ model Utilisateur {
   agents_assurance       AgentAssurance[]
   agents_pharmacie       AgentPharmacie[]
   agents_ambulance       AgentAmbulance[]
+  agents_laboratoire     AgentLaboratoire[]
   avis_pharmacie         AvisPharmacie[]
+  avis_laboratoire       AvisLaboratoire[]
 
   // Module transverse Gestion des médecins — voir plus bas dans ce fichier.
   avis_medecin AvisMedecin[]
@@ -544,6 +552,9 @@ model Utilisateur {
   // peut contacter 1-N assurances, une assurance peut être contactée
   // par 1-N utilisateurs) — voir table de jointure MiseEnRelation.
   mises_en_relation MiseEnRelation[]
+
+  // Versions des CGU / politique de confidentialité acceptées.
+  acceptations_documents_legaux AcceptationDocumentLegal[]
 
   @@index([pays_id])
   @@index([role_id])
@@ -2352,8 +2363,8 @@ model Notification {
   donnees        Json?
   cle            String           @unique @db.VarChar(255)
 
-  lue_le        DateTime?
-  date_creation DateTime  @default(now())
+  lue_le         DateTime?
+  date_creation  DateTime  @default(now())
   // Push mobile (FCM) : posé quand l'envoi a été pris en charge — une
   // notification n'est poussée qu'une fois, même si sa clé est rejouée.
   push_envoye_le DateTime?
@@ -2648,6 +2659,11 @@ model MobileApk {
   status      Boolean  @default(true)
   date_upload DateTime @default(now())
 
+  // Lus dans l'AndroidManifest de l'APK au téléversement (utils/apkVersion.js) :
+  // l'application mobile les compare à sa propre version (écran « Mises à jour »).
+  version_name String? @db.VarChar(50)
+  version_code Int?
+
   @@map("mobile_apk")
 }
 
@@ -2881,6 +2897,8 @@ enum TypeActeurPresence {
   // ont leur propre moteur d'abonnement (AbonnementAssurance). Jamais
   // accepté par l'API des abonnements de présence (TYPES_ACTEUR_PRESENCE).
   assurance
+  // Idem pour les laboratoires (pas d'abonnement, vues du portail seulement).
+  laboratoire
 }
 
 model NiveauAbonnementPresence {
@@ -3465,4 +3483,292 @@ model MessageContact {
 
   @@index([statut, date_creation])
   @@map("message_contact")
+}
+
+// =====================================================================
+// Annuaire laboratoires d'analyses
+//
+// Même patron que Pharmacie / ServiceAssurance : fiche annuaire publique
+// après validation (statut_verification), créée avec le compte de son
+// agent (ou rattachée au compte connecté — rattachementAgent.service.js),
+// pièces justificatives Cloudinary (seul le « nom » est stocké, l'URL est
+// reconstruite à la volée, jamais exposée au public). "geolocalisation" et
+// CentreLaboratoire.gps sont des GEOGRAPHY(POINT,4326) PostGIS
+// (Unsupported) : lecture/écriture via lib/geo.js.
+//
+// Portail du laboratoire : examens proposés, centres de prélèvement,
+// médiathèque, avis modérés, tableau de bord (vues + engagements).
+// Pas d'abonnement pour l'instant : tout le contenu d'une fiche publiée est
+// public (voir controllers/laboratoire.controller.js).
+// =====================================================================
+
+enum StatutVerificationLaboratoire {
+  non_publie
+  en_cours
+  publie
+}
+
+model Laboratoire {
+  laboratoire_id String @id @default(uuid()) @db.Uuid
+
+  nom                       String                                 @db.VarChar(200)
+  description               String?                                @db.Text
+  pays_id                   String                                 @db.Uuid
+  ville_id                  String                                 @db.Uuid
+  // Adresse lisible (quartier, rue, repère) — la position précise est
+  // dans geolocalisation.
+  localisation              String                                 @db.VarChar(255)
+  geolocalisation           Unsupported("geography(Point, 4326)")?
+  telephone                 String                                 @db.VarChar(20)
+  email                     String                                 @db.VarChar(255)
+  // Numéro de l'agrément d'exercice délivré par l'autorité sanitaire.
+  agrement                  String                                 @db.VarChar(100)
+  statut_verification       StatutVerificationLaboratoire
+  // Première mise en ligne (posée par le contrôleur, jamais effacée).
+  date_premiere_publication DateTime?
+  date_creation             DateTime                               @default(now())
+
+  // Pièces Cloudinary (requises à la création) :
+  //   - image_nom             : logo / photo du laboratoire (public)
+  //   - piece_identite_nom    : CNI du responsable (jamais publique)
+  //   - document_agrement_nom : agrément officiel (jamais public)
+  image_nom             String @db.VarChar(255)
+  piece_identite_nom    String @db.VarChar(255)
+  document_agrement_nom String @db.VarChar(255)
+
+  pays  Pays  @relation(fields: [pays_id], references: [pays_id])
+  ville Ville @relation(fields: [ville_id], references: [ville_id])
+
+  agents      AgentLaboratoire[]
+  examens     ExamenLaboratoire[]
+  centres     CentreLaboratoire[]
+  medias      MediaLaboratoire[]
+  avis        AvisLaboratoire[]
+  engagements EngagementLaboratoire[]
+
+  @@index([pays_id])
+  @@index([ville_id])
+  @@index([statut_verification])
+  @@map("laboratoire")
+}
+
+model AgentLaboratoire {
+  agent_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id String @db.Uuid
+  laboratoire_id String @db.Uuid
+  fonction       String @db.VarChar(100)
+
+  utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
+  laboratoire Laboratoire @relation(fields: [laboratoire_id], references: [laboratoire_id])
+
+  // Espaces multiples : un compte peut gérer plusieurs laboratoires.
+  @@unique([utilisateur_id, laboratoire_id])
+  @@index([laboratoire_id])
+  @@index([utilisateur_id])
+  @@map("agent_laboratoire")
+}
+
+// Catalogue des examens d'un laboratoire (ex. « Numération formule
+// sanguine », catégorie « Hématologie »). prix : indicatif, dans la devise
+// du pays de la fiche (null = sur devis / non communiqué).
+model ExamenLaboratoire {
+  examen_id String @id @default(uuid()) @db.Uuid
+
+  laboratoire_id   String    @db.Uuid
+  nom              String    @db.VarChar(200)
+  categorie        String?   @db.VarChar(100)
+  description      String?   @db.Text
+  prix             Decimal?  @db.Decimal(12, 2)
+  delai_resultat   String?   @db.VarChar(100)
+  // Conditions de prélèvement (à jeun, sur rendez-vous, ordonnance…).
+  preparation      String?   @db.Text
+  disponible       Boolean   @default(true)
+  date_creation    DateTime  @default(now())
+  date_mise_a_jour DateTime? @updatedAt
+
+  laboratoire Laboratoire @relation(fields: [laboratoire_id], references: [laboratoire_id], onDelete: Cascade)
+
+  @@index([laboratoire_id, categorie])
+  @@map("examen_laboratoire")
+}
+
+// Centres de prélèvement / sites d'un laboratoire (le siège compris s'il
+// reçoit des patients).
+model CentreLaboratoire {
+  centre_id String @id @default(uuid()) @db.Uuid
+
+  laboratoire_id String                                 @db.Uuid
+  nom            String                                 @db.VarChar(150)
+  ville_id       String?                                @db.Uuid
+  localisation   String                                 @db.VarChar(255)
+  gps            Unsupported("geography(Point, 4326)")?
+  telephone      String?                                @db.VarChar(20)
+  horaires       String?                                @db.VarChar(255)
+  date_creation  DateTime                               @default(now())
+
+  laboratoire Laboratoire @relation(fields: [laboratoire_id], references: [laboratoire_id], onDelete: Cascade)
+  ville       Ville?      @relation(fields: [ville_id], references: [ville_id])
+
+  @@index([laboratoire_id])
+  @@map("centre_laboratoire")
+}
+
+// Médiathèque (photos / vidéos Cloudinary) — même patron que
+// MediaAssurance ; quotas fixes (voir services/portailLaboratoire.service.js).
+enum TypeMediaLaboratoire {
+  image
+  video
+}
+
+model MediaLaboratoire {
+  media_id String @id @default(uuid()) @db.Uuid
+
+  laboratoire_id String               @db.Uuid
+  type           TypeMediaLaboratoire
+  fichier_nom    String               @db.Text
+  titre          String?              @db.VarChar(150)
+  ordre          Int                  @default(0)
+  taille_octets  Int?
+  date_creation  DateTime             @default(now())
+
+  laboratoire Laboratoire @relation(fields: [laboratoire_id], references: [laboratoire_id], onDelete: Cascade)
+
+  @@index([laboratoire_id, type, ordre])
+  @@map("media_laboratoire")
+}
+
+// Avis des utilisateurs — même modération que AvisPharmacie (visible après
+// validation par l'administration). Un avis par compte et par laboratoire :
+// le redéposer le remplace (et le renvoie en modération).
+model AvisLaboratoire {
+  avis_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id    String               @db.Uuid
+  laboratoire_id    String               @db.Uuid
+  note              Int                  @db.SmallInt
+  commentaire       String?              @db.Text
+  statut_moderation StatutModerationAvis @default(en_attente)
+  date_creation     DateTime             @default(now())
+  date_mise_a_jour  DateTime?            @updatedAt
+
+  utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
+  laboratoire Laboratoire @relation(fields: [laboratoire_id], references: [laboratoire_id], onDelete: Cascade)
+
+  @@unique([utilisateur_id, laboratoire_id])
+  @@index([laboratoire_id, statut_moderation])
+  @@map("avis_laboratoire")
+}
+
+// Engagements sur la fiche publique (tableau de bord du portail) — même
+// principe que EngagementMedecin : agrégat par jour UTC, un visiteur compte
+// au plus une fois par jour et par type (empreinte HMAC purgée chaque nuit).
+enum TypeEngagementLaboratoire {
+  clic_telephone
+  clic_email
+  clic_itineraire
+  partage
+  lecture_examens
+  lecture_avis
+}
+
+model EngagementLaboratoire {
+  laboratoire_id String                    @db.Uuid
+  jour           DateTime                  @db.Date
+  type           TypeEngagementLaboratoire
+  nombre         Int                       @default(0)
+
+  laboratoire Laboratoire @relation(fields: [laboratoire_id], references: [laboratoire_id], onDelete: Cascade)
+
+  @@id([laboratoire_id, jour, type])
+  @@index([jour])
+  @@map("engagement_laboratoire")
+}
+
+model EngagementLaboratoireVisiteur {
+  laboratoire_id String                    @db.Uuid
+  jour           DateTime                  @db.Date
+  type           TypeEngagementLaboratoire
+  empreinte      String                    @db.VarChar(64)
+
+  @@id([laboratoire_id, jour, type, empreinte])
+  @@index([jour])
+  @@map("engagement_laboratoire_visiteur")
+}
+
+// =====================================================================
+// Documents légaux (CGU, politique de confidentialité)
+//
+// Rédigés par le superadmin au back-office (éditeur visuel), stockés en
+// HTML nettoyé côté serveur (lib/htmlDocumentLegal.js : balises de
+// structure seulement, aucun style) et mis en forme par le site public
+// (/cgu, /confidentialite). L'application mobile ouvre ces pages web.
+//
+// Chaque modification passe par une nouvelle version : brouillon ->
+// publiee -> archivee. Une seule version publiée par type (garanti par
+// la transaction de publication). Les versions publiées ou archivées ne
+// sont plus modifiables : ce sont elles que les utilisateurs ont
+// acceptées (AcceptationDocumentLegal).
+// =====================================================================
+enum TypeDocumentLegal {
+  cgu
+  confidentialite
+}
+
+enum StatutVersionDocumentLegal {
+  brouillon
+  publiee
+  archivee
+}
+
+model VersionDocumentLegal {
+  version_document_legal_id String @id @default(uuid()) @db.Uuid
+
+  type   TypeDocumentLegal
+  // 1, 2, 3… par type, attribué à la création du brouillon.
+  numero Int
+
+  titre                String  @db.VarChar(200)
+  contenu_html         String  @db.Text
+  // « Ce qui change » : affiché sur le site au-dessus du texte.
+  resume_modifications String? @db.Text
+
+  statut StatutVersionDocumentLegal @default(brouillon)
+
+  // Publication = entrée en vigueur immédiate.
+  date_publication DateTime?
+  date_archivage   DateTime?
+
+  cree_par_id       String?  @db.Uuid
+  publie_par_id     String?  @db.Uuid
+  date_creation     DateTime @default(now())
+  date_modification DateTime @updatedAt
+
+  acceptations AcceptationDocumentLegal[]
+
+  @@unique([type, numero])
+  @@index([type, statut])
+  @@map("version_document_legal")
+}
+
+// Preuve d'acceptation : quel compte a accepté quelle version, quand,
+// et depuis quel parcours (contexte = inscription_patient,
+// inscription_medecin, creation_pharmacie…).
+model AcceptationDocumentLegal {
+  acceptation_document_legal_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id            String @db.Uuid
+  version_document_legal_id String @db.Uuid
+
+  contexte         String   @db.VarChar(40)
+  adresse_ip       String?  @db.VarChar(64)
+  user_agent       String?  @db.VarChar(300)
+  date_acceptation DateTime @default(now())
+
+  utilisateur Utilisateur          @relation(fields: [utilisateur_id], references: [utilisateur_id], onDelete: Cascade)
+  version     VersionDocumentLegal @relation(fields: [version_document_legal_id], references: [version_document_legal_id], onDelete: Cascade)
+
+  @@unique([utilisateur_id, version_document_legal_id])
+  @@index([version_document_legal_id, date_acceptation])
+  @@map("acceptation_document_legal")
 }

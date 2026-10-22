@@ -625,6 +625,7 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
           label: "J'accepte les Conditions générales d'utilisation et la "
               'Politique de confidentialité.',
           checked: _acceptCgu,
+          contenu: const TexteAcceptationLegale(),
           onTap: () => setState(() => _acceptCgu = !_acceptCgu),
         ),
         const SizedBox(height: 14),

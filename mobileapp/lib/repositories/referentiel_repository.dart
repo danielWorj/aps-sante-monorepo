@@ -72,6 +72,21 @@ class ReferentielRepository {
     return liste.whereType<Map<String, dynamic>>().map(Pays.fromJson).toList();
   }
 
+  /// Pays APS correspondant à une position GPS (GET /referentiels/pays/detecter).
+  /// null si la position n'est pas reconnue ou hors des pays ouverts.
+  Future<Pays?> detecterPays({required double latitude, required double longitude}) async {
+    try {
+      final data = await _client.get(
+        '${ApiEndpoints.pays}/detecter',
+        query: {'lat': '$latitude', 'lng': '$longitude'},
+      );
+      final pays = (data as Map<String, dynamic>)['pays'];
+      return pays is Map<String, dynamic> ? Pays.fromJson(pays) : null;
+    } on ApiException {
+      return null;
+    }
+  }
+
   /// Détail d'un pays : inclut ses villes (`include: { villes: true }`
   /// côté backend).
   Future<Pays> obtenirPays(String id) async {

@@ -77,6 +77,7 @@ import {
   serialiserUtilisateur,
   validerMotDePasse,
 } from "../services/compte.service.js";
+import { MESSAGE_CGU_REFUSEES, cguRefusees, enregistrerAcceptationsAuteur, enregistrerAcceptationsLegales } from "../services/documentLegal.service.js";
 
 const STATUTS_PUBLICITE = ["en_moderation", "rejetee", "en_attente_paiement", "expiree", "payee", "annulee"];
 // Statuts où l'annonceur n'a encore rien payé : suppression possible.
@@ -794,6 +795,9 @@ const MAX_EN_MODERATION_PAR_UTILISATEUR = 5;
  */
 export async function creerPublicite(req, res, next) {
   try {
+    if (cguRefusees(req.body)) {
+      return res.status(400).json({ message: MESSAGE_CGU_REFUSEES });
+    }
     const champs = validerChampsReservation(req.body);
     const fichierVisuel = req.files?.visuel?.[0];
     if (!fichierVisuel) {
@@ -840,6 +844,8 @@ export async function creerPublicite(req, res, next) {
     // 15 s) ; notifierPublicite ne lève jamais et journalise l'échec.
     void notifierPublicite("publicite_soumise", publicite.publicite_id);
 
+    await enregistrerAcceptationsAuteur(req, "reservation_publicite");
+
     return res.status(201).json({
       message: "Demande envoyée. Vous recevrez la décision par WhatsApp.",
       publicite: vueDetail(publicite),
@@ -867,6 +873,9 @@ const LIBELLE_ROLE_ANNONCEUR = "annonceur";
  */
 export async function reserverAvecCompte(req, res, next) {
   try {
+    if (cguRefusees(req.body)) {
+      return res.status(400).json({ message: MESSAGE_CGU_REFUSEES });
+    }
     const prenom = String(req.body.compte_prenom ?? "").trim();
     const nom = String(req.body.compte_nom ?? "").trim();
     const emailBrut = String(req.body.compte_email ?? "").trim();
@@ -955,6 +964,10 @@ export async function reserverAvecCompte(req, res, next) {
     }
 
     void notifierPublicite("publicite_soumise", publicite.publicite_id);
+
+    await enregistrerAcceptationsLegales({
+      utilisateurId: utilisateur.utilisateur_id, req, contexte: "reservation_publicite",
+    });
 
     const accessToken = await ouvrirSession(req, res, utilisateur);
     return res.status(201).json({

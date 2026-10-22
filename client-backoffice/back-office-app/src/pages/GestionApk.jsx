@@ -573,6 +573,7 @@ export default function GestionApk() {
                   <thead>
                     <tr>
                       <th>Libellé</th>
+                      <th>Version</th>
                       <th>Description</th>
                       <th>Fichier</th>
                       <th>Statut</th>
@@ -584,6 +585,18 @@ export default function GestionApk() {
                     {lignesTable.map((apk) => (
                       <tr key={apk.id} className={!apk.status ? 'apk-row-inactive' : ''}>
                         <td className="cell-title">{apk.libelle}</td>
+                        <td>
+                          {apk.version_name || apk.version_code != null ? (
+                            <>
+                              {apk.version_name || '—'}
+                              {apk.numero_build != null && (
+                                <div className="aps-text-muted" style={{ fontSize: 11 }}>build {apk.numero_build}</div>
+                              )}
+                            </>
+                          ) : (
+                            <span className="aps-text-muted">—</span>
+                          )}
+                        </td>
                         <td style={{ maxWidth: 260 }}>{apercuTexte(apk.description)}</td>
                         <td>
                           <a
@@ -709,6 +722,10 @@ export default function GestionApk() {
             <label className="form-label">
               Fichier APK {!formulaire.apk_id && <span className="text-danger">*</span>}
             </label>
+            <div className="aps-text-muted mb-1" style={{ fontSize: 12 }}>
+              La version est lue automatiquement dans le fichier : l&apos;application mobile la compare à la
+              sienne pour proposer la mise à jour. Publiez toujours la même architecture (arm64-v8a).
+            </div>
             <input
               type="file"
               className="form-control"

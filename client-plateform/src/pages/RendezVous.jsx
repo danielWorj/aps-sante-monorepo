@@ -79,6 +79,7 @@ import ChoixMoyenPaiement from '../components/paiement/ChoixMoyenPaiement';
 // geoService.js) n'a donc pas sa place dans ce formulaire tant que le
 // backend n'exige pas de ville à l'inscription patient.
 import { listerPays } from '../services/geoService';
+import CaseAcceptationLegale from '../components/legal/CaseAcceptationLegale';
 
 function StepperNav({ steps, current }) {
   return (
@@ -311,6 +312,7 @@ export default function RendezVous() {
   const [inscMotDePasse, setInscMotDePasse] = useState('');
   const [inscDateNaissance, setInscDateNaissance] = useState('');
   const [inscPaysId, setInscPaysId] = useState('');
+  const [inscAccepteCgu, setInscAccepteCgu] = useState(false);
   const [listePays, setListePays] = useState([]);
   const [chargementPays, setChargementPays] = useState(false);
   const [erreurPays, setErreurPays] = useState(null);
@@ -500,6 +502,7 @@ export default function RendezVous() {
           mot_de_passe: inscMotDePasse,
           pays_id: inscPaysId,
           date_naissance: inscDateNaissance,
+          accepte_cgu: inscAccepteCgu,
         });
         // Ouvre la session tout juste créée : à partir d'ici,
         // isAuthenticated devient vrai et patient_id sera correctement
@@ -851,6 +854,7 @@ export default function RendezVous() {
                               )}
                             </div>
                           </div>
+                          <CaseAcceptationLegale id="insc-cgu" className="form-check mb-3" checked={inscAccepteCgu} onChange={setInscAccepteCgu} />
                           <p className="text-faint mb-0" style={{ fontSize: '.78rem' }}>
                             Déjà un compte ? <Link to="/login">Connectez-vous</Link> puis revenez sur cette page.
                           </p>

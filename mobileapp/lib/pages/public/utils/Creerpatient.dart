@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 
 import '../../../components/style/colors.dart';
+import '../../../components/legal/texte_acceptation_legale.dart';
 import '../../../components/ui/aps_select.dart';
 
 /// ============================================================
@@ -624,8 +625,7 @@ class _CheckRow extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                label,
+              child: TexteAcceptationLegale(
                 style: const TextStyle(
                   fontSize: 12.5,
                   color: ApsColors.ink,

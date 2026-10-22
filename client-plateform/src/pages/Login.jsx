@@ -430,7 +430,7 @@ export default function Login() {
 
               <p className="connexion26-legal">
                 En vous connectant, vous acceptez nos{' '}
-                <Link to="/conditions">conditions d&apos;utilisation</Link> et notre{' '}
+                <Link to="/cgu">conditions d&apos;utilisation</Link> et notre{' '}
                 <Link to="/confidentialite">politique de confidentialité</Link>.
               </p>
             </div>

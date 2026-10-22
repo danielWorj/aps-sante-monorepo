@@ -620,6 +620,7 @@ class _CreateCentreSanteScreenState extends ConsumerState<CreateCentreSanteScree
           label: "J'accepte les Conditions générales d'utilisation et la "
               'Politique de confidentialité.',
           checked: _acceptCgu,
+          contenu: const TexteAcceptationLegale(),
           onTap: () => setState(() => _acceptCgu = !_acceptCgu),
         ),
         const SizedBox(height: 14),

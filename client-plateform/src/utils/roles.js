@@ -15,6 +15,7 @@ export const ROLES = Object.freeze({
   AGENT_ASSURANCE: 'agent_assurance',
   AGENT_PHARMACIE: 'agent_pharmacie',
   AGENT_STRUCTURE_SANTE: 'agent_structure_sante',
+  AGENT_LABORATOIRE: 'agent_laboratoire',
   ANNONCEUR: 'annonceur',
   ADMIN: 'admin',
   SUPERADMIN: 'superadmin',
@@ -29,6 +30,7 @@ export const ROLES_ESPACE = Object.freeze({
   assurance: [ROLES.AGENT_ASSURANCE],
   pharmacie: [ROLES.AGENT_PHARMACIE],
   structure: [ROLES.AGENT_STRUCTURE_SANTE],
+  laboratoire: [ROLES.AGENT_LABORATOIRE],
   // « Mes publicités » : tout compte non administrateur peut réserver un
   // espace publicitaire (ReserverPublicite.jsx) ; le serveur ne renvoie
   // que ses propres publicités. Les administrateurs modèrent depuis le
@@ -40,6 +42,7 @@ export const ROLES_ESPACE = Object.freeze({
     ROLES.AGENT_ASSURANCE,
     ROLES.AGENT_PHARMACIE,
     ROLES.AGENT_STRUCTURE_SANTE,
+    ROLES.AGENT_LABORATOIRE,
   ],
   // Pages du compte lui-même (choisir son espace, créer son code PIN) :
   // tout compte non administrateur.
@@ -49,6 +52,7 @@ export const ROLES_ESPACE = Object.freeze({
     ROLES.AGENT_ASSURANCE,
     ROLES.AGENT_PHARMACIE,
     ROLES.AGENT_STRUCTURE_SANTE,
+    ROLES.AGENT_LABORATOIRE,
     ROLES.ANNONCEUR,
   ],
   // /mes-annonces : espaces sans portail dédié (les autres rôles ont la
@@ -62,6 +66,7 @@ const ACCUEIL_PAR_ROLE = Object.freeze({
   [ROLES.AGENT_ASSURANCE]: '/portail/assurance',
   [ROLES.AGENT_PHARMACIE]: '/mon-espace-pharmacie',
   [ROLES.AGENT_STRUCTURE_SANTE]: '/mon-espace-structure',
+  [ROLES.AGENT_LABORATOIRE]: '/portail/laboratoire',
   [ROLES.ANNONCEUR]: '/portail/annonceur',
 });
 
@@ -72,6 +77,7 @@ const ACCUEIL_PAR_ESPACE = Object.freeze({
   assurance: '/portail/assurance',
   pharmacie: '/mon-espace-pharmacie',
   structure: '/mon-espace-structure',
+  laboratoire: '/portail/laboratoire',
   publicites: '/portail/annonceur',
 });
 
@@ -98,6 +104,7 @@ const ROLES_PAR_CHEMIN = [
   [/^\/portail\/patient-/, ROLES_ESPACE.patient],
   [/^\/portail\/consultation\//, ROLES_ESPACE.consultation],
   [/^\/portail\/assurance/, ROLES_ESPACE.assurance],
+  [/^\/portail\/laboratoire/, ROLES_ESPACE.laboratoire],
   [/^\/portail\/annonceur/, ROLES_ESPACE.publicite],
   [/^\/publicite\/[^/]+\/paiement/, ROLES_ESPACE.publicite],
   [/^\/mon-espace-assurance/, ROLES_ESPACE.assurance],

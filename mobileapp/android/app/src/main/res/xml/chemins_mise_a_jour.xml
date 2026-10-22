@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- APK des mises à jour, téléchargées par l'application dans son cache
+     (lib/services/mise_a_jour_service.dart) puis confiées à l'installateur. -->
+<paths>
+    <cache-path name="mises_a_jour" path="mises_a_jour/" />
+</paths>

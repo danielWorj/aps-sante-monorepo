@@ -24,6 +24,7 @@ import {
 } from "../services/cycleAbonnementPresence.service.js";
 import { purgerVisiteursVuesFiche } from "../services/vuesFiche.service.js";
 import { purgerVisiteursEngagement } from "../services/engagementMedecin.service.js";
+import { purgerVisiteursEngagementLaboratoire } from "../services/portailLaboratoire.service.js";
 import { relancerMessagesWhatsapp } from "../services/whatsapp.service.js";
 import { relancerMessagesSms } from "../services/sms.service.js";
 import { purgerCodesVerification } from "../services/verificationTelephone.service.js";
@@ -198,6 +199,11 @@ export function demarrerScheduler() {
         await purgerVisiteursEngagement();
       } catch (err) {
         console.error("[scheduler] Échec purge des empreintes d'engagement médecin :", err);
+      }
+      try {
+        await purgerVisiteursEngagementLaboratoire();
+      } catch (err) {
+        console.error("[scheduler] Échec purge des empreintes d'engagement laboratoire :", err);
       }
     },
     { timezone: "UTC" }

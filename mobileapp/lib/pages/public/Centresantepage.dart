@@ -42,6 +42,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../components/components.dart';
+import '../../services/pays_utilisateur_service.dart';
 import '../../controllers/centresante_controller.dart';
 import '../../models/centresante_models.dart';
 import 'publicAcceuil.dart';
@@ -155,6 +156,8 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _paysParDefaut());
+    PaysUtilisateurService.instance.addListener(_paysParDefaut);
     // Annuaire public : on ne demande à l'API que les fiches déjà
     // vérifiées/publiées (voir StatutVerificationStructure côté modèle) —
     // une fiche « en_cours » ou « non_publie » ne doit pas être visible
@@ -177,6 +180,7 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
 
   @override
   void dispose() {
+    PaysUtilisateurService.instance.removeListener(_paysParDefaut);
     _searchController.dispose();
     super.dispose();
   }
@@ -186,7 +190,29 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
 
   /// Pays / ville côté serveur ; le filtre « publiées » posé à
   /// l'ouverture de l'écran est conservé.
-  void _appliquerPaysVille(String? paysId, String? villeId) {
+
+  /// Vrai dès que l'utilisateur agit sur le filtre « Pays » de cet écran :
+  /// le pays détecté ([PaysUtilisateurService]) n'est alors plus imposé.
+  bool _paysTouche = false;
+
+  /// Ouvre l'annuaire sur le pays de l'utilisateur (détecté ou choisi),
+  /// et le suit tant que l'utilisateur n'a pas choisi lui-même.
+  void _paysParDefaut() {
+    if (!mounted || _paysTouche) return;
+    final service = PaysUtilisateurService.instance;
+    final id = service.paysId;
+    final actuel = _filtresServeur.paysId;
+    if (id == null || actuel == id) return;
+    if (actuel != null && actuel != service.paysPrecedent) return;
+    _appliquerPaysVille(id, null, parUtilisateur: false);
+  }
+
+  void _appliquerPaysVille(String? paysId, String? villeId, {bool parUtilisateur = true}) {
+    if (parUtilisateur) {
+      _paysTouche = true;
+      // Un pays choisi vaut pour toute l'application ; « Tous » pour cet écran.
+      PaysUtilisateurService.instance.choisir(paysId);
+    }
     final actuel = _filtresServeur;
     ref.read(filtresCentresSanteProvider.notifier).state = CentresSanteFiltre(
       paysId: paysId,

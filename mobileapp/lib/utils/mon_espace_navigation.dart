@@ -34,6 +34,7 @@ import '../pages/public/demande_rapide_page.dart';
 import '../pages/public/login.dart';
 import '../pages/public/utils/createassurancepage.dart';
 import '../pages/public/utils/createcentresantepage.dart';
+import '../pages/public/utils/createlaboratoirepage.dart';
 import '../pages/public/utils/createmedecinpage.dart';
 import '../pages/public/utils/createpharmaciepage.dart';
 
@@ -146,3 +147,6 @@ void ouvrirDeclarerCentreSante(BuildContext context) =>
 
 void ouvrirDeclarerAssurance(BuildContext context) =>
     ouvrirAvecSession(context, (_) => const CreateAssuranceScreen());
+
+void ouvrirDeclarerLaboratoire(BuildContext context) =>
+    ouvrirAvecSession(context, (_) => const CreateLaboratoireScreen());

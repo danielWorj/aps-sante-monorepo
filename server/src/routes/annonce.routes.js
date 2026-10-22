@@ -64,7 +64,7 @@ router.get("/annonces/:id", obtenirAnnonce);
 router.post(
   "/annonces",
   authentifier,
-  autoriser("admin", "superadmin"),
+  autoriser("superadmin"),
   gererTeleversementAnnonce,
   creerAnnonce
 );
@@ -74,7 +74,7 @@ router.post(
 router.put(
   "/annonces/:id",
   authentifier,
-  autoriser("admin", "superadmin"),
+  autoriser("superadmin"),
   gererTeleversementAnnonce,
   modifierAnnonce
 );
@@ -85,13 +85,13 @@ router.put(
 router.patch(
   "/annonces/:id/activer",
   authentifier,
-  autoriser("admin", "superadmin"),
+  autoriser("superadmin"),
   activerAnnonce
 );
 router.patch(
   "/annonces/:id/desactiver",
   authentifier,
-  autoriser("admin", "superadmin"),
+  autoriser("superadmin"),
   desactiverAnnonce
 );
 
@@ -101,7 +101,7 @@ router.patch(
 router.delete(
   "/annonces/:id",
   authentifier,
-  autoriser("admin", "superadmin"),
+  autoriser("superadmin"),
   supprimerAnnonce
 );
 

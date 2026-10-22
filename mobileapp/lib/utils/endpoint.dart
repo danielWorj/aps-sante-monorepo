@@ -14,6 +14,13 @@ class ApiRealEndpoints {
   );
   static const String meetbaseUrl = 'https://meet.azasante.com';
 
+  /// Site web public (pages CGU / confidentialité ouvertes dans le
+  /// navigateur). Surchargeable : --dart-define=SITE_WEB_URL=http://10.0.2.2:5173
+  static const String siteWebUrl = String.fromEnvironment(
+    'SITE_WEB_URL',
+    defaultValue: 'https://azasante.com',
+  );
+
   // ─── Authentification (module transverse "authentification") ────
   // Voir authentification.routes.js / authentification.controller.js.
   //   - register, login, refresh                : publiques.
@@ -200,6 +207,10 @@ class ApiRealEndpoints {
 
   // ─── Annonces (publiées par APS Santé, route publique) ───────────────
   static const String annonces = '${baseUrl}/annonces';
+
+  // Mises à jour : dernière APK publiée depuis le back-office (route publique,
+  // gestionapk.routes.js), avec sa version lue dans le manifeste.
+  static const String apkActive = '${baseUrl}/apks/active';
 
   // ─── Patients (fiche patient — module transverse "Gestion des
   // médecins") ────────────────────────────────────────────────────────

@@ -67,6 +67,7 @@ import {
 } from "../lib/geo.js";
 import { resoudreDroitsPresenceEnLot, droitsPresencePublics, filtrerMedecin } from "../lib/droitsPresence.js";
 import { enregistrerVueFiche } from "../services/vuesFiche.service.js";
+import { MESSAGE_CGU_REFUSEES, cguRefusees, enregistrerAcceptationsLegales } from "../services/documentLegal.service.js";
 
 export {
   listerAvisMedecin,
@@ -390,6 +391,10 @@ function genererMotDePasseTemporaire() {
  */
 export async function creerMedecin(req, res, next) {
   try {
+    if (cguRefusees(req.body)) {
+      return res.status(400).json({ message: MESSAGE_CGU_REFUSEES });
+    }
+
     const {
       nom,
       prenom,
@@ -526,6 +531,10 @@ export async function creerMedecin(req, res, next) {
         });
 
         return { utilisateur: utilisateurCree, medecin: medecinCree };
+      });
+
+      await enregistrerAcceptationsLegales({
+        utilisateurId: utilisateur.utilisateur_id, req, contexte: "inscription_medecin",
       });
 
       // Position (facultative) écrite APRÈS la transaction (lib/geo.js

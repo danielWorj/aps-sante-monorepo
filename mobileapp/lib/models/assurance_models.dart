@@ -1317,6 +1317,8 @@ class ServiceAssuranceCreationRequete {
       champs['agent_telephone'] = agentTelephone!;
     }
     if (responsableMoi) champs['responsable_moi'] = 'true';
+    // Le formulaire de création impose la case CGU / confidentialité.
+    champs['accepte_cgu'] = 'true';
     return champs;
   }
 }

@@ -120,6 +120,12 @@ class RoleBottomNavigationBar extends StatelessWidget {
           RoleNavItem(icon: Icons.event_note_outlined, label: 'Dossiers'),
           RoleNavItem(icon: Icons.person_outline, label: 'Profil'),
         ];
+      case RoleUtilisateur.agentLaboratoire:
+        return const [
+          RoleNavItem(icon: Icons.biotech_outlined, label: 'Accueil'),
+          RoleNavItem(icon: Icons.science_outlined, label: 'Examens'),
+          RoleNavItem(icon: Icons.person_outline, label: 'Profil'),
+        ];
       case RoleUtilisateur.patient:
       case RoleUtilisateur.medecin:
       case RoleUtilisateur.annonceur:

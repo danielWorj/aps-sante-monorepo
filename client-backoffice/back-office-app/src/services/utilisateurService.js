@@ -188,6 +188,25 @@ export function reactiverUtilisateur(id) {
   );
 }
 
+/**
+ * PATCH /api/utilisateurs/:id/mot-de-passe  (superadmin uniquement)
+ * Pose un nouveau mot de passe TEMPORAIRE (à changer à la prochaine
+ * connexion) et ferme les sessions ouvertes du compte.
+ */
+export function reinitialiserMotDePasse(id, mot_de_passe) {
+  return apiFetch(`/utilisateurs/${id}/mot-de-passe`, { method: 'PATCH', body: { mot_de_passe } }).then(
+    (d) => d.utilisateur
+  );
+}
+
+/**
+ * DELETE /api/utilisateurs/:id  (superadmin uniquement)
+ * ⚠️ 409 si le compte a déjà un historique : le suspendre plutôt.
+ */
+export function supprimerUtilisateur(id) {
+  return apiFetch(`/utilisateurs/${id}`, { method: 'DELETE' });
+}
+
 const UtilisateurService = {
   ROLES_UTILISATEUR,
   STATUTS_COMPTE_UTILISATEUR,
@@ -198,6 +217,8 @@ const UtilisateurService = {
   modifierUtilisateur,
   suspendreUtilisateur,
   reactiverUtilisateur,
+  reinitialiserMotDePasse,
+  supprimerUtilisateur,
 };
 
 export default UtilisateurService;

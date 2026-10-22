@@ -14,6 +14,7 @@ const ICONES = {
   pharmacie: 'fa-prescription-bottle-medical',
   structure: 'fa-hospital',
   assurance: 'fa-building-shield',
+  laboratoire: 'fa-flask-vial',
   publicites: 'fa-bullhorn',
   ambulance: 'fa-truck-medical',
   pompes_funebres: 'fa-dove',

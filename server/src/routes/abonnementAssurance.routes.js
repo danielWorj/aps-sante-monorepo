@@ -53,6 +53,8 @@ import { catalogueAbonnementAssurance } from "../controllers/catalogueAbonnement
 
 const router = Router();
 const admin = [authentifier, autoriser("admin", "superadmin")];
+// Catalogue commun à tous les pays (niveaux, remises de durée) : superadmin seul.
+const catalogue = [authentifier, autoriser("superadmin")];
 
 // ─── Public : catalogue de la page « Abonnements » ────────────
 router.get("/abonnements-assurance/catalogue", catalogueAbonnementAssurance);
@@ -71,15 +73,15 @@ router.get("/abonnements-assurance/:id/facture", authentifier, obtenirFacture);
 
 // ─── Administration ───────────────────────────────────────────
 router.get("/admin/niveaux-assurance", ...admin, listerNiveaux);
-router.post("/admin/niveaux-assurance", ...admin, creerNiveau);
-router.put("/admin/niveaux-assurance/:id", ...admin, modifierNiveau);
+router.post("/admin/niveaux-assurance", ...catalogue, creerNiveau);
+router.put("/admin/niveaux-assurance/:id", ...catalogue, modifierNiveau);
 
 router.get("/admin/tarifs-abonnement-assurance", ...admin, listerTarifs);
 router.put("/admin/tarifs-abonnement-assurance", ...admin, enregistrerTarif);
 
 router.get("/admin/remises-duree-abonnement-assurance", ...admin, listerRemises);
-router.put("/admin/remises-duree-abonnement-assurance", ...admin, enregistrerRemises);
-router.delete("/admin/remises-duree-abonnement-assurance/:duree", ...admin, supprimerRemise);
+router.put("/admin/remises-duree-abonnement-assurance", ...catalogue, enregistrerRemises);
+router.delete("/admin/remises-duree-abonnement-assurance/:duree", ...catalogue, supprimerRemise);
 
 router.get("/admin/config-abonnement-assurance", ...admin, listerConfigs);
 router.put("/admin/config-abonnement-assurance/:pays_id", ...admin, enregistrerConfig);

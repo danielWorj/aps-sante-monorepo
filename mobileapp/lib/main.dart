@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'components/style/app_theme.dart';
 import 'controllers/authentification_controller.dart';
+import 'pages/mise_a_jour/veille_mise_a_jour.dart';
 import 'pages/pilote_push.dart';
 import 'pages/public/onboarding/onboarding_accueil_page.dart';
 import 'pages/verrou/veille_connexion_web.dart';
 import 'pages/verrou/verrou_application.dart';
+import 'services/pays_utilisateur_service.dart';
 import 'services/push_service.dart';
+import 'utils/api_client.dart';
 import 'utils/identifiant_installation.dart';
 
 Future<void> main() async {
@@ -46,6 +49,15 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     ref.read(sessionControllerProvider);
+    // Pays de l'utilisateur (annuaires ouverts sur son pays) : détecté une
+    // fois au démarrage, puis affiné par le pays du compte à la connexion.
+    PaysUtilisateurService.instance.initialiser(
+      client: ref.read(apiClientProvider),
+      paysCompte: ref.read(authUtilisateurProvider)?.paysId,
+    );
+    ref.listenManual(authUtilisateurProvider, (_, utilisateur) {
+      PaysUtilisateurService.instance.definirPaysCompte(utilisateur?.paysId);
+    });
   }
 
   @override
@@ -79,10 +91,13 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       // à une navigation "Passer" près (voir OnboardingAccueilPage).
       home: const OnboardingAccueilPage(),
       // Au-dessus de tous les écrans : verrouillage par code PIN / empreinte,
-      // et validation des connexions web demandées depuis un ordinateur.
+      // validation des connexions web demandées depuis un ordinateur, et
+      // proposition des mises à jour de l'application (APK hors store).
       builder: (context, child) => VerrouApplication(
         child: VeilleConnexionWeb(
-          child: PilotePush(child: child ?? const SizedBox.shrink()),
+          child: VeilleMiseAJour(
+            child: PilotePush(child: child ?? const SizedBox.shrink()),
+          ),
         ),
       ),
     );

@@ -21,6 +21,7 @@
 .home26-accent{ color:var(--primary); }
 .home26-lead{ font-size:1.12rem; max-width:470px; margin:1.1rem 0 0; }
 .home26-sbar{ margin-top:2.2rem; margin-right:-6.5rem; position:relative; z-index:3; }
+.home26-pays{ margin-top:1rem; }
 .home26-populaires{ display:flex; align-items:center; flex-wrap:wrap; gap:.5rem; margin-top:1.1rem; }
 .home26-urgence{ margin-top:2rem; }
 .home26-urgence-lnk{
