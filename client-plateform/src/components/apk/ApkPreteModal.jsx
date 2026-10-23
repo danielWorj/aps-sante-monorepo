@@ -19,6 +19,7 @@ const formaterTaille = (octets) => (octets ? `${(octets / 1024 / 1024).toFixed(1
 
 /** @param {{ apk: ReturnType<import('../../hooks/useTelechargementApk').useTelechargementApk> }} props */
 export default function ApkPreteModal({ apk }) {
+  if (apk.infoIos) return <InfoIos apk={apk} />;
   if (!apk.fichierPret) return null;
   return <Contenu apk={apk} />;
 }
@@ -122,6 +123,72 @@ function Contenu({ apk }) {
             </div>
           </>
         )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/**
+ * Modale affichée sur iPhone / iPad : l'APK ne s'installe que sur Android,
+ * on propose d'envoyer le lien vers un téléphone Android ou d'utiliser le site.
+ */
+function InfoIos({ apk }) {
+  const ids = useId();
+  const btnPrincipal = useRef(null);
+  const [lienCopie, setLienCopie] = useState(false);
+  const lienSite = typeof window !== 'undefined' ? window.location.origin : '';
+
+  useEffect(() => {
+    const precedent = document.activeElement;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    btnPrincipal.current?.focus();
+    return () => {
+      document.body.style.overflow = overflow;
+      if (precedent && typeof precedent.focus === 'function') precedent.focus();
+    };
+  }, []);
+
+  const partager = async () => {
+    const donnees = { title: 'ApSa', text: 'Téléchargez l’application ApSa sur Android :', url: lienSite };
+    try {
+      if (navigator.share) { await navigator.share(donnees); return; }
+      await navigator.clipboard.writeText(lienSite);
+      setLienCopie(true);
+    } catch {
+      // Partage annulé par l'utilisateur : rien à faire.
+    }
+  };
+
+  return createPortal(
+    <div className="aps-dialog-fond" onMouseDown={(e) => { if (e.target === e.currentTarget) apk.fermer(); }}>
+      <div
+        className="aps-dialog apk-prete"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`${ids}-titre`}
+        onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); apk.fermer(); } }}
+      >
+        <span className="apk-prete-icone" aria-hidden="true"><i className="fa-brands fa-apple" /></span>
+        <h2 id={`${ids}-titre`} className="aps-dialog-titre apk-prete-titre">Bientôt sur iPhone</h2>
+        <p className="aps-dialog-message">
+          L&apos;application ApSa est pour l&apos;instant disponible uniquement sur <strong>Android</strong> :
+          un fichier APK ne peut pas s&apos;installer sur iPhone ou iPad.
+        </p>
+        <ol className="apk-prete-etapes">
+          <li>Continuez sur ce site : toutes les fonctionnalités (rendez-vous, téléconsultation, paiement) y sont disponibles.</li>
+          <li>Pour un téléphone Android, envoyez-lui le lien du site puis téléchargez l&apos;application depuis ce téléphone.</li>
+        </ol>
+        <div className="aps-dialog-actions">
+          <button type="button" className="aps-dialog-btn aps-dialog-btn--neutre" onClick={partager}>
+            <i className={`fa-solid ${lienCopie ? 'fa-check' : 'fa-share-from-square'}`} aria-hidden="true" />
+            {lienCopie ? 'Lien copié' : 'Envoyer le lien'}
+          </button>
+          <button ref={btnPrincipal} type="button" className="aps-dialog-btn aps-dialog-btn--primaire" onClick={apk.fermer}>
+            Compris
+          </button>
+        </div>
       </div>
     </div>,
     document.body,

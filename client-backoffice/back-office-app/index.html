@@ -1,7 +1,14 @@
 <!doctype html>
-<html lang="en">
+<!--
+  lang="fr" + translate="no" : l'interface est en français. Avec lang="en",
+  Chrome proposait/appliquait Google Traduction, qui remplace les nœuds texte
+  gérés par React et fait planter le rendu suivant (« removeChild … n'est pas
+  un enfant de ce nœud »).
+-->
+<html lang="fr" translate="no">
   <head>
     <meta charset="UTF-8" />
+    <meta name="google" content="notranslate" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>back-office-app</title>

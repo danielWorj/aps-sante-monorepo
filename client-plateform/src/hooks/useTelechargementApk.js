@@ -12,7 +12,22 @@ import {
   declencherSauvegardeBlob,
 } from '../services/apkService';
 
+/**
+ * iPhone / iPad / iPod : un APK ne s'y installe pas (format Android) et
+ * Safari n'enregistre pas le fichier dans « Téléchargements ». iPadOS se
+ * présente comme un Mac : on le reconnaît à son écran tactile.
+ */
+export const estIos = () => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/i.test(ua)
+    || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+};
+
 export function useTelechargementApk() {
+  const ios = estIos();
+  // Sur iOS, le bouton ouvre une modale d'information au lieu de télécharger.
+  const [infoIos, setInfoIos] = useState(false);
   // URL de téléchargement de l'APK active, récupérée depuis GET /api/apks/active
   // (route publique). null = pas encore chargée / aucune APK active : le
   // bouton est alors désactivé.
@@ -49,6 +64,10 @@ export function useTelechargementApk() {
 
   /** Lance le téléchargement ; renvoie false s'il a échoué (message dans `erreur`). */
   async function lancer() {
+    if (ios) {
+      setInfoIos(true);
+      return true;
+    }
     if (!url || enCours) return false;
     setErreur(null);
     setOctetsRecus(0);
@@ -78,10 +97,11 @@ export function useTelechargementApk() {
   /** Ferme la modale et libère le fichier gardé en mémoire. */
   function fermer() {
     setFichierPret(null);
+    setInfoIos(false);
   }
 
   return {
     disponible: Boolean(url), enCours, progression, tailleInconnue, libelleProgression, erreur, lancer,
-    fichierPret, installer, fermer,
+    fichierPret, installer, fermer, ios, infoIos,
   };
 }
