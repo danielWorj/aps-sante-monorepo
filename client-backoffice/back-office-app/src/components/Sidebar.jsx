@@ -7,26 +7,32 @@ import { estRouteSuperadmin, estSuperadmin } from "../utils/roles";
    Sidebar.jsx
    Portage React du menu latéral APS (ex sidebar.js).
 
-   - Le surlignage du lien actif est géré par <NavLink> (react-router-dom),
-     donc plus besoin de data-page / data-key : la route courante suffit.
-   - Le nom/rôle du pied de menu proviennent de la session réelle
-     (useAuth().user) plutôt que de props statiques.
+   - Le surlignage du lien actif est géré par <NavLink> (react-router-dom) :
+     la route courante suffit.
+   - Le nom/rôle du pied de menu proviennent de la session (useAuth().user).
    - Fermeture du menu mobile : on retire la classe "is-mobile-open" posée
-     sur #apsApp par Navbar.jsx (voir handleLinkClick).
+     sur #apsApp par Navbar.jsx (voir closeMobileMenu).
 
-   - Structure des groupes :
-     Chaque section (`group`) peut contenir :
-       - `entities` : des sous-groupes par entité (fiche + éventuels enfants
-         Publicité / Avis), quand une rubrique de l'annuaire a besoin de ces
-         vues.
-       - `items`    : des liens simples, sans sous-regroupement.
+   - Structure des groupes : chaque section (`group`) contient
+       - `entities` : liens de tête repliables, avec des enfants (Avis,
+         Niveaux, Tarifs, Paiements…) affichés au clic sur le chevron ;
+       - `items`    : des liens simples.
 
-   - IMPORTANT : ce menu est calqué sur les routes RÉELLEMENT déclarées dans
-     router.jsx (espace privé, RequireAuth > PrivateLayout). Les rubriques
-     pour lesquelles aucune route n'existe encore côté router.jsx sont
-     laissées en commentaire ci-dessous, avec la même logique que les
-     routes commentées dans router.jsx : à décommenter le jour où la page
-     et la route correspondantes seront créées.
+   - Ordre des sections, du quotidien vers le paramétrage :
+       1. Tableau de bord
+       2. Activité                  → ce qui se passe sur la plateforme
+       3. Annuaire de santé         → les acteurs référencés et leurs avis
+       4. Utilisateurs & support
+       5. Abonnements               → un bloc par type d'acteur abonné
+       6. Finance                   → flux d'argent et commissions
+       7. Publicité & communication
+       8. Règles métier             → délais et sanctions appliqués aux RDV
+       9. Configuration             → pays, documents légaux, canaux, appli
+     Les écrans réservés au superadmin sont masqués aux admins pays par
+     menuPour() (voir ROUTES_SUPERADMIN).
+
+   - IMPORTANT : ce menu est calqué sur les routes déclarées dans
+     router.jsx. L'ancien écran /abonnement-medecin reste routé, hors menu.
    ========================================================================== */
 
 const APS_MENU = [
@@ -36,22 +42,32 @@ const APS_MENU = [
       { key: "dashboard", label: "Tableau de bord", icon: "fa-solid fa-gauge-high", to: "/" }
     ]
   },
- 
   {
-    group: "Annuaire & Utilisateurs",
+    group: "Activité",
+    items: [
+      { key: "rendez-vous", label: "Rendez-vous", icon: "fa-solid fa-calendar-check", to: "/rendez-vous" },
+      { key: "offres-rdv", label: "Demandes de RDV", icon: "fa-solid fa-hand-holding-medical", to: "/offres-rdv" },
+      { key: "ordonnance", label: "Ordonnances", icon: "fa-solid fa-file-prescription", to: "/ordonnance" },
+      { key: "urgences", label: "Urgences", icon: "fa-solid fa-truck-medical", to: "/urgences" }
+    ]
+  },
+  {
+    group: "Annuaire de santé",
     entities: [
+      {
+        key: "medecin",
+        label: "Médecins",
+        icon: "fa-solid fa-user-doctor",
+        to: "/medecin",
+        children: [
+          { key: "avis-medecin", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-medecin" }
+        ]
+      },
       {
         key: "structure-sante",
         label: "Structures & hôpitaux",
         icon: "fa-solid fa-hospital",
-        to: "/structure-sante",
-        // Abonnements de présence des centres de santé (cliniques, hôpitaux, laboratoires)
-        children: [
-          { key: "abonnements-presence-structure", label: "Abonnements", icon: "fa-solid fa-id-card-clip", to: "/abonnements-presence/structure" },
-          { key: "niveaux-abonnement-presence-structure", label: "Niveaux", icon: "fa-solid fa-layer-group", to: "/niveaux-abonnement-presence/structure" },
-          { key: "tarifs-abonnement-presence-structure", label: "Tarifs & paramètres", icon: "fa-solid fa-tags", to: "/tarifs-abonnement-presence/structure" },
-          { key: "paiements-abonnement-presence-structure", label: "Paiements", icon: "fa-solid fa-receipt", to: "/paiements-abonnement-presence/structure" }
-        ]
+        to: "/structure-sante"
       },
       {
         key: "pharmacies",
@@ -59,19 +75,10 @@ const APS_MENU = [
         icon: "fa-solid fa-mortar-pestle",
         to: "/pharmacie",
         children: [
-          { key: "avis-pharmacie", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-pharmacie" },
-          // Abonnements de présence des pharmacies
-          { key: "abonnements-presence-pharmacie", label: "Abonnements", icon: "fa-solid fa-id-card-clip", to: "/abonnements-presence/pharmacie" },
-          { key: "niveaux-abonnement-presence-pharmacie", label: "Niveaux", icon: "fa-solid fa-layer-group", to: "/niveaux-abonnement-presence/pharmacie" },
-          { key: "tarifs-abonnement-presence-pharmacie", label: "Tarifs & paramètres", icon: "fa-solid fa-tags", to: "/tarifs-abonnement-presence/pharmacie" },
-          { key: "paiements-abonnement-presence-pharmacie", label: "Paiements", icon: "fa-solid fa-receipt", to: "/paiements-abonnement-presence/pharmacie" }
-          // Pas de /publicite-pharmacie dédiée : la publicité pharmacie
-          // passe par la rubrique "Publicité" générique plus bas.
+          { key: "avis-pharmacie", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-pharmacie" }
         ]
       },
       {
-        // Laboratoires d'analyses : fiches (vérification, publication,
-        // contenus) et modération des avis.
         key: "laboratoires",
         label: "Laboratoires",
         icon: "fa-solid fa-flask-vial",
@@ -81,100 +88,67 @@ const APS_MENU = [
         ]
       },
       {
-        // Nouveau : /medecin, /avis-medecin, /abonnement-medecin et
-        // /ordonnance sont bien déclarées dans router.jsx -> l'entité
-        // remplace l'ancien placeholder "professionnels" (jamais routé).
-        key: "medecin",
-        label: "Médecins",
-        icon: "fa-solid fa-user-doctor",
-        to: "/medecin",
-        children: [
-          { key: "avis-medecin", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-medecin" },
-          // Abonnements de présence des médecins ; l'obligation de souscrire
-          // s'active ou se désactive par pays dans « Tarifs & paramètres ».
-          // (L'ancien écran /abonnement-medecin reste routé, hors menu.)
-          { key: "abonnements-presence-medecin", label: "Abonnements", icon: "fa-solid fa-id-card-clip", to: "/abonnements-presence/medecin" },
-          { key: "niveaux-abonnement-presence-medecin", label: "Niveaux", icon: "fa-solid fa-layer-group", to: "/niveaux-abonnement-presence/medecin" },
-          { key: "tarifs-abonnement-presence-medecin", label: "Tarifs & activation", icon: "fa-solid fa-toggle-on", to: "/tarifs-abonnement-presence/medecin" },
-          { key: "paiements-abonnement-presence-medecin", label: "Paiements", icon: "fa-solid fa-receipt", to: "/paiements-abonnement-presence/medecin" },
-          { key: "ordonnance", label: "Ordonnances", icon: "fa-solid fa-file-prescription", to: "/ordonnance" },
-          { key: "retraits", label: "Retraits", icon: "fa-solid fa-money-bill-transfer", to: "/retraits" }
-        ]
-      }
-
-      // Entités prévues côté maquette mais sans route dans router.jsx :
-      // {
-      //   key: "assureurs",
-      //   label: "Assureurs & courtiers",
-      //   icon: "fa-solid fa-shield-heart",
-      //   to: "/assureurs",
-      //   children: [
-      //     { key: "publicite-assureurs", label: "Publicité", icon: "fa-solid fa-bullhorn", to: "/publicite-assureurs" },
-      //     { key: "avis-assureurs", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-assureurs" }
-      //   ]
-      // },
-      // {
-      //   key: "services-connexes",
-      //   label: "Services connexes",
-      //   icon: "fa-solid fa-truck-medical",
-      //   to: "/services-connexes",
-      //   children: [
-      //     { key: "publicite-services-connexes", label: "Publicité", icon: "fa-solid fa-bullhorn", to: "/publicite-services-connexes" },
-      //     { key: "avis-services-connexes", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-services-connexes" }
-      //   ]
-      // }
-    ],
-    items: [
-      { key: "utilisateurs", label: "Utilisateurs", icon: "fa-solid fa-users", to: "/utilisateurs" },
-      { key: "messages-contact", label: "Messages de contact", icon: "fa-solid fa-envelope-open-text", to: "/messages-contact" },
-      { key: "documents-legaux", label: "Documents légaux", icon: "fa-solid fa-file-contract", to: "/documents-legaux" }
-    ]
-  },
-   {
-    group: "Mise en Relation",
-    entities: [
-      {
-        key: "rendez-vous",
-        label: "Rendez-vous",
-        icon: "fa-solid fa-calendar-check",
-        to: "/rendez-vous"
-      },
-      {
-        key: "offres-rdv",
-        label: "Demandes de RDV",
-        icon: "fa-solid fa-bullhorn",
-        to: "/offres-rdv"
-      },
-      {
-        key: "parametre-delai-confirmation",
-        label: "Délai de confirmation",
-        icon: "fa-solid fa-hourglass-start",
-        to: "/parametre-delai-confirmation"
+        key: "assurances",
+        label: "Assurances",
+        icon: "fa-solid fa-shield-heart",
+        to: "/assurances"
       }
     ]
   },
   {
-    group: "Finance",
+    group: "Utilisateurs & support",
     items: [
-      { key: "remboursements-campay", label: "Remboursements CamPay", icon: "fa-solid fa-rotate-left", to: "/remboursements-campay" },
-      { key: "frais-agregateur", label: "Frais d'agrégateur", icon: "fa-solid fa-percent", to: "/frais-agregateur" },
-      { key: "lignes-tarifaires", label: "Commissions APS (CM / CP)", icon: "fa-solid fa-scale-balanced", to: "/lignes-tarifaires" },
-      { key: "parametre-amende", label: "Amendes médecins", icon: "fa-solid fa-gavel", to: "/parametre-amende" },
-      { key: "parametre-delai-liberation", label: "Délai de libération (T)", icon: "fa-solid fa-hourglass-half", to: "/parametre-delai-liberation" }
+      { key: "utilisateurs", label: "Utilisateurs", icon: "fa-solid fa-users", to: "/utilisateurs" },
+      { key: "messages-contact", label: "Messages de contact", icon: "fa-solid fa-envelope-open-text", to: "/messages-contact" }
     ]
   },
-
-   {
-    group: "Assurances & Services",
+  {
+    // Le lien de tête ouvre la liste des souscriptions ; le chevron donne
+    // accès aux niveaux, tarifs et paiements du même type d'acteur.
+    group: "Abonnements",
     entities: [
       {
-        key: "assurances",
-        label: "Assurances",
-        icon: "fa-solid fa-shield-alt",
-        to: "/assurances",
-        // Abonnements des assurances (guide abonnements v3, §3)
+        key: "abonnements-medecin",
+        label: "Médecins",
+        icon: "fa-solid fa-user-doctor",
+        to: "/abonnements-presence/medecin",
         children: [
-          { key: "abonnements-assurance", label: "Abonnements", icon: "fa-solid fa-id-card-clip", to: "/abonnements-assurance" },
+          { key: "niveaux-abonnement-presence-medecin", label: "Niveaux", icon: "fa-solid fa-layer-group", to: "/niveaux-abonnement-presence/medecin" },
+          // L'obligation de souscrire s'active ou se désactive par pays ici.
+          { key: "tarifs-abonnement-presence-medecin", label: "Tarifs & activation", icon: "fa-solid fa-toggle-on", to: "/tarifs-abonnement-presence/medecin" },
+          { key: "paiements-abonnement-presence-medecin", label: "Paiements", icon: "fa-solid fa-receipt", to: "/paiements-abonnement-presence/medecin" }
+        ]
+      },
+      {
+        // Centres de santé (cliniques, hôpitaux, laboratoires)
+        key: "abonnements-structure",
+        label: "Structures de santé",
+        icon: "fa-solid fa-hospital",
+        to: "/abonnements-presence/structure",
+        children: [
+          { key: "niveaux-abonnement-presence-structure", label: "Niveaux", icon: "fa-solid fa-layer-group", to: "/niveaux-abonnement-presence/structure" },
+          { key: "tarifs-abonnement-presence-structure", label: "Tarifs & paramètres", icon: "fa-solid fa-tags", to: "/tarifs-abonnement-presence/structure" },
+          { key: "paiements-abonnement-presence-structure", label: "Paiements", icon: "fa-solid fa-receipt", to: "/paiements-abonnement-presence/structure" }
+        ]
+      },
+      {
+        key: "abonnements-pharmacie",
+        label: "Pharmacies",
+        icon: "fa-solid fa-mortar-pestle",
+        to: "/abonnements-presence/pharmacie",
+        children: [
+          { key: "niveaux-abonnement-presence-pharmacie", label: "Niveaux", icon: "fa-solid fa-layer-group", to: "/niveaux-abonnement-presence/pharmacie" },
+          { key: "tarifs-abonnement-presence-pharmacie", label: "Tarifs & paramètres", icon: "fa-solid fa-tags", to: "/tarifs-abonnement-presence/pharmacie" },
+          { key: "paiements-abonnement-presence-pharmacie", label: "Paiements", icon: "fa-solid fa-receipt", to: "/paiements-abonnement-presence/pharmacie" }
+        ]
+      },
+      {
+        // Abonnements des assurances (guide abonnements v3, §3)
+        key: "abonnements-assurance",
+        label: "Assurances",
+        icon: "fa-solid fa-shield-heart",
+        to: "/abonnements-assurance",
+        children: [
           { key: "niveaux-abonnement-assurance", label: "Niveaux", icon: "fa-solid fa-layer-group", to: "/niveaux-abonnement-assurance" },
           { key: "tarifs-abonnement-assurance", label: "Tarifs & paramètres", icon: "fa-solid fa-tags", to: "/tarifs-abonnement-assurance" },
           { key: "paiements-abonnement-assurance", label: "Paiements", icon: "fa-solid fa-receipt", to: "/paiements-abonnement-assurance" }
@@ -183,52 +157,42 @@ const APS_MENU = [
     ]
   },
   {
-    // Correspond aux 3 routes /publicite, /emplacement-publicitaire et
-    // /forfait-publicitaire déclarées dans router.jsx (bloc "PUBLICITE").
-    group: "Publicité",
+    group: "Finance",
+    items: [
+      { key: "retraits", label: "Retraits médecins", icon: "fa-solid fa-money-bill-transfer", to: "/retraits" },
+      { key: "remboursements-campay", label: "Remboursements CamPay", icon: "fa-solid fa-rotate-left", to: "/remboursements-campay" },
+      { key: "lignes-tarifaires", label: "Commissions APS (CM / CP)", icon: "fa-solid fa-scale-balanced", to: "/lignes-tarifaires" },
+      { key: "frais-agregateur", label: "Frais d'agrégateur", icon: "fa-solid fa-percent", to: "/frais-agregateur" },
+      { key: "moyen-paiement", label: "Moyens de paiement", icon: "fa-solid fa-credit-card", to: "/moyen-paiement" }
+    ]
+  },
+  {
+    group: "Publicité & communication",
     items: [
       { key: "publicite", label: "Réservations publicitaires", icon: "fa-solid fa-bullhorn", to: "/publicite" },
       { key: "emplacement-publicitaire", label: "Emplacements publicitaires", icon: "fa-solid fa-map-location-dot", to: "/emplacement-publicitaire" },
-      { key: "forfait-publicitaire", label: "Forfaits publicitaires", icon: "fa-solid fa-tags", to: "/forfait-publicitaire" }
+      { key: "forfait-publicitaire", label: "Forfaits publicitaires", icon: "fa-solid fa-tags", to: "/forfait-publicitaire" },
+      { key: "annonces", label: "Annonces", icon: "fa-solid fa-newspaper", to: "/annonces" }
     ]
   },
-   {
-    // Correspond aux 3 routes /publicite, /emplacement-publicitaire et
-    // /forfait-publicitaire déclarées dans router.jsx (bloc "PUBLICITE").
-    group: "Annonces",
-    items: [
-      { key: "annonces", label: "Annonces", icon: "fa-solid fa-bullhorn", to: "/annonces" }
-      ]
-  },
   {
-    group: "Urgences",
-    entities: [
-      {
-        key: "urgences",
-        label: "Urgences",
-        icon: "fa-solid fa-ambulance",
-        to: "/urgences"
-      }
+    group: "Règles métier",
+    items: [
+      { key: "parametre-delai-confirmation", label: "Délai de confirmation", icon: "fa-solid fa-hourglass-start", to: "/parametre-delai-confirmation" },
+      { key: "parametre-delai-liberation", label: "Délai de libération (T)", icon: "fa-solid fa-hourglass-half", to: "/parametre-delai-liberation" },
+      { key: "parametre-amende", label: "Amendes médecins", icon: "fa-solid fa-gavel", to: "/parametre-amende" }
     ]
   },
   {
     group: "Configuration",
     items: [
-      { key: "referentiel-pays", label: "Référentiel pays", icon: "fa-solid fa-earth-africa", to: "/referentiel" }, 
-      { key: "moyen-paiement", label: "Moyens de paiement", icon: "fa-solid fa-credit-card", to: "/moyen-paiement" },
-      { key: "apk", label: "Gestion APK", icon: "fa-solid fa-mobile-alt", to: "/apk" },
+      { key: "referentiel-pays", label: "Référentiel pays", icon: "fa-solid fa-earth-africa", to: "/referentiel" },
+      { key: "documents-legaux", label: "Documents légaux", icon: "fa-solid fa-file-contract", to: "/documents-legaux" },
       { key: "whatsapp", label: "WhatsApp", icon: "fa-brands fa-whatsapp", to: "/whatsapp" },
-      { key: "sms", label: "SMS", icon: "fa-solid fa-comment-sms", to: "/sms" }
-      // { key: "parametrage-local", label: "Paramétrage local", icon: "fa-solid fa-sliders", to: "/parametrage-local" },
-      // { key: "equipe-admin", label: "Équipe & rôles admin", icon: "fa-solid fa-user-shield", to: "/equipe-admin" }
+      { key: "sms", label: "SMS", icon: "fa-solid fa-comment-sms", to: "/sms" },
+      { key: "apk", label: "Gestion APK", icon: "fa-solid fa-mobile-screen", to: "/apk" }
     ]
   }
-
-  // Groupes prévus mais dont AUCUNE route n'existe encore dans router.jsx :
-  // "Validation & Conformité"  -> /validation, /moderation, /signalements
-  // "Opérations"               -> /gardes, /paiements, /abonnements
-  // "Pilotage"                 -> /reporting, /securite
-  // À réintroduire dès que les pages + routes seront ajoutées dans router.jsx.
 ];
 
 /* Menu vu par l'utilisateur connecté : un admin (périmètre pays) ne voit

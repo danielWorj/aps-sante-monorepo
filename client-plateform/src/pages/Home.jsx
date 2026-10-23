@@ -501,8 +501,8 @@ export default function Home() {
                   type="button"
                   className="btn btn-dark btn-lg-aps"
                   onClick={apk.lancer}
-                  disabled={!apk.disponible || apk.enCours}
-                  title={apk.disponible ? undefined : 'Application momentanément indisponible au téléchargement'}
+                  disabled={(!apk.disponible && !apk.ios) || apk.enCours}
+                  title={apk.disponible || apk.ios ? undefined : 'Application momentanément indisponible au téléchargement'}
                 >
                   {apk.enCours ? (
                     <>
@@ -516,6 +516,7 @@ export default function Home() {
                 </button>
                 <span className="aps-t-xs">
                   <i className="fa-brands fa-android" /> Fichier APK · Android 7.0 ou plus
+                  {apk.ios && <> · version iPhone bientôt disponible</>}
                 </span>
               </div>
 

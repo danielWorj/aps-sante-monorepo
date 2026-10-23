@@ -84,8 +84,8 @@ export default function Footer() {
               type="button"
               className="btn btn-dark btn-sm-aps"
               onClick={telecharger}
-              disabled={!apk.disponible || apk.enCours}
-              title={apk.disponible ? undefined : 'Application momentanément indisponible au téléchargement'}
+              disabled={(!apk.disponible && !apk.ios) || apk.enCours}
+              title={apk.disponible || apk.ios ? undefined : 'Application momentanément indisponible au téléchargement'}
             >
               {apk.enCours ? (
                 <><i className="fa-solid fa-spinner fa-spin" /> Téléchargement… {apk.libelleProgression}</>
