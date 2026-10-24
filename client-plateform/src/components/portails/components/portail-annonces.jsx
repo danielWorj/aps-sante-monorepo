@@ -2,12 +2,14 @@
 //
 // Même liste partout (ListeAnnonces) ; seul l'habillage change selon
 // l'espace : sidebar médecin, sidebar patient, gabarit du portail
-// assurance ou espaces pharmacie / structure / annonceur (page simple).
+// assurance, laboratoire, pharmacie / centre de santé, ou espace annonceur
+// (page simple).
 import ListeAnnonces from '../../annonces/ListeAnnonces';
 import PortailSidebar from '../layouts/portail-sidebar';
 import PatientPortailSidebar from '../layouts/patient.portail-sidebar';
 import { AssurancePortailPage } from '../layouts/assurance.portail-sidebar';
 import { LaboratoirePortailPage } from '../layouts/laboratoire.portail-sidebar';
+import { PresencePortailPage } from '../layouts/presence.portail-sidebar';
 
 const INTRO = 'Les informations publiées par APS Santé à destination de ses utilisateurs.';
 
@@ -69,5 +71,13 @@ export function LaboratoireAnnonces() {
     <LaboratoirePortailPage titre="Annonces" description={INTRO}>
       <ListeAnnonces />
     </LaboratoirePortailPage>
+  );
+}
+
+export function PresenceAnnonces() {
+  return (
+    <PresencePortailPage titre="Annonces ApSa" description={INTRO}>
+      <ListeAnnonces />
+    </PresencePortailPage>
   );
 }

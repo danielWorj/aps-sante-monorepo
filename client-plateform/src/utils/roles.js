@@ -55,17 +55,17 @@ export const ROLES_ESPACE = Object.freeze({
     ROLES.AGENT_LABORATOIRE,
     ROLES.ANNONCEUR,
   ],
-  // /mes-annonces : espaces sans portail dédié (les autres rôles ont la
-  // rubrique dans leur portail).
-  annonces: [ROLES.AGENT_PHARMACIE, ROLES.AGENT_STRUCTURE_SANTE, ROLES.ANNONCEUR],
+  // /mes-annonces : espace annonceur (sans portail à rubriques) ; les autres
+  // rôles ont la rubrique dans leur portail.
+  annonces: [ROLES.ANNONCEUR],
 });
 
 const ACCUEIL_PAR_ROLE = Object.freeze({
   [ROLES.PATIENT]: '/portail/patient-rdv',
   [ROLES.MEDECIN]: '/portail/medecin-tableau-de-bord',
   [ROLES.AGENT_ASSURANCE]: '/portail/assurance',
-  [ROLES.AGENT_PHARMACIE]: '/mon-espace-pharmacie',
-  [ROLES.AGENT_STRUCTURE_SANTE]: '/mon-espace-structure',
+  [ROLES.AGENT_PHARMACIE]: '/portail/pharmacie',
+  [ROLES.AGENT_STRUCTURE_SANTE]: '/portail/structure',
   [ROLES.AGENT_LABORATOIRE]: '/portail/laboratoire',
   [ROLES.ANNONCEUR]: '/portail/annonceur',
 });
@@ -75,8 +75,8 @@ const ACCUEIL_PAR_ESPACE = Object.freeze({
   patient: '/portail/patient-rdv',
   medecin: '/portail/medecin-tableau-de-bord',
   assurance: '/portail/assurance',
-  pharmacie: '/mon-espace-pharmacie',
-  structure: '/mon-espace-structure',
+  pharmacie: '/portail/pharmacie',
+  structure: '/portail/structure',
   laboratoire: '/portail/laboratoire',
   publicites: '/portail/annonceur',
 });
@@ -105,6 +105,8 @@ const ROLES_PAR_CHEMIN = [
   [/^\/portail\/consultation\//, ROLES_ESPACE.consultation],
   [/^\/portail\/assurance/, ROLES_ESPACE.assurance],
   [/^\/portail\/laboratoire/, ROLES_ESPACE.laboratoire],
+  [/^\/portail\/pharmacie/, ROLES_ESPACE.pharmacie],
+  [/^\/portail\/structure/, ROLES_ESPACE.structure],
   [/^\/portail\/annonceur/, ROLES_ESPACE.publicite],
   [/^\/publicite\/[^/]+\/paiement/, ROLES_ESPACE.publicite],
   [/^\/mon-espace-assurance/, ROLES_ESPACE.assurance],

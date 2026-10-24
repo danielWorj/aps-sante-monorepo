@@ -153,6 +153,16 @@ export async function listerExamensCentre(id) {
 }
 
 /**
+ * GET /centres-sante/:id/annonces
+ * Route publique. Actualités en ligne publiées par le centre depuis son
+ * espace (vide si l'abonnement de la fiche ne les inclut pas).
+ * @returns {Promise<{annonces: Array}>}
+ */
+export async function listerActualitesCentre(id) {
+  return apiFetch(`/centres-sante/${id}/annonces`);
+}
+
+/**
  * POST /centres-sante/:id/messages
  * Route publique — formulaire de contact de la fiche centre, utilisable
  * par un visiteur non connecté (pas de compte requis pour écrire à un

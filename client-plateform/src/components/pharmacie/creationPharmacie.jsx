@@ -85,6 +85,8 @@ const CreationPharmacie = () => {
     pays_id: '',
     ville_id: '',
     numero_ordre_titulaire: '',
+    adresse: '',
+    email: '',
 
     // Étape 2 — localisation (facultative)
     latitude: '',
@@ -198,6 +200,8 @@ const CreationPharmacie = () => {
         if (!formData.ville_id) return "La ville est obligatoire.";
         if (!formData.numero_ordre_titulaire.trim())
           return "Le numéro d'ordre du titulaire est obligatoire.";
+        if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim()))
+          return "L'e-mail de contact n'est pas valide.";
         return null;
       case 2: {
         const latRenseignee = formData.latitude !== '';
@@ -271,6 +275,8 @@ const CreationPharmacie = () => {
         pays_id: formData.pays_id,
         ville_id: formData.ville_id,
         numero_ordre_titulaire: formData.numero_ordre_titulaire.trim(),
+        adresse: formData.adresse.trim() || undefined,
+        email: formData.email.trim() || undefined,
         latitude: formData.latitude === '' ? undefined : Number(formData.latitude),
         longitude: formData.longitude === '' ? undefined : Number(formData.longitude),
         fonction: formData.fonction.trim(),
@@ -593,6 +599,30 @@ const CreationPharmacie = () => {
                               onChange={handleChange}
                               placeholder="Numéro délivré par l'ordre des pharmaciens"
                               required
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">Adresse</label>
+                            <input
+                              type="text"
+                              className="form-control"
+                              name="adresse"
+                              value={formData.adresse}
+                              onChange={handleChange}
+                              maxLength={255}
+                              placeholder="Quartier, rue, point de repère"
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">E-mail de contact</label>
+                            <input
+                              type="email"
+                              className="form-control"
+                              name="email"
+                              value={formData.email}
+                              onChange={handleChange}
+                              maxLength={255}
+                              placeholder="contact@exemple.com"
                             />
                           </div>
                         </div>

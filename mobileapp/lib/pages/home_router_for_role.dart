@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../controllers/authentification_controller.dart';
 import '../models/authentification_models.dart' show EspaceCompte, RoleUtilisateur;
+import '../models/espace_presence_models.dart' show TypeEspacePresence;
 import 'espaces/choisir_espace_screen.dart';
 import 'portails/assurance/assurance_home_shell.dart';
 import 'portails/laboratoire/laboratoire_home_shell.dart';
 import 'portails/medecin/medecin_home_shell.dart';
 import 'portails/patient/patient_home_shell.dart';
+import 'portails/presence/presence_home_shell.dart';
 import 'portails/role/role_home_shell.dart';
 import 'publicite/mes_publicites_screen.dart';
 
@@ -17,10 +19,11 @@ import 'publicite/mes_publicites_screen.dart';
 ///   - medecin  -> MedecinHomeShell  (components/medecin-bottom-navigation-bar.dart)
 ///   - agent_assurance -> AssuranceHomeShell (portail assurance)
 ///   - agent_laboratoire -> LaboratoireHomeShell (portail laboratoire)
+///   - agent_pharmacie / agent_structure_sante -> PresenceHomeShell (espaces
+///     pharmacie et centre de santé)
 ///   - annonceur -> MesPublicitesScreen (portail annonceur, avec déconnexion)
-///   - tout autre rôle (admin, superadmin, agent_structure_sante,
-///     agent_pharmacie, agent_ambulance, agent_pompes_funebres,
-///     agent_assurance…) -> RoleHomeShell (components/role-bottom-navigation.dart)
+///   - tout autre rôle (admin, superadmin, agent_ambulance,
+///     agent_pompes_funebres) -> RoleHomeShell (components/role-bottom-navigation.dart)
 class HomeRouterForRole extends StatelessWidget {
   final RoleUtilisateur role;
 
@@ -37,6 +40,10 @@ class HomeRouterForRole extends StatelessWidget {
         return const AssuranceHomeShell();
       case RoleUtilisateur.agentLaboratoire:
         return const LaboratoireHomeShell();
+      case RoleUtilisateur.agentPharmacie:
+        return const PresenceHomeShell(type: TypeEspacePresence.pharmacie);
+      case RoleUtilisateur.agentStructureSante:
+        return const PresenceHomeShell(type: TypeEspacePresence.structure);
       case RoleUtilisateur.annonceur:
         return const MesPublicitesScreen(espaceAnnonceur: true);
       default:
@@ -56,6 +63,10 @@ Widget ecranEspace(EspaceCompte espace, RoleUtilisateur role) {
       return const AssuranceHomeShell();
     case 'laboratoire':
       return const LaboratoireHomeShell();
+    case 'pharmacie':
+      return const PresenceHomeShell(type: TypeEspacePresence.pharmacie);
+    case 'structure':
+      return const PresenceHomeShell(type: TypeEspacePresence.structure);
     case 'publicites':
       return const MesPublicitesScreen(espaceAnnonceur: true);
     default:

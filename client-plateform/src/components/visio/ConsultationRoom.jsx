@@ -81,6 +81,10 @@ function ConsultationRoom({ rdvId, onCallEnded, onReady, onApi, onParticipantLef
           liveStreamingEnabled: false,
           prejoinPageEnabled: false,
           disableModeratorIndicator: true,
+          // Sur navigateur mobile, Jitsi proposerait « Rejoindre depuis
+          // l'application » au lieu d'ouvrir la visio dans la page.
+          disableDeepLinking: true,
+          deeplinking: { disabled: true },
           // Titre lisible (« Téléconsultation avec Dr … ») au lieu du nom
           // technique de la salle (rdv-<uuid>) ; localSubject vaut pour
           // chacun, subject n'est appliqué que par le modérateur.

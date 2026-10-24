@@ -45,8 +45,18 @@ import MonEspaceAssurance from './pages/MonEspaceAssurance.jsx';
 import PaiementAbonnementSucces from './pages/PaiementAbonnementSucces.jsx';
 import PaiementAbonnementAnnule from './pages/PaiementAbonnementAnnule.jsx';
 // Abonnements de présence : pharmacies, centres de santé, médecins
-import GestionPresence from './pages/GestionPresence.jsx';
-import MonEspacePresence from './pages/MonEspacePresence.jsx';
+import PortailPresenceLayout from './Layouts/PortailPresenceLayout.jsx';
+import PresenceDashboard from './components/portails/presence/presence-dashboard.jsx';
+import PresenceFiche from './components/portails/presence/presence-fiche.jsx';
+import PresenceHoraires from './components/portails/presence/presence-horaires.jsx';
+import PresencePresentation from './components/portails/presence/presence-presentation.jsx';
+import PresencePhotos from './components/portails/presence/presence-photos.jsx';
+import PresenceActualites from './components/portails/presence/presence-actualites.jsx';
+import PresenceMessages from './components/portails/presence/presence-messages.jsx';
+import PresenceAbonnement from './components/portails/presence/presence-abonnement.jsx';
+import PharmacieGardes from './components/portails/presence/pharmacie-gardes.jsx';
+import PharmacieAvis from './components/portails/presence/pharmacie-avis.jsx';
+import StructurePrestations from './components/portails/presence/structure-prestations.jsx';
 import PaiementAbonnementPresenceSucces from './pages/PaiementAbonnementPresenceSucces.jsx';
 import PaiementAbonnementPresenceAnnule from './pages/PaiementAbonnementPresenceAnnule.jsx';
 
@@ -108,7 +118,7 @@ import FicheAnnonce from './pages/FicheAnnonce.jsx';
 import CreerPin from './pages/CreerPin.jsx';
 import ChoisirEspace from './pages/ChoisirEspace.jsx';
 import PinOublie from './pages/PinOublie.jsx';
-import { AssuranceAnnonces, EspaceAnnonces, LaboratoireAnnonces, MedecinAnnonces, PatientAnnonces } from './components/portails/components/portail-annonces.jsx';
+import { AssuranceAnnonces, EspaceAnnonces, LaboratoireAnnonces, MedecinAnnonces, PatientAnnonces, PresenceAnnonces } from './components/portails/components/portail-annonces.jsx';
 
 export const router = createBrowserRouter([
   {
@@ -203,19 +213,20 @@ export const router = createBrowserRouter([
           { path: '/assurances/:id/gestion', element: <GestionAssurance /> },
         ],
       },
-      // Espaces gestionnaire pharmacie / centre de santé (abonnement de présence)
+      // Anciennes adresses des espaces pharmacie / centre de santé (liens de
+      // notifications déjà envoyées) : redirigées vers leur portail.
       {
         element: <RequireAuth roles={ROLES_ESPACE.pharmacie} />,
         children: [
-          { path: '/mon-espace-pharmacie', element: <MonEspacePresence key="pharmacie" type="pharmacie" /> },
-          { path: '/pharmacie/:id/gestion', element: <GestionPresence key="pharmacie" type="pharmacie" /> },
+          { path: '/mon-espace-pharmacie', element: <Navigate to="/portail/pharmacie" replace /> },
+          { path: '/pharmacie/:id/gestion', element: <Navigate to="/portail/pharmacie-abonnement" replace /> },
         ],
       },
       {
         element: <RequireAuth roles={ROLES_ESPACE.structure} />,
         children: [
-          { path: '/mon-espace-structure', element: <MonEspacePresence key="structure" type="structure" /> },
-          { path: '/structure-sante/:id/gestion', element: <GestionPresence key="structure" type="structure" /> },
+          { path: '/mon-espace-structure', element: <Navigate to="/portail/structure" replace /> },
+          { path: '/structure-sante/:id/gestion', element: <Navigate to="/portail/structure-abonnement" replace /> },
         ],
       },
       // Publicité : compte obligatoire pour payer et suivre ses statistiques
@@ -228,8 +239,8 @@ export const router = createBrowserRouter([
           { path: '/portail/annonceur/publicites/:id', element: <PortailAnnonceur /> },
         ],
       },
-      // Annonces reçues des espaces sans portail dédié (pharmacie, structure,
-      // annonceur) ; patient, médecin et assurance les ont dans leur portail.
+      // Annonces reçues de l'espace annonceur (sans portail à rubriques) ; les
+      // autres espaces les ont dans leur portail.
       {
         element: <RequireAuth roles={ROLES_ESPACE.annonces} />,
         children: [{ path: '/mes-annonces', element: <EspaceAnnonces /> }],
@@ -310,6 +321,33 @@ export const router = createBrowserRouter([
       },
     ],
   },
+  // Portails pharmacie et centre de santé : l'agent gère la fiche de son
+  // espace actif (le serveur vérifie le rattachement sur chaque requête).
+  ...['pharmacie', 'structure'].map((type) => ({
+    element: <RequireAuth roles={ROLES_ESPACE[type]} />,
+    children: [
+      {
+        element: <PortailPresenceLayout key={type} type={type} />,
+        children: [
+          { path: `/portail/${type}`, element: <PresenceDashboard /> },
+          { path: `/portail/${type}-fiche`, element: <PresenceFiche /> },
+          { path: `/portail/${type}-horaires`, element: <PresenceHoraires /> },
+          { path: `/portail/${type}-presentation`, element: <PresencePresentation /> },
+          { path: `/portail/${type}-photos`, element: <PresencePhotos /> },
+          { path: `/portail/${type}-actualites`, element: <PresenceActualites /> },
+          { path: `/portail/${type}-messages`, element: <PresenceMessages /> },
+          { path: `/portail/${type}-abonnement`, element: <PresenceAbonnement /> },
+          { path: `/portail/${type}-annonces`, element: <PresenceAnnonces /> },
+          ...(type === 'pharmacie'
+            ? [
+                { path: '/portail/pharmacie-gardes', element: <PharmacieGardes /> },
+                { path: '/portail/pharmacie-avis', element: <PharmacieAvis /> },
+              ]
+            : [{ path: '/portail/structure-prestations', element: <StructurePrestations /> }]),
+        ],
+      },
+    ],
+  })),
   ],
   },
 ]);

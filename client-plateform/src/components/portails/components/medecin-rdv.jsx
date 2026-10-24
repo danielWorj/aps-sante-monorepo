@@ -41,6 +41,7 @@ import AvertissementAnnulation from "./avertissement-annulation";
 import ReprogrammationPanel from "./reprogrammation-panel";
 import TerminerRdvModal from "./terminer-rdv-modal";
 import AccepterRdvModal from "./accepter-rdv-modal";
+import ChangerTypeRdvModal from "./changer-type-rdv-modal";
 import {
   listerRendezVousMedecinConnecte,
   MOTIFS_ANNULATION_MEDECIN,
@@ -55,6 +56,7 @@ import {
   estErreurRdvNonPaye,
   peutTerminerRdv,
   peutAccepterRdv,
+  peutChangerTypeRdv,
   lieuAPreciser,
   fondsEnAttenteDeLiberation,
   formaterDateLiberation,
@@ -418,6 +420,26 @@ const MedecinRdv = () => {
     chargerRendezVous();
   };
 
+  // ─── Changer le type (physique <-> téléconsultation) ──────
+  const [rdvAChangerType, setRdvAChangerType] = useState(null); // rdv | null
+  const ouvrirChangerType = (rdv) => {
+    fermerDetail();
+    setRdvAChangerType(rdv);
+  };
+  const fermerChangerType = () => setRdvAChangerType(null);
+
+  const apresChangementType = (resultat) => {
+    const id = rdvAChangerType?.rdv_id;
+    setRdvAChangerType(null);
+    if (id && resultat?.rendez_vous) {
+      setRendezVous((prev) =>
+        prev.map((r) => (r.rdv_id === id ? { ...r, ...resultat.rendez_vous } : r))
+      );
+    }
+    toast.succes(resultat?.message || "Type du rendez-vous modifié.", { duree: 7000 });
+    chargerRendezVous();
+  };
+
   const tabs = [
     { key: "avenir", label: "À venir", count: rdvParCategorie.avenir.length },
     { key: "attente", label: "En attente", count: rdvParCategorie.attente.length },
@@ -519,6 +541,7 @@ const MedecinRdv = () => {
     const peutTerminer = categorie === "avenir" && peutTerminerRdv(rdv);
     const peutAccepter = categorie === "avenir" && peutAccepterRdv(rdv);
     const aAccepter = peutAccepter && !rdv.accepte_le;
+    const peutChangerType = categorie === "avenir" && peutChangerTypeRdv(rdv);
     const fondsEnAttente = fondsEnAttenteDeLiberation(rdv);
 
     // B7 : net perçu, uniquement si le RDV est payé et que le serveur a
@@ -733,6 +756,16 @@ const MedecinRdv = () => {
               >
                 <i className="fa-solid fa-location-dot"></i>{" "}
                 {aAccepter ? "Accepter et préciser le lieu" : "Modifier le lieu"}
+              </button>
+            )}
+            {peutChangerType && (
+              <button
+                type="button"
+                className="btn btn-outline-primary btn-sm-aps"
+                onClick={() => ouvrirChangerType(rdv)}
+              >
+                <i className="fa-solid fa-right-left"></i>{" "}
+                {isTeleconsultation ? "Passer en physique" : "Passer en téléconsultation"}
               </button>
             )}
             {peutTerminer && (
@@ -1042,6 +1075,14 @@ const MedecinRdv = () => {
         patientNom={rdvAAccepter ? nomPatient(rdvAAccepter) : ""}
         onClose={fermerAccepter}
         onAccepte={apresAcceptation}
+      />
+
+      <ChangerTypeRdvModal
+        open={rdvAChangerType !== null}
+        rdv={rdvAChangerType}
+        patientNom={rdvAChangerType ? nomPatient(rdvAChangerType) : ""}
+        onClose={fermerChangerType}
+        onChange={apresChangementType}
       />
 
       <TerminerRdvModal

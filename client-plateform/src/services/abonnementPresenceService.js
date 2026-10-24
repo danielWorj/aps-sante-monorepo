@@ -11,27 +11,6 @@
 
 import { apiFetch } from '../lib/apiClient';
 
-export const TYPES_PRESENCE = {
-  pharmacie: {
-    libelle: 'pharmacie',
-    espace: '/mon-espace-pharmacie',
-    gestion: (id) => `/pharmacie/${id}/gestion`,
-    creation: '/pharmacie/creation',
-  },
-  structure: {
-    libelle: 'centre de santé',
-    espace: '/mon-espace-structure',
-    gestion: (id) => `/structure-sante/${id}/gestion`,
-    creation: '/structure-sante/creation',
-  },
-  medecin: {
-    libelle: 'médecin',
-    espace: '/portail/medecin-abonnement',
-    gestion: () => '/portail/medecin-abonnement',
-    creation: '/devenir-medecin',
-  },
-};
-
 /** Avantages lisibles, par clé de droit (affichage des offres). */
 export const LIBELLES_AVANTAGES = {
   contact_direct: 'Téléphone et contact direct visibles',

@@ -33,7 +33,8 @@ const ACTEURS = {
     libelle: "pharmacie",
     table: "pharmacie",
     cle: "pharmacie_id",
-    lienGestion: (id) => `/pharmacie/${id}/gestion`,
+    // Espace pharmacie (portail) : la fiche est celle de l'espace actif.
+    lienGestion: () => "/portail/pharmacie-abonnement",
     async charger(client, id) {
       const f = await client.pharmacie.findUnique({
         where: { pharmacie_id: id },
@@ -92,7 +93,8 @@ const ACTEURS = {
     libelle: "centre de santé",
     table: "structure_sante",
     cle: "structure_id",
-    lienGestion: (id) => `/structure-sante/${id}/gestion`,
+    // Espace centre de santé (portail) : la fiche est celle de l'espace actif.
+    lienGestion: () => "/portail/structure-abonnement",
     async charger(client, id) {
       const f = await client.structureSante.findUnique({
         where: { structure_id: id },
@@ -262,10 +264,33 @@ export function estAdminOuSuperadmin(utilisateur) {
   return utilisateur?.role === "admin" || utilisateur?.role === "superadmin";
 }
 
-/** Gestionnaire de CETTE fiche (agent, ou le médecin lui-même), ou admin / superadmin. */
+// Rôle de la session (espace actif) qui gère chaque type de fiche : les
+// droits d'un espace ne se cumulent jamais avec ceux d'un autre (un agent de
+// pharmacie connecté dans son espace patient ne gère pas sa pharmacie).
+const ROLE_GESTIONNAIRE = { pharmacie: "agent_pharmacie", structure: "agent_structure_sante", medecin: "medecin" };
+
+/**
+ * Gestionnaire de CETTE fiche (agent rattaché, ou le médecin lui-même), ou
+ * admin / superadmin. Un compte peut gérer plusieurs pharmacies ou centres
+ * (espaces multiples) : on vérifie le rattachement à la fiche demandée, pas
+ * seulement à la première.
+ */
 export async function peutGererFichePresence(utilisateur, type, acteur_id) {
-  if (!utilisateur) return false;
+  if (!utilisateur || !acteur_id) return false;
   if (estAdminOuSuperadmin(utilisateur)) return true;
+  if (utilisateur.role !== ROLE_GESTIONNAIRE[type]) return false;
+  if (type === "pharmacie") {
+    return !!(await prisma.agentPharmacie.findFirst({
+      where: { utilisateur_id: utilisateur.utilisateur_id, pharmacie_id: acteur_id },
+      select: { agent_id: true },
+    }));
+  }
+  if (type === "structure") {
+    return !!(await prisma.agentStructureSante.findFirst({
+      where: { utilisateur_id: utilisateur.utilisateur_id, structure_id: acteur_id },
+      select: { agent_id: true },
+    }));
+  }
   const id = await acteur(type).acteurDeUtilisateur(utilisateur.utilisateur_id);
   return !!id && id === acteur_id;
 }

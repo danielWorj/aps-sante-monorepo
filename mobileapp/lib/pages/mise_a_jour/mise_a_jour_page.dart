@@ -3,8 +3,11 @@
 // Espace « Mises à jour » : version installée, dernière version publiée
 // (APK active du back-office) avec ses notes, téléchargement avec
 // progression puis installation via l'installateur Android.
-// Accès : profils (CarteConnexionCompte), accueil public, et proposition
+// Sur iPhone, « mettre à jour » ouvre le lien App Store / TestFlight publié.
+// Accès : Paramètres (BoutonParametres), profils (CarteConnexionCompte), et proposition
 // automatique au démarrage (VeilleMiseAJour).
+
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -84,7 +87,7 @@ class _CarteVersionInstallee extends StatelessWidget {
     return _Carte(
       child: Row(
         children: [
-          const ApsIconTile(Icons.phone_android_rounded),
+          ApsIconTile(Platform.isIOS ? Icons.phone_iphone_rounded : Icons.phone_android_rounded),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -283,8 +286,8 @@ class _CarteNouvelleVersion extends StatelessWidget {
       default:
         return [
           ApsButton(
-            label: 'Télécharger et installer',
-            icon: Icons.download_rounded,
+            label: controleur.estIos ? 'Mettre à jour sur l’App Store' : 'Télécharger et installer',
+            icon: controleur.estIos ? Icons.open_in_new_rounded : Icons.download_rounded,
             onPressed: controleur.telecharger,
           ),
         ];

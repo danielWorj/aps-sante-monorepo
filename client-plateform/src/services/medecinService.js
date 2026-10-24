@@ -1016,6 +1016,29 @@ export async function accepterRendezVous(rdvId, lieu) {
 }
 
 /**
+ * POST /rendez-vous/:id/type { type_rdv }
+ * Réservé au MÉDECIN du rendez-vous (RDV payé, statut « confirme », consultation
+ * pas encore commencée). Change le type : "physique" <-> "teleconsultation".
+ * Le lieu et l'acceptation sont effacés (un RDV redevenu physique doit être
+ * ré-accepté avec un lieu). Le patient est notifié.
+ *
+ * Erreurs (Error avec `.status` et `.data`, voir apiFetch) :
+ *   - 400 : type invalide, ou téléconsultation non activée sur le profil ;
+ *   - 403 : autre médecin ;
+ *   - 409 : RDV non payé, statut incompatible ou consultation commencée.
+ *
+ * @param {string} rdvId
+ * @param {"physique"|"teleconsultation"} typeRdv
+ * @returns {Promise<{ message: string, inchange: boolean, rendez_vous: Object }>}
+ */
+export async function changerTypeRendezVous(rdvId, typeRdv) {
+  return apiFetch(`/rendez-vous/${rdvId}/type`, {
+    method: 'POST',
+    body: { type_rdv: typeRdv },
+  });
+}
+
+/**
  * DELETE /rendez-vous/:id
  * Réservé à admin/superadmin — suppression PHYSIQUE. Un rendez-vous
  * s'annule normalement via annulerRendezVous(id, { motif }).

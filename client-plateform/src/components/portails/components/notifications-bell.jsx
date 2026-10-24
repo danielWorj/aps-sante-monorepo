@@ -30,6 +30,10 @@ const ICONES = {
   offre_rdv_candidature_non_retenue: 'fa-circle-xmark',
   // Rappels de RDV : J-3, J-1, H-3, à l'heure.
   rdv_rappel: 'fa-bell',
+  // Téléconsultation : le médecin a lancé la visio (patient).
+  rdv_visio_demarree: 'fa-video',
+  // Le médecin a changé le type du RDV (physique <-> téléconsultation) (patient).
+  rdv_type_modifie: 'fa-right-left',
   // Portail assurance : nouvelle demande de mise en relation, abonnement de la fiche.
   mise_en_relation_recue: 'fa-inbox',
   abonnement_assurance_active: 'fa-id-card',

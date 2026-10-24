@@ -11,7 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 // Assurances) et sont ici branchés sur de VRAIES navigations
 // (`Navigator.push`), pas de simples callbacks vides.
 import '../../components/components.dart';
-import '../../controllers/mise_a_jour_controller.dart';
+import '../../controllers/authentification_controller.dart';
 import '../../controllers/publicite_controller.dart';
 import '../../models/publicite_models.dart' show Publicite;
 import '../../utils/mon_espace_navigation.dart';
@@ -21,7 +21,6 @@ import 'Laboratoirepage.dart';
 import 'Centresantepage.dart';
 import 'Assurancepage.dart';
 import 'urgence.dart';
-import '../mise_a_jour/mise_a_jour_page.dart';
 
 /// Écran d'accueil public de l'application APS Santé.
 ///
@@ -53,7 +52,7 @@ import '../mise_a_jour/mise_a_jour_page.dart';
 class PublicAcceuilPage extends ConsumerStatefulWidget {
   const PublicAcceuilPage({
     super.key,
-    this.prenomUtilisateur = 'Fabrice',
+    this.nomUtilisateur,
     this.localisation = 'Douala, Cameroun',
     this.ads = const [],
     this.pharmaciesDeGarde = const [],
@@ -68,8 +67,9 @@ class PublicAcceuilPage extends ConsumerStatefulWidget {
     this.onRdvPressed,
   });
 
-  /// Prénom affiché dans le message de bienvenue (« Bonjour, {prénom} »).
-  final String prenomUtilisateur;
+  /// Nom affiché sous « Bonjour ». Par défaut : prénom et nom de la
+  /// personne connectée, sinon « Mr/Mme ».
+  final String? nomUtilisateur;
 
   /// Ville / pays affiché sous la salutation.
   final String localisation;
@@ -403,6 +403,13 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
     );
   }
 
+  /// « Prénom Nom » de la personne connectée, « Mr/Mme » sinon.
+  String _nomConnecte() {
+    final u = ref.watch(authUtilisateurProvider);
+    final nom = '${u?.prenom ?? ''} ${u?.nom ?? ''}'.trim();
+    return nom.isEmpty ? 'Mr/Mme' : nom;
+  }
+
   Widget _buildContent(BuildContext context) {
     // Recalculé à chaque build : `ref.watch` dans `_resoudreAds()` fait que
     // ce widget se reconstruit automatiquement dès que l'API renvoie les
@@ -432,7 +439,7 @@ class _PublicAcceuilPageState extends ConsumerState<PublicAcceuilPage> {
             18, 6, 18, AppBottomNav.reservedHeight + MediaQuery.paddingOf(context).bottom),
         children: [
           _HomeHeader(
-            prenom: widget.prenomUtilisateur,
+            nom: widget.nomUtilisateur ?? _nomConnecte(),
             localisation: widget.localisation,
             onCompte: _ouvrirMonEspace,
           ),
@@ -609,12 +616,12 @@ const List<HomePharmacieItem> _demoPharmacies = [
 /// En-tête : avatar, salutation, localisation, accès au compte.
 class _HomeHeader extends StatelessWidget {
   const _HomeHeader({
-    required this.prenom,
+    required this.nom,
     required this.localisation,
     required this.onCompte,
   });
 
-  final String prenom;
+  final String nom;
   final String localisation;
   final VoidCallback onCompte;
 
@@ -624,7 +631,7 @@ class _HomeHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(0, 6, 0, 14),
       child: Row(
         children: [
-          ApsAvatar(name: prenom, size: 40, round: true, variant: 2),
+          ApsAvatar(name: nom == 'Mr/Mme' ? 'ApSa' : nom, size: 40, round: true, variant: 2),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -635,7 +642,7 @@ class _HomeHeader extends StatelessWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        prenom,
+                        nom,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.strong.copyWith(fontSize: 15),
@@ -657,34 +664,14 @@ class _HomeHeader extends StatelessWidget {
               ],
             ),
           ),
-          const _BoutonMiseAJour(),
           const SizedBox(width: 10),
+          const BoutonParametres(),
           ApsIconButton(
             icon: Icons.notifications_none_rounded,
             tooltip: 'Mon espace',
             onPressed: onCompte,
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Raccourci vers « Mises à jour », affiché seulement quand une nouvelle
-/// version de l'application est publiée.
-class _BoutonMiseAJour extends ConsumerWidget {
-  const _BoutonMiseAJour();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (!ref.watch(miseAJourProvider.select((e) => e.nouvelleVersion))) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(left: 10),
-      child: ApsIconButton(
-        icon: Icons.system_update_rounded,
-        dot: true,
-        tooltip: 'Mise à jour disponible',
-        onPressed: () => ouvrirMisesAJour(context),
       ),
     );
   }

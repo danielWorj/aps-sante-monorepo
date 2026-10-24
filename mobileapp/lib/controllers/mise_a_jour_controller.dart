@@ -84,6 +84,9 @@ class MiseAJourController extends Notifier<EtatMiseAJour> {
 
   MiseAJourService get _service => ref.read(miseAJourServiceProvider);
 
+  /// Sur iPhone, la mise à jour passe par un lien (App Store / TestFlight).
+  bool get estIos => _service.estIos;
+
   @override
   EtatMiseAJour build() {
     if (!_service.disponible) return const EtatMiseAJour(phase: PhaseMiseAJour.indisponible);
@@ -120,6 +123,15 @@ class MiseAJourController extends Notifier<EtatMiseAJour> {
   Future<void> telecharger() async {
     final version = state.publiee;
     if (version == null || state.phase == PhaseMiseAJour.telechargement) return;
+    // iPhone : pas de fichier à installer, on ouvre l'App Store / TestFlight.
+    if (estIos) {
+      try {
+        await _service.ouvrirLienIos(version);
+      } catch (_) {
+        state = state.copyWith(erreur: 'Impossible d’ouvrir l’App Store. Réessayez.');
+      }
+      return;
+    }
     _annule = false;
     state = state.copyWith(phase: PhaseMiseAJour.telechargement, recus: 0, total: version.taille ?? 0);
     try {

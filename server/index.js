@@ -7,6 +7,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import authentificationRoutes from "./src/routes/authentification.routes.js";
 import referentielsRoutes from "./src/routes/referentiels.routes.js";
+import espacePresenceRoutes from "./src/routes/espacePresence.routes.js";
 import centreSanteRoutes from "./src/routes/centreSante.routes.js";
 import pharmacieRoutes from "./src/routes/pharmacie.routes.js";
 import avisRoutes from "./src/routes/avis.routes.js";
@@ -160,6 +161,9 @@ app.get("/", (_req, res) => {
 app.use(poserPerimetrePays);
 app.use("/api/auth", authentificationRoutes);
 app.use("/api/referentiels", referentielsRoutes);
+// Espaces pharmacie / centre de santé : avant les annuaires (« /pharmacies/mon-espace »
+// ne doit pas être pris pour « /pharmacies/:id »).
+app.use("/api", espacePresenceRoutes);
 app.use("/api", centreSanteRoutes);
 app.use("/api", pharmacieRoutes);
 app.use("/api", avisRoutes);

@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../components/navigation/bouton_deconnexion.dart';
+import '../../../components/navigation/bouton_parametres.dart';
 import '../../../components/style/colors.dart';
 import '../../../components/ui/aps_ui.dart' show ApsAvatar;
 import '../../../components/style/text_styles.dart';
@@ -97,6 +98,7 @@ class _Proprietaire extends ConsumerWidget {
               ],
             ),
           ),
+          const BoutonParametres(),
           const BoutonDeconnexion(),
         ],
       ),

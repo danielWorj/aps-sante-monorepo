@@ -59,7 +59,7 @@ class CarteConnexionCompte extends ConsumerWidget {
   }
 }
 
-/// Entrée « Mises à jour » (masquée hors Android), signalée quand une
+/// Entrée « Mises à jour » (Android et iPhone), signalée quand une
 /// nouvelle version est publiée.
 class LigneMisesAJour extends ConsumerWidget {
   const LigneMisesAJour({super.key});

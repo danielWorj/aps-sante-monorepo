@@ -248,6 +248,11 @@ class ApiRealEndpoints {
   static String accepterRendezVous(String id) =>
       '${baseUrl}/rendez-vous/$id/accepter';
 
+  // RDV payé pas encore commencé : le médecin en change le type.
+  // POST { type_rdv } — voir changerTypeRendezVous (rendezVous.controller.js).
+  static String changerTypeRendezVous(String id) =>
+      '${baseUrl}/rendez-vous/$id/type';
+
   // ─── Politique de fonds v2 : reprogrammation « deux absents » ─────
   // Voir reprogrammation.controller.js : authentifié, réservé aux deux
   // parties du rendez-vous (un admin n'est pas une partie), statut

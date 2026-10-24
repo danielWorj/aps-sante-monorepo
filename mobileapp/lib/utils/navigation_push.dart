@@ -39,6 +39,8 @@ const _typesMedecin = {
 const _typesPatient = {
   'rdv_accepte',
   'rdv_confirmation_expiree',
+  'rdv_visio_demarree',
+  'rdv_type_modifie',
   'offre_rdv_reponse',
   'offre_rdv_expiree',
   'avis_medecin_invitation',

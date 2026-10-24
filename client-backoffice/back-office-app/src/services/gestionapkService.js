@@ -200,6 +200,8 @@ export function supprimerApk(id) {
  */
 export function obtenirUrlTelechargementApk(apk) {
   if (!apk?.file_url) return '';
+  // Version iOS : file_url est le lien App Store / TestFlight.
+  if (apk.plateforme === 'ios') return apk.file_url;
   // API_BASE_URL inclut déjà le protocole + host (+ éventuellement /api
   // selon la config) ; file_url renvoyé par le serveur commence lui
   // par "/api/apks/download/...". On évite donc de dupliquer "/api" si

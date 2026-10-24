@@ -316,6 +316,11 @@ class RendezVous {
   /// Date de la première acceptation par le médecin (`null` = pas acceptée).
   final DateTime? accepteLe;
 
+  /// Consultation commencée : une présence est constatée ou la visio a été
+  /// clôturée (`medecin_present_le`, `patient_present_le`,
+  /// `visio_cloturee_le`). Le type du RDV n'est alors plus modifiable.
+  final bool consultationCommencee;
+
   final MedecinRdvRef? medecin;
   final PatientRdvRef? patient;
 
@@ -347,6 +352,7 @@ class RendezVous {
     this.echeanceConfirmation,
     this.lieuRdv,
     this.accepteLe,
+    this.consultationCommencee = false,
     this.medecin,
     this.patient,
     this.nonPaye = false,
@@ -379,6 +385,15 @@ class RendezVous {
       !estNonPaye &&
       typeRdv == TypeRdv.physique &&
       statut == StatutRendezVous.confirme;
+
+  /// Le médecin peut changer le type de ce RDV (physique <-> téléconsultation) :
+  /// payé, `confirme`, consultation pas encore commencée (miroir de
+  /// `peutChangerTypeRdv` côté web ; le serveur reste seul juge).
+  bool get peutChangerDeType =>
+      !estNonPaye &&
+      statut == StatutRendezVous.confirme &&
+      termineLe == null &&
+      !consultationCommencee;
 
   /// RDV physique payé que le médecin n'a pas encore accepté (lieu à préciser).
   bool get lieuAPreciser => peutEtreAccepte && accepteLe == null;
@@ -423,6 +438,10 @@ class RendezVous {
       echeanceConfirmation: _lireDate(json, 'echeance_confirmation'),
       lieuRdv: _lire<String>(json, 'lieu_rdv'),
       accepteLe: _lireDate(json, 'accepte_le'),
+      consultationCommencee: json['consultation_commencee'] == true ||
+          _lireDate(json, 'medecin_present_le') != null ||
+          _lireDate(json, 'patient_present_le') != null ||
+          _lireDate(json, 'visio_cloturee_le') != null,
       medecin: json['medecin'] is Map<String, dynamic>
           ? MedecinRdvRef.fromJson(json['medecin'] as Map<String, dynamic>)
           : null,
@@ -456,6 +475,7 @@ class RendezVous {
       'liberation_prevue_le': liberationPrevueLe!.toIso8601String(),
     if (lieuRdv != null) 'lieu_rdv': lieuRdv,
     if (accepteLe != null) 'accepte_le': accepteLe!.toIso8601String(),
+    if (consultationCommencee) 'consultation_commencee': true,
     if (medecin != null) 'medecin': medecin!.toJson(),
     if (patient != null) 'patient': patient!.toJson(),
     if (nonPaye) 'non_paye': true,
@@ -482,6 +502,7 @@ class RendezVous {
     DateTime? echeanceConfirmation,
     String? lieuRdv,
     DateTime? accepteLe,
+    bool? consultationCommencee,
     MedecinRdvRef? medecin,
     PatientRdvRef? patient,
     bool? nonPaye,
@@ -508,6 +529,7 @@ class RendezVous {
       echeanceConfirmation: echeanceConfirmation ?? this.echeanceConfirmation,
       lieuRdv: lieuRdv ?? this.lieuRdv,
       accepteLe: accepteLe ?? this.accepteLe,
+      consultationCommencee: consultationCommencee ?? this.consultationCommencee,
       medecin: medecin ?? this.medecin,
       patient: patient ?? this.patient,
       nonPaye: nonPaye ?? this.nonPaye,
@@ -1105,6 +1127,24 @@ class ResultatAcceptation {
   }
 }
 
+/// Réponse de POST /rendez-vous/:id/type (type du RDV changé par le médecin).
+/// [inchange] : même type renvoyé, rien n'a changé (aucune notification).
+class ResultatChangementType {
+  final String? message;
+  final bool inchange;
+  final RendezVous? rendezVous;
+
+  const ResultatChangementType({this.message, this.inchange = false, this.rendezVous});
+
+  factory ResultatChangementType.fromJson(Map<String, dynamic> json) {
+    return ResultatChangementType(
+      message: _lire<String>(json, 'message'),
+      inchange: json['inchange'] == true,
+      rendezVous: _rendezVousTolerant(json['rendez_vous']),
+    );
+  }
+}
+
 /// Devis avant paiement — GET /paiement/rendez-vous/:id/devis
 /// ?agregateur=stripe|campay.
 /// `total = honoraires + frais d'envoi + commission APS patient (CP)`.
@@ -1180,9 +1220,20 @@ enum TypeNotification {
   avisMedecinReponse('avis_medecin_reponse'),
   // Rappels de RDV confirmé (J-3, J-1, H-3, à l'heure), médecin et patient.
   rdvRappel('rdv_rappel'),
+  // Téléconsultation : le médecin a lancé la visio (patient).
+  rdvVisioDemarree('rdv_visio_demarree'),
+  // Patient : le médecin a changé le type du RDV (physique <-> téléconsultation).
+  rdvTypeModifie('rdv_type_modifie'),
   // RDV aléatoire : candidature du MÉDECIN retenue / non retenue.
   offreRdvCandidatureRetenue('offre_rdv_candidature_retenue'),
   offreRdvCandidatureNonRetenue('offre_rdv_candidature_non_retenue'),
+  // Abonnement de présence (pharmacie, centre de santé, médecin) : activation
+  // et rappels d'échéance.
+  abonnementPresenceActive('abonnement_presence_active'),
+  abonnementPresenceEcheance('abonnement_presence_echeance'),
+  // Espace pharmacie / centre de santé : message reçu par le formulaire de
+  // contact de la fiche publique. Un appui ouvre les messages.
+  messageFicheRecu('message_fiche_recu'),
   inconnu('');
 
   const TypeNotification(this.valeurApi);
