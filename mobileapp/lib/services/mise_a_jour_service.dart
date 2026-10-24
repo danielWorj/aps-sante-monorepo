@@ -8,6 +8,9 @@
 //     (MainActivity.kt) ;
 //   - téléchargement de l'APK dans le cache de l'application, en flux,
 //     avec progression.
+// Sur iPhone : version publiée = GET /apks/active?plateforme=ios (lien App
+// Store / TestFlight saisi au back-office), version installée lue par le même
+// canal (AppDelegate.swift) ; « mettre à jour » ouvre ce lien.
 
 import 'dart:async';
 import 'dart:convert';
@@ -15,6 +18,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../utils/endpoint.dart';
 
@@ -56,12 +60,14 @@ class VersionPubliee {
     final base = ApiRealEndpoints.baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
     final build = json['numero_build'];
     final taille = json['taille'];
+    final ios = json['plateforme'] == 'ios';
     return VersionPubliee(
       id: json['id'] as String,
       libelle: (json['libelle'] as String?) ?? 'ApSa',
       nom: json['version_name'] as String?,
       build: build is num ? build.toInt() : null,
-      url: '$base${json['file_url']}',
+      // iOS : file_url est directement le lien App Store / TestFlight.
+      url: ios ? '${json['file_url']}' : '$base${json['file_url']}',
       description: json['description'] as String?,
       taille: taille is num ? taille.toInt() : null,
       datePublication: DateTime.tryParse('${json['date_upload'] ?? ''}'),
@@ -73,8 +79,11 @@ class MiseAJourService {
   static const MethodChannel _canal = MethodChannel('aps/mise_a_jour');
   static const Duration _timeout = Duration(seconds: 15);
 
-  /// Les mises à jour hors store ne concernent que l'APK Android.
-  bool get disponible => Platform.isAndroid;
+  /// Android : APK téléchargée et installée. iOS : lien vers l'App Store /
+  /// TestFlight. Autres plateformes : pas de mise à jour gérée ici.
+  bool get disponible => Platform.isAndroid || Platform.isIOS;
+
+  bool get estIos => Platform.isIOS;
 
   Future<VersionInstallee> versionInstallee() async {
     final infos = await _canal.invokeMapMethod<String, dynamic>('infosVersion') ?? const {};
@@ -85,7 +94,10 @@ class MiseAJourService {
   /// Dernière version publiée, ou null si aucune APK n'est active.
   Future<VersionPubliee?> versionPubliee() async {
     final r = await http
-        .get(Uri.parse(ApiRealEndpoints.apkActive), headers: const {'Accept': 'application/json'})
+        .get(
+          Uri.parse(estIos ? '${ApiRealEndpoints.apkActive}?plateforme=ios' : ApiRealEndpoints.apkActive),
+          headers: const {'Accept': 'application/json'},
+        )
         .timeout(_timeout);
     if (r.statusCode == 404) return null;
     if (r.statusCode < 200 || r.statusCode >= 300) {
@@ -149,6 +161,13 @@ class MiseAJourService {
 
   /// Ouvre l'installateur Android sur l'APK : l'utilisateur confirme « Mettre à jour ».
   Future<void> installer(File apk) => _canal.invokeMethod('installer', {'chemin': apk.path});
+
+  /// iOS : ouvre le lien App Store / TestFlight de la version publiée.
+  Future<void> ouvrirLienIos(VersionPubliee version) async {
+    if (!await launchUrl(Uri.parse(version.url), mode: LaunchMode.externalApplication)) {
+      throw const HttpException('Lien inaccessible');
+    }
+  }
 }
 
 class TelechargementAnnule implements Exception {

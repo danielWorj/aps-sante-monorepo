@@ -129,6 +129,22 @@ export function peutAccepterRdv(rdv) {
   return rdv?.type_rdv === "physique" && !estRdvNonPaye(rdv) && rdv.statut === "confirme";
 }
 
+/**
+ * Le médecin peut-il changer le type de ce RDV (physique <-> téléconsultation) ?
+ * RDV payé, « confirme », consultation pas encore commencée — même règle que
+ * le serveur (changementTypeRdv.service.js), qui reste seul juge.
+ */
+export function peutChangerTypeRdv(rdv) {
+  return (
+    !estRdvNonPaye(rdv) &&
+    rdv?.statut === "confirme" &&
+    !rdv.medecin_present_le &&
+    !rdv.patient_present_le &&
+    !rdv.visio_cloturee_le &&
+    !rdv.termine_le
+  );
+}
+
 /** RDV physique payé que le médecin n'a pas encore accepté (lieu non précisé). */
 export function lieuAPreciser(rdv) {
   return peutAccepterRdv(rdv) && !rdv.accepte_le;

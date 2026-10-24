@@ -85,6 +85,7 @@ import {
   changerStatutRendezVous,
   terminerRendezVous,
   accepterRendezVous,
+  changerTypeRendezVous,
   forcerLiberationEscrow,
   supprimerRendezVous,
   // Ordonnances
@@ -405,6 +406,12 @@ router.post("/rendez-vous/:id/terminer", authentifier, limiteurTerminer, termine
 // { lieu }), ou en change le lieu. Le patient est notifié (rdv_accepte).
 // Réservé au médecin du RDV (contrôlé dans acceptationRdv.service.js).
 router.post("/rendez-vous/:id/accepter", authentifier, accepterRendezVous);
+
+// RDV payé (« confirme ») pas encore commencé : le médecin en change le type
+// (Body : { type_rdv: "physique" | "teleconsultation" }). Le patient est
+// notifié (rdv_type_modifie). Réservé au médecin du RDV
+// (contrôlé dans changementTypeRdv.service.js).
+router.post("/rendez-vous/:id/type", authentifier, changerTypeRendezVous);
 
 // Politique de fonds v2 §5 (étape 6) — reprogrammation d'un RDV « a_reprogrammer »
 // (les deux parties absentes) : l'une des parties PROPOSE une nouvelle date,

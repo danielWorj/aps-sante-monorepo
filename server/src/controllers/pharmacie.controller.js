@@ -56,6 +56,8 @@ import {
 import { enregistrerVueFiche } from "../services/vuesFiche.service.js";
 import { estResponsableMoi, rattacherCompteConnecte } from "../services/rattachementAgent.service.js";
 import { MESSAGE_CGU_REFUSEES, cguRefusees, enregistrerAcceptationsAuteur } from "../services/documentLegal.service.js";
+import { normaliserCoordonnees } from "../services/espacePresence.service.js";
+import { estOuvert24h, etatOuverture } from "../lib/horairesFiche.js";
 
 const SALT_ROUNDS = 10; // valeur identique à authentification.controller.js
 
@@ -238,7 +240,19 @@ function avecUrlsFichiers(pharmacie) {
 
 async function enrichirPharmacie(pharmacie) {
   const avecGeo = await avecGeolocalisation(pharmacie);
-  return avecUrlsFichiers(avecGeo);
+  return avecOuverture(avecUrlsFichiers(avecGeo));
+}
+
+/**
+ * Ouverture « maintenant » d'après les horaires (heure murale du pays de la
+ * fiche, lib/horairesFiche.js) : null si les horaires ne sont pas renseignés.
+ */
+function avecOuverture(pharmacie) {
+  return {
+    ...pharmacie,
+    ouverture: etatOuverture(pharmacie.horaires, pharmacie.pays?.fuseau_horaire),
+    ouvert_24h: estOuvert24h(pharmacie.horaires),
+  };
 }
 
 /*
@@ -419,7 +433,14 @@ export async function creerPharmacie(req, res, next) {
       agent_prenom,
       agent_email,
       agent_telephone,
+      adresse,
+      email,
     } = req.body;
+
+    const coordonnees = normaliserCoordonnees({ adresse, email });
+    if (coordonnees.erreur) {
+      return res.status(400).json({ message: coordonnees.erreur });
+    }
 
     if (
       !nom ||
@@ -537,6 +558,7 @@ export async function creerPharmacie(req, res, next) {
             telephone,
             statut_verification: statutApplique,
             numero_ordre_titulaire: numero_ordre_titulaire.trim(),
+            ...coordonnees.data,
             image_nom: uploadImage.nom,
             piece_identite_nom: uploadPieceIdentite.nom,
             document_agrement_nom: uploadAgrement.nom,
@@ -650,7 +672,14 @@ export async function modifierPharmacie(req, res, next) {
       longitude,
       description_enrichie,
       services_particuliers,
+      adresse,
+      email,
     } = req.body;
+
+    const coordonnees = normaliserCoordonnees({ adresse, email });
+    if (coordonnees.erreur) {
+      return res.status(400).json({ message: coordonnees.erreur });
+    }
 
     const existante = await prisma.pharmacie.findUnique({
       where: { pharmacie_id: req.params.id },
@@ -750,6 +779,7 @@ export async function modifierPharmacie(req, res, next) {
         ...(services_particuliers !== undefined && {
           services_particuliers: String(services_particuliers).trim().slice(0, 5000) || null,
         }),
+        ...coordonnees.data,
         ...donneesFichiers,
       },
       include: { pays: true, ville: true },

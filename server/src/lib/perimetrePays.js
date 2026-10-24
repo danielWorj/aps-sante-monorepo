@@ -108,6 +108,13 @@ const filtreAbonnementPresence = (p) => ({
   ],
 });
 
+const filtreFichePresence = (p) => ({
+  OR: [
+    { pharmacie: { is: { pays_id: p } } },
+    { structure: { is: { pays_id: p } } },
+  ],
+});
+
 export const REGLES = {
   // Colonne pays directe
   Pays: direct(),
@@ -170,6 +177,12 @@ export const REGLES = {
   AvisPharmacie: parPharmacie,
   AbonnementPharmacie: parPharmacie,
   GardePharmacie: parPharmacie,
+
+  // Espaces pharmacie / centre de santé (photos, actualités, messages, prestations)
+  MediaFichePresence: via(filtreFichePresence),
+  ActualiteFichePresence: via(filtreFichePresence),
+  MessageFichePresence: via(filtreFichePresence),
+  PrestationStructure: via((p) => ({ structure: { is: { pays_id: p } } })),
 
   // Satellites d'une assurance
   MiseEnRelation: parServiceAssurance,

@@ -45,6 +45,8 @@ import {
 import { enregistrerVueFiche } from "../services/vuesFiche.service.js";
 import { estResponsableMoi, rattacherCompteConnecte } from "../services/rattachementAgent.service.js";
 import { MESSAGE_CGU_REFUSEES, cguRefusees, enregistrerAcceptationsAuteur } from "../services/documentLegal.service.js";
+import { normaliserCoordonnees } from "../services/espacePresence.service.js";
+import { estOuvert24h, etatOuverture } from "../lib/horairesFiche.js";
 
 const SALT_ROUNDS = 10; // valeur identique à authentification.controller.js
 
@@ -231,7 +233,19 @@ function avecUrlsFichiers(structure) {
 
 async function enrichirCentreSante(structure) {
   const avecGeo = await avecGeolocalisation(structure);
-  return avecUrlsFichiers(avecGeo);
+  return avecOuverture(avecUrlsFichiers(avecGeo));
+}
+
+/**
+ * Ouverture « maintenant » d'après les horaires (heure murale du pays de la
+ * fiche, lib/horairesFiche.js) : null si les horaires ne sont pas renseignés.
+ */
+function avecOuverture(structure) {
+  return {
+    ...structure,
+    ouverture: etatOuverture(structure.horaires, structure.pays?.fuseau_horaire),
+    ouvert_24h: estOuvert24h(structure.horaires),
+  };
 }
 
 /*
@@ -413,7 +427,14 @@ export async function creerCentreSante(req, res, next) {
       agent_prenom,
       agent_email,
       agent_telephone,
+      adresse,
+      email,
     } = req.body;
+
+    const coordonnees = normaliserCoordonnees({ adresse, email });
+    if (coordonnees.erreur) {
+      return res.status(400).json({ message: coordonnees.erreur });
+    }
 
     if (!nom || !pays_id || !ville_id || !telephone || !type_structure) {
       return res.status(400).json({
@@ -531,6 +552,7 @@ export async function creerCentreSante(req, res, next) {
             telephone,
             statut_verification: statutApplique,
             type_structure,
+            ...coordonnees.data,
             image_nom: uploadImage.nom,
             piece_identite_nom: uploadPieceIdentite.nom,
             document_agrement_nom: uploadAgrement.nom,
@@ -643,7 +665,14 @@ export async function modifierCentreSante(req, res, next) {
       longitude,
       description_enrichie,
       presentation_equipe,
+      adresse,
+      email,
     } = req.body;
+
+    const coordonnees = normaliserCoordonnees({ adresse, email });
+    if (coordonnees.erreur) {
+      return res.status(400).json({ message: coordonnees.erreur });
+    }
 
     const existante = await prisma.structureSante.findUnique({
       where: { structure_id: req.params.id },
@@ -746,6 +775,7 @@ export async function modifierCentreSante(req, res, next) {
         ...(presentation_equipe !== undefined && {
           presentation_equipe: String(presentation_equipe).trim().slice(0, 5000) || null,
         }),
+        ...coordonnees.data,
         ...donneesFichiers,
       },
       include: { pays: true, ville: true },

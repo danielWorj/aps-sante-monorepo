@@ -38,6 +38,7 @@ export 'alert/app_alert.dart';
 // Navigation
 export 'navigation/app_bottom_nav.dart';
 export 'navigation/bouton_deconnexion.dart';
+export 'navigation/bouton_parametres.dart';
 
 // Onboarding
 export 'onboarding/onboarding_header.dart';

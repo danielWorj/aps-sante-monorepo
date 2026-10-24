@@ -47,24 +47,6 @@
             </intent-filter>
         </activity>
 
-        <!-- ─── FIX CRASH AU DÉMARRAGE ───────────────────────────────────
-             Le SDK Jitsi s'initialise via androidx.startup (JitsiInitializer)
-             avant même main() et plante avec :
-             NoSuchFieldError: ReactBuildConfig.UNSTABLE_ENABLE_FUSEBOX_RELEASE
-             (conflit de versions React Native dans l'APK).
-             On désactive cet initializer pour que l'app démarre.
-             ⚠ La visio Jitsi ne fonctionnera pas tant que le conflit n'est
-             pas résolu : retirer ce bloc <provider> une fois corrigé. -->
-        <provider
-            android:name="androidx.startup.InitializationProvider"
-            android:authorities="${applicationId}.androidx-startup"
-            android:exported="false"
-            tools:node="merge">
-            <meta-data
-                android:name="org.jitsi.meet.sdk.JitsiInitializer"
-                tools:node="remove" />
-        </provider>
-
         <!-- ─── Notifications push (Firebase Cloud Messaging) ────────────
              Canal « Rendez-vous » créé au démarrage par MainActivity : les
              messages du serveur (push.service.js) y arrivent par défaut. -->

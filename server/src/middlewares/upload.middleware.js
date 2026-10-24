@@ -312,3 +312,29 @@ export function gererTeleversementLaboratoire(req, res, next) {
 // Médiathèque d'une fiche laboratoire : mêmes règles que la médiathèque
 // assurance (une photo ou une vidéo par requête, champ "fichier").
 export const gererTeleversementMediaLaboratoire = gererTeleversementMediaAssurance;
+
+// ─────────────────────────────────────────────────────────────────
+// Espaces pharmacie / centre de santé (services/espacePresence.service.js) :
+// une photo par requête (JPEG/PNG/WEBP, 5 Mo), champ "fichier" (galerie)
+// ou "image" (illustration d'une actualité, facultative).
+// ─────────────────────────────────────────────────────────────────
+const televersementImageFiche = multer({
+  storage: stockage,
+  limits: { fileSize: TAILLE_MAX_OCTETS },
+  fileFilter: filtreFichierVisuel,
+}).fields([
+  { name: "fichier", maxCount: 1 },
+  { name: "image", maxCount: 1 },
+]);
+
+export function gererTeleversementImageFiche(req, res, next) {
+  televersementImageFiche(req, res, (err) => {
+    if (err) {
+      const message = err.code === "LIMIT_FILE_SIZE"
+        ? "Photo trop volumineuse (5 Mo maximum)."
+        : err.message || "Erreur lors du téléversement de la photo.";
+      return res.status(400).json({ message });
+    }
+    next();
+  });
+}

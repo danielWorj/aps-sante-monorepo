@@ -121,9 +121,52 @@ function lireVersionFichierApk(file) {
 function serialiserApk(apk) {
   return {
     ...apk,
-    file_url: construireUrlTelechargement(apk.id, apk.file_url),
+    // Version iOS : file_url est déjà le lien externe (App Store / TestFlight).
+    file_url: apk.plateforme === "ios" ? apk.file_url : construireUrlTelechargement(apk.id, apk.file_url),
     numero_build: numeroBuild(apk.version_code),
   };
+}
+
+const PLATEFORMES = ["android", "ios"];
+
+/** Plateforme reçue du client (défaut android), ou null si inconnue. */
+function lirePlateforme(valeur) {
+  const p = String(valeur ?? "android").trim().toLowerCase() || "android";
+  return PLATEFORMES.includes(p) ? p : null;
+}
+
+/**
+ * Champs d'une version iOS : lien (https), version_name et version_code
+ * (numéro de build, le « +N » de pubspec.yaml). Avec [exigerTout], les trois
+ * sont obligatoires (création) ; sinon seuls les champs fournis sont lus.
+ * Retourne { donnees } ou { erreur }.
+ */
+function lireChampsIos(body, exigerTout) {
+  const donnees = {};
+  const { lien, version_name, version_code } = body;
+
+  if (lien !== undefined || exigerTout) {
+    const l = String(lien ?? "").trim();
+    let valide = false;
+    try {
+      valide = new URL(l).protocol === "https:";
+    } catch {
+      valide = false;
+    }
+    if (!valide) return { erreur: "Le lien iOS (App Store ou TestFlight) doit être une adresse https valide." };
+    donnees.file_url = l;
+  }
+  if (version_name !== undefined || exigerTout) {
+    const v = String(version_name ?? "").trim();
+    if (!v || v.length > 50) return { erreur: "Le nom de version (ex : 1.2.0) est obligatoire (50 caractères max)." };
+    donnees.version_name = v;
+  }
+  if (version_code !== undefined || exigerTout) {
+    const c = Number(version_code);
+    if (!Number.isInteger(c) || c < 1) return { erreur: "Le numéro de build doit être un entier positif." };
+    donnees.version_code = c;
+  }
+  return { donnees };
 }
 
 /**
@@ -195,6 +238,12 @@ export async function creerApk(req, res, next) {
     const { libelle, description, status } = req.body;
     const fichier = req.file;
 
+    const plateforme = lirePlateforme(req.body.plateforme);
+    if (!plateforme) {
+      return res.status(400).json({ message: "La 'plateforme' doit valoir android ou ios." });
+    }
+    if (plateforme === "ios") return creerVersionIos(req, res);
+
     // Validation des champs obligatoires
     const champsManquants = [];
     if (!libelle || !String(libelle).trim()) champsManquants.push("libelle");
@@ -239,10 +288,13 @@ export async function creerApk(req, res, next) {
     // Créer l'enregistrement en base de données
     let apkCreee;
     try {
-      // Une seule APK active à la fois : activer celle-ci désactive les autres.
+      // Une seule APK active par plateforme : activer celle-ci désactive les autres.
       apkCreee = await prisma.$transaction(async (tx) => {
         if (statutLu) {
-          await tx.mobileApk.updateMany({ where: { status: true }, data: { status: false } });
+          await tx.mobileApk.updateMany({
+            where: { status: true, plateforme: "android" },
+            data: { status: false },
+          });
         }
         return tx.mobileApk.create({
           data: {
@@ -274,6 +326,44 @@ export async function creerApk(req, res, next) {
 }
 
 /**
+ * Création d'une version iOS (appelée par creerApk) : pas de fichier, un
+ * lien externe et une version saisie au back-office.
+ */
+async function creerVersionIos(req, res) {
+  const { libelle, description, status } = req.body;
+  if (req.file) {
+    return res.status(400).json({ message: "Une version iOS se publie par un lien, sans fichier." });
+  }
+  if (!libelle || !String(libelle).trim()) {
+    return res.status(400).json({ message: "Champs obligatoires manquants : libelle." });
+  }
+  const champs = lireChampsIos(req.body, true);
+  if (champs.erreur) return res.status(400).json({ message: champs.erreur });
+
+  const statutLu = status !== undefined ? lireStatut(status) : true;
+  if (statutLu === null) {
+    return res.status(400).json({ message: "Le 'status' doit valoir true ou false." });
+  }
+
+  const version = await prisma.$transaction(async (tx) => {
+    if (statutLu) {
+      await tx.mobileApk.updateMany({ where: { status: true, plateforme: "ios" }, data: { status: false } });
+    }
+    return tx.mobileApk.create({
+      data: {
+        libelle: String(libelle).trim(),
+        description: description ? String(description).trim() : null,
+        status: statutLu,
+        plateforme: "ios",
+        ...champs.donnees,
+      },
+    });
+  });
+
+  return res.status(201).json({ message: "Version iOS créée avec succès.", apk: serialiserApk(version) });
+}
+
+/**
  * GET /api/apks
  * Liste toutes les APKs avec filtres optionnels.
  *
@@ -290,7 +380,7 @@ export async function creerApk(req, res, next) {
  */
 export async function listerApks(req, res, next) {
   try {
-    const { status, search, skip = 0, take = 20 } = req.query;
+    const { status, search, plateforme, skip = 0, take = 20 } = req.query;
 
     // Validation et conversion des paramètres de pagination
     let skipNum = parseInt(skip, 10) || 0;
@@ -312,6 +402,12 @@ export async function listerApks(req, res, next) {
           message: `Paramètre 'status' invalide (boolean ou "true"/"false" attendu, reçu : ${status}).`,
         });
       }
+    }
+
+    if (plateforme !== undefined && plateforme !== "") {
+      const p = lirePlateforme(plateforme);
+      if (!p) return res.status(400).json({ message: "Paramètre 'plateforme' invalide (android ou ios)." });
+      filtre.plateforme = p;
     }
 
     // Filtre de recherche textuelle (libelle ou description)
@@ -370,8 +466,14 @@ export async function listerApks(req, res, next) {
  */
 export async function obtenirApkActive(req, res, next) {
   try {
+    // ?plateforme=ios pour l'application iPhone ; android par défaut (site public, APK).
+    const plateforme = lirePlateforme(req.query.plateforme);
+    if (!plateforme) {
+      return res.status(400).json({ message: "Paramètre 'plateforme' invalide (android ou ios)." });
+    }
+
     const apk = await prisma.mobileApk.findFirst({
-      where: { status: true },
+      where: { status: true, plateforme },
       orderBy: { date_upload: "desc" },
     });
 
@@ -382,10 +484,12 @@ export async function obtenirApkActive(req, res, next) {
     // Taille du fichier (octets) : repli côté client pour la barre de
     // progression si un proxy retire Content-Length au téléchargement.
     let taille = null;
-    try {
-      taille = (await fs.stat(path.join(APK_STORAGE_DIR, apk.file_url))).size;
-    } catch {
-      // Fichier absent : le téléchargement renverra lui-même un 404.
+    if (plateforme === "android") {
+      try {
+        taille = (await fs.stat(path.join(APK_STORAGE_DIR, apk.file_url))).size;
+      } catch {
+        // Fichier absent : le téléchargement renverra lui-même un 404.
+      }
     }
 
     return res.status(200).json({
@@ -495,6 +599,17 @@ export async function modifierApk(req, res, next) {
       miseAJour.status = statutLu;
     }
 
+    // Version iOS : lien et version saisis, jamais de fichier.
+    const estIos = apkExistante.plateforme === "ios";
+    if (estIos) {
+      if (fichier) {
+        return res.status(400).json({ message: "Une version iOS se publie par un lien, sans fichier." });
+      }
+      const champs = lireChampsIos(req.body, false);
+      if (champs.erreur) return res.status(400).json({ message: champs.erreur });
+      Object.assign(miseAJour, champs.donnees);
+    }
+
     // Si un nouveau fichier est fourni, le valider et le traiter
     let ancienNomFichier = null;
     if (fichier) {
@@ -534,11 +649,11 @@ export async function modifierApk(req, res, next) {
     // Mettre à jour en base de données
     let apkModifiee;
     try {
-      // Une seule APK active à la fois : activer celle-ci désactive les autres.
+      // Une seule APK active par plateforme : activer celle-ci désactive les autres.
       apkModifiee = await prisma.$transaction(async (tx) => {
         if (miseAJour.status === true) {
           await tx.mobileApk.updateMany({
-            where: { status: true, id: { not: id } },
+            where: { status: true, plateforme: apkExistante.plateforme, id: { not: id } },
             data: { status: false },
           });
         }
@@ -546,7 +661,7 @@ export async function modifierApk(req, res, next) {
       });
     } catch (errDb) {
       // Nettoyage best-effort : supprimer le nouveau fichier si la BD échoue
-      if (miseAJour.file_url) {
+      if (miseAJour.file_url && !estIos) {
         await supprimerFichierDuDisque(miseAJour.file_url);
       }
       console.error(`❌ Erreur lors de la mise à jour en BD : ${errDb.message}`);
@@ -607,8 +722,8 @@ export async function supprimerApk(req, res, next) {
       });
     }
 
-    // Nettoyer le fichier du disque (best-effort)
-    await supprimerFichierDuDisque(apk.file_url);
+    // Nettoyer le fichier du disque (best-effort) — une version iOS n'en a pas.
+    if (apk.plateforme !== "ios") await supprimerFichierDuDisque(apk.file_url);
 
     return res.status(200).json({
       message: "APK supprimée avec succès.",
@@ -648,6 +763,7 @@ export async function telechargerApk(req, res, next) {
     if (!apk) {
       return res.status(404).json({ message: `APK avec l'ID ${id} introuvable.` });
     }
+    if (apk.plateforme === "ios") return res.redirect(302, apk.file_url);
 
     // Vérifier que le nomFichier décodé correspond à celui en BD
     const nomFichierDecode = decodeURIComponent(nomFichier);

@@ -25,6 +25,7 @@ import { STATUTS_FIN_CONSULTATION, validerCodeConsultation } from "../services/f
 import { ErreurParametreDelai } from "../services/parametreDelaiLiberation.service.js";
 import { genererCodeConsultation } from "../lib/codeConsultation.js";
 import { accepterRendezVous as accepterRdvPhysique } from "../services/acceptationRdv.service.js";
+import { changerTypeRendezVous as changerTypeRdv } from "../services/changementTypeRdv.service.js";
 import {
   ROLES_VISIBILITE,
   filtrerResultatAnnulation,
@@ -1077,6 +1078,55 @@ export async function accepterRendezVous(req, res, next) {
           ? "Lieu du rendez-vous modifié. Le patient a été prévenu."
           : "Rendez-vous accepté. Le patient a été prévenu.",
       deja_accepte: resultat.deja_accepte,
+      rendez_vous: projeterRdvPourRole(rdvMisAJour, ROLES_VISIBILITE.MEDECIN),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/rendez-vous/:id/type
+ * Body: { type_rdv: "physique" | "teleconsultation" }
+ *
+ * Le médecin du RDV change le type d'un RDV payé (« confirme ») tant que la
+ * consultation n'a pas commencé. Le lieu et l'acceptation sont effacés : un
+ * RDV redevenu physique doit être ré-accepté avec un lieu. Le patient est
+ * notifié (rdv_type_modifie). Réservé au médecin du RDV (ni patient, ni admin).
+ *
+ * Toute la règle vit dans changementTypeRdv.service.js ; ici : traduction HTTP.
+ * Erreurs : 400 (type invalide, téléconsultation non activée), 403 (autre
+ * médecin), 404, 409 (RDV_NON_PAYE, statut incompatible, consultation commencée).
+ */
+export async function changerTypeRendezVous(req, res, next) {
+  try {
+    const medecin = await profilMedecinCourant(req.utilisateur);
+    if (!medecin) {
+      return res.status(403).json({ message: "Accès refusé : vous n'êtes pas le médecin de ce rendez-vous." });
+    }
+
+    const resultat = await changerTypeRdv({
+      rdv_id: req.params.id,
+      medecin_id: medecin.medecin_id,
+      type_rdv: req.body?.type_rdv,
+    });
+    if (resultat.erreur) {
+      const { status, message, code } = resultat.erreur;
+      return res.status(status).json({ message, ...(code ? { code } : {}) });
+    }
+
+    const rdvMisAJour = await prisma.rendezVous.findUnique({
+      where: { rdv_id: req.params.id },
+      include: INCLUSION_NOMS_RDV,
+    });
+
+    return res.status(200).json({
+      message: resultat.inchange
+        ? "Le rendez-vous a déjà ce type."
+        : resultat.type_rdv === "teleconsultation"
+          ? "Rendez-vous transformé en téléconsultation. Le patient a été prévenu."
+          : "Rendez-vous transformé en consultation physique. Acceptez-le en précisant le lieu.",
+      inchange: resultat.inchange,
       rendez_vous: projeterRdvPourRole(rdvMisAJour, ROLES_VISIBILITE.MEDECIN),
     });
   } catch (err) {

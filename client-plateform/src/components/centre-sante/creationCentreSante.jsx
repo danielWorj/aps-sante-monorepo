@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react';
 // remplacer l'import ci-dessous en conséquence.
 import '../../assets/styles/creer-medecin.css';
 
-import { creerCentreSante } from '../../services/structureSanteService';
+import { TYPES_STRUCTURE, creerCentreSante } from '../../services/structureSanteService';
 import { listerPays, listerVilles } from '../../services/geoService';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import GoogleMapPicker from '../maps/GoogleMapPicker';
@@ -21,16 +21,16 @@ import { useAuth } from '../../context/AuthContext';
 // côté back / creerCentreSante de centreSanteService.js côté front)
 // diffère :
 //
-//   Corps multipart/form-data — champs obligatoires supposés :
-//     nom, type_etablissement, pays_id, ville_id, telephone,
-//     numero_autorisation, fonction, agent_nom, agent_prenom,
-//     agent_email
-//   Champs optionnels : agent_telephone, latitude, longitude
+//   Corps multipart/form-data — champs obligatoires :
+//     nom, type_structure (clinique, hopital, centre_medical, dispensaire,
+//     laboratoire — TYPES_STRUCTURE), pays_id, ville_id, telephone,
+//     fonction, agent_nom, agent_prenom, agent_email
+//   Champs optionnels : adresse, email, agent_telephone, latitude, longitude
 //     (statut_verification existe côté back mais est ignoré si
 //     l'appelant n'est pas admin/superadmin — on ne l'envoie donc
 //     jamais depuis ce formulaire public)
-//   Fichiers obligatoires : image_centre, piece_identite,
-//     document_autorisation
+//   Fichiers obligatoires : image_structure, piece_identite,
+//     document_agrement (noms des champs multer du serveur)
 //
 // Étape 2 (Localisation) : latitude/longitude sont positionnées via
 // GoogleMapPicker (recherche d'adresse géocodée par le backend, clic
@@ -55,14 +55,6 @@ const ETAPES = [
   'Agent responsable',
   'Justificatifs',
   'Confirmation',
-];
-
-const TYPES_ETABLISSEMENT = [
-  'Centre de santé',
-  'Centre médical',
-  'Clinique',
-  'Hôpital',
-  "Cabinet médical de groupe",
 ];
 
 const CreationCentreSante = () => {
@@ -94,11 +86,12 @@ const CreationCentreSante = () => {
   const [formData, setFormData] = useState({
     // Étape 1 — informations du centre de santé
     nom: '',
-    type_etablissement: '',
+    type_structure: '',
     telephone: '',
     pays_id: '',
     ville_id: '',
-    numero_autorisation: '',
+    adresse: '',
+    email: '',
 
     // Étape 2 — localisation (facultative)
     latitude: '',
@@ -205,12 +198,12 @@ const CreationCentreSante = () => {
     switch (step) {
       case 1:
         if (!formData.nom.trim()) return "Le nom du centre de santé est obligatoire.";
-        if (!formData.type_etablissement) return "Le type d'établissement est obligatoire.";
+        if (!formData.type_structure) return "Le type d'établissement est obligatoire.";
         if (!formData.telephone.trim()) return "Le téléphone est obligatoire.";
         if (!formData.pays_id) return "Le pays est obligatoire.";
         if (!formData.ville_id) return "La ville est obligatoire.";
-        if (!formData.numero_autorisation.trim())
-          return "Le numéro d'autorisation d'exercice est obligatoire.";
+        if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim()))
+          return "L'e-mail de contact n'est pas valide.";
         return null;
       case 2: {
         const latRenseignee = formData.latitude !== '';
@@ -280,11 +273,12 @@ const CreationCentreSante = () => {
       const resultat = await creerCentreSante({
         accepte_cgu: formData.acceptCGU,
         nom: formData.nom.trim(),
-        type_etablissement: formData.type_etablissement,
+        type_structure: formData.type_structure,
         telephone: formData.telephone.trim(),
         pays_id: formData.pays_id,
         ville_id: formData.ville_id,
-        numero_autorisation: formData.numero_autorisation.trim(),
+        adresse: formData.adresse.trim() || undefined,
+        email: formData.email.trim() || undefined,
         latitude: formData.latitude === '' ? undefined : Number(formData.latitude),
         longitude: formData.longitude === '' ? undefined : Number(formData.longitude),
         fonction: formData.fonction.trim(),
@@ -293,9 +287,10 @@ const CreationCentreSante = () => {
         agent_email: formData.agent_email.trim(),
         agent_telephone: formData.agent_telephone.trim() || undefined,
         responsable_moi: formData.responsable_moi ? 'true' : undefined,
-        image_centre: formData.image_centre,
+        // Noms des champs fichier attendus par le serveur (upload.middleware.js).
+        image_structure: formData.image_centre,
         piece_identite: formData.piece_identite,
-        document_autorisation: formData.document_autorisation,
+        document_agrement: formData.document_autorisation,
       });
 
       const { centreSante, agent } = resultat;
@@ -540,15 +535,15 @@ const CreationCentreSante = () => {
                             </label>
                             <select
                               className="form-select"
-                              name="type_etablissement"
-                              value={formData.type_etablissement}
+                              name="type_structure"
+                              value={formData.type_structure}
                               onChange={handleChange}
                               required
                             >
                               <option value="">Sélectionner…</option>
-                              {TYPES_ETABLISSEMENT.map((type) => (
-                                <option key={type} value={type}>
-                                  {type}
+                              {TYPES_STRUCTURE.map((type) => (
+                                <option key={type.valeur} value={type.valeur}>
+                                  {type.libelle}
                                 </option>
                               ))}
                             </select>
@@ -568,17 +563,27 @@ const CreationCentreSante = () => {
                             />
                           </div>
                           <div className="col-md-6">
-                            <label className="form-label-aps">
-                              Numéro d'autorisation d'exercice <span className="required-mark">*</span>
-                            </label>
+                            <label className="form-label-aps">Adresse</label>
                             <input
                               type="text"
                               className="form-control"
-                              name="numero_autorisation"
-                              value={formData.numero_autorisation}
+                              name="adresse"
+                              value={formData.adresse}
                               onChange={handleChange}
-                              placeholder="Numéro délivré par le ministère de la Santé"
-                              required
+                              maxLength={255}
+                              placeholder="Quartier, rue, point de repère"
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">E-mail de contact</label>
+                            <input
+                              type="email"
+                              className="form-control"
+                              name="email"
+                              value={formData.email}
+                              onChange={handleChange}
+                              maxLength={255}
+                              placeholder="contact@exemple.com"
                             />
                           </div>
                           <div className="col-md-6">

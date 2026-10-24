@@ -155,7 +155,21 @@ function Modal({ id, title, isOpen, onClose, children, footer, large }) {
   );
 }
 
-const FORM_VIDE = { apk_id: '', libelle: '', description: '', status: true, fichier: null };
+// Android : fichier .apk (version lue dedans). iOS : lien App Store /
+// TestFlight + version saisie (un iPhone n'installe pas un fichier téléchargé).
+const FORM_VIDE = {
+  apk_id: '',
+  plateforme: 'android',
+  libelle: '',
+  description: '',
+  status: true,
+  fichier: null,
+  lien: '',
+  version_name: '',
+  version_code: '',
+};
+
+const LIBELLES_PLATEFORME = { android: 'Android', ios: 'iOS' };
 
 export default function GestionApk() {
   const { user, status: statusAuth } = useAuth();
@@ -170,6 +184,7 @@ export default function GestionApk() {
   const [erreurChargement, setErreurChargement] = useState(null);
 
   const [filtreStatut, setFiltreStatut] = useState('');
+  const [filtrePlateforme, setFiltrePlateforme] = useState('');
   const [recherche, setRecherche] = useState('');
 
   const chargerApks = useCallback(async () => {
@@ -182,6 +197,7 @@ export default function GestionApk() {
     try {
       const filtres = {};
       if (filtreStatut) filtres.status = filtreStatut === 'actif';
+      if (filtrePlateforme) filtres.plateforme = filtrePlateforme;
       const liste = await listerApks(filtres);
       setApks(liste.apks ?? []);
     } catch (err) {
@@ -193,7 +209,7 @@ export default function GestionApk() {
     } finally {
       setLoading(false);
     }
-  }, [estSuperadmin, filtreStatut]);
+  }, [estSuperadmin, filtreStatut, filtrePlateforme]);
 
   useEffect(() => {
     if (statusAuth === 'loading') return;
@@ -224,15 +240,15 @@ export default function GestionApk() {
     return base;
   }, [apks]);
 
-  /* ─── Activation exclusive : une seule APK active à la fois ─────── */
+  /* ─── Activation exclusive : une seule version active par plateforme ─── */
 
-  // Le serveur désactive les autres APK quand on en active une (voir
-  // gestionapk.controller.js) : on reflète ce changement dans la liste.
+  // Le serveur désactive les autres versions de la même plateforme quand on
+  // en active une (voir gestionapk.controller.js) : on le reflète ici.
   function appliquerApk(apk, { nouvelle = false } = {}) {
     setApks((prev) => {
       const liste = prev.map((a) => {
         if (a.id === apk.id) return apk;
-        return apk.status && a.status ? { ...a, status: false } : a;
+        return apk.status && a.status && a.plateforme === apk.plateforme ? { ...a, status: false } : a;
       });
       return nouvelle ? [apk, ...liste] : liste;
     });
@@ -241,15 +257,16 @@ export default function GestionApk() {
   // Demande confirmation avant d'activer `apk` (ou une nouvelle APK si
   // apk est null) lorsque cela désactivera d'autres versions.
   async function confirmerActivation(apk) {
-    const actives = apks.filter((a) => a.status && a.id !== apk?.id);
+    const plateforme = apk?.plateforme ?? formulaire.plateforme;
+    const actives = apks.filter((a) => a.status && a.id !== apk?.id && a.plateforme === plateforme);
     return confirmer({
       titre: 'Activer cette version',
       message:
         actives.length > 0
-          ? `« ${apk?.libelle ?? formulaire.libelle.trim()} » deviendra la seule version téléchargeable. ` +
+          ? `« ${apk?.libelle ?? formulaire.libelle.trim()} » deviendra la seule version ${LIBELLES_PLATEFORME[plateforme]} proposée. ` +
             `${actives.length > 1 ? 'Les versions' : 'La version'} ${actives.map((a) => `« ${a.libelle} »`).join(', ')} ` +
             `${actives.length > 1 ? 'seront désactivées' : 'sera désactivée'} automatiquement.`
-          : `« ${apk?.libelle ?? formulaire.libelle.trim()} » deviendra la version téléchargeable par les utilisateurs.`,
+          : `« ${apk?.libelle ?? formulaire.libelle.trim()} » deviendra la version ${LIBELLES_PLATEFORME[plateforme]} proposée aux utilisateurs.`,
       labelConfirmer: 'Activer',
       variante: 'avertissement',
     });
@@ -281,10 +298,14 @@ export default function GestionApk() {
     if (!estSuperadmin) return;
     setFormulaire({
       apk_id: apk.id,
+      plateforme: apk.plateforme || 'android',
       libelle: apk.libelle || '',
       description: apk.description || '',
       status: !!apk.status,
       fichier: null,
+      lien: apk.plateforme === 'ios' ? apk.file_url || '' : '',
+      version_name: apk.version_name || '',
+      version_code: apk.version_code != null ? String(apk.version_code) : '',
     });
     setApkExistant(apk);
     setErreurFormulaire(null);
@@ -323,7 +344,21 @@ export default function GestionApk() {
       setErreurFormulaire(`La description est trop longue (${DESCRIPTION_LONGUEUR_MAX} caractères maximum).`);
       return;
     }
-    if (enCreation && !formulaire.fichier) {
+    const estIos = formulaire.plateforme === 'ios';
+    if (estIos) {
+      if (!/^https:\/\/\S+$/.test(formulaire.lien.trim())) {
+        setErreurFormulaire('Le lien App Store / TestFlight (https://…) est requis.');
+        return;
+      }
+      if (!formulaire.version_name.trim()) {
+        setErreurFormulaire('Le nom de version (ex. : 1.2.0) est requis.');
+        return;
+      }
+      if (!/^[1-9]\d*$/.test(formulaire.version_code.trim())) {
+        setErreurFormulaire('Le numéro de build doit être un entier positif.');
+        return;
+      }
+    } else if (enCreation && !formulaire.fichier) {
       setErreurFormulaire("Le fichier de l'application (APK) est requis.");
       return;
     }
@@ -353,7 +388,15 @@ export default function GestionApk() {
         // UI), seule la clé envoyée au service change ici.
         // Absent en édition si l'admin ne remplace pas le fichier :
         // le contrôleur conserve alors l'ancien file_url tel quel.
-        ...(formulaire.fichier ? { file: formulaire.fichier } : {}),
+        ...(!estIos && formulaire.fichier ? { file: formulaire.fichier } : {}),
+        ...(enCreation ? { plateforme: formulaire.plateforme } : {}),
+        ...(estIos
+          ? {
+              lien: formulaire.lien.trim(),
+              version_name: formulaire.version_name.trim(),
+              version_code: formulaire.version_code.trim(),
+            }
+          : {}),
       };
 
       if (enCreation) {
@@ -532,7 +575,15 @@ export default function GestionApk() {
                   <option value="inactif">Inactif</option>
                 </select>
               </div>
-              <div className="col-md-9">
+              <div className="col-md-3">
+                <label className="form-label">Plateforme</label>
+                <select className="form-select" value={filtrePlateforme} onChange={(e) => setFiltrePlateforme(e.target.value)}>
+                  <option value="">Toutes</option>
+                  <option value="android">Android</option>
+                  <option value="ios">iOS</option>
+                </select>
+              </div>
+              <div className="col-md-6">
                 <label className="form-label">Recherche</label>
                 <div className="aps-search">
                   <i className="fa-solid fa-magnifying-glass"></i>
@@ -573,6 +624,7 @@ export default function GestionApk() {
                   <thead>
                     <tr>
                       <th>Libellé</th>
+                      <th>Plateforme</th>
                       <th>Version</th>
                       <th>Description</th>
                       <th>Fichier</th>
@@ -585,6 +637,10 @@ export default function GestionApk() {
                     {lignesTable.map((apk) => (
                       <tr key={apk.id} className={!apk.status ? 'apk-row-inactive' : ''}>
                         <td className="cell-title">{apk.libelle}</td>
+                        <td>
+                          <i className={`fa-brands ${apk.plateforme === 'ios' ? 'fa-apple' : 'fa-android'} me-1`}></i>
+                          {LIBELLES_PLATEFORME[apk.plateforme] ?? 'Android'}
+                        </td>
                         <td>
                           {apk.version_name || apk.version_code != null ? (
                             <>
@@ -604,10 +660,19 @@ export default function GestionApk() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="apk-file-chip"
-                            title="Télécharger ce fichier"
+                            title={apk.plateforme === 'ios' ? apk.file_url : 'Télécharger ce fichier'}
                           >
-                            <i className="fa-solid fa-file-arrow-down me-1"></i>
-                            {nomFichierDepuisUrl(apk.file_url)}
+                            {apk.plateforme === 'ios' ? (
+                              <>
+                                <i className="fa-solid fa-arrow-up-right-from-square me-1"></i>
+                                Lien App Store / TestFlight
+                              </>
+                            ) : (
+                              <>
+                                <i className="fa-solid fa-file-arrow-down me-1"></i>
+                                {nomFichierDepuisUrl(apk.file_url)}
+                              </>
+                            )}
                           </a>
                           {apk.taille_octets != null && (
                             <div className="aps-text-muted mt-1" style={{ fontSize: 11 }}>
@@ -688,6 +753,19 @@ export default function GestionApk() {
 
         <form onSubmit={soumettreFormulaire}>
           <div className="mb-3">
+            <label className="form-label">Plateforme</label>
+            <select
+              className="form-select"
+              value={formulaire.plateforme}
+              disabled={!!formulaire.apk_id}
+              onChange={(e) => modifierChampFormulaire('plateforme', e.target.value)}
+            >
+              <option value="android">Android — fichier APK</option>
+              <option value="ios">iOS — lien App Store / TestFlight</option>
+            </select>
+          </div>
+
+          <div className="mb-3">
             <label className="form-label">
               Libellé <span className="text-danger">*</span>
             </label>
@@ -718,6 +796,54 @@ export default function GestionApk() {
             />
           </div>
 
+          {formulaire.plateforme === 'ios' ? (
+            <>
+              <div className="mb-3">
+                <label className="form-label">
+                  Lien App Store / TestFlight <span className="text-danger">*</span>
+                </label>
+                <input
+                  type="url"
+                  className="form-control"
+                  placeholder="https://apps.apple.com/… ou https://testflight.apple.com/join/…"
+                  value={formulaire.lien}
+                  onChange={(e) => modifierChampFormulaire('lien', e.target.value)}
+                />
+              </div>
+              <div className="row g-3 mb-3">
+                <div className="col-6">
+                  <label className="form-label">
+                    Version <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="1.2.0"
+                    maxLength={50}
+                    value={formulaire.version_name}
+                    onChange={(e) => modifierChampFormulaire('version_name', e.target.value)}
+                  />
+                </div>
+                <div className="col-6">
+                  <label className="form-label">
+                    Numéro de build <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="form-control"
+                    placeholder="12"
+                    value={formulaire.version_code}
+                    onChange={(e) => modifierChampFormulaire('version_code', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="aps-text-muted mb-3" style={{ fontSize: 12 }}>
+                Le numéro de build est le « +N » de pubspec.yaml : l&apos;application iPhone le compare au sien pour
+                proposer la mise à jour.
+              </div>
+            </>
+          ) : (
           <div className="mb-3">
             <label className="form-label">
               Fichier APK {!formulaire.apk_id && <span className="text-danger">*</span>}
@@ -742,6 +868,7 @@ export default function GestionApk() {
               </div>
             )}
           </div>
+          )}
 
           {enregistrementEnCours && progressionUpload !== null && (
             <div className="mb-3">
@@ -787,7 +914,7 @@ export default function GestionApk() {
               Actif (visible / téléchargeable par l'application mobile)
             </label>
             <div className="aps-text-muted mt-1" style={{ fontSize: 11 }}>
-              Une seule version peut être active : l'activer désactive automatiquement les autres.
+              Une seule version active par plateforme : l'activer désactive automatiquement les autres.
             </div>
           </div>
         </form>

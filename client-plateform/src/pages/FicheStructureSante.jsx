@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import structure1 from "../assets/img/structure1.jpg";
 import "./../assets/styles/FicheStructureSante.css";
 import GoogleMapView from "../components/maps/GoogleMapView";
+import HorairesFiche, { StatutOuverture } from "../components/presence/HorairesFiche";
+import ActualitesFiche from "../components/presence/ActualitesFiche";
 // Services réels — voir src/services/structureSanteService.js. Ce fichier
 // exporte déjà TYPES_STRUCTURE, listerCentresSante et creerCentreSante
 // (page StructureSante.jsx). Pour cette fiche détaillée, il doit en plus
@@ -16,14 +18,18 @@ import {
   obtenirCentreSante,
   listerImagesCentre,
   listerExamensCentre,
+  listerActualitesCentre,
   envoyerMessageCentre,
 } from "../services/structureSanteService.js";
 
 // Fiche structure de santé — page de détail d'un hôpital, d'une clinique,
 // d'un centre médical, d'un dispensaire ou d'un laboratoire, avec ses
-// coordonnées, sa localisation sur une carte, ses photos, la liste des
-// examens qui y sont réalisés, et un formulaire de contact direct par
-// email. Contenu entièrement dynamisé depuis l'API.
+// coordonnées, ses horaires, sa localisation sur une carte, ses photos, la
+// liste des prestations et examens qui y sont réalisés, ses actualités, et
+// un formulaire de contact direct par email — ouvert seulement si
+// l'abonnement de la fiche inclut le contact direct (droits.contact_direct).
+// Contenu entièrement dynamisé depuis l'API ; il est géré par l'agent du
+// centre depuis son espace (/portail/structure).
 
 // Photo par défaut si la structure n'a pas (encore) d'image_url exploitable.
 const PHOTO_PAR_DEFAUT = structure1;
@@ -236,15 +242,11 @@ function PresentationPanel({ structure }) {
                 </td>
               </tr>
             )}
-            {structure.horaires && (
-              <tr>
-                <td>Horaires</td>
-                <td>{structure.horaires}</td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
+
+      <HorairesFiche fiche={structure} />
 
       {(structure.description_enrichie || structure.description) && (
         <div className="info-card">
@@ -270,7 +272,18 @@ function PresentationPanel({ structure }) {
           <MapCard structure={structure} />
         </div>
         <div className="col-md-4">
-          <ContactForm structure={structure} />
+          {structure.droits?.contact_direct ? (
+            <ContactForm structure={structure} />
+          ) : (
+            <div className="info-card" id="contact">
+              <h3>
+                <i className="fa-solid fa-envelope" /> Contact
+              </h3>
+              <p className="minimal-note mb-0">
+                Cet établissement ne reçoit pas de messages via ApSa pour le moment.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -339,9 +352,9 @@ function ExamensPanel({ examens, chargement }) {
                       <strong>{ex.nom}</strong>
                       {ex.description && <span className="exam-row-cat">{ex.description}</span>}
                     </div>
-                    {ex.prix != null && (
-                      <span className="exam-row-price">{Number(ex.prix).toLocaleString()} FCFA</span>
-                    )}
+                    <span className="exam-row-price">
+                      {ex.prix != null ? `${Number(ex.prix).toLocaleString("fr-FR")} ${ex.devise ?? ""}`.trim() : "Sur demande"}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -384,6 +397,8 @@ export default function FicheStructureSante() {
   const [structure, setStructure] = useState(null);
   const [images, setImages] = useState([]);
   const [examens, setExamens] = useState([]);
+  const [actualites, setActualites] = useState([]);
+  const [chargementActualites, setChargementActualites] = useState(true);
   const [chargementFiche, setChargementFiche] = useState(true);
   const [chargementImages, setChargementImages] = useState(true);
   const [chargementExamens, setChargementExamens] = useState(true);
@@ -411,6 +426,9 @@ export default function FicheStructureSante() {
       .then((data) => {
         if (!annule) setImages(data.images || []);
       })
+      .catch(() => {
+        if (!annule) setImages([]);
+      })
       .finally(() => {
         if (!annule) setChargementImages(false);
       });
@@ -420,8 +438,23 @@ export default function FicheStructureSante() {
       .then((data) => {
         if (!annule) setExamens(data.examens || []);
       })
+      .catch(() => {
+        if (!annule) setExamens([]);
+      })
       .finally(() => {
         if (!annule) setChargementExamens(false);
+      });
+
+    setChargementActualites(true);
+    listerActualitesCentre(id)
+      .then((data) => {
+        if (!annule) setActualites(data.annonces || []);
+      })
+      .catch(() => {
+        if (!annule) setActualites([]);
+      })
+      .finally(() => {
+        if (!annule) setChargementActualites(false);
       });
 
     return () => {
@@ -447,6 +480,7 @@ export default function FicheStructureSante() {
     { id: "presentation", label: "Présentation" },
     { id: "images", label: `Images (${images.length})` },
     { id: "examens", label: `Examens (${examens.length})` },
+    { id: "actualites", label: `Actualités (${actualites.length})` },
   ];
 
   return (
@@ -508,16 +542,24 @@ export default function FicheStructureSante() {
                     <i className="fa-solid fa-hourglass-half" /> En cours de vérification
                   </span>
                 )}
+                {structure.urgences_24h && (
+                  <span className="chip chip-verifie">
+                    <i className="fa-solid fa-truck-medical" /> Urgences 24 h/24
+                  </span>
+                )}
+                <StatutOuverture fiche={structure} />
               </div>
             </div>
             <div className="profile-actions">
-              <a
-                href="#contact"
-                className="btn btn-primary btn-lg-aps"
-                onClick={() => setActiveTab("presentation")}
-              >
-                <i className="fa-solid fa-envelope" /> Contacter
-              </a>
+              {structure.droits?.contact_direct && (
+                <a
+                  href="#contact"
+                  className="btn btn-primary btn-lg-aps"
+                  onClick={() => setActiveTab("presentation")}
+                >
+                  <i className="fa-solid fa-envelope" /> Contacter
+                </a>
+              )}
               {structure.telephone && (
                 <a href={`tel:${structure.telephone}`} className="btn btn-ghost">
                   <i className="fa-solid fa-phone" />
@@ -539,6 +581,9 @@ export default function FicheStructureSante() {
           )}
           {activeTab === "examens" && (
             <ExamensPanel examens={examens} chargement={chargementExamens} />
+          )}
+          {activeTab === "actualites" && (
+            <ActualitesFiche actualites={actualites} chargement={chargementActualites} nom={structure.nom} />
           )}
         </div>
       </section>

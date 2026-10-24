@@ -18,6 +18,7 @@ import { verifierSignatureWebhookVisio } from "../lib/jitsiWebhookService.js";
 import { enregistrerPresence } from "../services/presence.service.js";
 import { partieDepuisParticipant } from "../services/reglesPresenceReprogrammation.service.js";
 import { inviterAvisPatient } from "../services/avisMedecin.service.js";
+import { creerNotifications } from "../services/notification.service.js";
 
 const STATUTS_AUTORISES_VISIO = ["confirme", "en_attente_presence"];
 // Doit rester identique au roomName généré dans obtenirTokenVisio
@@ -103,6 +104,8 @@ export async function obtenirTokenVisio(req, res, next) {
     const nomInterlocuteur = [interlocuteur.prenom, interlocuteur.nom].filter(Boolean).join(" ");
     const sujet = `Téléconsultation avec ${estLeMedecin ? "" : "Dr "}${nomInterlocuteur}`;
 
+    if (estLeMedecin) alerterPatientVisio(rdv);
+
     res.json({
       token,
       roomName,
@@ -112,6 +115,31 @@ export async function obtenirTokenVisio(req, res, next) {
   } catch (err) {
     next(err);
   }
+}
+
+// Une alerte au plus par tranche de 10 min : le médecin qui recharge ou
+// relance l'appel ne doit pas inonder le patient.
+const TRANCHE_ALERTE_VISIO_MS = 10 * 60 * 1000;
+
+/**
+ * Le médecin lance la visio : le patient est alerté (in-app + push mobile)
+ * pour la rejoindre. Jamais bloquant pour le médecin.
+ */
+function alerterPatientVisio(rdv) {
+  const tranche = Math.floor(Date.now() / TRANCHE_ALERTE_VISIO_MS);
+  const patient_id = rdv.patient.utilisateur_id;
+  const nomMedecin = [rdv.medecin.utilisateur.prenom, rdv.medecin.utilisateur.nom].filter(Boolean).join(" ");
+  creerNotifications([
+    {
+      utilisateur_id: patient_id,
+      type: "rdv_visio_demarree",
+      rdv_id: rdv.rdv_id,
+      titre: "Votre téléconsultation commence",
+      message: `Dr ${nomMedecin} vous attend dans la salle de consultation. Rejoignez la visio depuis vos rendez-vous.`,
+      donnees: { role: "patient", type_rdv: "teleconsultation" },
+      cle: `rdv_visio_demarree:${rdv.rdv_id}:${tranche}:${patient_id}`,
+    },
+  ]).catch((err) => console.error("[visio] alerte patient non émise :", err.message));
 }
 
 /**

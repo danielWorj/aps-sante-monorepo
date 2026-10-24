@@ -9,9 +9,8 @@ import '../annonces/portail_annonces.dart';
 import '../../espaces/carte_connexion_compte.dart';
 
 /// Shell (Scaffold + RoleBottomNavigationBar) affiché pour tout rôle
-/// qui n'a pas de shell dédié (admin, superadmin, agent_structure_sante,
-/// agent_pharmacie, agent_ambulance, agent_pompes_funebres,
-/// agent_assurance…).
+/// qui n'a pas de shell dédié (admin, superadmin, agent_ambulance,
+/// agent_pompes_funebres). Pharmacie et centre de santé : PresenceHomeShell.
 ///
 /// Les pages sont des placeholders générés à partir des libellés des
 /// items de la barre : à remplacer par les vrais écrans de chaque
@@ -91,6 +90,7 @@ class _EnTeteEspace extends ConsumerWidget {
           const BoutonChangerEspace(),
           const BoutonAnnonces(),
           const SizedBox(width: 8),
+          const BoutonParametres(),
           const BoutonDeconnexion(),
         ],
       ),

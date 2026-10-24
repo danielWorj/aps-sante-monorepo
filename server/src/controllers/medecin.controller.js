@@ -103,6 +103,7 @@ export {
   // (visio.controller.js, traiterFinSessionVisio). Remplace scannerQrRendezVous.
   terminerRendezVous,
   accepterRendezVous,
+  changerTypeRendezVous,
   // Correction manuelle admin (voir rendezVous.controller.js) : importée
   // par medecin.routes.js, mais jamais ré-exportée ici — même cause que
   // la note ci-dessus (le serveur ne démarrait pas).

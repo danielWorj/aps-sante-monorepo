@@ -12,6 +12,7 @@ import '../../../utils/fonds.dart';
 import '../teleconsultation_screen.dart';
 import 'terminer_rdv_sheet.dart';
 import 'accepter_rdv_sheet.dart';
+import 'changer_type_rdv_sheet.dart';
 
 /// ============================================================
 /// portail-medecin-rdv.dart - VERSION ADAPTÉE
@@ -168,6 +169,7 @@ class _DoctorStrip extends StatelessWidget {
                   ],
                 ),
               ),
+              const BoutonParametres(),
               const BoutonDeconnexion(),
             ],
           ),
@@ -561,22 +563,7 @@ class _PanelConfirme extends ConsumerWidget {
                                                         rdv: rdv,
                                                         role: PartieRendezVous.medecin,
                                                       )
-                                                    // RDV déjà accepté : le lieu reste modifiable
-                                                    // tant qu'il est `confirme` (patient renotifié).
-                                                    : rdv.peutEtreAccepte && rdv.accepteLe != null
-                                                        ? Align(
-                                                            alignment: Alignment.centerLeft,
-                                                            child: TextButton.icon(
-                                                                onPressed: () => afficherAccepterRdv(
-                                                                    context,
-                                                                    rdv: rdv,
-                                                                    nomPatient: '${rdv.patient?.utilisateur?.prenom ?? ''} ${rdv.patient?.utilisateur?.nom ?? ''}',
-                                                                ),
-                                                                icon: const Icon(Icons.edit_location_alt_outlined, size: 16),
-                                                                label: const Text('Modifier le lieu', style: TextStyle(fontSize: 12)),
-                                                            ),
-                                                          )
-                                                        : null,
+                                                    : _actionsSecondaires(context, rdv),
                                                 bottom: _Frow(
                                                     badge: rdv.estAReprogrammer
                                                         ? const BadgeChip(
@@ -1132,6 +1119,37 @@ class _Frow extends StatelessWidget {
 /// ════════════════════════════════════════════════════════════
 
 /// Format l'heure (ex: "09:30")
+/// Actions secondaires d'un RDV confirmé : « Modifier le lieu » (RDV physique
+/// déjà accepté, patient renotifié) et « Changer le type » (physique <->
+/// téléconsultation, tant que la consultation n'a pas commencé). `null` s'il
+/// n'y en a aucune.
+Widget? _actionsSecondaires(BuildContext context, RendezVous rdv) {
+  final nomPatient =
+      '${rdv.patient?.utilisateur?.prenom ?? ''} ${rdv.patient?.utilisateur?.nom ?? ''}';
+  final actions = <Widget>[
+    if (rdv.peutEtreAccepte && rdv.accepteLe != null)
+      TextButton.icon(
+        onPressed: () => afficherAccepterRdv(context, rdv: rdv, nomPatient: nomPatient),
+        icon: const Icon(Icons.edit_location_alt_outlined, size: 16),
+        label: const Text('Modifier le lieu', style: TextStyle(fontSize: 12)),
+      ),
+    if (rdv.peutChangerDeType)
+      TextButton.icon(
+        onPressed: () => afficherChangerTypeRdv(context, rdv: rdv, nomPatient: nomPatient),
+        icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+        label: Text(
+          rdv.estTeleconsultation ? 'Passer en physique' : 'Passer en téléconsultation',
+          style: const TextStyle(fontSize: 12),
+        ),
+      ),
+  ];
+  if (actions.isEmpty) return null;
+  return Align(
+    alignment: Alignment.centerLeft,
+    child: Wrap(spacing: 4, children: actions),
+  );
+}
+
 String _formatTime(DateTime dateHeure) {
     return '${dateHeure.hour.toString().padLeft(2, '0')}:${dateHeure.minute.toString().padLeft(2, '0')}';
 }

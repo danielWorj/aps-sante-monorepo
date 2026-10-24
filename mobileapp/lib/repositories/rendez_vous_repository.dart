@@ -346,6 +346,28 @@ class RendezVousRepository {
     return ResultatAcceptation.fromJson(donnees);
   }
 
+  /// POST /rendez-vous/:id/type  { type_rdv }
+  ///
+  /// RDV payé (`confirme`), consultation pas encore commencée : réservé au
+  /// médecin du rendez-vous, qui le passe en physique ou en téléconsultation.
+  /// Le lieu et l'acceptation sont effacés ; le patient est notifié. Lève
+  /// [ApiException] avec le message du serveur : 400 téléconsultation non
+  /// activée, 403 autre médecin, 409 non payé, statut incompatible ou
+  /// consultation commencée.
+  Future<ResultatChangementType> changerTypeRendezVous({
+    required String id,
+    required TypeRdv typeRdv,
+    required String token,
+  }) async {
+    final donnees = await _post(
+      ApiRealEndpoints.changerTypeRendezVous(id),
+      body: {'type_rdv': typeRdv.toApi()},
+      token: token,
+    );
+    if (donnees is! Map<String, dynamic>) return const ResultatChangementType();
+    return ResultatChangementType.fromJson(donnees);
+  }
+
   /// PATCH /rendez-vous/:id/statut avec `statut: annule`.
   ///
   /// Politique de fonds v2 : la réponse porte le résultat financier

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import pharmaPlaceholder from "../assets/img/pharma1.jpg";
 import "./../assets/styles/FicheStructureSante.css";
 import GoogleMapView from "../components/maps/GoogleMapView";
+import HorairesFiche, { StatutOuverture } from "../components/presence/HorairesFiche";
 // Services réels — voir src/services/pharmacieService.js. Ce fichier
 // exporte déjà listerPharmacies / obtenirPharmacie / creerPharmacie
 // (page Pharmacie.jsx) ainsi que listerGardesPharmacie (pour savoir si
@@ -21,10 +22,11 @@ import {
 } from "../services/pharmacieService";
 
 // Fiche pharmacie — page de détail d'une pharmacie, avec ses
-// coordonnées, sa localisation sur une carte, ses photos, ses
-// annonces (promotions, réassorts, informations ponctuelles...) et un
-// formulaire de contact direct par email. Contenu entièrement
-// dynamisé depuis l'API.
+// coordonnées, ses horaires, sa localisation sur une carte, ses photos,
+// ses actualités (informations pratiques publiées par la pharmacie depuis
+// son espace) et un formulaire de contact direct par email — ouvert
+// seulement si l'abonnement de la fiche inclut le contact direct
+// (droits.contact_direct). Contenu entièrement dynamisé depuis l'API.
 //
 // NB route : cette fiche est supposée montée sur /pharmacie/:id (même
 // convention que /structure-sante/:id pour FicheStructureSante) — à
@@ -224,15 +226,11 @@ function PresentationPanel({ pharmacie }) {
                 </td>
               </tr>
             )}
-            {pharmacie.horaires && (
-              <tr>
-                <td>Horaires</td>
-                <td>{pharmacie.horaires}</td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
+
+      <HorairesFiche fiche={pharmacie} />
 
       {(pharmacie.description_enrichie || pharmacie.description) && (
         <div className="info-card">
@@ -258,7 +256,18 @@ function PresentationPanel({ pharmacie }) {
           <MapCard pharmacie={pharmacie} />
         </div>
         <div className="col-md-4">
-          <ContactForm pharmacie={pharmacie} />
+          {pharmacie.droits?.contact_direct ? (
+            <ContactForm pharmacie={pharmacie} />
+          ) : (
+            <div className="info-card" id="contact">
+              <h3>
+                <i className="fa-solid fa-envelope" /> Contact
+              </h3>
+              <p className="minimal-note mb-0">
+                Cette pharmacie ne reçoit pas de messages via ApSa pour le moment. Rendez-vous sur place aux heures d&apos;ouverture.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -308,17 +317,17 @@ function formatDate(valeur) {
 }
 
 function AnnoncesPanel({ annonces, chargement }) {
-  if (chargement) return <p className="minimal-note">Chargement des annonces…</p>;
+  if (chargement) return <p className="minimal-note">Chargement des actualités…</p>;
 
   return (
     <div className="tab-panel active">
       <div className="info-card">
         <h3>
-          <i className="fa-solid fa-bullhorn" /> Annonces de la pharmacie
+          <i className="fa-solid fa-newspaper" /> Actualités de la pharmacie
         </h3>
         {annonces.length === 0 ? (
           <p className="minimal-note mb-0">
-            Cette pharmacie n&apos;a publié aucune annonce pour le moment.
+            Cette pharmacie n&apos;a publié aucune actualité pour le moment.
           </p>
         ) : (
           <div className="d-flex flex-column gap-3">
@@ -360,7 +369,7 @@ function AnnoncesPanel({ annonces, chargement }) {
           </div>
         )}
         <p className="minimal-note mt-3 mb-0">
-          <i className="fa-solid fa-circle-info" /> Annonces publiées et mises à
+          <i className="fa-solid fa-circle-info" /> Actualités publiées et mises à
           jour par la pharmacie elle-même. À confirmer directement auprès d&apos;elle
           avant tout déplacement.
         </p>
@@ -423,6 +432,9 @@ export default function FichePharmacie() {
       .then((data) => {
         if (!annule) setImages(data.images || []);
       })
+      .catch(() => {
+        if (!annule) setImages([]);
+      })
       .finally(() => {
         if (!annule) setChargementImages(false);
       });
@@ -431,6 +443,9 @@ export default function FichePharmacie() {
     listerAnnoncesPharmacie(id)
       .then((data) => {
         if (!annule) setAnnonces(data.annonces || []);
+      })
+      .catch(() => {
+        if (!annule) setAnnonces([]);
       })
       .finally(() => {
         if (!annule) setChargementAnnonces(false);
@@ -465,7 +480,7 @@ export default function FichePharmacie() {
   const tabs = [
     { id: "presentation", label: "Présentation" },
     { id: "images", label: `Images (${images.length})` },
-    { id: "annonces", label: `Annonces (${annonces.length})` },
+    { id: "annonces", label: `Actualités (${annonces.length})` },
   ];
 
   return (
@@ -528,16 +543,19 @@ export default function FichePharmacie() {
                     <i className="fa-solid fa-hourglass-half" /> En cours de vérification
                   </span>
                 )}
+                <StatutOuverture fiche={pharmacie} />
               </div>
             </div>
             <div className="profile-actions">
-              <a
-                href="#contact"
-                className="btn btn-primary btn-lg-aps"
-                onClick={() => setActiveTab("presentation")}
-              >
-                <i className="fa-solid fa-envelope" /> Contacter
-              </a>
+              {pharmacie.droits?.contact_direct && (
+                <a
+                  href="#contact"
+                  className="btn btn-primary btn-lg-aps"
+                  onClick={() => setActiveTab("presentation")}
+                >
+                  <i className="fa-solid fa-envelope" /> Contacter
+                </a>
+              )}
               {pharmacie.telephone && (
                 <a href={`tel:${pharmacie.telephone}`} className="btn btn-urgence">
                   <i className="fa-solid fa-phone" />

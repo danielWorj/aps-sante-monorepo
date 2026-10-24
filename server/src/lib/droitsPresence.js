@@ -234,11 +234,15 @@ function sansPieces(fiche, cles) {
   return copie;
 }
 
-/** Pharmacie (EF-PHA-06 / EF-PHA-07) : seuls le contact direct et l'enrichi sont modulés. */
+/**
+ * Pharmacie (EF-PHA-06 / EF-PHA-07) : seuls le contact direct (téléphone,
+ * e-mail) et l'enrichi sont modulés ; adresse et horaires restent publics.
+ */
 export function filtrerPharmacie(p, droits) {
   return {
     ...sansPieces(p, PIECES_STRUCTURE),
     telephone: droits.contact_direct ? p.telephone : null,
+    email: droits.contact_direct ? p.email ?? null : null,
     image_nom: droits.photos ? p.image_nom : null,
     image_url: droits.photos ? p.image_url : null,
     description_enrichie: droits.description_enrichie ? p.description_enrichie ?? null : null,
@@ -251,6 +255,7 @@ export function filtrerStructure(s, droits) {
   return {
     ...sansPieces(s, PIECES_STRUCTURE),
     telephone: droits.contact_direct ? s.telephone : null,
+    email: droits.contact_direct ? s.email ?? null : null,
     image_nom: droits.photos ? s.image_nom : null,
     image_url: droits.photos ? s.image_url : null,
     description_enrichie: droits.description_enrichie ? s.description_enrichie ?? null : null,

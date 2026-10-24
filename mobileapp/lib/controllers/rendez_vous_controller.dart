@@ -339,6 +339,32 @@ class ActionsRendezVousController extends AsyncNotifier<void> {
     }
   }
 
+  /// Change le type d'un RDV payé (physique <-> téléconsultation)
+  /// (POST /rendez-vous/:id/type). Réservé au médecin du RDV. Lève
+  /// [ApiException] avec le message du serveur ; la liste des RDV est
+  /// invalidée seulement en cas de succès.
+  Future<ResultatChangementType> changerType(
+    String id, {
+    required TypeRdv typeRdv,
+    required String token,
+  }) async {
+    state = const AsyncLoading<void>().copyWithPrevious(state);
+    try {
+      final resultat =
+          await ref.read(rendezVousRepositoryProvider).changerTypeRendezVous(
+                id: id,
+                typeRdv: typeRdv,
+                token: token,
+              );
+      state = const AsyncData(null);
+      ref.invalidate(listeRendezVousControllerProvider);
+      return resultat;
+    } catch (e, pile) {
+      state = AsyncError<void>(e, pile);
+      rethrow;
+    }
+  }
+
   /// Propose une nouvelle date pour un RDV `a_reprogrammer` (phase 5).
   /// [nouvelleDateIso] vient de `CreneauAgenda.iso`. Lève [ApiException]
   /// avec le message du serveur ; la liste des RDV est invalidée seulement

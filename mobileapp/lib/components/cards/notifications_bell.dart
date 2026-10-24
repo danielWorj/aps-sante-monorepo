@@ -55,10 +55,20 @@ IconData iconeNotification(TypeNotification type) {
       return Icons.reply_rounded;
     case TypeNotification.rdvRappel:
       return Icons.alarm_rounded;
+    case TypeNotification.rdvVisioDemarree:
+      return Icons.videocam_rounded;
+    case TypeNotification.rdvTypeModifie:
+      return Icons.swap_horiz_rounded;
     case TypeNotification.offreRdvCandidatureRetenue:
       return Icons.handshake_outlined;
     case TypeNotification.offreRdvCandidatureNonRetenue:
       return Icons.cancel_outlined;
+    case TypeNotification.abonnementPresenceActive:
+      return Icons.verified_outlined;
+    case TypeNotification.abonnementPresenceEcheance:
+      return Icons.hourglass_top_outlined;
+    case TypeNotification.messageFicheRecu:
+      return Icons.mail_outline_rounded;
     case TypeNotification.inconnu:
       return Icons.notifications_none_outlined;
   }
@@ -72,16 +82,20 @@ ApsTone _teinteNotification(TypeNotification type) {
     case TypeNotification.offreRdvReponse:
     case TypeNotification.offreRdvCandidatureRetenue:
     case TypeNotification.miseEnRelationRecue:
+    case TypeNotification.messageFicheRecu:
       return ApsTone.violet;
     case TypeNotification.rdvRappel:
+    case TypeNotification.rdvVisioDemarree:
       return ApsTone.sky;
     case TypeNotification.offreRdvCandidatureNonRetenue:
       return ApsTone.neutral;
     case TypeNotification.rdvAReprogrammer:
     case TypeNotification.offreRdvExpiree:
     case TypeNotification.abonnementAssuranceEcheance:
+    case TypeNotification.abonnementPresenceEcheance:
       return ApsTone.amber;
     case TypeNotification.abonnementAssuranceActive:
+    case TypeNotification.abonnementPresenceActive:
       return ApsTone.sky;
     case TypeNotification.avisMedecinInvitation:
     case TypeNotification.avisMedecinPublie:
@@ -94,6 +108,7 @@ ApsTone _teinteNotification(TypeNotification type) {
 
 bool _estNotificationDemande(TypeNotification type) =>
     type == TypeNotification.miseEnRelationRecue ||
+    type == TypeNotification.messageFicheRecu ||
     type == TypeNotification.offreRdvNouvelle ||
     type == TypeNotification.offreRdvReponse ||
     type == TypeNotification.offreRdvExpiree ||

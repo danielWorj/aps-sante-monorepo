@@ -54,6 +54,7 @@ class EnTeteLaboratoire extends ConsumerWidget {
               ],
             ),
           ),
+          const BoutonParametres(),
           const BoutonDeconnexion(),
         ],
       ),
