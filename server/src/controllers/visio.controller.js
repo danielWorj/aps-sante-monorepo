@@ -435,6 +435,30 @@ export async function cloturerVisio(req, res, next) {
   }
 }
 
+/**
+ * POST /api/visio/:id/presence — l'application signale que l'utilisateur
+ * courant est entré dans la salle (événement Jitsi « conférence rejointe »).
+ *
+ * Même fait que le webhook `muc-occupant-joined` (premier passage gagnant,
+ * idempotent) : sans lui, un webhook Prosody absent ou injoignable laissait
+ * les présences vides, donc aucune fin de consultation constatée à la
+ * clôture du médecin — et plus de note possible pour le patient.
+ */
+export async function signalerPresenceVisio(req, res, next) {
+  try {
+    const charge = await chargerRdvParticipant(req, res);
+    if (!charge) return undefined;
+    const { rdv, role } = charge;
+    if (!STATUTS_AUTORISES_VISIO.includes(rdv.statut)) {
+      return res.status(200).json({ enregistree: false });
+    }
+    const { enregistree } = await enregistrerPresence(rdv.rdv_id, role);
+    return res.status(200).json({ enregistree });
+  } catch (err) {
+    next(err);
+  }
+}
+
 /** GET /api/visio/:id/cloture — bilan seul (le patient attend la clôture du médecin). */
 export async function obtenirBilanVisio(req, res, next) {
   try {

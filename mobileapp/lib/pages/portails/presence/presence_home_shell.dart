@@ -10,11 +10,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../components/navigation/bouton_accueil_public.dart';
 import '../../../components/cards/notifications_bell.dart';
+import '../../../components/navigation/bouton_deconnexion.dart';
 import '../../../components/navigation/role-bottom-navigation.dart';
 import '../../../components/style/colors.dart';
 import '../../../components/style/text_styles.dart';
-import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/espace_presence_controller.dart';
 import '../../../models/espace_presence_models.dart';
 import 'portail-presence-dashboard.dart';
@@ -80,6 +81,8 @@ class _PresenceHomeShellState extends ConsumerState<PresenceHomeShell> {
           ),
         ),
       ),
+      // Retour à l'accueil public sans se déconnecter.
+      floatingActionButton: const BoutonAccueilPublic(),
       bottomNavigationBar: fiche.hasValue
           ? RoleBottomNavigationBar(
               currentIndex: _index,
@@ -126,13 +129,8 @@ class _SansFiche extends ConsumerWidget {
             TextButton.icon(
               onPressed: () async {
                 if (!await confirmerPortail(context, 'Déconnexion', 'Se déconnecter de votre espace ?', action: 'Se déconnecter')) return;
-                try {
-                  await ref.read(sessionControllerProvider.notifier).deconnecter();
-                } catch (_) {
-                  // Session déjà fermée localement.
-                }
-                ref.invalidate(maFichePresenceProvider(type));
-                if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+                if (!context.mounted) return;
+                await fermerSessionEtRevenirAccueil(context, nettoyer: (c) => c.invalidate(maFichePresenceProvider(type)));
               },
               icon: const Icon(Icons.logout, size: 18),
               label: const Text('Déconnexion'),

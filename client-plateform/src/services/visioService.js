@@ -12,3 +12,7 @@ export const cloturerVisio = (rdvId) => apiFetch(`/visio/${rdvId}/cloture`, { me
 
 /** GET /visio/:id/cloture — même bilan, sans effet (le patient attend la clôture du médecin). */
 export const obtenirBilanVisio = (rdvId) => apiFetch(`/visio/${rdvId}/cloture`);
+
+/** POST /visio/:id/presence — l'utilisateur est entré dans la salle (doublon
+ *  volontaire du webhook Prosody, qui peut manquer). -> { enregistree } */
+export const signalerPresenceVisio = (rdvId) => apiFetch(`/visio/${rdvId}/presence`, { method: 'POST' });

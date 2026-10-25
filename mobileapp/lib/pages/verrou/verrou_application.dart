@@ -4,7 +4,10 @@
 // connexion », 6.8) : la session reste ouverte 30 jours, mais l'application
 // se rouvre avec le code PIN ou l'empreinte.
 //
-// Verrouillée :
+// Verrouillage FACULTATIF (25/10 : le PIN redemandé à chaque retour dans
+// l'application agaçait les utilisateurs) : désactivé par défaut, activé par
+// l'utilisateur depuis son profil ou les Paramètres (préférence locale).
+// Une fois activé, l'application est verrouillée :
 //   - au démarrage, quand une session est restaurée ;
 //   - au retour au premier plan après plus de 2 minutes en arrière-plan.
 // Seulement pour un compte qui a un code PIN (sinon rien à saisir).
@@ -30,8 +33,27 @@ import '../../controllers/authentification_controller.dart';
 import '../../models/authentification_models.dart';
 
 const _cleBiometrie = 'aps_deverrouillage_biometrique';
+const _cleVerrouillage = 'aps_verrouillage_application';
 const _delaiVerrouillage = Duration(minutes: 2);
 const _stockage = FlutterSecureStorage();
+
+/// Préférence « verrouiller l'application » (désactivée par défaut), lue au
+/// démarrage par [VerrouApplication] et modifiée par [ecrireVerrouillageActif].
+final ValueNotifier<bool> verrouillageActif = ValueNotifier<bool>(false);
+
+Future<bool> lireVerrouillageActif() async {
+  try {
+    verrouillageActif.value = await _stockage.read(key: _cleVerrouillage) == 'oui';
+  } catch (_) {
+    verrouillageActif.value = false;
+  }
+  return verrouillageActif.value;
+}
+
+Future<void> ecrireVerrouillageActif(bool actif) {
+  verrouillageActif.value = actif;
+  return _stockage.write(key: _cleVerrouillage, value: actif ? 'oui' : 'non').catchError((_) {});
+}
 
 /// Préférence « déverrouiller avec l'empreinte » : true, false, ou null
 /// (jamais proposée).
@@ -76,11 +98,20 @@ class _VerrouApplicationState extends ConsumerState<VerrouApplication> with Widg
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Session restaurée au démarrage : on verrouille (une connexion faite
-    // pendant cette ouverture de l'application, elle, ne verrouille pas).
-    ref.read(sessionControllerProvider.future).then((session) {
-      if (mounted && (session?.utilisateur.pinDefini ?? false)) setState(() => _verrouille = true);
-    }).catchError((_) {});
+    _verrouillerAuDemarrage();
+  }
+
+  /// Session restaurée au démarrage : on verrouille si l'utilisateur l'a
+  /// demandé (une connexion faite pendant cette ouverture de l'application,
+  /// elle, ne verrouille pas).
+  Future<void> _verrouillerAuDemarrage() async {
+    try {
+      final actif = await lireVerrouillageActif();
+      final session = await ref.read(sessionControllerProvider.future);
+      if (mounted && actif && (session?.utilisateur.pinDefini ?? false)) setState(() => _verrouille = true);
+    } catch (_) {
+      // Session non restaurée : rien à verrouiller.
+    }
   }
 
   @override
@@ -96,7 +127,10 @@ class _VerrouApplicationState extends ConsumerState<VerrouApplication> with Widg
     } else if (etat == AppLifecycleState.resumed) {
       final depuis = _miseEnArrierePlan;
       _miseEnArrierePlan = null;
-      if (depuis != null && DateTime.now().difference(depuis) > _delaiVerrouillage && _sessionAvecPin) {
+      if (verrouillageActif.value &&
+          depuis != null &&
+          DateTime.now().difference(depuis) > _delaiVerrouillage &&
+          _sessionAvecPin) {
         setState(() => _verrouille = true);
       }
     }
@@ -271,7 +305,9 @@ class _EcranVerrouState extends ConsumerState<_EcranVerrou> {
                 ],
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: _envoi ? null : () => ref.read(sessionControllerProvider.notifier).deconnecter().catchError((_) {}),
+                  // L'écran sous le verrou peut être un espace : retour à
+                  // l'accueil public, sinon il resterait un écran vide.
+                  onPressed: _envoi ? null : () => fermerSessionEtRevenirAccueil(context),
                   child: const Text('Se déconnecter'),
                 ),
               ],

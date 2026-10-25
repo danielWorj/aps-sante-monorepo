@@ -2,9 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../controllers/authentification_controller.dart';
+import '../../pages/pilote_push.dart' show cleNavigateurApp;
 import '../../pages/public/publicAcceuil.dart';
 import '../style/colors.dart';
 import '../ui/aps_ui.dart';
+
+/// Revient à l'accueil public avec un historique vidé. Passe par le
+/// navigateur racine : fonctionne même si l'écran appelant est démonté.
+void retournerAccueilPublic() {
+  cleNavigateurApp.currentState?.pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => const PublicAcceuilPage()),
+    (_) => false,
+  );
+}
+
+/// Ferme la session (même hors réseau) puis revient à l'accueil public.
+///
+/// Tout ce qui dépend de l'écran appelant est lu AVANT la déconnexion : dès
+/// que la session passe à null, l'espace se reconstruit et se démonte
+/// (AccueilCompte), son `context` et son `ref` ne sont plus utilisables —
+/// c'était la cause de l'écran noir après « Se déconnecter ».
+/// [nettoyer] : providers propres à l'espace à invalider ensuite.
+Future<void> fermerSessionEtRevenirAccueil(
+  BuildContext context, {
+  void Function(ProviderContainer container)? nettoyer,
+}) async {
+  final container = ProviderScope.containerOf(context, listen: false);
+  try {
+    await container.read(sessionControllerProvider.notifier).deconnecter();
+  } catch (_) {
+    // Session déjà fermée localement (voir SessionController.deconnecter).
+  }
+  nettoyer?.call(container);
+  retournerAccueilPublic();
+}
 
 /// Déconnexion depuis un espace connecté (patient, médecin, assurance,
 /// structure…) : confirmation, session fermée (même hors réseau), puis
@@ -21,17 +52,8 @@ Future<void> deconnecterEspace(BuildContext context, WidgetRef ref) async {
       ],
     ),
   );
-  if (ok != true) return;
-  try {
-    await ref.read(sessionControllerProvider.notifier).deconnecter();
-  } catch (_) {
-    // Session déjà fermée localement (voir SessionController.deconnecter).
-  }
-  if (!context.mounted) return;
-  Navigator.of(context).pushAndRemoveUntil(
-    MaterialPageRoute(builder: (_) => const PublicAcceuilPage()),
-    (_) => false,
-  );
+  if (ok != true || !context.mounted) return;
+  await fermerSessionEtRevenirAccueil(context);
 }
 
 /// Bouton discret de déconnexion, placé à côté de l'avatar et du nom du

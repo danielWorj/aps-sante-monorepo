@@ -18,6 +18,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../components/navigation/bouton_accueil_public.dart';
+import '../../components/navigation/bouton_deconnexion.dart';
 import '../../components/style/colors.dart';
 import '../../components/style/text_styles.dart';
 import '../../controllers/annonceur_publicite_controller.dart';
@@ -39,13 +41,8 @@ Future<void> _deconnecter(BuildContext context, WidgetRef ref) async {
       ],
     ),
   );
-  if (ok != true) return;
-  try {
-    await ref.read(sessionControllerProvider.notifier).deconnecter();
-  } catch (_) {
-    // Session déjà fermée localement (voir SessionController.deconnecter).
-  }
-  if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+  if (ok != true || !context.mounted) return;
+  await fermerSessionEtRevenirAccueil(context);
 }
 
 String _nombre(int n) => n.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ' ');
@@ -120,10 +117,22 @@ class MesPublicitesScreen extends ConsumerWidget {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ReserverPubliciteScreen())),
-        icon: const Icon(Icons.add),
-        label: const Text('Réserver un espace'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Espace annonceur : retour à l'accueil public sans se déconnecter.
+          if (espaceAnnonceur) ...[
+            const BoutonAccueilPublic(),
+            const SizedBox(height: 10),
+          ],
+          FloatingActionButton.extended(
+            heroTag: 'reserver_publicite',
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ReserverPubliciteScreen())),
+            icon: const Icon(Icons.add),
+            label: const Text('Réserver un espace'),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(mesPublicitesProvider.future),

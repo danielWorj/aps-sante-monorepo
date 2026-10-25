@@ -1,7 +1,8 @@
 // lib/pages/parametres/parametres_page.dart
 //
 // Paramètres de l'application (volontairement simple) : mise à jour de
-// l'application, version installée, pages d'information et déconnexion.
+// l'application, version installée, pages d'information, verrouillage par
+// code PIN (facultatif) et déconnexion.
 // Accès : icône engrenage en haut de l'accueil public et des tableaux de
 // bord (BoutonParametres).
 
@@ -11,7 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../components/components.dart';
 import '../../controllers/authentification_controller.dart';
 import '../../controllers/mise_a_jour_controller.dart';
-import '../espaces/carte_connexion_compte.dart' show LigneMisesAJour;
+import '../espaces/carte_connexion_compte.dart' show LigneMisesAJour, LigneVerrouillageApplication;
 import '../public/apropos.dart';
 
 void ouvrirParametres(BuildContext context) {
@@ -23,7 +24,7 @@ class ParametresPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connecte = ref.watch(authUtilisateurProvider) != null;
+    final utilisateur = ref.watch(authUtilisateurProvider);
     final installee = ref.watch(miseAJourProvider.select((e) => e.installee));
 
     return Scaffold(
@@ -58,11 +59,12 @@ class ParametresPage extends ConsumerWidget {
                 ),
               ],
             ),
-            if (connecte) ...[
+            if (utilisateur != null) ...[
               const SizedBox(height: 16),
               _Section(
                 titre: 'Compte',
                 lignes: [
+                  if (utilisateur.pinDefini) const LigneVerrouillageApplication(),
                   ApsMenuItem(
                     icon: Icons.logout_rounded,
                     title: 'Se déconnecter',

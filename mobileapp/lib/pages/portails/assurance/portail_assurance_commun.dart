@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../components/navigation/bouton_deconnexion.dart';
 import '../../../components/style/colors.dart';
 import '../../../components/style/text_styles.dart';
 import '../../../controllers/authentification_controller.dart';
@@ -23,16 +24,11 @@ Future<T> appelPortailUi<T>(
 }
 
 /// Déconnexion depuis le portail : session fermée (même hors réseau), retour
-/// au premier écran de l'application.
+/// à l'accueil public.
 Future<void> deconnecterPortail(BuildContext context, WidgetRef ref) async {
   if (!await confirmerPortail(context, 'Déconnexion', 'Se déconnecter de votre espace ?', action: 'Se déconnecter')) return;
-  try {
-    await ref.read(sessionControllerProvider.notifier).deconnecter();
-  } catch (_) {
-    // Session déjà fermée localement (voir SessionController.deconnecter).
-  }
-  ref.invalidate(maFicheAssuranceProvider);
-  if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+  if (!context.mounted) return;
+  await fermerSessionEtRevenirAccueil(context, nettoyer: (c) => c.invalidate(maFicheAssuranceProvider));
 }
 
 void snackPortail(BuildContext context, String message) {

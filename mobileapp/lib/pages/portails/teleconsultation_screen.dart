@@ -170,7 +170,10 @@ class _TeleconsultationScreenState
     );
 
     final listener = JitsiMeetEventListener(
-      conferenceJoined: (_) => _demarrerVerification(),
+      conferenceJoined: (_) {
+        _signalerPresence();
+        _demarrerVerification();
+      },
       // La clôture du médecin peut suivre de peu son départ : relectures.
       participantLeft: (_) {
         for (final s in const [0, 3, 8]) {
@@ -183,6 +186,19 @@ class _TeleconsultationScreenState
 
     setState(() => _etat = _EtatEcran.enConference);
     await _jitsiMeet.join(options, listener);
+  }
+
+  /// Présence enregistrée par l'application en plus du webhook Prosody :
+  /// sans elle, la clôture du médecin ne constate pas la fin et le patient
+  /// ne peut pas noter. Silencieux en cas d'échec.
+  Future<void> _signalerPresence() async {
+    try {
+      await ref.read(sessionControllerProvider.notifier).appelAuthentifie((token) => ref
+          .read(visioRepositoryProvider)
+          .signalerPresence(rdvId: widget.rdv.rdvId, token: token));
+    } catch (_) {
+      // Le webhook reste la source principale.
+    }
   }
 
   void _demarrerVerification() {

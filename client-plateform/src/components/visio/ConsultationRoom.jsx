@@ -19,6 +19,7 @@
 import { useEffect, useState } from "react";
 import { JitsiMeeting } from "@jitsi/react-sdk";
 import { apiFetch } from "../../lib/apiClient";
+import { signalerPresenceVisio } from "../../services/visioService";
 import { estErreurRdvNonPaye } from "../../utils/rdv";
 
 // onApi(externalApi) : API Jitsi, pour raccrocher / terminer pour tous depuis
@@ -105,9 +106,20 @@ function ConsultationRoom({ rdvId, onCallEnded, onReady, onApi, onParticipantLef
           // que le médecin ait rejoint le salon) ; on affine avec
           // videoConferenceJoined pour ne passer "en direct" qu'une fois
           // réellement connecté.
-          externalApi.addEventListener("videoConferenceJoined", () => onReady?.(externalApi));
+          externalApi.addEventListener("videoConferenceJoined", () => {
+            // Présence enregistrée par l'application en plus du webhook
+            // Prosody : sans elle, la fin de consultation n'est pas constatée
+            // et le patient ne peut pas noter le médecin.
+            signalerPresenceVisio(rdvId).catch(() => {});
+            onReady?.(externalApi);
+          });
           externalApi.addEventListener("videoConferenceLeft", () => onCallEnded?.());
           externalApi.addEventListener("readyToClose", () => onCallEnded?.());
+          // « Terminer pour tous » du médecin : le patient est expulsé de la
+          // salle, ce qui n'émet pas toujours videoConferenceLeft.
+          externalApi.addEventListener("participantKickedOut", (e) => {
+            if (e?.kicked?.local) onCallEnded?.();
+          });
           externalApi.addEventListener("participantLeft", () => onParticipantLeft?.());
         }}
       />

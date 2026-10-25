@@ -47,6 +47,8 @@ class _RoleHomeShellState extends State<RoleHomeShell> {
           ],
         ),
       ),
+      // Retour à l'accueil public sans se déconnecter.
+      floatingActionButton: const BoutonAccueilPublic(),
       bottomNavigationBar: RoleBottomNavigationBar.forRole(
         role: widget.role,
         currentIndex: _index,

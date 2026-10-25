@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../components/navigation/bouton_accueil_public.dart';
 import '../../../components/cards/notifications_bell.dart';
 import '../../../components/navigation/role-bottom-navigation.dart';
 import '../../../components/style/colors.dart';
@@ -74,6 +75,8 @@ class _AssuranceHomeShellState extends ConsumerState<AssuranceHomeShell> {
           ),
         ),
       ),
+      // Retour à l'accueil public sans se déconnecter.
+      floatingActionButton: const BoutonAccueilPublic(),
       bottomNavigationBar: fiche.hasValue
           ? RoleBottomNavigationBar(
               currentIndex: _index,

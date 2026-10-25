@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobileapp/pages/portails/patient/portail-patient-profil.dart';
 
+import '../../../components/navigation/bouton_accueil_public.dart';
 import '../../../components/cards/notifications_bell.dart';
 import '../../../components/navigation/patient-bottom-navigation.dart';
 import '../../../controllers/notification_controller.dart';
@@ -113,6 +114,8 @@ class _PatientHomeShellState extends ConsumerState<PatientHomeShell> {
           ],
         ),
       ),
+      // Retour à l'accueil public sans se déconnecter.
+      floatingActionButton: const BoutonAccueilPublic(),
       bottomNavigationBar: PatientBottomNavigationBar(
         currentIndex: _index,
         onTap: (i) => setState(() => _index = i),
