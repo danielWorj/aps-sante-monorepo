@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../components/navigation/bouton_accueil_public.dart';
 import '../../../components/cards/notifications_bell.dart';
 import '../../../components/navigation/medecin-bottom-navigation-bar.dart';
 import '../../../controllers/notification_controller.dart';
@@ -118,6 +119,8 @@ class _MedecinHomeShellState extends ConsumerState<MedecinHomeShell> {
           ],
         ),
       ),
+      // Retour à l'accueil public sans se déconnecter.
+      floatingActionButton: const BoutonAccueilPublic(),
       bottomNavigationBar: MedecinBottomNavigationBar(
         currentIndex: _index,
         onTap: (i) => setState(() => _index = i),

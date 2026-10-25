@@ -93,7 +93,9 @@ class AccueilCompte extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final role = ref.watch(authUtilisateurProvider)?.role;
-    if (role == null) return const SizedBox.shrink();
+    // Déconnexion en cours : l'appelant revient à l'accueil public. Un
+    // Scaffold plutôt qu'un widget nu, qui laissait un écran noir.
+    if (role == null) return const Scaffold();
 
     Widget pour(List<EspaceCompte> liste) {
       if (liste.isEmpty) return HomeRouterForRole(role: role);

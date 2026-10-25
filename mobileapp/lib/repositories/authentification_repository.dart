@@ -116,7 +116,9 @@ class AuthentificationRepository {
     bool avecJson = true,
     Map<String, String>? entetesSupplementaires,
   }) {
-    final entetes = <String, String>{'Accept': 'application/json'};
+    // X-Client-App : le serveur accorde à l'application mobile une session
+    // longue (6 mois glissants, voir token.utils.js) au lieu de 30 jours.
+    final entetes = <String, String>{'Accept': 'application/json', 'X-Client-App': 'mobile'};
     if (avecJson) entetes['Content-Type'] = 'application/json';
     if (token != null && token.isNotEmpty) {
       entetes['Authorization'] = 'Bearer $token';

@@ -9,6 +9,7 @@ import prisma from "../lib/prisma.js";
 import { espaceParDefaut, listerEspaces } from "./espaces.service.js";
 import {
   genererAccessToken,
+  estClientMobile,
   genererRefreshToken,
   NOM_COOKIE_REFRESH_TOKEN,
   optionsCookieRefreshToken,
@@ -86,7 +87,7 @@ export async function ouvrirSessionEspace(req, res, utilisateur, { espace, pinVe
     espace: actif?.cle ?? null,
     pin_le: pinVerifie ? Math.floor(Date.now() / 1000) : null,
   });
-  const { token: refreshToken, token_hash, date_expiration } = genererRefreshToken();
+  const { token: refreshToken, token_hash, date_expiration } = genererRefreshToken({ mobile: estClientMobile(req) });
 
   await prisma.refreshToken.create({
     data: {

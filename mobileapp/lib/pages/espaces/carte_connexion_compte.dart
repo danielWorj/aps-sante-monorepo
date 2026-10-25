@@ -44,6 +44,7 @@ class CarteConnexionCompte extends ConsumerWidget {
                 : 'Connectez-vous avec votre numéro, sans mot de passe',
             onTap: () => ouvrirCreerPin(context),
           ),
+          if (pinDefini) const LigneVerrouillageApplication(),
           if (pinDefini) const _LigneEmpreinte(),
           if (plusieursEspaces)
             ApsMenuItem(
@@ -98,7 +99,28 @@ class BoutonChangerEspace extends ConsumerWidget {
   }
 }
 
-/// « Déverrouiller avec l'empreinte » : visible si l'appareil le permet.
+/// « Verrouiller l'application » : PIN (ou empreinte) redemandé à
+/// l'ouverture. Désactivé par défaut (voir verrou_application.dart).
+class LigneVerrouillageApplication extends StatelessWidget {
+  const LigneVerrouillageApplication({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: verrouillageActif,
+      builder: (context, actif, _) => ApsMenuItem(
+        icon: Icons.lock_outline_rounded,
+        title: 'Verrouiller l’application',
+        subtitle: 'Demander le code PIN à l’ouverture de l’application',
+        showChevron: false,
+        trailing: Switch(value: actif, onChanged: ecrireVerrouillageActif),
+      ),
+    );
+  }
+}
+
+/// « Déverrouiller avec l'empreinte » : visible si l'appareil le permet et
+/// si le verrouillage est activé.
 class _LigneEmpreinte extends StatefulWidget {
   const _LigneEmpreinte();
 
@@ -129,7 +151,9 @@ class _LigneEmpreinteState extends State<_LigneEmpreinte> {
   @override
   Widget build(BuildContext context) {
     if (_disponible != true) return const SizedBox.shrink();
-    return ApsMenuItem(
+    return ValueListenableBuilder<bool>(
+      valueListenable: verrouillageActif,
+      builder: (context, verrouillage, _) => !verrouillage ? const SizedBox.shrink() : ApsMenuItem(
       icon: Icons.fingerprint,
       title: 'Déverrouiller avec l’empreinte',
       subtitle: 'À l’ouverture de l’application, à la place du code PIN',
@@ -140,6 +164,7 @@ class _LigneEmpreinteState extends State<_LigneEmpreinte> {
           ecrireDeverrouillageBiometrique(v);
           setState(() => _actif = v);
         },
+      ),
       ),
     );
   }

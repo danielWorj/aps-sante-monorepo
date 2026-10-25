@@ -424,4 +424,5 @@ class ApiRealEndpoints {
   static const String visioToken = '${baseUrl}/visio/token';
   // Fin d'appel : POST (le médecin clôt la consultation) / GET (bilan seul).
   static String visioCloture(String rdvId) => '${baseUrl}/visio/$rdvId/cloture';
+  static String visioPresence(String rdvId) => '${baseUrl}/visio/$rdvId/presence';
 }

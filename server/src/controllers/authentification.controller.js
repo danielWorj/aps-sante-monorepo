@@ -5,6 +5,7 @@ import prisma from "../lib/prisma.js";
 // Ici ce sont les mthodes du controller qu'on va exposer a l'utilisayeur du controller en l'occurence authentification routes
 import {
   genererAccessToken,
+  estClientMobile,
   genererRefreshToken,
   genererTokenChangementMotDePasse,
   hasherToken,
@@ -776,7 +777,7 @@ export async function rafraichirToken(req, res, next) {
       token: nouveauRefreshToken,
       token_hash: nouveauHash,
       date_expiration: nouvelleExpiration,
-    } = genererRefreshToken();
+    } = genererRefreshToken({ mobile: estClientMobile(req) });
 
     // Espace actif de la session : repris tel quel s'il existe encore,
     // sinon (fiche retirée entre-temps) espace par défaut du compte.

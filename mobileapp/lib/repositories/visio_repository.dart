@@ -129,6 +129,16 @@ class VisioRepository {
     return BilanClotureVisio.fromJson(donnees as Map<String, dynamic>);
   }
 
+  /// POST /visio/:id/presence — l'utilisateur est entré dans la salle
+  /// (doublon volontaire du webhook Prosody, qui peut manquer : sans
+  /// présences, la fin de consultation n'est pas constatée).
+  Future<void> signalerPresence({
+    required String rdvId,
+    required String token,
+  }) async {
+    await _post(ApiRealEndpoints.visioPresence(rdvId), token: token);
+  }
+
   /// GET /visio/:id/cloture — bilan sans effet (le patient attend la
   /// clôture par le médecin).
   Future<BilanClotureVisio> obtenirBilan({

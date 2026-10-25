@@ -8,11 +8,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../components/navigation/bouton_accueil_public.dart';
 import '../../../components/cards/notifications_bell.dart';
+import '../../../components/navigation/bouton_deconnexion.dart';
 import '../../../components/navigation/role-bottom-navigation.dart';
 import '../../../components/style/colors.dart';
 import '../../../components/style/text_styles.dart';
-import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/laboratoire_controller.dart';
 import 'portail-laboratoire-centres.dart';
 import 'portail-laboratoire-dashboard.dart';
@@ -64,6 +65,8 @@ class _LaboratoireHomeShellState extends ConsumerState<LaboratoireHomeShell> {
           ),
         ),
       ),
+      // Retour à l'accueil public sans se déconnecter.
+      floatingActionButton: const BoutonAccueilPublic(),
       bottomNavigationBar: fiche.hasValue
           ? RoleBottomNavigationBar(
               currentIndex: _index,
@@ -109,13 +112,8 @@ class _SansFiche extends ConsumerWidget {
             TextButton.icon(
               onPressed: () async {
                 if (!await confirmerPortail(context, 'Déconnexion', 'Se déconnecter de votre espace ?', action: 'Se déconnecter')) return;
-                try {
-                  await ref.read(sessionControllerProvider.notifier).deconnecter();
-                } catch (_) {
-                  // Session déjà fermée localement.
-                }
-                ref.invalidate(monLaboratoireProvider);
-                if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+                if (!context.mounted) return;
+                await fermerSessionEtRevenirAccueil(context, nettoyer: (c) => c.invalidate(monLaboratoireProvider));
               },
               icon: const Icon(Icons.logout, size: 18),
               label: const Text('Déconnexion'),

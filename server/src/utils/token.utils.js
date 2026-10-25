@@ -12,6 +12,19 @@ const ACCESS_TOKEN_ALGORITHM = process.env.JWT_ACCESS_ALGORITHM || "ES256";
 const ACCESS_TOKEN_EXPIRES_IN = process.env.JWT_ACCESS_EXPIRES_IN || "15m";
 const REFRESH_TOKEN_EXPIRES_IN_MS =
   Number(process.env.REFRESH_TOKEN_EXPIRES_IN_MS) || 30 * 24 * 60 * 60 * 1000; // 30 jours
+// Application mobile : session longue (téléphone personnel, cookie chiffré
+// sur l'appareil) pour ne pas redemander la connexion. Glissante comme sur
+// le web : chaque /auth/refresh repart pour la durée complète.
+const REFRESH_TOKEN_MOBILE_EXPIRES_IN_MS =
+  Number(process.env.REFRESH_TOKEN_MOBILE_EXPIRES_IN_MS) || 180 * 24 * 60 * 60 * 1000; // 6 mois
+
+/** En-tête posé par l'application mobile sur ses appels d'authentification. */
+export const ENTETE_CLIENT_APPLICATION = "x-client-app";
+
+/** La requête vient-elle de l'application mobile ? (durée de session seulement) */
+export function estClientMobile(req) {
+  return String(req?.get?.(ENTETE_CLIENT_APPLICATION) ?? req?.headers?.[ENTETE_CLIENT_APPLICATION] ?? "").toLowerCase() === "mobile";
+}
 
 // ─── Cookie httpOnly du refresh token ─────────────────────────
 // Le refresh token n'est plus jamais renvoyé dans le corps JSON : il
@@ -218,11 +231,13 @@ function genererTokenRestreint(utilisateur, scope) {
 /**
  * Génère un refresh token opaque (aléatoire) ainsi que son hash SHA-256,
  * qui seul est persisté en base (le token en clair n'est jamais stocké).
+ * `mobile` : durée longue de l'application mobile (voir estClientMobile).
  */
-export function genererRefreshToken() {
+export function genererRefreshToken({ mobile = false } = {}) {
   const token = crypto.randomBytes(64).toString("hex");
   const token_hash = hasherToken(token);
-  const date_expiration = new Date(Date.now() + REFRESH_TOKEN_EXPIRES_IN_MS);
+  const duree = mobile ? REFRESH_TOKEN_MOBILE_EXPIRES_IN_MS : REFRESH_TOKEN_EXPIRES_IN_MS;
+  const date_expiration = new Date(Date.now() + duree);
 
   return { token, token_hash, date_expiration };
 }

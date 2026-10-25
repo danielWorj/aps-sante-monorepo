@@ -230,6 +230,14 @@ export default function Teleconsultation() {
     }
   }, [estLeMedecin, id, gererFinAppel]);
 
+  // Filet de sécurité côté patient : un départ du médecin manqué par Jitsi
+  // le laisserait seul dans la salle, on relit donc le bilan pendant l'appel.
+  useEffect(() => {
+    if (estLeMedecin || phase !== "session") return undefined;
+    const t = setInterval(verifierClotureMedecin, 20_000);
+    return () => clearInterval(t);
+  }, [estLeMedecin, phase, verifierClotureMedecin]);
+
   // ── Rendu ────────────────────────────────────────────────────────
 
   if (phase === "chargement") {
