@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -64,6 +66,10 @@ class _PortailPatientRdvState extends ConsumerState<PortailPatientRdv>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
+  /// Relecture des RDV tant qu'une téléconsultation attend que le médecin
+  /// lance la visio : le bouton « Rejoindre » s'active sans recharger.
+  Timer? _attenteVisio;
+
   @override
   void initState() {
     super.initState();
@@ -79,10 +85,24 @@ class _PortailPatientRdvState extends ConsumerState<PortailPatientRdv>
             .definirToken(token);
       }
     });
+    _attenteVisio = Timer.periodic(const Duration(seconds: 15), (_) {
+      final rdvs = ref.read(listeRendezVousControllerProvider).value ?? const [];
+      final enAttente = rdvs.any((r) =>
+          r.estTeleconsultation &&
+          (r.statut == StatutRendezVous.confirme ||
+              r.statut == StatutRendezVous.enAttentePresence) &&
+          r.termineLe == null);
+      if (enAttente) {
+        ref
+            .read(listeRendezVousControllerProvider.notifier)
+            .relireDiscretement(ref.read(authTokenProvider));
+      }
+    });
   }
 
   @override
   void dispose() {
+    _attenteVisio?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -389,12 +409,18 @@ class _PanelConfirme extends ConsumerWidget {
                               // `a_reprogrammer` : le créneau initial
                               // est passé.
                               if (!rdv.estAReprogrammer) ...[
+                              // Grisé tant que le médecin n'a pas
+                                // lancé la visio.
                               if (rdv.typeRdv ==
                                   TypeRdv.teleconsultation)
                                 RdvButton(
-                                  label: 'Démarrer',
+                                  label: rdv.visioLancee
+                                      ? 'Rejoindre'
+                                      : 'En attente du médecin',
                                   icon: Icons.videocam_outlined,
-                                  onPressed: () {
+                                  onPressed: !rdv.visioLancee
+                                      ? null
+                                      : () {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
                                         builder: (_) =>

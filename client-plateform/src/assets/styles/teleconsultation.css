@@ -211,6 +211,14 @@
   cursor: not-allowed;
 }
 
+.tcc-btn.is-attente,
+.tcc-btn.is-attente:disabled {
+  background: #e9ecef;
+  border-color: #dee2e6;
+  color: #868e96;
+  opacity: 1;
+}
+
 .tcc-btn.is-secondaire {
   background: var(--surface, #fff);
   border-color: var(--bleu-sante-ligne, #D5E3F3);

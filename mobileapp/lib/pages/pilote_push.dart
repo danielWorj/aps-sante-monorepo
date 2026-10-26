@@ -10,7 +10,8 @@
 //     été lancée par la notification, l'ouverture attend la restauration
 //     de la session ;
 //   - message reçu application ouverte → bandeau discret « Voir », et
-//     rechargement de la cloche.
+//     rechargement de la cloche ; visio lancée par le médecin → écran
+//     d'appel entrant (AppelVisioService) à la place du bandeau.
 
 import 'dart:async';
 import 'dart:io' show Platform;
@@ -25,6 +26,8 @@ import '../controllers/authentification_controller.dart';
 import '../controllers/notification_controller.dart';
 import '../controllers/rendez_vous_controller.dart';
 import '../models/authentification_models.dart' show RoleUtilisateur;
+import '../models/visio_models.dart' show AppelVisioEntrant;
+import '../services/appel_visio_service.dart';
 import '../services/push_service.dart';
 import '../utils/navigation_push.dart';
 import 'home_router_for_role.dart';
@@ -147,7 +150,17 @@ class _PilotePushState extends ConsumerState<PilotePush> {
   }
 
   void _afficherPremierPlan(RemoteMessage message) {
+    final termine = rdvIdAppelTermine(message.data);
+    if (termine != null) {
+      AppelVisioService.raccrocher(termine);
+      return;
+    }
     _rafraichir(message.data);
+    final appel = AppelVisioEntrant.depuisPush(message.data);
+    if (appel != null) {
+      AppelVisioService.sonner(appel);
+      return;
+    }
     // iOS affiche déjà son bandeau (setForegroundNotificationPresentationOptions).
     if (!Platform.isAndroid) return;
     final titre = message.notification?.title;

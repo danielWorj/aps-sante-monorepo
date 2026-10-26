@@ -54,9 +54,9 @@
 // autorisation réelle (déjà gérée par le serveur).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { obtenirRendezVous } from "../services/medecinService";
-import { estRdvNonPaye, estErreurRdvNonPaye } from "../utils/rdv";
+import { estRdvNonPaye, estErreurRdvNonPaye, visioLancee, INTERVALLE_ATTENTE_VISIO_MS } from "../utils/rdv";
 import { useAuth } from "../context/AuthContext";
 import ConsultationRoom from "../components/visio/ConsultationRoom";
 import ClotureConsultation from "../components/visio/ClotureConsultation";
@@ -107,6 +107,10 @@ export default function Teleconsultation() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  // ?rejoindre=1 : le patient a décroché l'appel entrant (AppelVisioEntrant),
+  // on entre directement dans la salle si la visio est lancée.
+  const [parametres] = useSearchParams();
+  const rejoindreDirect = parametres.get("rejoindre") === "1";
 
   // 'chargement' | 'erreur' | 'indisponible' | 'attente' | 'session' | 'terminee'
   const [phase, setPhase] = useState("chargement");
@@ -146,7 +150,9 @@ export default function Teleconsultation() {
           setPhase("indisponible");
           return;
         }
-        setPhase("attente");
+        setPhase(
+          rejoindreDirect && user?.role !== "medecin" && visioLancee(donnees) ? "session" : "attente"
+        );
       })
       .catch((err) => {
         if (annule) return;
@@ -167,7 +173,7 @@ export default function Teleconsultation() {
     return () => {
       annule = true;
     };
-  }, [id, user?.role]);
+  }, [id, user?.role]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Confirmation avant de fermer/rafraîchir l'onglet pendant un appel en
   // cours, pour éviter une coupure accidentelle (ex. Ctrl+W involontaire).
@@ -182,6 +188,22 @@ export default function Teleconsultation() {
   }, [phase]);
 
   const estLeMedecin = user?.role === "medecin";
+  const peutRejoindre = estLeMedecin || visioLancee(rdv);
+
+  // PATIENT en salle d'attente : relecture du RDV jusqu'à ce que le médecin
+  // lance la visio (le bouton « Rejoindre » s'active alors).
+  useEffect(() => {
+    if (estLeMedecin || phase !== "attente" || visioLancee(rdv)) return undefined;
+    const t = setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        setRdv(await obtenirRendezVous(id));
+      } catch {
+        // Silencieux : nouvel essai au prochain tour.
+      }
+    }, INTERVALLE_ATTENTE_VISIO_MS);
+    return () => clearInterval(t);
+  }, [estLeMedecin, phase, rdv, id]);
 
   const interlocuteur = useMemo(() => {
     if (!rdv) return null;
@@ -327,10 +349,22 @@ export default function Teleconsultation() {
             <button type="button" className="tcc-btn is-secondaire" onClick={retourPortail}>
               Plus tard
             </button>
-            <button type="button" className="tcc-btn" onClick={() => setPhase("session")}>
-              <i className="fa-solid fa-video" /> Rejoindre la consultation
+            <button
+              type="button"
+              className={`tcc-btn ${peutRejoindre ? "" : "is-attente"}`}
+              disabled={!peutRejoindre}
+              onClick={() => setPhase("session")}
+            >
+              <i className="fa-solid fa-video" />{" "}
+              {peutRejoindre ? "Rejoindre la consultation" : "En attente du médecin"}
             </button>
           </div>
+          {!peutRejoindre && (
+            <p className="tc-securite">
+              <i className="fa-solid fa-circle-info" />
+              Le bouton s&apos;activera dès que le médecin aura lancé la visio.
+            </p>
+          )}
           <p className="tc-securite">
             <i className="fa-solid fa-shield-halved" />
             Salle sécurisée, accessible uniquement à vous deux. Rien n&apos;est enregistré.

@@ -17,6 +17,53 @@ class VisioSession {
   );
 }
 
+/// Appel entrant (GET /visio/appel-entrant, ou push `rdv_visio_demarree`) :
+/// le médecin vient de lancer la visio d'un RDV du patient.
+class AppelVisioEntrant {
+  final String rdvId;
+
+  /// Horodatage du lancement, tel qu'envoyé par le serveur (chaîne ISO) :
+  /// avec [rdvId], identifie un appel pour ne le faire sonner qu'une fois.
+  final String lanceeLe;
+  final String nomMedecin;
+  final String? photoMedecin;
+  final String? specialite;
+
+  const AppelVisioEntrant({
+    required this.rdvId,
+    required this.lanceeLe,
+    required this.nomMedecin,
+    this.photoMedecin,
+    this.specialite,
+  });
+
+  String get cle => '$rdvId:$lanceeLe';
+
+  factory AppelVisioEntrant.fromJson(Map<String, dynamic> json) {
+    final m = json['medecin'] is Map<String, dynamic> ? json['medecin'] as Map<String, dynamic> : const {};
+    final nom = [m['prenom'], m['nom']].whereType<String>().where((s) => s.isNotEmpty).join(' ');
+    return AppelVisioEntrant(
+      rdvId: json['rdv_id'] as String,
+      lanceeLe: json['lancee_le'] as String? ?? '',
+      nomMedecin: nom.isEmpty ? 'Votre médecin' : 'Dr $nom',
+      photoMedecin: m['photo_url'] as String?,
+      specialite: m['specialite'] as String?,
+    );
+  }
+
+  /// Données d'une notification push `rdv_visio_demarree` (voir donneesPush).
+  static AppelVisioEntrant? depuisPush(Map<String, dynamic> d) {
+    final rdvId = d['rdv_id'];
+    if (d['type'] != 'rdv_visio_demarree' || rdvId is! String) return null;
+    return AppelVisioEntrant(
+      rdvId: rdvId,
+      lanceeLe: d['lancee_le'] as String? ?? '',
+      nomMedecin: d['appelant'] as String? ?? 'Votre médecin',
+      photoMedecin: d['appelant_photo'] as String?,
+    );
+  }
+}
+
 /// Bilan de fin de téléconsultation — réponse de POST / GET
 /// /visio/:id/cloture (voir visio.controller.js, bilanCloture).
 ///

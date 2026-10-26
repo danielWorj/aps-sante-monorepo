@@ -33,6 +33,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
+import 'appel_visio_service.dart' show recevoirPushArrierePlan;
+
 /// Données d'une notification push (voir donneesPush côté serveur) :
 /// `type`, `cible` (rendez_vous | demandes | avis | notifications),
 /// `rdv_id`, `offre_id`, `palier`…
@@ -72,22 +74,30 @@ class PushService {
 
   static String get plateforme => Platform.isIOS ? 'ios' : 'android';
 
+  /// Options du projet Firebase (--dart-define), null si non configuré.
+  /// Aussi lues par l'isolat d'arrière-plan (appel visio entrant).
+  static FirebaseOptions? get optionsFirebase {
+    final appId = Platform.isIOS ? _appIdIos : _appIdAndroid;
+    if (_apiKey.isEmpty || appId.isEmpty || _senderId.isEmpty || _projectId.isEmpty) return null;
+    return FirebaseOptions(
+      apiKey: _apiKey,
+      appId: appId,
+      messagingSenderId: _senderId,
+      projectId: _projectId,
+    );
+  }
+
   /// À appeler une fois dans main(), avant runApp. Ne lève jamais.
   static Future<void> initialiser() async {
-    final appId = Platform.isIOS ? _appIdIos : _appIdAndroid;
-    if (_apiKey.isEmpty || appId.isEmpty || _senderId.isEmpty || _projectId.isEmpty) {
+    final options = optionsFirebase;
+    if (options == null) {
       debugPrint('[push] Firebase non configuré (--dart-define FIREBASE_*) : push désactivé.');
       return;
     }
     try {
-      await Firebase.initializeApp(
-        options: FirebaseOptions(
-          apiKey: _apiKey,
-          appId: appId,
-          messagingSenderId: _senderId,
-          projectId: _projectId,
-        ),
-      );
+      await Firebase.initializeApp(options: options);
+      // Application fermée / en arrière-plan : l'appel visio sonne quand même.
+      FirebaseMessaging.onBackgroundMessage(recevoirPushArrierePlan);
       FirebaseMessaging.onMessageOpenedApp.listen((m) => _touchers.add(m.data));
       FirebaseMessaging.onMessage.listen(_premierPlan.add);
       _toucherInitial = (await FirebaseMessaging.instance.getInitialMessage())?.data;

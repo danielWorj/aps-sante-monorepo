@@ -2303,6 +2303,14 @@ model RendezVous {
   // de fin d'APPEL pour le patient, indépendant de termine_le (qui exige les
   // deux présences). Remis à NULL si le médecin rejoint de nouveau la salle.
   visio_cloturee_le       DateTime?
+  // Le médecin a lancé la visio (POST /visio/token) : tant qu'il est NULL, ou
+  // que la visio a été clôturée depuis, le patient ne peut pas la rejoindre
+  // (bouton grisé). Sert aussi d'appel entrant chez le patient.
+  visio_lancee_le         DateTime?
+  // Le patient a répondu à l'appel entrant de ce lancement (refusé, manqué ou
+  // rejoint) : l'appel ne sonne plus sur aucun de ses appareils. Répondu si
+  // visio_appel_repondu_le >= visio_lancee_le.
+  visio_appel_repondu_le  DateTime?
   // T (en heures) figé à la validation, lu dans parametre_delai_liberation
   // (comme taux_applique pour les amendes) : une modification ultérieure
   // de T ne touche pas les RDV déjà terminés.

@@ -54,7 +54,7 @@ export function donneesPush(notification) {
     cible: cibleNotification(notification.type),
   };
   if (notification.rdv_id) donnees.rdv_id = notification.rdv_id;
-  for (const cle of ["offre_id", "palier", "date_creneau", "date_souhaitee", "type_rdv"]) {
+  for (const cle of ["offre_id", "palier", "date_creneau", "date_souhaitee", "type_rdv", "appelant", "appelant_photo", "lancee_le"]) {
     if (d[cle] != null) donnees[cle] = String(d[cle]);
   }
   return donnees;
@@ -92,6 +92,28 @@ export async function retirerAppareil(utilisateur_id, { jeton } = {}) {
 /* -------------------------------------------------------------------
  * Envoi
  * ------------------------------------------------------------------- */
+
+/**
+ * Signal SILENCIEUX (aucun bandeau, aucune notification en base) envoyé à
+ * tous les téléphones d'un utilisateur — ex. `visio_appel_termine` : l'appel
+ * entrant doit cesser de sonner (refusé ou décroché ailleurs, visio terminée
+ * par le médecin). Ne lève jamais, ne bloque jamais l'appelant.
+ * @param {string} utilisateur_id
+ * @param {Record<string,string>} donnees valeurs CHAÎNES uniquement
+ */
+export function signalerAppareils(utilisateur_id, donnees) {
+  if (!utilisateur_id || !estConfigure()) return;
+  (async () => {
+    const appareils = await prisma.appareilPush.findMany({ where: { utilisateur_id }, select: { jeton: true } });
+    for (const { jeton } of appareils) {
+      // eslint-disable-next-line no-await-in-loop
+      await envoyerMessage(jeton, { donnees, silencieux: true }).catch(async (err) => {
+        if (err.jetonInvalide) await prisma.appareilPush.deleteMany({ where: { jeton } }).catch(() => {});
+        else console.error(`[push] Signal ${donnees.type} non envoyé : ${err.message}`);
+      });
+    }
+  })().catch((err) => console.error("[push] Signal inattendu :", err.message));
+}
 
 /**
  * Planifie le push des notifications identifiées par leurs clés. Ne lève
@@ -132,7 +154,13 @@ export async function pousserNotifications(cles) {
       where: { utilisateur_id: n.utilisateur_id },
       select: { jeton: true },
     });
-    const message = { titre: n.titre, corps: n.message, donnees: donneesPush(n) };
+    const message = {
+      titre: n.titre,
+      corps: n.message,
+      donnees: donneesPush(n),
+      // Visio lancée par le médecin : sonnerie d'appel entrant sur le téléphone.
+      appel: n.type === "rdv_visio_demarree",
+    };
     for (const { jeton } of appareils) {
       try {
         // eslint-disable-next-line no-await-in-loop
