@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'components/style/app_theme.dart';
 import 'controllers/authentification_controller.dart';
 import 'pages/mise_a_jour/veille_mise_a_jour.dart';
+import 'pages/pilote_appel_visio.dart';
 import 'pages/pilote_push.dart';
 import 'pages/public/onboarding/onboarding_accueil_page.dart';
 import 'pages/verrou/veille_connexion_web.dart';
@@ -96,7 +97,10 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       builder: (context, child) => VerrouApplication(
         child: VeilleConnexionWeb(
           child: VeilleMiseAJour(
-            child: PilotePush(child: child ?? const SizedBox.shrink()),
+            child: PilotePush(
+              // Patient : appel entrant quand le médecin lance la visio.
+              child: PiloteAppelVisio(child: child ?? const SizedBox.shrink()),
+            ),
           ),
         ),
       ),

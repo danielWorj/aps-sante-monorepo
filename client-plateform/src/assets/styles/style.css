@@ -185,6 +185,8 @@ table{max-width:100%; display:block; overflow-x:auto;}
   color:#fff;
 }
 .btn-primary:hover{background:var(--primary-hover); border-color:var(--primary-hover); color:#fff;}
+/* Visio pas encore lancée par le médecin : bouton grisé (patient). */
+.btn-visio-attente,.btn-visio-attente:disabled{background:#e9ecef; border-color:#dee2e6; color:#868e96; opacity:1; cursor:not-allowed;}
 
 .btn-outline-primary{
   background:transparent;

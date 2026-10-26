@@ -139,6 +139,26 @@ class VisioRepository {
     await _post(ApiRealEndpoints.visioPresence(rdvId), token: token);
   }
 
+  /// GET /visio/appel-entrant — PATIENT : téléconsultation que son médecin
+  /// vient de lancer (sonne comme un appel), ou null.
+  Future<AppelVisioEntrant?> obtenirAppelEntrant({required String token}) async {
+    final reponse = await http
+        .get(Uri.parse(ApiRealEndpoints.visioAppelEntrant),
+            headers: _entetes(token: token, avecJson: false))
+        .timeout(_timeout);
+    final appel = (_decoder(reponse) as Map<String, dynamic>?)?['appel'];
+    return appel is Map<String, dynamic> ? AppelVisioEntrant.fromJson(appel) : null;
+  }
+
+  /// POST /visio/:id/refus — PATIENT : appel refusé ou manqué ; il cesse de
+  /// sonner sur tous ses appareils (navigateur compris). Idempotent.
+  Future<void> refuserAppel({
+    required String rdvId,
+    required String token,
+  }) async {
+    await _post(ApiRealEndpoints.visioRefus(rdvId), token: token);
+  }
+
   /// GET /visio/:id/cloture — bilan sans effet (le patient attend la
   /// clôture par le médecin).
   Future<BilanClotureVisio> obtenirBilan({

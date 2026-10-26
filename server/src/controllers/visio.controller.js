@@ -19,6 +19,7 @@ import { enregistrerPresence } from "../services/presence.service.js";
 import { partieDepuisParticipant } from "../services/reglesPresenceReprogrammation.service.js";
 import { inviterAvisPatient } from "../services/avisMedecin.service.js";
 import { creerNotifications } from "../services/notification.service.js";
+import { signalerAppareils } from "../services/push.service.js";
 
 const STATUTS_AUTORISES_VISIO = ["confirme", "en_attente_presence"];
 // Doit rester identique au roomName généré dans obtenirTokenVisio
@@ -28,6 +29,39 @@ const STATUTS_AUTORISES_VISIO = ["confirme", "en_attente_presence"];
 const PREFIXE_ROOM_RDV = "rdv-";
 // Événements émis par mod_muc_events_webhook.lua que ce contrôleur traite.
 const EVENEMENTS_VISIO_TRAITES = ["muc-room-destroyed", "muc-occupant-joined"];
+// Fenêtre pendant laquelle une visio lancée « sonne » chez le patient.
+const DUREE_APPEL_ENTRANT_MS = 10 * 60 * 1000;
+
+/** Le médecin a lancé la visio et ne l'a pas terminée : le patient peut la rejoindre. */
+export function visioLanceeParMedecin(rdv) {
+  return Boolean(rdv.visio_lancee_le) && !rdv.visio_cloturee_le && !rdv.termine_le;
+}
+
+/** Le patient a répondu (refusé, manqué ou rejoint) à l'appel de CE lancement. */
+export function appelRepondu(rdv) {
+  return (
+    Boolean(rdv.visio_lancee_le && rdv.visio_appel_repondu_le) &&
+    new Date(rdv.visio_appel_repondu_le) >= new Date(rdv.visio_lancee_le)
+  );
+}
+
+/**
+ * Un jeton médecin ouvre-t-il un NOUVEL appel ? Oui si la visio n'était pas
+ * lancée (ou a été clôturée), ou si le lancement précédent a expiré sans
+ * réponse du patient. Sinon (rechargement de page, double appel de l'effet
+ * React, reconnexion Jitsi…) l'appel en cours garde son horodatage : c'est
+ * son identité côté applications, le changer le ferait resonner.
+ */
+export function estNouveauLancement(rdv, maintenant = new Date()) {
+  if (!visioLanceeParMedecin(rdv)) return true;
+  const expire = maintenant - new Date(rdv.visio_lancee_le) > DUREE_APPEL_ENTRANT_MS;
+  return expire && !appelRepondu(rdv);
+}
+
+/** L'appel ne doit plus sonner sur les téléphones du patient (signal silencieux). */
+function arreterSonnerie(patientUtilisateurId, rdv_id) {
+  signalerAppareils(patientUtilisateurId, { type: "visio_appel_termine", rdv_id });
+}
 
 export async function obtenirTokenVisio(req, res, next) {
   try {
@@ -79,6 +113,14 @@ export async function obtenirTokenVisio(req, res, next) {
         .json({ message: "Ce rendez-vous n'est pas dans un état permettant la visio." });
     }
 
+    // Le patient attend que le médecin lance la visio (bouton grisé côté app).
+    if (estLePatient && !visioLanceeParMedecin(rdv)) {
+      return res.status(409).json({
+        code: "VISIO_NON_LANCEE",
+        message: "Le médecin n'a pas encore lancé la visio. Vous pourrez la rejoindre dès qu'il l'aura fait.",
+      });
+    }
+
     const participantInfo = estLeMedecin ? rdv.medecin.utilisateur : rdv.patient.utilisateur;
     const roomName = `${PREFIXE_ROOM_RDV}${rdv.rdv_id}`;
 
@@ -93,10 +135,27 @@ export async function obtenirTokenVisio(req, res, next) {
       roomName
     );
 
-    // Le médecin (re)rejoint : l'appel n'est plus considéré comme clôturé,
-    // sinon le patient serait aussitôt raccroché par sa vérification.
-    if (estLeMedecin && rdv.visio_cloturee_le && !rdv.termine_le) {
-      await prisma.rendezVous.update({ where: { rdv_id }, data: { visio_cloturee_le: null } });
+    // Le médecin (re)lance la visio : le patient peut la rejoindre, et l'appel
+    // n'est plus considéré comme clôturé (sinon le patient serait aussitôt
+    // raccroché par sa vérification).
+    // Le médecin lance (ou rejoint) la visio. Un nouvel horodatage n'est posé
+    // que pour un NOUVEL appel (voir estNouveauLancement) ; le même horodatage
+    // part dans l'alerte, pour que l'application reconnaisse l'appel déjà
+    // sonné (push) quand elle relit GET /visio/appel-entrant.
+    const maintenant = new Date();
+    const nouveauLancement = estLeMedecin && !rdv.termine_le && estNouveauLancement(rdv, maintenant);
+    if (estLeMedecin && !rdv.termine_le && (nouveauLancement || rdv.visio_cloturee_le)) {
+      await prisma.rendezVous.update({
+        where: { rdv_id },
+        data: { visio_cloturee_le: null, ...(nouveauLancement ? { visio_lancee_le: maintenant } : {}) },
+      });
+    }
+
+    // Le patient rejoint : il a répondu à l'appel, qui cesse de sonner sur
+    // ses autres appareils.
+    if (estLePatient && !appelRepondu(rdv)) {
+      await prisma.rendezVous.update({ where: { rdv_id }, data: { visio_appel_repondu_le: maintenant } });
+      arreterSonnerie(rdv.patient.utilisateur_id, rdv_id);
     }
 
     // Titre affiché dans Jitsi (sinon il affiche le nom technique de la salle).
@@ -104,7 +163,7 @@ export async function obtenirTokenVisio(req, res, next) {
     const nomInterlocuteur = [interlocuteur.prenom, interlocuteur.nom].filter(Boolean).join(" ");
     const sujet = `Téléconsultation avec ${estLeMedecin ? "" : "Dr "}${nomInterlocuteur}`;
 
-    if (estLeMedecin) alerterPatientVisio(rdv);
+    if (nouveauLancement) alerterPatientVisio(rdv, maintenant);
 
     res.json({
       token,
@@ -117,16 +176,13 @@ export async function obtenirTokenVisio(req, res, next) {
   }
 }
 
-// Une alerte au plus par tranche de 10 min : le médecin qui recharge ou
-// relance l'appel ne doit pas inonder le patient.
-const TRANCHE_ALERTE_VISIO_MS = 10 * 60 * 1000;
-
 /**
  * Le médecin lance la visio : le patient est alerté (in-app + push mobile)
- * pour la rejoindre. Jamais bloquant pour le médecin.
+ * pour la rejoindre. Une alerte par lancement (estNouveauLancement) : le
+ * médecin qui recharge la page ou se reconnecte ne fait pas resonner l'appel.
+ * Jamais bloquant pour le médecin.
  */
-function alerterPatientVisio(rdv) {
-  const tranche = Math.floor(Date.now() / TRANCHE_ALERTE_VISIO_MS);
+function alerterPatientVisio(rdv, lanceeLe) {
   const patient_id = rdv.patient.utilisateur_id;
   const nomMedecin = [rdv.medecin.utilisateur.prenom, rdv.medecin.utilisateur.nom].filter(Boolean).join(" ");
   creerNotifications([
@@ -136,8 +192,15 @@ function alerterPatientVisio(rdv) {
       rdv_id: rdv.rdv_id,
       titre: "Votre téléconsultation commence",
       message: `Dr ${nomMedecin} vous attend dans la salle de consultation. Rejoignez la visio depuis vos rendez-vous.`,
-      donnees: { role: "patient", type_rdv: "teleconsultation" },
-      cle: `rdv_visio_demarree:${rdv.rdv_id}:${tranche}:${patient_id}`,
+      // `appelant` / `appelant_photo` : écran d'appel entrant sur le téléphone.
+      donnees: {
+        role: "patient",
+        type_rdv: "teleconsultation",
+        appelant: `Dr ${nomMedecin}`,
+        lancee_le: lanceeLe.toISOString(),
+        ...(rdv.medecin.photo_url ? { appelant_photo: rdv.medecin.photo_url } : {}),
+      },
+      cle: `rdv_visio_demarree:${rdv.rdv_id}:${lanceeLe.getTime()}:${patient_id}`,
     },
   ]).catch((err) => console.error("[visio] alerte patient non émise :", err.message));
 }
@@ -414,6 +477,8 @@ export async function cloturerVisio(req, res, next) {
     // Signal de fin d'appel pour le patient, posé avant toute règle de paiement.
     if (role === "medecin" && !rdv.visio_cloturee_le) {
       await prisma.rendezVous.update({ where: { rdv_id: rdv.rdv_id }, data: { visio_cloturee_le: new Date() } });
+      // L'appel ne doit plus sonner chez le patient s'il n'a pas décroché.
+      if (!appelRepondu(rdv)) arreterSonnerie(rdv.patient.utilisateur_id, rdv.rdv_id);
     }
     if (role === "medecin" && !rdv.termine_le && STATUTS_AUTORISES_VISIO.includes(rdv.statut)) {
       if (rdv.medecin_present_le && rdv.patient_present_le) {
@@ -465,6 +530,81 @@ export async function obtenirBilanVisio(req, res, next) {
     const charge = await chargerRdvParticipant(req, res);
     if (!charge) return undefined;
     return res.status(200).json(await bilanCloture(charge.rdv.rdv_id, charge.role));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/visio/:id/refus — PATIENT : il refuse l'appel entrant (ou l'a
+ * manqué). Enregistré côté serveur pour que l'appel cesse de sonner sur TOUS
+ * ses appareils (navigateur, téléphones) ; la visio reste joignable depuis
+ * ses rendez-vous tant que le médecin ne l'a pas terminée. Idempotent.
+ */
+export async function refuserAppelVisio(req, res, next) {
+  try {
+    const charge = await chargerRdvParticipant(req, res);
+    if (!charge) return undefined;
+    const { rdv, role } = charge;
+    if (role !== "patient") {
+      return res.status(403).json({ message: "Seul le patient peut refuser l'appel." });
+    }
+    if (visioLanceeParMedecin(rdv) && !appelRepondu(rdv)) {
+      await prisma.rendezVous.update({ where: { rdv_id: rdv.rdv_id }, data: { visio_appel_repondu_le: new Date() } });
+      arreterSonnerie(rdv.patient.utilisateur_id, rdv.rdv_id);
+    }
+    return res.status(200).json({ refuse: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/visio/appel-entrant — PATIENT : téléconsultation que son médecin
+ * vient de lancer (moins de 10 min, ni clôturée ni terminée) et à laquelle il
+ * n'a pas encore répondu, affichée comme un appel entrant. `{ appel: null }`
+ * sinon : les applications arrêtent alors la sonnerie. Le plus récent gagne.
+ */
+export async function obtenirAppelEntrant(req, res, next) {
+  try {
+    // Prisma ne compare pas deux colonnes : la réponse du patient
+    // (visio_appel_repondu_le >= visio_lancee_le) est filtrée ici.
+    const candidats = await prisma.rendezVous.findMany({
+      where: {
+        type_rdv: "teleconsultation",
+        statut: { in: STATUTS_AUTORISES_VISIO },
+        patient: { utilisateur_id: req.utilisateur.utilisateur_id },
+        visio_lancee_le: { gte: new Date(Date.now() - DUREE_APPEL_ENTRANT_MS) },
+        visio_cloturee_le: null,
+        termine_le: null,
+      },
+      orderBy: { visio_lancee_le: "desc" },
+      take: 5,
+      include: {
+        medecin: {
+          select: {
+            photo_url: true,
+            utilisateur: { select: { prenom: true, nom: true } },
+            specialite: { select: { nom: true } },
+          },
+        },
+      },
+    });
+    const rdv = candidats.find((r) => !appelRepondu(r));
+    if (!rdv) return res.status(200).json({ appel: null });
+    return res.status(200).json({
+      appel: {
+        rdv_id: rdv.rdv_id,
+        lancee_le: rdv.visio_lancee_le,
+        date_creneau: rdv.date_creneau,
+        medecin: {
+          prenom: rdv.medecin.utilisateur.prenom,
+          nom: rdv.medecin.utilisateur.nom,
+          photo_url: rdv.medecin.photo_url ?? null,
+          specialite: rdv.medecin.specialite?.nom ?? null,
+        },
+      },
+    });
   } catch (err) {
     next(err);
   }

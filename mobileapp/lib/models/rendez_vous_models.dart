@@ -321,6 +321,11 @@ class RendezVous {
   /// `visio_cloturee_le`). Le type du RDV n'est alors plus modifiable.
   final bool consultationCommencee;
 
+  /// Le médecin a lancé la visio (`visio_lancee_le`) / l'a terminée
+  /// (`visio_cloturee_le`). Voir [visioLancee].
+  final DateTime? visioLanceeLe;
+  final DateTime? visioClotureeLe;
+
   final MedecinRdvRef? medecin;
   final PatientRdvRef? patient;
 
@@ -353,6 +358,8 @@ class RendezVous {
     this.lieuRdv,
     this.accepteLe,
     this.consultationCommencee = false,
+    this.visioLanceeLe,
+    this.visioClotureeLe,
     this.medecin,
     this.patient,
     this.nonPaye = false,
@@ -413,6 +420,11 @@ class RendezVous {
   bool get estConteste => statut == StatutRendezVous.conteste;
   bool get estTeleconsultation => typeRdv == TypeRdv.teleconsultation;
 
+  /// Le médecin a lancé la visio et ne l'a pas terminée : le patient peut la
+  /// rejoindre. Sinon son bouton est grisé et le serveur refuse le jeton
+  /// (409 `VISIO_NON_LANCEE`). Miroir de `visioLancee` côté web.
+  bool get visioLancee => visioLanceeLe != null && visioClotureeLe == null && termineLe == null;
+
   factory RendezVous.fromJson(Map<String, dynamic> json) {
     return RendezVous(
       rdvId: json['rdv_id'] as String,
@@ -442,6 +454,8 @@ class RendezVous {
           _lireDate(json, 'medecin_present_le') != null ||
           _lireDate(json, 'patient_present_le') != null ||
           _lireDate(json, 'visio_cloturee_le') != null,
+      visioLanceeLe: _lireDate(json, 'visio_lancee_le'),
+      visioClotureeLe: _lireDate(json, 'visio_cloturee_le'),
       medecin: json['medecin'] is Map<String, dynamic>
           ? MedecinRdvRef.fromJson(json['medecin'] as Map<String, dynamic>)
           : null,

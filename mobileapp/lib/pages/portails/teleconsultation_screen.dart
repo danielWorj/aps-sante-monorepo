@@ -44,9 +44,13 @@ import '../../models/visio_models.dart';
 import '../../repositories/visio_repository.dart' show ApiException;
 
 class TeleconsultationScreen extends ConsumerStatefulWidget {
-  const TeleconsultationScreen({super.key, required this.rdv});
+  const TeleconsultationScreen({super.key, required this.rdv, this.rejoindreDirect = false});
 
   final RendezVous rdv;
+
+  /// Le patient a décroché l'appel entrant : on entre directement dans la
+  /// salle, sans passer par la salle d'attente.
+  final bool rejoindreDirect;
 
   @override
   ConsumerState<TeleconsultationScreen> createState() =>
@@ -66,6 +70,11 @@ class _TeleconsultationScreenState
   _EtatEcran _etat = _EtatEcran.salleAttente;
   String? _messageErreur;
   Timer? _verification;
+
+  /// RDV relu en salle d'attente (patient) : la visio peut être lancée
+  /// par le médecin pendant que le patient attend.
+  late RendezVous _rdv = widget.rdv;
+  Timer? _attenteMedecin;
 
   /// Vrai quand la visio est refusée à cause du statut du RDV
   /// (`a_reprogrammer`, ou RDV non payé : 409 `RDV_NON_PAYE`) :
@@ -87,11 +96,33 @@ class _TeleconsultationScreenState
           "Ce rendez-vous est à reprogrammer (les deux parties étaient "
           "absentes). Convenez d'une nouvelle date depuis la page de "
           "vos rendez-vous.";
+      return;
+    }
+    if (widget.rejoindreDirect) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _demarrer();
+      });
+    } else if (!_estMedecin && !_rdv.visioLancee) {
+      _attenteMedecin = Timer.periodic(const Duration(seconds: 10), (_) => _relireRdv());
+    }
+  }
+
+  /// PATIENT en salle d'attente : le médecin a-t-il lancé la visio ?
+  Future<void> _relireRdv() async {
+    try {
+      final rdv = await ref.read(sessionControllerProvider.notifier).appelAuthentifie(
+          (token) => ref.read(rendezVousRepositoryProvider).obtenirRendezVous(widget.rdv.rdvId, token: token));
+      if (!mounted) return;
+      setState(() => _rdv = rdv);
+      if (rdv.visioLancee) _attenteMedecin?.cancel();
+    } catch (_) {
+      // Silencieux : nouvel essai au prochain tour.
     }
   }
 
   @override
   void dispose() {
+    _attenteMedecin?.cancel();
     _verification?.cancel();
     // Écran quitté pendant l'appel : on raccroche plutôt que de laisser
     // une conférence orpheline.
@@ -261,7 +292,7 @@ class _TeleconsultationScreenState
         body: SafeArea(
           child: switch (_etat) {
             _EtatEcran.salleAttente => _SalleAttente(
-                rdv: widget.rdv,
+                rdv: _rdv,
                 estMedecin: _estMedecin,
                 onRejoindre: _demarrer,
                 onPlusTard: () => Navigator.of(context).pop(),
@@ -328,6 +359,7 @@ class _SalleAttente extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final peutRejoindre = estMedecin || rdv.visioLancee;
     final u = estMedecin ? rdv.patient?.utilisateur : rdv.medecin?.utilisateur;
     final nom = u == null
         ? 'Votre interlocuteur'
@@ -413,11 +445,20 @@ class _SalleAttente extends StatelessWidget {
                       const _Verification(icone: Icons.mic_none_rounded, texte: 'Caméra et micro autorisés'),
                       const _Verification(icone: Icons.wb_sunny_outlined, texte: 'Un endroit calme et bien éclairé'),
                       const SizedBox(height: 18),
+                      // Patient : grisé tant que le médecin n'a pas lancé la visio.
                       _BoutonBleu(
-                        label: 'Rejoindre la consultation',
+                        label: peutRejoindre ? 'Rejoindre la consultation' : 'En attente du médecin',
                         icone: Icons.videocam_rounded,
-                        onPressed: onRejoindre,
+                        onPressed: peutRejoindre ? onRejoindre : null,
                       ),
+                      if (!peutRejoindre) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Le bouton s’activera dès que le médecin aura lancé la visio.',
+                          textAlign: TextAlign.center,
+                          style: _style(11.5, FontWeight.w600, AppColors.ink3),
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       _BoutonBleu(label: 'Plus tard', secondaire: true, onPressed: onPlusTard),
                       const SizedBox(height: 14),
@@ -537,7 +578,9 @@ class _BoutonBleu extends StatelessWidget {
         onPressed: chargement ? null : onPressed,
         style: TextButton.styleFrom(
           backgroundColor: fond,
-          disabledBackgroundColor: fond.withValues(alpha: 0.55),
+          // Désactivé hors chargement = en attente : bouton grisé.
+          disabledBackgroundColor: chargement ? fond.withValues(alpha: 0.55) : AppColors.segment,
+          disabledForegroundColor: chargement ? texte : AppColors.ink3,
           foregroundColor: texte,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
@@ -556,10 +599,11 @@ class _BoutonBleu extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (icone != null) ...[
-                    Icon(icone, size: 18, color: texte),
+                    Icon(icone, size: 18, color: onPressed == null ? AppColors.ink3 : texte),
                     const SizedBox(width: 8),
                   ],
-                  Text(label, style: _style(14, FontWeight.w700, texte)),
+                  Text(label,
+                      style: _style(14, FontWeight.w700, onPressed == null ? AppColors.ink3 : texte)),
                 ],
               ),
       ),

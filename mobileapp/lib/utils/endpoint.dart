@@ -425,4 +425,7 @@ class ApiRealEndpoints {
   // Fin d'appel : POST (le médecin clôt la consultation) / GET (bilan seul).
   static String visioCloture(String rdvId) => '${baseUrl}/visio/$rdvId/cloture';
   static String visioPresence(String rdvId) => '${baseUrl}/visio/$rdvId/presence';
+  // Patient : visio que son médecin vient de lancer (appel entrant).
+  static const String visioAppelEntrant = '${baseUrl}/visio/appel-entrant';
+  static String visioRefus(String rdvId) => '${baseUrl}/visio/$rdvId/refus';
 }

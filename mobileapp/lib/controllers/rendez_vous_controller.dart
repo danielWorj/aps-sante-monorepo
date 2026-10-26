@@ -131,6 +131,20 @@ class ListeRendezVousController extends AsyncNotifier<List<RendezVous>> {
           () => _charger(token, ref.read(filtresRendezVousProvider)),
     );
   }
+
+  /// Relecture discrète (ex. patient qui attend que le médecin lance la
+  /// visio) : ni indicateur de chargement, et un échec garde la liste
+  /// affichée. [token] : jeton courant de la session (il a pu être renouvelé).
+  Future<void> relireDiscretement(String? token) async {
+    if (token != null) _token = token;
+    final t = _token;
+    if (t == null) return;
+    try {
+      state = AsyncData(await _charger(t, ref.read(filtresRendezVousProvider)));
+    } catch (_) {
+      // Silencieux : nouvel essai au prochain tour.
+    }
+  }
 }
 
 final listeRendezVousControllerProvider =

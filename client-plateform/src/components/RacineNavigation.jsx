@@ -1,5 +1,6 @@
 import { useLayoutEffect } from 'react';
 import { Outlet, useLocation, useNavigationType } from 'react-router-dom';
+import AppelVisioEntrant from './visio/AppelVisioEntrant';
 
 /**
  * Racine de toutes les routes : remet la page en haut à chaque changement
@@ -14,6 +15,8 @@ import { Outlet, useLocation, useNavigationType } from 'react-router-dom';
  * - Liens avec ancre (/home#application, /contact#faq) : la page gère le
  *   défilement vers l'ancre elle-même, on n'y touche pas.
  * - Retour / avance du navigateur (POP) : on laisse la position telle quelle.
+ *
+ * Monte aussi l'appel visio entrant (patient), présent sur toutes les pages.
  */
 export default function RacineNavigation() {
   const { pathname, hash } = useLocation();
@@ -24,5 +27,11 @@ export default function RacineNavigation() {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <Outlet />;
+  return (
+    <>
+      <Outlet />
+      {/* Patient : appel entrant quand le médecin lance la visio. */}
+      <AppelVisioEntrant />
+    </>
+  );
 }

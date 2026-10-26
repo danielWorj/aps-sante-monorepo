@@ -102,11 +102,16 @@ async function obtenirJetonAcces(compte) {
 /**
  * Envoie un message à UN appareil.
  * @param {string} jeton jeton FCM de l'appareil
- * @param {{ titre: string, corps: string, donnees?: Record<string,string>, canal?: string }} message
+ * @param {{ titre: string, corps: string, donnees?: Record<string,string>, canal?: string, appel?: boolean }} message
  *   `donnees` : valeurs CHAÎNES uniquement (contrainte FCM).
+ *   `appel` : appel entrant (visio lancée). Android reçoit un message de DONNÉES
+ *   seules (titre/corps dans `data`) : l'application, même fermée, affiche
+ *   elle-même l'écran d'appel au lieu d'un simple bandeau. iOS garde le bandeau.
+ *   `silencieux` : données seules, sans bandeau sur aucune plateforme (signal
+ *   à l'application, ex. arrêter la sonnerie d'un appel).
  * @returns {Promise<{ id: string }>}
  */
-export async function envoyerMessage(jeton, { titre, corps, donnees = {}, canal = "aps_rdv" }) {
+export async function envoyerMessage(jeton, { titre, corps, donnees = {}, canal = "aps_rdv", appel = false, silencieux = false }) {
   const compte = lireCompteService();
   if (!compte) throw new FcmError("Push mobile non configuré (FCM_*).", { status: 503, code: "NON_CONFIGURE" });
 
@@ -115,16 +120,37 @@ export async function envoyerMessage(jeton, { titre, corps, donnees = {}, canal 
     method: "POST",
     headers: { Authorization: `Bearer ${acces}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      message: {
-        token: jeton,
-        notification: { title: titre, body: corps },
-        data: donnees,
-        android: {
-          priority: "high",
-          notification: { channel_id: canal, sound: "default", click_action: "FLUTTER_NOTIFICATION_CLICK" },
-        },
-        apns: { payload: { aps: { sound: "default" } } },
-      },
+      message: silencieux
+        ? {
+            token: jeton,
+            data: donnees,
+            android: { priority: "high", ttl: "60s" },
+            apns: {
+              headers: { "apns-priority": "5", "apns-push-type": "background" },
+              payload: { aps: { "content-available": 1 } },
+            },
+          }
+        : appel
+        ? {
+            token: jeton,
+            data: { ...donnees, titre, corps },
+            // Un appel qui n'arrive pas dans la minute n'a plus de sens.
+            android: { priority: "high", ttl: "60s" },
+            apns: {
+              headers: { "apns-priority": "10" },
+              payload: { aps: { alert: { title: titre, body: corps }, sound: "default", "interruption-level": "time-sensitive" } },
+            },
+          }
+        : {
+            token: jeton,
+            notification: { title: titre, body: corps },
+            data: donnees,
+            android: {
+              priority: "high",
+              notification: { channel_id: canal, sound: "default", click_action: "FLUTTER_NOTIFICATION_CLICK" },
+            },
+            apns: { payload: { aps: { sound: "default" } } },
+          },
     }),
     signal: AbortSignal.timeout(DELAI_APPEL_MS),
   });

@@ -1,0 +1,174 @@
+/* Appel visio entrant façon WhatsApp (components/visio/AppelVisioEntrant.jsx).
+   Carte sombre volontairement identique en thème clair et sombre, comme
+   l'écran d'appel de WhatsApp. */
+:root {
+  --ae-fond: #1f2c34;
+  --ae-fond-entete: #111b21;
+  --ae-texte: #e9edef;
+  --ae-texte-doux: #8696a0;
+  --ae-vert: #25d366;
+  --ae-vert-fonce: #1fb855;
+  --ae-rouge: #f15c6d;
+  --ae-rouge-fonce: #d94a5a;
+}
+
+.ae-appel {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2000;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  background: var(--ae-fond);
+  color: var(--ae-texte);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  font-family: inherit;
+  animation: ae-entree 0.25s ease-out;
+}
+
+@keyframes ae-entree {
+  from { transform: translateY(-12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.ae-entete {
+  background: var(--ae-fond-entete);
+  color: var(--ae-texte-doux);
+  font-size: 12px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ae-corps {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 16px 8px;
+}
+
+.ae-avatar {
+  position: relative;
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+}
+
+.ae-avatar img,
+.ae-initiales {
+  position: relative;
+  z-index: 1;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2a3942;
+  color: var(--ae-texte);
+  font-weight: 700;
+  font-size: 18px;
+}
+
+/* Onde qui pulse autour de la photo, comme pendant la sonnerie WhatsApp. */
+.ae-onde {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--ae-vert);
+  opacity: 0.45;
+  animation: ae-onde 1.6s ease-out infinite;
+}
+
+@keyframes ae-onde {
+  from { transform: scale(1); opacity: 0.45; }
+  to { transform: scale(1.6); opacity: 0; }
+}
+
+.ae-texte {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ae-nom {
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ae-statut {
+  color: var(--ae-texte-doux);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ae-specialite {
+  color: var(--ae-texte-doux);
+  font-size: 12px;
+}
+
+.ae-actions {
+  display: flex;
+  justify-content: space-around;
+  padding: 12px 16px 16px;
+}
+
+.ae-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ae-texte-doux);
+}
+
+.ae-bouton {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.ae-bouton:hover { transform: scale(1.06); }
+.ae-bouton:focus-visible { outline: 3px solid rgba(255, 255, 255, 0.6); outline-offset: 2px; }
+.ae-bouton.is-refuser { background: var(--ae-rouge); }
+.ae-bouton.is-refuser:hover { background: var(--ae-rouge-fonce); }
+.ae-bouton.is-accepter { background: var(--ae-vert); animation: ae-secousse 1.2s ease-in-out infinite; }
+.ae-bouton.is-accepter:hover { background: var(--ae-vert-fonce); }
+
+@keyframes ae-secousse {
+  0%, 60%, 100% { transform: rotate(0); }
+  70% { transform: rotate(-12deg); }
+  80% { transform: rotate(12deg); }
+  90% { transform: rotate(-6deg); }
+}
+
+@media (max-width: 576px) {
+  .ae-appel {
+    top: 12px;
+    right: 16px;
+    left: 16px;
+    width: auto;
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ae-appel, .ae-onde, .ae-bouton.is-accepter { animation: none; }
+}

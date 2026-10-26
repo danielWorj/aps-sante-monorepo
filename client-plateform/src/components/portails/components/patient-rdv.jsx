@@ -63,6 +63,8 @@ import {
   fondsEnAttenteDeLiberation,
   formaterDateLiberation,
   lieuAPreciser,
+  visioLancee,
+  INTERVALLE_ATTENTE_VISIO_MS,
 } from "./../../../utils/rdv";
 import ContestationRdv from "./contestation-rdv";
 import AvisAFaire from "../../avis/AvisAFaire";
@@ -272,6 +274,53 @@ const PatientRdv = () => {
     return () => { annule = true; };
   }, [estPatient]);
 
+  // ─── Visio en attente du médecin : relecture silencieuse ─────
+  // Le bouton « Rejoindre la visio » reste grisé tant que le médecin n'a pas
+  // lancé la visio ; on relit donc les RDV pour l'activer sans recharger.
+  const visioEnAttente = useMemo(
+    () =>
+      rendezVous.some(
+        (r) =>
+          r.type_rdv === "teleconsultation" &&
+          r.statut !== "a_reprogrammer" &&
+          categoriserRdv(r) === "avenir"
+      ),
+    [rendezVous]
+  );
+  useEffect(() => {
+    if (!estPatient || !visioEnAttente) return undefined;
+    const t = setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const data = await listerRendezVousPatientConnecte();
+        if (Array.isArray(data)) setRendezVous(data);
+      } catch {
+        // Silencieux : nouvel essai au prochain tour.
+      }
+    }, INTERVALLE_ATTENTE_VISIO_MS);
+    return () => clearInterval(t);
+  }, [estPatient, visioEnAttente]);
+
+  /** « Rejoindre la visio », grisé tant que le médecin ne l'a pas lancée. */
+  const renderBoutonVisio = (rdv, { stopPropagation = false } = {}) => {
+    const lancee = visioLancee(rdv);
+    return (
+      <button
+        type="button"
+        className={`btn btn-sm-aps ${lancee ? "btn-primary" : "btn-visio-attente"}`}
+        disabled={!lancee}
+        title={lancee ? undefined : "Le médecin n'a pas encore lancé la visio"}
+        onClick={(e) => {
+          if (stopPropagation) e.stopPropagation();
+          if (lancee) ouvrirVisio(rdv);
+        }}
+      >
+        <i className="fa-solid fa-video"></i>{" "}
+        {lancee ? "Rejoindre la visio" : "En attente du médecin"}
+      </button>
+    );
+  };
+
   // ─── Répartition par onglet ─────────────────────────────────
   const rdvParCategorie = useMemo(() => {
     const categories = { avenir: [], attente: [], passes: [], annules: [] };
@@ -457,16 +506,10 @@ const PatientRdv = () => {
           </div>
         </div>
         {peutRejoindreVisio && (
-          <button
-            type="button"
-            className="btn btn-primary btn-sm-aps"
-            onClick={(e) => {
-              e.stopPropagation();
-              ouvrirVisio(rdv);
-            }}
-          >
-            <i className="fa-solid fa-video"></i> Rejoindre la visio
-          </button>
+          // Bouton grisé : le clic ne doit pas non plus ouvrir le détail.
+          <span onClick={(e) => e.stopPropagation()}>
+            {renderBoutonVisio(rdv, { stopPropagation: true })}
+          </span>
         )}
         <i className="fa-solid fa-chevron-right rdv-chevron" aria-hidden="true"></i>
       </article>
@@ -476,7 +519,9 @@ const PatientRdv = () => {
   // ─── Pop-up de détails d'une consultation ───────────────────
   const renderDetailModal = () => {
     if (!detailRdv) return null;
-    const { rdv, categorie } = detailRdv;
+    const { categorie } = detailRdv;
+    // Version relue (la visio peut avoir été lancée depuis l'ouverture).
+    const rdv = rendezVous.find((r) => r.rdv_id === detailRdv.rdv.rdv_id) || detailRdv.rdv;
 
     const medecin = nomMedecin(rdv);
     const initials = extraireInitiales(medecin);
@@ -671,14 +716,8 @@ const PatientRdv = () => {
             )}
             {categorie === "avenir" &&
               isTeleconsultation &&
-              rdv.statut !== "a_reprogrammer" && (
-                <button
-                  className="btn btn-primary btn-sm-aps"
-                  onClick={() => ouvrirVisio(rdv)}
-                >
-                  <i className="fa-solid fa-video"></i> Rejoindre la visio
-                </button>
-              )}
+              rdv.statut !== "a_reprogrammer" &&
+              renderBoutonVisio(rdv)}
             {categorie === "avenir" &&
               !isTeleconsultation &&
               rdv.statut !== "a_reprogrammer" && (

@@ -145,6 +145,18 @@ export function peutChangerTypeRdv(rdv) {
   );
 }
 
+/**
+ * Le médecin a-t-il lancé la visio (et pas encore terminée) ? Tant que non, le
+ * patient ne peut pas la rejoindre : bouton grisé, et le serveur refuse le
+ * jeton (409 VISIO_NON_LANCEE). Miroir de visioLanceeParMedecin côté serveur.
+ */
+export function visioLancee(rdv) {
+  return Boolean(rdv?.visio_lancee_le) && !rdv.visio_cloturee_le && !rdv.termine_le;
+}
+
+/** Intervalle de relecture des RDV tant qu'une téléconsultation attend le médecin. */
+export const INTERVALLE_ATTENTE_VISIO_MS = 15_000;
+
 /** RDV physique payé que le médecin n'a pas encore accepté (lieu non précisé). */
 export function lieuAPreciser(rdv) {
   return peutAccepterRdv(rdv) && !rdv.accepte_le;

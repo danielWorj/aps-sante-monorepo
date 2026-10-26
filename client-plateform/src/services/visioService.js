@@ -13,6 +13,14 @@ export const cloturerVisio = (rdvId) => apiFetch(`/visio/${rdvId}/cloture`, { me
 /** GET /visio/:id/cloture — même bilan, sans effet (le patient attend la clôture du médecin). */
 export const obtenirBilanVisio = (rdvId) => apiFetch(`/visio/${rdvId}/cloture`);
 
+/** GET /visio/appel-entrant — PATIENT : visio que son médecin vient de lancer.
+ *  -> { appel: { rdv_id, lancee_le, date_creneau, medecin: { prenom, nom, photo_url, specialite } } | null } */
+export const obtenirAppelEntrant = () => apiFetch('/visio/appel-entrant');
+
+/** POST /visio/:id/refus — PATIENT : appel refusé (ou manqué), l'appel cesse de
+ *  sonner sur tous ses appareils. -> { refuse: true } */
+export const refuserAppelVisio = (rdvId) => apiFetch(`/visio/${rdvId}/refus`, { method: 'POST' });
+
 /** POST /visio/:id/presence — l'utilisateur est entré dans la salle (doublon
  *  volontaire du webhook Prosody, qui peut manquer). -> { enregistree } */
 export const signalerPresenceVisio = (rdvId) => apiFetch(`/visio/${rdvId}/presence`, { method: 'POST' });
