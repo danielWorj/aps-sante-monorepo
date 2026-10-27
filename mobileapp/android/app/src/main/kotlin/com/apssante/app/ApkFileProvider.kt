@@ -1,4 +1,4 @@
-package com.example.mobileapp
+package com.apssante.app
 
 import androidx.core.content.FileProvider
 

@@ -39,6 +39,12 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
+# Firebase : fichiers de configuration locaux, jamais commités
+# (les valeurs sont passées au build via --dart-define FIREBASE_*)
+google-services.json
+GoogleService-Info.plist
+/firebase.json
+
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile

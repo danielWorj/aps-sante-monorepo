@@ -145,9 +145,12 @@ export async function envoyerMessage(jeton, { titre, corps, donnees = {}, canal 
             token: jeton,
             notification: { title: titre, body: corps },
             data: donnees,
+            // Pas de click_action : sans lui, le toucher ouvre l'activité de
+            // lancement et firebase_messaging remonte le message à l'application
+            // (onMessageOpenedApp / getInitialMessage), qui ouvre la bonne page.
             android: {
               priority: "high",
-              notification: { channel_id: canal, sound: "default", click_action: "FLUTTER_NOTIFICATION_CLICK" },
+              notification: { channel_id: canal, sound: "default" },
             },
             apns: { payload: { aps: { sound: "default" } } },
           },

@@ -35,6 +35,11 @@ const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "../..");
 const APK_STORAGE_DIR = path.join(PROJECT_ROOT, "storage", "apk");
 
+// Identifiant Android de l'application (applicationId, build.gradle.kts).
+// Android ne met à jour une application qu'avec une APK du même paquet : une
+// APK d'un autre identifiant s'installe à côté et la version reste la même.
+const PAQUET_APPLICATION = process.env.APK_PACKAGE || "com.apssante.app";
+
 // ─────────────────────────────────────────────────────────────────
 // Utilitaires
 // ─────────────────────────────────────────────────────────────────
@@ -107,9 +112,16 @@ function validerFichierApk(file) {
  */
 function lireVersionFichierApk(file) {
   try {
-    const { versionName, versionCode } = lireVersionApk(file.buffer);
+    const { versionName, versionCode, packageName } = lireVersionApk(file.buffer);
     if (!Number.isInteger(versionCode)) {
       return { erreur: "Numéro de version (versionCode) introuvable dans l'APK." };
+    }
+    if (packageName && packageName !== PAQUET_APPLICATION) {
+      return {
+        erreur:
+          `Cette APK est celle du paquet « ${packageName} », pas de « ${PAQUET_APPLICATION} » : ` +
+          "elle ne mettrait pas à jour l'application installée. Recompilez l'application actuelle.",
+      };
     }
     return { version: { version_name: versionName, version_code: versionCode } };
   } catch (err) {
@@ -479,6 +491,27 @@ export async function obtenirApkActive(req, res, next) {
 
     if (!apk) {
       return res.status(404).json({ message: "Aucune APK active pour le moment." });
+    }
+
+    // APK téléversée avant la lecture des versions (migration apk_version) :
+    // sans version_code, l'application se croirait toujours à jour. On lit
+    // le manifeste une fois et on l'enregistre.
+    if (plateforme === "android" && apk.version_code == null) {
+      try {
+        const contenu = await fs.readFile(path.join(APK_STORAGE_DIR, apk.file_url));
+        const { versionName, versionCode } = lireVersionApk(contenu);
+        if (Number.isInteger(versionCode)) {
+          Object.assign(
+            apk,
+            await prisma.mobileApk.update({
+              where: { id: apk.id },
+              data: { version_name: versionName, version_code: versionCode },
+            })
+          );
+        }
+      } catch (err) {
+        console.warn(`⚠️ Version illisible pour l'APK active ${apk.id} : ${err.message}`);
+      }
     }
 
     // Taille du fichier (octets) : repli côté client pour la barre de

@@ -1,8 +1,10 @@
-package com.example.mobileapp
+package com.apssante.app
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -29,6 +31,14 @@ class MainActivity : FlutterFragmentActivity() {
                     "dossierTelechargement" -> {
                         val dossier = File(cacheDir, "mises_a_jour").apply { mkdirs() }
                         resultat.success(dossier.absolutePath)
+                    }
+                    "analyserApk" -> {
+                        val chemin = appel.argument<String>("chemin")
+                        if (chemin == null) {
+                            resultat.error("argument", "Chemin de l'APK manquant", null)
+                        } else {
+                            resultat.success(analyserApk(File(chemin)))
+                        }
                     }
                     "peutInstaller" -> resultat.success(peutInstaller())
                     "ouvrirReglagesInstallation" -> {
@@ -57,13 +67,59 @@ class MainActivity : FlutterFragmentActivity() {
     // split-per-abi arm64), comparés à l'APK publiée côté serveur.
     private fun infosVersion(): Map<String, Any?> {
         val infos = packageManager.getPackageInfo(packageName, 0)
-        val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        return mapOf("versionName" to infos.versionName, "versionCode" to codeVersion(infos))
+    }
+
+    // Contrôle de l'APK téléchargée avant d'ouvrir l'installateur : Android
+    // n'accepte une mise à jour que pour le même paquet, un versionCode
+    // strictement supérieur et la même clé de signature. Sinon l'installateur
+    // affiche seulement « Application non installée » (ou installe une
+    // seconde application si le paquet diffère) et la version reste la même.
+    // Retourne le motif du refus (« illisible », « paquet », « version »,
+    // « signature ») ou null si l'APK peut remplacer la version installée.
+    private fun analyserApk(apk: File): Map<String, Any?> {
+        val drapeaux = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            0
+        }
+        val archive = packageManager.getPackageArchiveInfo(apk.absolutePath, drapeaux)
+            ?: return mapOf("refus" to "illisible")
+        val installee = packageManager.getPackageInfo(packageName, drapeaux)
+        val codeArchive = codeVersion(archive)
+        val codeInstalle = codeVersion(installee)
+        val refus = when {
+            archive.packageName != packageName -> "paquet"
+            codeArchive <= codeInstalle -> "version"
+            !memeSignature(archive, installee) -> "signature"
+            else -> null
+        }
+        return mapOf(
+            "refus" to refus,
+            "paquet" to archive.packageName,
+            "versionCode" to codeArchive,
+            "versionCodeInstalle" to codeInstalle,
+        )
+    }
+
+    private fun codeVersion(infos: PackageInfo): Long =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             infos.longVersionCode
         } else {
             @Suppress("DEPRECATION")
             infos.versionCode.toLong()
         }
-        return mapOf("versionName" to infos.versionName, "versionCode" to code)
+
+    // La clé actuelle de l'application installée doit figurer dans la lignée
+    // de signature de l'APK. Avant Android 9, pas de lecture fiable de la
+    // signature d'une archive : on laisse l'installateur trancher.
+    private fun memeSignature(archive: PackageInfo, installee: PackageInfo): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return true
+        val signesArchive = archive.signingInfo?.let {
+            if (it.hasMultipleSigners()) it.apkContentsSigners else it.signingCertificateHistory
+        } ?: return true
+        val signesInstalle = installee.signingInfo?.apkContentsSigners ?: return true
+        return signesInstalle.any { cle -> signesArchive.any { it == cle } }
     }
 
     // Android 8+ : l'utilisateur doit autoriser ApSa à installer des applications.
