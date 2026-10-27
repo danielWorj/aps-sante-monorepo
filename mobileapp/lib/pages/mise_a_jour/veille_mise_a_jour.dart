@@ -46,7 +46,7 @@ class _VeilleMiseAJourState extends ConsumerState<VeilleMiseAJour> with WidgetsB
   }
 
   void _proposer(EtatMiseAJour etat) {
-    if (_proposee || etat.phase != PhaseMiseAJour.disponible || !etat.nouvelleVersion) return;
+    if (_proposee || etat.phase != PhaseMiseAJour.disponible || !etat.nouvelleVersion || !etat.installable) return;
     final contexte = cleNavigateurApp.currentContext;
     if (contexte == null) return;
     _proposee = true;

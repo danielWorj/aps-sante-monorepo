@@ -92,7 +92,7 @@ function lirePoolChaines(buf, debut) {
   return chaines;
 }
 
-/** Lit versionCode / versionName sur l'élément <manifest> du XML binaire. */
+/** Lit versionCode / versionName / package sur l'élément <manifest> du XML binaire. */
 function lireVersionManifeste(buf) {
   let chaines = [];
   let ressources = [];
@@ -116,7 +116,7 @@ function lireVersionManifeste(buf) {
         const debutAttributs = ext + buf.readUInt16LE(ext + 8);
         const tailleAttribut = buf.readUInt16LE(ext + 10);
         const nbAttributs = buf.readUInt16LE(ext + 12);
-        const version = { versionCode: null, versionName: null };
+        const version = { versionCode: null, versionName: null, packageName: null };
 
         for (let i = 0; i < nbAttributs; i++) {
           const a = debutAttributs + i * tailleAttribut;
@@ -133,6 +133,9 @@ function lireVersionManifeste(buf) {
           } else if (idRessource === RES_VERSION_NAME || nom === "versionName") {
             if (typeDonnee === TYPE_CHAINE) version.versionName = chaines[donnee];
             else if (valeurBrute >= 0) version.versionName = chaines[valeurBrute];
+          } else if (nom === "package" && valeurBrute >= 0) {
+            // Attribut sans espace de noms android : identifiant de l'application.
+            version.packageName = chaines[valeurBrute];
           }
         }
         return version;
@@ -145,7 +148,7 @@ function lireVersionManifeste(buf) {
 
 /**
  * @param {Buffer} buffer - contenu complet du fichier .apk
- * @returns {{ versionCode: number|null, versionName: string|null }}
+ * @returns {{ versionCode: number|null, versionName: string|null, packageName: string|null }}
  * @throws si l'archive ou le manifeste sont illisibles
  */
 export function lireVersionApk(buffer) {

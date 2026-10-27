@@ -45,6 +45,13 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Notification push touchée portant click_action (anciens envois du
+                 serveur) : sans ce filtre, Android ne trouve aucune activité et
+                 le toucher n'ouvre rien. -->
+            <intent-filter>
+                <action android:name="FLUTTER_NOTIFICATION_CLICK"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
         </activity>
 
         <!-- ─── Notifications push (Firebase Cloud Messaging) ────────────

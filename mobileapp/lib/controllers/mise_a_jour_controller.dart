@@ -31,6 +31,7 @@ class EtatMiseAJour {
     this.fichier,
     this.erreur,
     this.autorisationDemandee = false,
+    this.installationLancee = false,
   });
 
   final PhaseMiseAJour phase;
@@ -45,11 +46,25 @@ class EtatMiseAJour {
   /// inconnues » : au retour, l'installation est relancée.
   final bool autorisationDemandee;
 
+  /// L'installateur Android a été ouvert. En cas de succès, Android arrête
+  /// l'application pour la remplacer : la voir revenir au premier plan avec
+  /// cet indicateur signifie que la mise à jour n'a pas été installée.
+  final bool installationLancee;
+
   /// Une version plus récente que celle installée est publiée.
   bool get nouvelleVersion {
     final p = publiee?.build;
     final i = installee?.build;
     return p != null && i != null && p > i;
+  }
+
+  /// Android n'installe par-dessus que si le versionCode complet est
+  /// supérieur : un build plus récent mais d'une autre architecture
+  /// (APK universelle 3 face à une arm64 2002) serait refusé.
+  bool get installable {
+    final p = publiee?.versionCode;
+    final i = installee?.code;
+    return p == null || i == null || p > i;
   }
 
   double? get progression => total > 0 ? (recus / total).clamp(0, 1).toDouble() : null;
@@ -63,6 +78,7 @@ class EtatMiseAJour {
     File? fichier,
     String? erreur,
     bool? autorisationDemandee,
+    bool? installationLancee,
   }) {
     return EtatMiseAJour(
       phase: phase ?? this.phase,
@@ -73,9 +89,21 @@ class EtatMiseAJour {
       fichier: fichier ?? this.fichier,
       erreur: erreur,
       autorisationDemandee: autorisationDemandee ?? this.autorisationDemandee,
+      installationLancee: installationLancee ?? this.installationLancee,
     );
   }
 }
+
+/// Motifs renvoyés par MiseAJourService.motifRefus (MainActivity.analyserApk).
+const _messagesRefus = {
+  'illisible': 'Le fichier téléchargé est incomplet ou endommagé. Relancez le téléchargement.',
+  'paquet': 'Ce fichier n’est pas une mise à jour de cette application : il ne peut pas la remplacer. '
+      'Contactez le support APS Santé.',
+  'version': 'Cette version ne peut pas remplacer celle installée : son numéro de version Android est '
+      'inférieur ou égal. Une version corrigée sera publiée prochainement.',
+  'signature': 'Cette version n’est pas signée avec la même clé que l’application installée : Android refuse '
+      'de la remplacer. Désinstallez ApSa puis installez la nouvelle version depuis le site APS Santé.',
+};
 
 final miseAJourServiceProvider = Provider<MiseAJourService>((ref) => MiseAJourService());
 
@@ -111,6 +139,7 @@ class MiseAJourController extends Notifier<EtatMiseAJour> {
                 ? PhaseMiseAJour.pret
                 : PhaseMiseAJour.disponible,
         fichier: dejaPret ? state.fichier : null,
+        erreur: etat.nouvelleVersion && !etat.installable ? _messagesRefus['version'] : null,
       );
     } catch (_) {
       state = state.copyWith(
@@ -130,6 +159,11 @@ class MiseAJourController extends Notifier<EtatMiseAJour> {
       } catch (_) {
         state = state.copyWith(erreur: 'Impossible d’ouvrir l’App Store. Réessayez.');
       }
+      return;
+    }
+    // Inutile de télécharger une APK qu'Android refusera d'installer.
+    if (!state.installable) {
+      state = state.copyWith(erreur: _messagesRefus['version']);
       return;
     }
     _annule = false;
@@ -160,6 +194,23 @@ class MiseAJourController extends Notifier<EtatMiseAJour> {
     final fichier = state.fichier;
     if (fichier == null) return;
     try {
+      final refus = await _service.motifRefus(fichier);
+      if (refus != null) {
+        final message = _messagesRefus[refus] ?? 'Cette mise à jour ne peut pas être installée.';
+        if (refus == 'illisible') {
+          await fichier.delete().catchError((_) => fichier);
+          // Fichier écarté : retour à « disponible » pour relancer le téléchargement.
+          state = EtatMiseAJour(
+            phase: PhaseMiseAJour.disponible,
+            installee: state.installee,
+            publiee: state.publiee,
+            erreur: message,
+          );
+        } else {
+          state = state.copyWith(erreur: message, autorisationDemandee: false);
+        }
+        return;
+      }
       if (!await _service.peutInstaller()) {
         state = state.copyWith(autorisationDemandee: true);
         await _service.ouvrirReglagesInstallation();
@@ -167,14 +218,24 @@ class MiseAJourController extends Notifier<EtatMiseAJour> {
       }
       state = state.copyWith(autorisationDemandee: false);
       await _service.installer(fichier);
+      state = state.copyWith(installationLancee: true);
     } catch (_) {
       state = state.copyWith(erreur: 'Impossible d’ouvrir l’installateur. Réessayez.');
     }
   }
 
   /// Retour dans l'application (MaterialApp au premier plan) : reprend
-  /// l'installation si l'utilisateur vient d'accorder l'autorisation.
+  /// l'installation si l'utilisateur vient d'accorder l'autorisation, ou
+  /// signale l'échec si l'on revient de l'installateur sans redémarrage
+  /// (installation annulée ou refusée par Android).
   Future<void> surRetourPremierPlan() async {
+    if (state.installationLancee) {
+      state = state.copyWith(
+        installationLancee: false,
+        erreur: 'La mise à jour n’a pas été installée. Touchez « Installer la mise à jour » pour réessayer.',
+      );
+      return;
+    }
     if (!state.autorisationDemandee || state.fichier == null) return;
     if (await _service.peutInstaller()) await installer();
   }

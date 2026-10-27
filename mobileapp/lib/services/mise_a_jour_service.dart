@@ -28,10 +28,13 @@ import '../utils/endpoint.dart';
 int numeroBuild(int versionCode) => versionCode >= 1000 ? versionCode % 1000 : versionCode;
 
 class VersionInstallee {
-  const VersionInstallee({required this.nom, required this.build});
+  const VersionInstallee({required this.nom, required this.build, required this.code});
 
   final String nom;
   final int build;
+
+  /// versionCode complet : c'est lui qu'Android compare à l'installation.
+  final int code;
 }
 
 class VersionPubliee {
@@ -40,6 +43,7 @@ class VersionPubliee {
     required this.libelle,
     required this.nom,
     required this.build,
+    required this.versionCode,
     required this.url,
     this.description,
     this.taille,
@@ -50,6 +54,7 @@ class VersionPubliee {
   final String libelle;
   final String? nom;
   final int? build;
+  final int? versionCode;
   final String url;
   final String? description;
   final int? taille;
@@ -59,6 +64,7 @@ class VersionPubliee {
     // file_url = « /api/apks/download/... » ; baseUrl se termine déjà par /api.
     final base = ApiRealEndpoints.baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
     final build = json['numero_build'];
+    final code = json['version_code'];
     final taille = json['taille'];
     final ios = json['plateforme'] == 'ios';
     return VersionPubliee(
@@ -66,6 +72,7 @@ class VersionPubliee {
       libelle: (json['libelle'] as String?) ?? 'ApSa',
       nom: json['version_name'] as String?,
       build: build is num ? build.toInt() : null,
+      versionCode: code is num ? code.toInt() : null,
       // iOS : file_url est directement le lien App Store / TestFlight.
       url: ios ? '${json['file_url']}' : '$base${json['file_url']}',
       description: json['description'] as String?,
@@ -88,7 +95,7 @@ class MiseAJourService {
   Future<VersionInstallee> versionInstallee() async {
     final infos = await _canal.invokeMapMethod<String, dynamic>('infosVersion') ?? const {};
     final code = (infos['versionCode'] as num?)?.toInt() ?? 0;
-    return VersionInstallee(nom: (infos['versionName'] as String?) ?? '—', build: numeroBuild(code));
+    return VersionInstallee(nom: (infos['versionName'] as String?) ?? '—', build: numeroBuild(code), code: code);
   }
 
   /// Dernière version publiée, ou null si aucune APK n'est active.
@@ -153,6 +160,14 @@ class MiseAJourService {
     } finally {
       client.close();
     }
+  }
+
+  /// Contrôle natif de l'APK téléchargée (MainActivity.analyserApk) : null si
+  /// elle peut remplacer la version installée, sinon le motif du refus
+  /// (« illisible », « paquet », « version », « signature »).
+  Future<String?> motifRefus(File apk) async {
+    final r = await _canal.invokeMapMethod<String, dynamic>('analyserApk', {'chemin': apk.path});
+    return r?['refus'] as String?;
   }
 
   Future<bool> peutInstaller() async => await _canal.invokeMethod<bool>('peutInstaller') ?? false;
