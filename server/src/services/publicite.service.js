@@ -17,12 +17,15 @@
 //     (acceptation, paiement) : deux acceptations concurrentes ne peuvent
 //     pas obtenir la même place ;
 //   - les dates sont des jours UTC ; date_fin est EXCLUE ;
-//   - les messages WhatsApp partent APRÈS la transaction métier.
+//   - les notifications à l'annonceur partent APRÈS la transaction métier,
+//     par le canal qu'il a choisi (WhatsApp, SMS ou e-mail).
 
 import prisma from "../lib/prisma.js";
 import { journaliserAudit } from "../lib/audit.js";
 import { construireUrl } from "../lib/cloudinaryService.js";
-import { envoyerMessageModele } from "./modeleMessageWhatsapp.service.js";
+import { envoyerMessageModele, rendreTexte } from "./modeleMessageWhatsapp.service.js";
+import { envoyerSms } from "./sms.service.js";
+import { construireEmailHtml, envoyerEmail } from "./email.service.js";
 
 export const DELAI_PAIEMENT_H = Number(process.env.PUBLICITE_DELAI_PAIEMENT_H ?? 72);
 const JOUR_MS = 86_400_000;
@@ -196,6 +199,9 @@ const FORMAT_TELEPHONE = /^\+?[\d\s.\-()]{6,30}$/;
 
 const REQUIS = ["titre", "description", "telephone_contact", "annonceur_nom", "annonceur_telephone"];
 
+// Canal par lequel l'annonceur reçoit la décision, le lien de paiement et la facture.
+export const CANAUX_NOTIFICATION = ["whatsapp", "sms", "email"];
+
 /**
  * Contrôle les champs texte du formulaire de réservation.
  * `partiel` (modification) : seuls les champs présents dans `corps` sont
@@ -220,6 +226,18 @@ export function validerChampsReservation(corps = {}, { partiel = false } = {}) {
   }
   for (const c of ["email_contact", "annonceur_email"]) {
     if (champs[c] && !FORMAT_EMAIL.test(champs[c])) throw new ErreurPublicite(400, "EMAIL_INVALIDE", `${c} invalide.`);
+  }
+  if (!partiel || corps.canal_notification !== undefined) {
+    const canal = String(corps.canal_notification ?? "").trim().toLowerCase() || "whatsapp";
+    if (!CANAUX_NOTIFICATION.includes(canal)) {
+      throw new ErreurPublicite(400, "CANAL_INVALIDE", `canal_notification invalide (${CANAUX_NOTIFICATION.join(", ")}).`);
+    }
+    champs.canal_notification = canal;
+  }
+  // Notification par e-mail : il faut l'adresse (en modification partielle
+  // sans annonceur_email, l'appelant contrôle avec la valeur enregistrée).
+  if (champs.canal_notification === "email" && !champs.annonceur_email && (!partiel || "annonceur_email" in champs)) {
+    throw new ErreurPublicite(400, "EMAIL_REQUIS", "Indiquez votre e-mail pour être notifié par e-mail.");
   }
   return champs;
 }
@@ -457,17 +475,57 @@ export async function publicitesDiffusees({ code, pays_id = null, maintenant = n
 }
 
 /* ===================================================================
- * Notifications WhatsApp
+ * Notifications à l'annonceur (WhatsApp, SMS ou e-mail)
  * =================================================================== */
 
 const baseFrontend = () => process.env.FRONTEND_URL || "http://localhost:5173";
 export const lienPaiementPublicite = (id) => `${baseFrontend()}/publicite/${id}/paiement`;
 export const lienPortailPublicite = (id) => `${baseFrontend()}/portail/annonceur/publicites/${id}`;
 
+// Mise en forme des e-mails, par message : objet, titre, bouton.
+const EMAILS = {
+  publicite_soumise: {
+    sujet: (v) => `Demande de publicité reçue : « ${v.titre} »`,
+    titre: "Nous avons bien reçu votre demande",
+    bouton: (v) => ({ libelle: "Suivre ma demande", url: v.lien_facture }),
+  },
+  publicite_acceptee: {
+    sujet: (v) => `Publicité acceptée : réglez avant le ${v.date_limite_paiement}`,
+    titre: "Votre publicité est acceptée",
+    bouton: (v) => ({ libelle: "Payer ma publicité", url: v.lien_paiement }),
+    note: "Paiement sécurisé par carte bancaire (Stripe) ou par Mobile Money. Sans paiement avant la date limite, la position est libérée.",
+  },
+  publicite_rejetee: {
+    sujet: (v) => `Votre demande de publicité « ${v.titre} » n'a pas été retenue`,
+    titre: "Votre demande n'a pas été retenue",
+    bouton: () => ({ libelle: "Faire une nouvelle demande", url: `${baseFrontend()}/publicite/reserver` }),
+  },
+  publicite_payee: {
+    sujet: (v) => `Paiement confirmé${v.numero_facture ? ` : facture ${v.numero_facture}` : ""}`,
+    titre: "Paiement confirmé, votre publicité est programmée",
+    bouton: (v) => ({ libelle: "Voir ma facture et mes statistiques", url: v.lien_facture }),
+  },
+};
+
+function detailsEmail(code, v) {
+  const lignes = [["Publicité", v.titre], ["Emplacement", `${v.emplacement}, position ${v.position}`]];
+  if (code === "publicite_rejetee") return [...lignes, ["Motif", v.motif ?? ""]];
+  lignes.push(["Diffusion", `du ${v.date_debut} au ${v.date_fin}`]);
+  if (code === "publicite_payee" && v.numero_facture) {
+    return [...lignes, ["Facture", v.numero_facture], ["Montant initial", v.montant_initial], ["Frais agrégateur", v.frais_agregateur], ["Total payé", v.total_paye]];
+  }
+  lignes.push(["Montant", v.montant]);
+  if (code === "publicite_acceptee") lignes.push(["À régler avant le", v.date_limite_paiement]);
+  return lignes;
+}
+
 /**
  * Envoie le message `code` (publicite_soumise | publicite_acceptee |
- * publicite_rejetee | publicite_payee) au téléphone de l'annonceur. Ne lève jamais : un échec
- * d'envoi est journalisé (table message_whatsapp) et relancé par le job.
+ * publicite_rejetee | publicite_payee) à l'annonceur, par le canal qu'il a
+ * choisi (publicite.canal_notification). Le texte est celui du modèle
+ * éditable au back-office (table modele_message_whatsapp, commune aux trois
+ * canaux ; modèle désactivé = rien n'est envoyé). Ne lève jamais : un échec
+ * d'envoi est journalisé et relancé par le job du canal.
  */
 export async function notifierPublicite(code, publicite_id) {
   try {
@@ -476,13 +534,11 @@ export async function notifierPublicite(code, publicite_id) {
       include: {
         emplacement_publicitaire: { select: { libelle: true } },
         pays: { select: { code_iso2: true } },
-        utilisateur: { select: { prenom: true, nom: true, telephone: true } },
+        utilisateur: { select: { prenom: true, nom: true, telephone: true, email: true } },
         facture: true,
       },
     });
     if (!p) return { statut: "ignore", raison: "PUBLICITE_INTROUVABLE" };
-    const destinataire = p.annonceur_telephone || p.utilisateur?.telephone;
-    if (!destinataire) return { statut: "ignore", raison: "SANS_TELEPHONE" };
 
     const variables = {
       annonceur: p.annonceur_nom || [p.utilisateur?.prenom, p.utilisateur?.nom].filter(Boolean).join(" "),
@@ -511,16 +567,44 @@ export async function notifierPublicite(code, publicite_id) {
 
     // L'acceptation peut se répéter (relance après expiration) : une clé par décision.
     const suffixe = code === "publicite_acceptee" ? `:${p.date_moderation?.getTime() ?? 0}` : "";
-    return await envoyerMessageModele({
-      code,
-      variables,
-      destinataire,
-      pays_iso2: p.pays?.code_iso2 ?? null,
-      cle: `${code}:${p.publicite_id}${suffixe}`,
+    const cle = `${code}:${p.publicite_id}${suffixe}`;
+    const telephone = p.annonceur_telephone || p.utilisateur?.telephone;
+    const pays_iso2 = p.pays?.code_iso2 ?? null;
+    const canal = p.canal_notification ?? "whatsapp";
+
+    if (canal === "whatsapp") {
+      if (!telephone) return { statut: "ignore", raison: "SANS_TELEPHONE" };
+      return await envoyerMessageModele({ code, variables, destinataire: telephone, pays_iso2, cle, utilisateur_id: p.utilisateur_id });
+    }
+
+    const modele = await prisma.modeleMessageWhatsapp.findUnique({ where: { code } });
+    if (!modele || !modele.actif) return { statut: "ignore", raison: modele ? "MODELE_DESACTIVE" : "MODELE_ABSENT" };
+    const texte = rendreTexte(modele.texte, variables);
+
+    if (canal === "sms") {
+      if (!telephone) return { statut: "ignore", raison: "SANS_TELEPHONE" };
+      return await envoyerSms({ destinataire: telephone, pays_iso2, texte, origine: code, cle, utilisateur_id: p.utilisateur_id });
+    }
+
+    const adresse = p.annonceur_email || p.utilisateur?.email;
+    if (!adresse) return { statut: "ignore", raison: "SANS_EMAIL" };
+    const gabarit = EMAILS[code];
+    return await envoyerEmail({
+      destinataire: adresse,
+      sujet: gabarit.sujet(variables).slice(0, 255),
+      texte,
+      html: construireEmailHtml({
+        titre: gabarit.titre,
+        paragraphes: [texte, gabarit.note],
+        details: detailsEmail(code, variables),
+        bouton: gabarit.bouton(variables),
+      }),
+      origine: code,
+      cle,
       utilisateur_id: p.utilisateur_id,
     });
   } catch (err) {
-    console.error(`[publicite] Notification WhatsApp ${code} impossible (${publicite_id}) :`, err.message);
+    console.error(`[publicite] Notification ${code} impossible (${publicite_id}) :`, err.message);
     return { statut: "echec", erreur: err.message };
   }
 }

@@ -18,6 +18,7 @@
 
 import fs from "fs/promises";
 import { createReadStream } from "fs";
+import { createHash } from "crypto";
 import path from "path";
 import { fileURLToPath } from "url";
 import prisma from "../lib/prisma.js";
@@ -181,6 +182,61 @@ function lireChampsIos(body, exigerTout) {
   return { donnees };
 }
 
+/** Empreinte SHA-256 (hexadécimal) d'un contenu en mémoire. */
+function empreinteSha256(contenu) {
+  return createHash("sha256").update(contenu).digest("hex");
+}
+
+/** Empreinte SHA-256 d'un fichier du disque, lu en flux (APK de plusieurs dizaines de Mo). */
+function empreinteFichier(chemin) {
+  return new Promise((resoudre, rejeter) => {
+    const hash = createHash("sha256");
+    createReadStream(chemin)
+      .on("data", (morceau) => hash.update(morceau))
+      .on("error", rejeter)
+      .on("end", () => resoudre(hash.digest("hex")));
+  });
+}
+
+/**
+ * Réglages OTA d'une version (les deux plateformes) :
+ *   - build_minimum : vide = aucune obligation, sinon entier ≥ 1 ne dépassant
+ *     pas le build de la version (sinon personne ne pourrait s'y conformer) ;
+ *   - deploiement_pourcentage : entier de 1 à 100.
+ * [buildVersion] = numéro de build de la version après modification (null si
+ * inconnu). Seuls les champs fournis sont lus. Retourne { donnees } ou { erreur }.
+ */
+export function lireChampsOta(body, buildVersion) {
+  const donnees = {};
+  const { build_minimum, deploiement_pourcentage } = body;
+
+  if (build_minimum !== undefined) {
+    const brut = String(build_minimum ?? "").trim();
+    if (brut === "" || brut === "null") {
+      donnees.build_minimum = null;
+    } else {
+      const b = Number(brut);
+      if (!Number.isInteger(b) || b < 1) {
+        return { erreur: "Le build minimal requis doit être un entier positif (ou vide)." };
+      }
+      if (buildVersion != null && b > buildVersion) {
+        return {
+          erreur: `Le build minimal requis (${b}) ne peut pas dépasser le build de cette version (${buildVersion}).`,
+        };
+      }
+      donnees.build_minimum = b;
+    }
+  }
+  if (deploiement_pourcentage !== undefined) {
+    const p = Number(String(deploiement_pourcentage).trim());
+    if (!Number.isInteger(p) || p < 1 || p > 100) {
+      return { erreur: "Le pourcentage de déploiement doit être un entier entre 1 et 100." };
+    }
+    donnees.deploiement_pourcentage = p;
+  }
+  return { donnees };
+}
+
 /**
  * Génère un nom de fichier unique et sécurisé.
  * Format : {uuid}_{timestamp}_{originalname}
@@ -283,6 +339,9 @@ export async function creerApk(req, res, next) {
       return res.status(400).json({ message: "Le 'status' doit valoir true ou false." });
     }
 
+    const ota = lireChampsOta(req.body, numeroBuild(lecture.version.version_code));
+    if (ota.erreur) return res.status(400).json({ message: ota.erreur });
+
     // Générer un nom de fichier sécurisé et unique
     const nomFichierSecurise = genererNomFichierSecurise(fichier.originalname);
     const cheminFichier = path.join(APK_STORAGE_DIR, nomFichierSecurise);
@@ -314,7 +373,9 @@ export async function creerApk(req, res, next) {
             description: description ? String(description).trim() : null,
             file_url: nomFichierSecurise,
             status: statutLu,
+            sha256: empreinteSha256(fichier.buffer),
             ...lecture.version,
+            ...ota.donnees,
           },
         });
       });
@@ -351,6 +412,8 @@ async function creerVersionIos(req, res) {
   }
   const champs = lireChampsIos(req.body, true);
   if (champs.erreur) return res.status(400).json({ message: champs.erreur });
+  const ota = lireChampsOta(req.body, champs.donnees.version_code);
+  if (ota.erreur) return res.status(400).json({ message: ota.erreur });
 
   const statutLu = status !== undefined ? lireStatut(status) : true;
   if (statutLu === null) {
@@ -368,6 +431,7 @@ async function creerVersionIos(req, res) {
         status: statutLu,
         plateforme: "ios",
         ...champs.donnees,
+        ...ota.donnees,
       },
     });
   });
@@ -518,8 +582,16 @@ export async function obtenirApkActive(req, res, next) {
     // progression si un proxy retire Content-Length au téléchargement.
     let taille = null;
     if (plateforme === "android") {
+      const chemin = path.join(APK_STORAGE_DIR, apk.file_url);
       try {
-        taille = (await fs.stat(path.join(APK_STORAGE_DIR, apk.file_url))).size;
+        taille = (await fs.stat(chemin)).size;
+        // APK téléversée avant la migration mobile_ota : empreinte calculée une fois.
+        if (!apk.sha256) {
+          Object.assign(
+            apk,
+            await prisma.mobileApk.update({ where: { id: apk.id }, data: { sha256: await empreinteFichier(chemin) } })
+          );
+        }
       } catch {
         // Fichier absent : le téléchargement renverra lui-même un 404.
       }
@@ -663,6 +735,7 @@ export async function modifierApk(req, res, next) {
         await fs.writeFile(cheminFichier, fichier.buffer);
         ancienNomFichier = apkExistante.file_url;
         miseAJour.file_url = nomFichierSecurise;
+        miseAJour.sha256 = empreinteSha256(fichier.buffer);
         Object.assign(miseAJour, lecture.version);
       } catch (errEcriture) {
         console.error(`❌ Erreur lors de l'écriture du fichier : ${errEcriture.message}`);
@@ -671,6 +744,15 @@ export async function modifierApk(req, res, next) {
         });
       }
     }
+
+    // Réglages OTA, contrôlés face au build de la version après modification.
+    const codeFinal = miseAJour.version_code ?? apkExistante.version_code;
+    const ota = lireChampsOta(req.body, codeFinal == null ? null : numeroBuild(codeFinal));
+    if (ota.erreur) {
+      if (miseAJour.file_url && !estIos) await supprimerFichierDuDisque(miseAJour.file_url);
+      return res.status(400).json({ message: ota.erreur });
+    }
+    Object.assign(miseAJour, ota.donnees);
 
     // Si aucune mise à jour n'a été spécifiée
     if (Object.keys(miseAJour).length === 0) {
@@ -824,28 +906,29 @@ export async function telechargerApk(req, res, next) {
       return res.status(404).json({ message: "Fichier APK introuvable sur le serveur." });
     }
 
-    // Envoyer le fichier avec les bons en-têtes. Content-Length est
-    // indispensable : sans lui, stream.pipe(res) part en "chunked" et le
-    // site public ne peut pas calculer la progression du téléchargement.
-    res.setHeader("Content-Type", "application/vnd.android.package-archive");
-    res.setHeader("Content-Length", String(infosFichier.size));
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${apk.libelle.replace(/"/g, '\\"')}.apk"`
-    );
-    res.setHeader("Cache-Control", "public, max-age=31536000"); // Cache 1 an
-
-    const stream = createReadStream(cheminFichier);
-    stream.pipe(res);
-
-    stream.on("error", (errStream) => {
-      console.error(`❌ Erreur lors du streaming du fichier : ${errStream.message}`);
-      if (!res.headersSent) {
-        res.status(500).json({
-          message: "Erreur lors du téléchargement du fichier.",
-        });
+    // sendFile gère Content-Length (progression côté site et application)
+    // et les requêtes Range (206) : l'application reprend un téléchargement
+    // interrompu là où il s'était arrêté au lieu de tout recommencer —
+    // indispensable sur un réseau mobile instable. Nom de fichier unique par
+    // version : cache d'un an sans risque.
+    res.sendFile(
+      cheminFichier,
+      {
+        acceptRanges: true,
+        maxAge: 365 * 24 * 60 * 60 * 1000,
+        headers: {
+          "Content-Type": "application/vnd.android.package-archive",
+          "Content-Disposition": `attachment; filename="${apk.libelle.replace(/"/g, '\\"')}.apk"`,
+        },
+      },
+      (errEnvoi) => {
+        if (!errEnvoi) return;
+        console.error(`❌ Erreur lors de l'envoi du fichier : ${errEnvoi.message}`);
+        if (!res.headersSent) {
+          res.status(500).json({ message: "Erreur lors du téléchargement du fichier." });
+        }
       }
-    });
+    );
   } catch (err) {
     next(err);
   }

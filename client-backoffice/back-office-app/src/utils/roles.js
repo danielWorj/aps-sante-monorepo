@@ -23,6 +23,7 @@ export const ROUTES_SUPERADMIN = [
   '/apk',
   '/whatsapp',
   '/sms',
+  '/email',
   '/messages-contact',
   '/documents-legaux',
   '/emplacement-publicitaire',

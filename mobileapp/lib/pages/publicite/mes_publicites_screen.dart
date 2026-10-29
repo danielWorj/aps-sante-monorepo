@@ -624,7 +624,7 @@ class _FeuillePaiementPubliciteState extends ConsumerState<_FeuillePaiementPubli
           const Icon(Icons.verified, size: 48, color: AppColors.success),
           const SizedBox(height: 8),
           const Text(
-            'Paiement reçu : votre publicité est programmée. La confirmation et votre facture vous ont été envoyées par WhatsApp.',
+            'Paiement reçu : votre publicité est programmée. La confirmation et votre facture vous ont été envoyées par le canal que vous avez choisi.',
             textAlign: TextAlign.center,
             style: AppTextStyles.body,
           ),

@@ -40,6 +40,39 @@
 .pub-forfait-libelle small { color: var(--ink-soft); }
 .pub-forfait input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
+/* Canal de notification : cartes radio (WhatsApp, SMS, e-mail). */
+.pub-canaux { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .9rem; }
+.pub-canal {
+  --canal: var(--primary); --canal-tint: var(--primary-tint);
+  position: relative; display: flex; flex-direction: column; gap: .35rem;
+  padding: 1.1rem 1.1rem 1rem; border: 1.5px solid var(--line-strong); border-radius: 14px;
+  background: var(--surface); cursor: pointer; transition: border-color .15s, background-color .15s, box-shadow .15s;
+}
+.pub-canal.is-whatsapp { --canal: #1FA855; --canal-tint: #E7F7EE; }
+.pub-canal.is-sms { --canal: #2F6FD6; --canal-tint: #E8F0FC; }
+.pub-canal.is-email { --canal: var(--orange-dark); --canal-tint: var(--orange-tint); }
+.pub-canal:hover { border-color: var(--canal); }
+.pub-canal.is-choisi { border-color: var(--canal); background: var(--canal-tint); box-shadow: 0 0 0 3px var(--canal-tint); }
+.pub-canal:has(input:focus-visible) { outline: 2px solid var(--canal); outline-offset: 2px; }
+.pub-canal-icone {
+  display: grid; place-items: center; width: 2.6rem; height: 2.6rem; margin-bottom: .3rem;
+  border-radius: 12px; background: var(--canal-tint); color: var(--canal); font-size: 1.25rem;
+}
+.pub-canal.is-choisi .pub-canal-icone { background: var(--canal); color: #fff; }
+.pub-canal-titre { font-weight: 700; color: var(--ink); }
+.pub-canal-texte { font-size: .84rem; color: var(--ink-soft); line-height: 1.4; }
+.pub-canal-destination {
+  margin-top: .35rem; font-size: .8rem; font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pub-canal-destination.is-vide { color: var(--ink-soft); font-weight: 500; font-style: italic; }
+.pub-canal-coche {
+  position: absolute; top: .8rem; right: .8rem; display: grid; place-items: center;
+  width: 1.35rem; height: 1.35rem; border-radius: 50%; border: 1.5px solid var(--line-strong);
+  color: transparent; font-size: .7rem; background: var(--surface);
+}
+.pub-canal.is-choisi .pub-canal-coche { border-color: var(--canal); background: var(--canal); color: #fff; }
+
 .pub-occupe { margin-top: 1rem; padding: .8rem 1rem; border-radius: 10px; background: var(--surface-sunk); font-size: .85rem; }
 .pub-occupe ul { margin: .3rem 0; padding-left: 1.2rem; }
 

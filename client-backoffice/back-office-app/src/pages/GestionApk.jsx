@@ -167,6 +167,10 @@ const FORM_VIDE = {
   lien: '',
   version_name: '',
   version_code: '',
+  // Déploiement OTA : build en dessous duquel la mise à jour est obligatoire
+  // (vide = jamais) et part des appareils à qui elle est proposée d'office.
+  build_minimum: '',
+  deploiement_pourcentage: '100',
 };
 
 const LIBELLES_PLATEFORME = { android: 'Android', ios: 'iOS' };
@@ -306,6 +310,8 @@ export default function GestionApk() {
       lien: apk.plateforme === 'ios' ? apk.file_url || '' : '',
       version_name: apk.version_name || '',
       version_code: apk.version_code != null ? String(apk.version_code) : '',
+      build_minimum: apk.build_minimum != null ? String(apk.build_minimum) : '',
+      deploiement_pourcentage: String(apk.deploiement_pourcentage ?? 100),
     });
     setApkExistant(apk);
     setErreurFormulaire(null);
@@ -362,6 +368,15 @@ export default function GestionApk() {
       setErreurFormulaire("Le fichier de l'application (APK) est requis.");
       return;
     }
+    if (formulaire.build_minimum.trim() && !/^[1-9]\d*$/.test(formulaire.build_minimum.trim())) {
+      setErreurFormulaire('Le build minimal requis doit être un entier positif (ou vide).');
+      return;
+    }
+    const pourcentage = Number(formulaire.deploiement_pourcentage);
+    if (!Number.isInteger(pourcentage) || pourcentage < 1 || pourcentage > 100) {
+      setErreurFormulaire('Le pourcentage de déploiement doit être un entier entre 1 et 100.');
+      return;
+    }
 
     // Confirmation si l'enregistrement active une version alors qu'elle
     // ne l'était pas (création active, ou passage inactif → actif).
@@ -397,6 +412,9 @@ export default function GestionApk() {
               version_code: formulaire.version_code.trim(),
             }
           : {}),
+        // Chaîne vide envoyée telle quelle : le serveur retire alors l'obligation.
+        build_minimum: formulaire.build_minimum.trim(),
+        deploiement_pourcentage: String(pourcentage),
       };
 
       if (enCreation) {
@@ -647,6 +665,18 @@ export default function GestionApk() {
                               {apk.version_name || '—'}
                               {apk.numero_build != null && (
                                 <div className="aps-text-muted" style={{ fontSize: 11 }}>build {apk.numero_build}</div>
+                              )}
+                              {apk.build_minimum != null && (
+                                <div className="text-danger" style={{ fontSize: 11 }}>
+                                  <i className="fa-solid fa-lock me-1"></i>
+                                  obligatoire sous le build {apk.build_minimum}
+                                </div>
+                              )}
+                              {(apk.deploiement_pourcentage ?? 100) < 100 && (
+                                <div className="aps-text-muted" style={{ fontSize: 11 }}>
+                                  <i className="fa-solid fa-chart-pie me-1"></i>
+                                  déployée à {apk.deploiement_pourcentage} %
+                                </div>
                               )}
                             </>
                           ) : (
@@ -900,6 +930,37 @@ export default function GestionApk() {
               )}
             </div>
           )}
+
+          <div className="row g-3 mb-1">
+            <div className="col-6">
+              <label className="form-label">Build minimal requis</label>
+              <input
+                type="number"
+                min={1}
+                className="form-control"
+                placeholder="Aucun"
+                value={formulaire.build_minimum}
+                onChange={(e) => modifierChampFormulaire('build_minimum', e.target.value)}
+              />
+            </div>
+            <div className="col-6">
+              <label className="form-label">Déploiement progressif (%)</label>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                className="form-control"
+                value={formulaire.deploiement_pourcentage}
+                onChange={(e) => modifierChampFormulaire('deploiement_pourcentage', e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="aps-text-muted mb-3" style={{ fontSize: 12 }}>
+            Une application dont le build est inférieur au build minimal reste bloquée sur l&apos;écran « Mise à
+            jour obligatoire » (correctif de sécurité, changement d&apos;API). Le déploiement progressif limite la
+            proposition automatique et le pré-téléchargement à cette part des appareils ; les autres trouvent la
+            version dans Paramètres &gt; Mises à jour.
+          </div>
 
           <div className="form-check form-switch">
             <input

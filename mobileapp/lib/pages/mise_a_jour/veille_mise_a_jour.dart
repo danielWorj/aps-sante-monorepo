@@ -1,10 +1,15 @@
 // lib/pages/mise_a_jour/veille_mise_a_jour.dart
 //
 // Monté au-dessus de toute l'application (MaterialApp.builder) :
-//   - au démarrage, vérifie la version publiée et, si elle est plus récente,
-//     propose la mise à jour (une fois par lancement) ;
+//   - au démarrage, vérifie la version publiée et, si elle est plus récente
+//     et que l'appareil fait partie du déploiement, propose la mise à jour
+//     (une fois par version et par lancement) — après le pré-téléchargement
+//     silencieux s'il a lieu : il ne reste alors qu'à installer ;
+//   - build sous le minimum requis : remplace l'application par l'écran
+//     « Mise à jour obligatoire » (MiseAJourPage, non quittable) ;
 //   - au retour au premier plan, reprend l'installation si l'utilisateur
-//     revient des réglages « installer des applications inconnues ».
+//     revient des réglages « installer des applications inconnues », ou
+//     vérifie de nouveau après quelques heures.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,7 +29,8 @@ class VeilleMiseAJour extends ConsumerStatefulWidget {
 }
 
 class _VeilleMiseAJourState extends ConsumerState<VeilleMiseAJour> with WidgetsBindingObserver {
-  bool _proposee = false;
+  /// Version déjà proposée pendant ce lancement (id de la version publiée).
+  String? _proposee;
 
   @override
   void initState() {
@@ -46,10 +52,16 @@ class _VeilleMiseAJourState extends ConsumerState<VeilleMiseAJour> with WidgetsB
   }
 
   void _proposer(EtatMiseAJour etat) {
-    if (_proposee || etat.phase != PhaseMiseAJour.disponible || !etat.nouvelleVersion || !etat.installable) return;
+    final id = etat.publiee?.id;
+    if (id == null || _proposee == id) return;
+    if (!etat.nouvelleVersion || !etat.installable || !etat.dansDeploiement || etat.obligatoire) return;
+    // Pré-téléchargement en cours : on attend qu'il aboutisse (phase prêt),
+    // ou qu'il échoue (retour à « disponible » sans automatique).
+    final pret = etat.phase == PhaseMiseAJour.pret;
+    if (!pret && (etat.phase != PhaseMiseAJour.disponible || etat.automatique)) return;
     final contexte = cleNavigateurApp.currentContext;
     if (contexte == null) return;
-    _proposee = true;
+    _proposee = id;
     showModalBottomSheet<void>(
       context: contexte,
       backgroundColor: AppColors.surface,
@@ -58,7 +70,8 @@ class _VeilleMiseAJourState extends ConsumerState<VeilleMiseAJour> with WidgetsB
         etat: etat,
         onMettreAJour: () {
           Navigator.of(feuille).pop();
-          ref.read(miseAJourProvider.notifier).telecharger();
+          final controleur = ref.read(miseAJourProvider.notifier);
+          pret ? controleur.installer() : controleur.telecharger();
           ouvrirMisesAJour(contexte);
         },
       ),
@@ -69,7 +82,13 @@ class _VeilleMiseAJourState extends ConsumerState<VeilleMiseAJour> with WidgetsB
   Widget build(BuildContext context) {
     // Lire le fournisseur lance la vérification au démarrage.
     ref.listen<EtatMiseAJour>(miseAJourProvider, (_, etat) => _proposer(etat));
-    return widget.child;
+    final obligatoire = ref.watch(miseAJourProvider.select((e) => e.obligatoire));
+    if (!obligatoire) return widget.child;
+    // Navigateur propre : la page (ApsTopBar, feuilles) en a besoin, et celui
+    // de l'application est retiré tant que la mise à jour n'est pas faite.
+    return Navigator(
+      onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => const MiseAJourPage(obligatoire: true)),
+    );
   }
 }
 
@@ -96,6 +115,7 @@ class _FeuilleNouvelleVersion extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               'ApSa ${v.nom ?? ''} est disponible (vous avez la version ${etat.installee?.nom ?? '—'}). '
+              '${etat.phase == PhaseMiseAJour.pret ? 'Elle est déjà téléchargée : il ne reste qu’à l’installer. ' : ''}'
               'La mise à jour ne prend qu’un instant et conserve vos données.',
               textAlign: TextAlign.center,
               style: AppTextStyles.small,
@@ -112,7 +132,9 @@ class _FeuilleNouvelleVersion extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 18),
-            ApsButton(label: 'Mettre à jour', icon: Icons.download_rounded, onPressed: onMettreAJour),
+            etat.phase == PhaseMiseAJour.pret
+                ? ApsButton(label: 'Installer', icon: Icons.install_mobile_rounded, onPressed: onMettreAJour)
+                : ApsButton(label: 'Mettre à jour', icon: Icons.download_rounded, onPressed: onMettreAJour),
             const SizedBox(height: 8),
             ApsButton(
               label: 'Plus tard',

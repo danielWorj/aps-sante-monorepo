@@ -146,7 +146,7 @@ router.post("/publicites/reservation-avec-compte", limiteurReservationPublique, 
 router.put("/publicites/:id", authentifier, gererTeleversementPublicite, modifierPublicite);
 router.delete("/publicites/:id", authentifier, supprimerPublicite);
 
-// Modération (WhatsApp à l'annonceur) et retrait par l'annonceur.
+// Modération (message à l'annonceur par son canal) et retrait par l'annonceur.
 router.post("/publicites/:id/accepter", ...admin, accepterPubliciteCtrl);
 router.post("/publicites/:id/rejeter", ...admin, rejeterPubliciteCtrl);
 router.post("/publicites/:id/annuler", authentifier, annulerPubliciteCtrl);
@@ -154,7 +154,7 @@ router.post("/publicites/:id/annuler", authentifier, annulerPubliciteCtrl);
 // Portail annonceur : statistiques de diffusion.
 router.get("/publicites/:id/statistiques", authentifier, obtenirStatistiquesPublicite);
 
-// Paiement (lien WhatsApp -> page de paiement), facture.
+// Paiement (lien du message d'acceptation -> page de paiement), facture.
 router.get("/publicites/:id/devis", authentifier, obtenirDevisPublicite);
 router.post("/publicites/:id/paiement", authentifier, creerPaiementStripePublicite);
 router.post("/publicites/:id/paiement-campay", authentifier, limiteurCampay, creerPaiementCampayPublicite);

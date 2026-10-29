@@ -43,6 +43,11 @@ const router = express.Router();
  *   - libelle : nom de l'APK (requis, string)
  *   - description : description (optionnel, string)
  *   - status : actif/inactif (optionnel, boolean, défaut true)
+ *   - build_minimum : build en dessous duquel la mise à jour est obligatoire
+ *     (optionnel, vide = aucune obligation ; aussi accepté en PUT)
+ *   - deploiement_pourcentage : part des appareils (1-100) à qui la version
+ *     est proposée d'office (optionnel, défaut 100 ; aussi accepté en PUT)
+ *   L'empreinte sha256 de l'APK est calculée au téléversement.
  *
  * Réponse (201 Created) :
  *   {
@@ -222,6 +227,9 @@ router.delete("/:id", authentifier, autoriser("superadmin"), supprimerApk);
  * Paramètres de route :
  *   - id : UUID de l'APK
  *   - nomFichier : nom du fichier (vérifié contre la BD pour sécurité)
+ *
+ * Accepte les requêtes Range (réponse 206) : l'application reprend un
+ * téléchargement interrompu.
  *
  * Réponse (200 OK) :
  *   - Content-Type: application/vnd.android.package-archive
