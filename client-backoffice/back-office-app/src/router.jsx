@@ -65,6 +65,8 @@ import GestionApk from './pages/GestionApk';
 import WhatsApp from './pages/WhatsApp';
 // SMS (Twilio)
 import Sms from './pages/Sms';
+// E-mail (SMTP / IMAP)
+import Email from './pages/Email';
 import MessagesContact from './pages/MessagesContact';
 import DocumentsLegaux from './pages/DocumentsLegaux';
 // import Medecin from './pages/Medecin';
@@ -151,6 +153,8 @@ export const router = createBrowserRouter([
           { path: '/whatsapp', element: <WhatsApp /> },
           // SMS (Twilio) : configuration, test, journal des envois
           { path: '/sms', element: <Sms /> },
+          // E-mail (SMTP / IMAP) : configuration, test, journal des envois, boîte de réception
+          { path: '/email', element: <Email /> },
           { path: '/messages-contact', element: <MessagesContact /> },
           { path: '/documents-legaux', element: <DocumentsLegaux /> },
           

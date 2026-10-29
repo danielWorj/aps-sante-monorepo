@@ -5,6 +5,11 @@
 // en premier), qui défilent automatiquement. Sous le slider, la petite carte
 // « Réserver cet espace » mène au formulaire de réservation de la page.
 //
+// Navigation : flèches, points (avec progression de la rotation), clavier
+// (← →) et balayage tactile. La rotation s'arrête au survol, au focus et
+// quand l'onglet est masqué. Le flyer est affiché en entier (contain) sur
+// un fond flouté de lui-même : un flyer vertical n'est jamais rogné.
+//
 // Statistiques : une impression est signalée la première fois qu'une
 // publicité devient visible, un clic à chaque ouverture d'un contact. Le
 // serveur dédoublonne ; un échec de suivi n'affecte jamais l'affichage.
@@ -27,7 +32,9 @@ export default function SliderPublicite({ code, variante = 'carte', intervalle =
   const [donnees, setDonnees] = useState(null);
   const [courant, setCourant] = useState(0);
   const [pause, setPause] = useState(false);
+  const [masque, setMasque] = useState(() => typeof document !== 'undefined' && document.hidden);
   const vues = useRef(new Set());
+  const toucher = useRef(null);
 
   useEffect(() => {
     let annule = false;
@@ -40,12 +47,33 @@ export default function SliderPublicite({ code, variante = 'carte', intervalle =
   const pubs = useMemo(() => donnees?.publicites ?? [], [donnees]);
   const nb = pubs.length;
 
-  // Rotation automatique (suspendue au survol / focus).
   useEffect(() => {
-    if (pause || nb <= 1) return undefined;
+    const surVisibilite = () => setMasque(document.hidden);
+    document.addEventListener('visibilitychange', surVisibilite);
+    return () => document.removeEventListener('visibilitychange', surVisibilite);
+  }, []);
+
+  // Rotation automatique (suspendue au survol / focus / onglet masqué).
+  const enPause = pause || masque;
+  useEffect(() => {
+    if (enPause || nb <= 1) return undefined;
     const t = setTimeout(() => setCourant((c) => (c + 1) % nb), intervalle);
     return () => clearTimeout(t);
-  }, [courant, pause, nb, intervalle]);
+  }, [courant, enPause, nb, intervalle]);
+
+  const aller = useCallback((delta) => setCourant((c) => (c + delta + nb) % nb), [nb]);
+  const surClavier = (e) => {
+    if (nb <= 1) return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); aller(-1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); aller(1); }
+  };
+  const debutToucher = (e) => { toucher.current = e.touches[0].clientX; };
+  const finToucher = (e) => {
+    if (toucher.current === null || nb <= 1) return;
+    const ecart = e.changedTouches[0].clientX - toucher.current;
+    toucher.current = null;
+    if (Math.abs(ecart) > 40) aller(ecart < 0 ? 1 : -1);
+  };
 
   // Impression : une fois par publicité et par affichage de la page.
   useEffect(() => {
@@ -71,25 +99,45 @@ export default function SliderPublicite({ code, variante = 'carte', intervalle =
           onMouseLeave={() => setPause(false)}
           onFocus={() => setPause(true)}
           onBlur={() => setPause(false)}
+          onKeyDown={surClavier}
+          onTouchStart={debutToucher}
+          onTouchEnd={finToucher}
+          role="region"
           aria-roledescription="carrousel"
           aria-label="Publicités"
+          style={{ '--pub-intervalle': `${intervalle}ms` }}
         >
           <div className="ad-label">
             <span>Publicité</span>
             {nb > 1 && <span className="pub-slider-compteur">{courant + 1} / {nb}</span>}
           </div>
-          <div className="pub-slider-piste">
+          <div className="pub-slider-piste" aria-live={enPause ? 'polite' : 'off'}>
             {pubs.map((p, i) => (
               <article
                 key={p.publicite_id}
                 className={`pub-slide${i === courant ? ' is-actif' : ''}`}
                 aria-hidden={i !== courant}
                 aria-roledescription="diapositive"
+                aria-label={`${i + 1} sur ${nb}`}
               >
-                <img src={p.visuel_url} alt={p.titre} loading="lazy" />
+                <div className="pub-slide-media" style={{ '--pub-fond': `url("${p.visuel_url}")` }}>
+                  <img src={p.visuel_url} alt={p.titre} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" />
+                  {nb > 1 && (
+                    <>
+                      <button type="button" className="pub-slider-fleche is-prec" onClick={() => aller(-1)}
+                        tabIndex={i === courant ? 0 : -1} aria-label="Publicité précédente">
+                        <i className="fa-solid fa-chevron-left" />
+                      </button>
+                      <button type="button" className="pub-slider-fleche is-suiv" onClick={() => aller(1)}
+                        tabIndex={i === courant ? 0 : -1} aria-label="Publicité suivante">
+                        <i className="fa-solid fa-chevron-right" />
+                      </button>
+                    </>
+                  )}
+                </div>
                 <div className="ad-card-body">
                   <h4>{p.titre}</h4>
-                  {p.description && <p>{p.description}</p>}
+                  {p.description && <p className="pub-slide-description" title={p.description}>{p.description}</p>}
                   {p.localisation && (
                     <p className="pub-slide-lieu"><i className="fa-solid fa-location-dot" /> {p.localisation}</p>
                   )}
@@ -118,10 +166,12 @@ export default function SliderPublicite({ code, variante = 'carte', intervalle =
             ))}
           </div>
           {nb > 1 && (
-            <div className="pub-slider-points" role="tablist" aria-label="Choisir une publicité">
+            <div className={`pub-slider-points${enPause ? ' is-pause' : ''}`} aria-label="Choisir une publicité">
               {pubs.map((p, i) => (
-                <button key={p.publicite_id} type="button" role="tab" aria-selected={i === courant}
-                  aria-label={`Publicité ${i + 1}`} className={i === courant ? 'is-actif' : ''} onClick={() => setCourant(i)} />
+                // La clé change à chaque passage : la barre de progression repart de zéro.
+                <button key={i === courant ? `${p.publicite_id}-${courant}` : p.publicite_id} type="button"
+                  aria-current={i === courant} aria-label={`Publicité ${i + 1} : ${p.titre}`}
+                  className={i === courant ? 'is-actif' : ''} onClick={() => setCourant(i)} />
               ))}
             </div>
           )}

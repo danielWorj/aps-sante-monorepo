@@ -8,8 +8,9 @@
 //     emplacement / position / période, montant, statistiques.
 //   - Accepter (date de début modifiable si la date demandée est passée ou
 //     prise) : la place est bloquée jusqu'au paiement et l'annonceur reçoit
-//     par WhatsApp le lien de paiement. Rejeter : motif obligatoire, envoyé
-//     par WhatsApp. Les textes se modifient dans Configuration > WhatsApp.
+//     le lien de paiement par le canal qu'il a choisi (WhatsApp, SMS ou
+//     e-mail). Rejeter : motif obligatoire, envoyé par ce même canal. Les
+//     textes (communs aux trois canaux) se modifient dans Configuration > WhatsApp.
 //   - Paiements tardifs (place reprise entre-temps) : remboursement manuel.
 //   - Modifier (contenu affiché, visuel, annonceur) et Supprimer, quel que
 //     soit le statut : une publicité avec historique de paiement n'est pas
@@ -53,9 +54,12 @@ const CHAMPS_EDITION = [
   { cle: 'localisation', libelle: 'Localisation', max: 255 },
   { cle: 'annonceur_nom', libelle: "Nom de l'annonceur", max: 150 },
   { cle: 'annonceur_entreprise', libelle: 'Entreprise', max: 150 },
-  { cle: 'annonceur_telephone', libelle: 'WhatsApp annonceur', max: 30 },
+  { cle: 'annonceur_telephone', libelle: 'Téléphone annonceur', max: 30 },
   { cle: 'annonceur_email', libelle: 'E-mail annonceur', type: 'email', max: 150 },
+  { cle: 'canal_notification', libelle: 'Canal de notification', type: 'canal' },
 ];
+// Canal par lequel l'annonceur reçoit décision, lien de paiement et facture.
+const CANAUX = { whatsapp: 'WhatsApp', sms: 'SMS', email: 'E-mail' };
 const formulaireDepuis = (p) => Object.fromEntries(CHAMPS_EDITION.map(({ cle }) => [cle, p[cle] ?? '']));
 /** Payée : la suppression devient un retrait de diffusion (facture conservée). */
 const aHistoriquePaiement = (p) => !!p.facture || p.statut === 'payee';
@@ -234,8 +238,9 @@ export default function Publicite() {
 
       <p className="aps-text-muted">
         Les annonceurs réservent une position dans le slider d'une page. Une demande acceptée bloque la place
-        jusqu'au paiement ; l'annonceur reçoit la décision par WhatsApp (textes modifiables dans{' '}
-        <a href="/whatsapp">Configuration &gt; WhatsApp</a>).
+        jusqu'au paiement ; l'annonceur reçoit la décision par le canal qu'il a choisi — WhatsApp, SMS ou
+        e-mail (textes communs modifiables dans <a href="/whatsapp">Configuration &gt; WhatsApp</a>, journaux
+        dans <a href="/sms">SMS</a> et <a href="/email">E-mail</a>).
       </p>
 
       {tardifs.length > 0 && (
@@ -402,7 +407,7 @@ export default function Publicite() {
                   value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} disabled={occupe} />
                 <small className="aps-text-muted">
                   Date demandée : {jour(detail.date_debut)}. La place est bloquée pendant le délai de paiement ;
-                  l'annonceur reçoit le lien de paiement par WhatsApp.
+                  l'annonceur reçoit le lien de paiement par {CANAUX[detail.canal_notification] ?? 'WhatsApp'}.
                 </small>
               </div>
             )}
@@ -414,6 +419,11 @@ export default function Publicite() {
                     {type === 'textarea' ? (
                       <textarea id={`pub-${cle}`} className="form-control" rows={3} value={formulaire[cle]}
                         onChange={(e) => setFormulaire((f) => ({ ...f, [cle]: e.target.value }))} disabled={occupe} />
+                    ) : type === 'canal' ? (
+                      <select id={`pub-${cle}`} className="form-select" value={formulaire[cle] || 'whatsapp'}
+                        onChange={(e) => setFormulaire((f) => ({ ...f, [cle]: e.target.value }))} disabled={occupe}>
+                        {Object.entries(CANAUX).map(([code, libelle]) => <option key={code} value={code}>{libelle}</option>)}
+                      </select>
                     ) : (
                       <input id={`pub-${cle}`} type={type ?? 'text'} className="form-control" maxLength={max} value={formulaire[cle]}
                         onChange={(e) => setFormulaire((f) => ({ ...f, [cle]: e.target.value }))} disabled={occupe} />
@@ -429,7 +439,9 @@ export default function Publicite() {
             )}
             {decision === 'rejeter' && (
               <div className="mb-3">
-                <label className="form-label" htmlFor="pub-motif">Motif du rejet (envoyé par WhatsApp)</label>
+                <label className="form-label" htmlFor="pub-motif">
+                  Motif du rejet (envoyé par {CANAUX[detail.canal_notification] ?? 'WhatsApp'})
+                </label>
                 <textarea id="pub-motif" className="form-control" rows={3} maxLength={500} value={motif}
                   onChange={(e) => setMotif(e.target.value)} disabled={occupe}
                   placeholder="Ex. Le visuel contient une allégation de santé non autorisée." />
@@ -448,7 +460,11 @@ export default function Publicite() {
                   <dt className="col-5">Annonceur</dt>
                   <dd className="col-7">
                     {detail.annonceur_nom}{detail.annonceur_entreprise && ` — ${detail.annonceur_entreprise}`}<br />
-                    WhatsApp : {detail.annonceur_telephone}{detail.annonceur_email && <><br />{detail.annonceur_email}</>}
+                    Tél. : {detail.annonceur_telephone}{detail.annonceur_email && <><br />{detail.annonceur_email}</>}
+                  </dd>
+                  <dt className="col-5">Notifié par</dt>
+                  <dd className="col-7">
+                    <span className="aps-badge is-neutral">{CANAUX[detail.canal_notification] ?? 'WhatsApp'}</span>
                   </dd>
                   <dt className="col-5">Emplacement</dt>
                   <dd className="col-7">{detail.emplacement_publicitaire?.libelle} · {position(detail.rang)} · {detail.pays?.nom}</dd>

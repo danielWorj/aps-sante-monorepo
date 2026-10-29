@@ -37,7 +37,7 @@
 // créée « en_moderation » ; le visuel arrive en multipart (« visuel »)
 // et est téléversé sur Cloudinary (visuel_url = public_id).
 // Modération : POST /accepter (bloque la place jusqu'au paiement) ou
-// /rejeter (motif obligatoire) — message WhatsApp à l'annonceur.
+// /rejeter (motif obligatoire) — message à l'annonceur par son canal (WhatsApp, SMS, e-mail).
 // Lecture publique : uniquement les publicités payées en cours de
 // diffusion, sans les informations de l'annonceur.
 // Annonceur : ses demandes, statistiques et factures (portail).
@@ -784,11 +784,15 @@ export async function obtenirProfilAnnonceur(req, res, next) {
 
 const MAX_EN_MODERATION_PAR_UTILISATEUR = 5;
 
+const LIBELLES_CANAL = { whatsapp: "par WhatsApp", sms: "par SMS", email: "par e-mail" };
+
 /**
  * POST /api/publicites — réservation d'un espace (multipart/form-data).
  * Champs : forfait_publicitaire_id, date_debut (AAAA-MM-JJ), titre,
  * description, telephone_contact, email_contact?, localisation?,
  * annonceur_nom, annonceur_entreprise?, annonceur_telephone, annonceur_email?,
+ * canal_notification? (whatsapp | sms | email ; défaut whatsapp — e-mail
+ * exige annonceur_email),
  * fichier « visuel » (flyer/image). Emplacement, pays, rang et prix sont
  * déduits du forfait (jamais fournis par le client). Toujours créée
  * « en_moderation » : rien n'est payé ni bloqué avant l'acceptation.
@@ -840,14 +844,14 @@ export async function creerPublicite(req, res, next) {
       include: INCLUDE_DETAIL,
     });
 
-    // Accusé de réception WhatsApp : pas attendu (l'appel Meta peut durer
-    // 15 s) ; notifierPublicite ne lève jamais et journalise l'échec.
+    // Accusé de réception par le canal choisi : pas attendu (l'appel au
+    // fournisseur peut durer 15 s) ; notifierPublicite ne lève jamais.
     void notifierPublicite("publicite_soumise", publicite.publicite_id);
 
     await enregistrerAcceptationsAuteur(req, "reservation_publicite");
 
     return res.status(201).json({
-      message: "Demande envoyée. Vous recevrez la décision par WhatsApp.",
+      message: `Demande envoyée. Vous recevrez la décision ${LIBELLES_CANAL[publicite.canal_notification]}.`,
       publicite: vueDetail(publicite),
     });
   } catch (err) {
@@ -867,7 +871,7 @@ const LIBELLE_ROLE_ANNONCEUR = "annonceur";
  * session (comme un login) pour qu'il suive sa demande dans son espace.
  * Champs : ceux de POST /api/publicites + compte_prenom, compte_nom,
  * compte_email, mot_de_passe. Le pays du compte est celui du forfait choisi ;
- * le téléphone du compte est le WhatsApp de l'annonceur.
+ * le téléphone du compte est celui de l'annonceur.
  * Un email déjà utilisé → 409 COMPTE_EXISTANT : l'utilisateur doit se
  * connecter (« Rejoindre mon espace ») puis réserver depuis son compte.
  */
@@ -971,7 +975,7 @@ export async function reserverAvecCompte(req, res, next) {
 
     const accessToken = await ouvrirSession(req, res, utilisateur);
     return res.status(201).json({
-      message: "Compte créé et demande envoyée. Vous recevrez la décision par WhatsApp.",
+      message: `Compte créé et demande envoyée. Vous recevrez la décision ${LIBELLES_CANAL[publicite.canal_notification]}.`,
       publicite: vueDetail(publicite),
       access_token: accessToken,
       utilisateur: serialiserUtilisateur(utilisateur),
@@ -1004,9 +1008,15 @@ export async function modifierPublicite(req, res, next) {
     }
 
     const permis = ["titre", "description", "telephone_contact", "email_contact", "localisation",
-      "annonceur_nom", "annonceur_entreprise", "annonceur_telephone", "annonceur_email"];
+      "annonceur_nom", "annonceur_entreprise", "annonceur_telephone", "annonceur_email", "canal_notification"];
     const fournis = Object.fromEntries(permis.filter((c) => req.body[c] !== undefined).map((c) => [c, req.body[c]]));
     const donnees = validerChampsReservation(fournis, { partiel: true });
+    // Canal e-mail : l'adresse finale (fournie ou déjà enregistrée) est obligatoire.
+    const canalFinal = donnees.canal_notification ?? pub.canal_notification;
+    const emailFinal = "annonceur_email" in donnees ? donnees.annonceur_email : pub.annonceur_email;
+    if (canalFinal === "email" && !emailFinal) {
+      return res.status(400).json({ code: "EMAIL_REQUIS", message: "Indiquez votre e-mail pour être notifié par e-mail." });
+    }
 
     if (req.body.date_debut && pub.statut === "en_moderation" && (auteur || admin)) {
       const { debut, fin } = await preparerSoumission({ forfait_publicitaire_id: pub.forfait_publicitaire_id, date_debut: req.body.date_debut });
@@ -1079,7 +1089,7 @@ export async function accepterPubliciteCtrl(req, res, next) {
   try {
     await accepterPublicite({ publicite_id: req.params.id, admin_id: req.utilisateur.utilisateur_id, date_debut: req.body?.date_debut });
     const pub = await prisma.publicite.findUnique({ where: { publicite_id: req.params.id }, include: INCLUDE_DETAIL });
-    return res.status(200).json({ message: "Publicité acceptée : l'annonceur a été notifié par WhatsApp.", publicite: vueDetail(pub) });
+    return res.status(200).json({ message: `Publicité acceptée : l'annonceur a été notifié ${LIBELLES_CANAL[pub.canal_notification]}.`, publicite: vueDetail(pub) });
   } catch (err) {
     repondreErreur(err, res, next);
   }
@@ -1090,7 +1100,7 @@ export async function rejeterPubliciteCtrl(req, res, next) {
   try {
     await rejeterPublicite({ publicite_id: req.params.id, admin_id: req.utilisateur.utilisateur_id, motif: req.body?.motif });
     const pub = await prisma.publicite.findUnique({ where: { publicite_id: req.params.id }, include: INCLUDE_DETAIL });
-    return res.status(200).json({ message: "Publicité rejetée : le motif a été envoyé par WhatsApp.", publicite: vueDetail(pub) });
+    return res.status(200).json({ message: `Publicité rejetée : le motif a été envoyé ${LIBELLES_CANAL[pub.canal_notification]}.`, publicite: vueDetail(pub) });
   } catch (err) {
     repondreErreur(err, res, next);
   }

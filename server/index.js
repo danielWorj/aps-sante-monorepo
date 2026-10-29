@@ -45,6 +45,7 @@ import abonnementPresenceRoutes from "./src/routes/abonnementPresence.routes.js"
 import offreRdvRoutes from "./src/routes/offreRdv.routes.js";
 import whatsappRoutes from "./src/routes/whatsapp.routes.js";
 import smsRoutes from "./src/routes/sms.routes.js";
+import emailRoutes from "./src/routes/email.routes.js";
 import { demarrerScheduler } from "./src/lib/scheduler.js";
 
 const app = express();
@@ -207,6 +208,8 @@ app.use("/api", offreRdvRoutes);
 app.use("/api", whatsappRoutes);
 // SMS (Twilio) : administration, rappel de statut, vérification de numéro par code.
 app.use("/api", smsRoutes);
+// E-mail (SMTP / IMAP) : configuration, e-mail de test, journal, boîte de réception.
+app.use("/api", emailRoutes);
 // NB : le webhook Stripe (paiementWebhookRoutes) est déjà monté plus
 // haut, avant express.json() — voir commentaire à cet endroit.
 

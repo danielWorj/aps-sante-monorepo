@@ -6,8 +6,10 @@
 //      date libre fournies par le serveur) ;
 //   3. la publicité : titre, brève description, flyer, téléphone, e-mail,
 //      localisation ;
-//   4. l'annonceur : nom, entreprise, WhatsApp (reçoit la décision), e-mail.
-// La demande part en modération ; la décision arrive par WhatsApp.
+//   4. l'annonceur : nom, entreprise, téléphone, e-mail ;
+//   5. le canal de notification (WhatsApp, SMS ou e-mail), en cartes.
+// La demande part en modération ; la décision (avec, si acceptée, le lien
+// de paiement carte bancaire / Mobile Money) arrive par le canal choisi.
 //
 // Écran PUBLIC : un visiteur sans compte choisit son pays de diffusion et
 // crée son compte annonceur à l'étape 4 (le serveur crée le compte + la
@@ -60,6 +62,7 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
   bool _acceptCgu = false;
   String? _erreur;
   bool _compteExistant = false;
+  CanalNotification _canal = CanalNotification.whatsapp;
 
   final _titre = TextEditingController();
   final _description = TextEditingController();
@@ -180,7 +183,7 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
 
   String? _verifierCompte() {
     if (_prenomCompte.text.trim().isEmpty || _nomCompte.text.trim().isEmpty) return 'Indiquez votre prénom et votre nom.';
-    if (_whatsapp.text.trim().isEmpty) return 'Votre numéro WhatsApp est obligatoire.';
+    if (_whatsapp.text.trim().isEmpty) return 'Votre numéro de téléphone est obligatoire.';
     if (_emailCompte.text.trim().isEmpty) return 'Indiquez votre e-mail : il servira d’identifiant de connexion.';
     if (_motDePasse.text.length < _longueurMinMotDePasse) {
       return 'Le mot de passe doit contenir au moins $_longueurMinMotDePasse caractères.';
@@ -207,7 +210,9 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
     } else if (invite) {
       probleme = _verifierCompte();
     } else if (_nom.text.trim().isEmpty || _whatsapp.text.trim().isEmpty) {
-      probleme = 'Votre nom et votre numéro WhatsApp sont obligatoires.';
+      probleme = 'Votre nom et votre numéro de téléphone sont obligatoires.';
+    } else if (_canal == CanalNotification.email && _emailAnnonceur.text.trim().isEmpty) {
+      probleme = 'Indiquez votre e-mail pour recevoir la décision par e-mail.';
     }
     if (probleme == null && !_acceptCgu) {
       probleme = 'Vous devez accepter les CGU et la politique de confidentialité.';
@@ -228,6 +233,7 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
       'localisation': _lieu.text,
       'annonceur_entreprise': _entreprise.text,
       'annonceur_telephone': _whatsapp.text,
+      'canal_notification': _canal.code,
     };
     try {
       final MaPublicite pub;
@@ -272,8 +278,9 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
           icon: const Icon(Icons.send_outlined, color: AppColors.success, size: 40),
           title: const Text('Demande envoyée'),
           content: Text(
-            'Nous examinons votre publicité « ${pub.titre} ». Vous recevrez la décision par WhatsApp au '
-            '${_whatsapp.text.trim()} ; en cas d’acceptation, le message contient le lien de paiement.'
+            'Nous examinons votre publicité « ${pub.titre} ». Vous recevrez la décision ${_canal.par} '
+            '${_canal == CanalNotification.email ? 'à' : 'au'} ${_destination(_canal, invite) ?? ''} ; en cas '
+            'd’acceptation, le message contient le lien pour payer (carte bancaire ou Mobile Money).'
             '${invite ? '\n\nVotre compte annonceur est créé et vous êtes connecté.' : ''}',
           ),
           actions: [FilledButton(onPressed: () => Navigator.pop(c), child: const Text('Voir mes publicités'))],
@@ -290,6 +297,14 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
     } finally {
       if (mounted) setState(() => _envoi = false);
     }
+  }
+
+  /// Numéro ou adresse qui recevra la décision par le canal `c` (null si vide).
+  String? _destination(CanalNotification c, bool invite) {
+    final v = c == CanalNotification.email
+        ? (invite ? _emailCompte.text : _emailAnnonceur.text).trim()
+        : _whatsapp.text.trim();
+    return v.isEmpty ? null : v;
   }
 
   @override
@@ -465,8 +480,8 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
               _Champ(controleur: _prenomCompte, libelle: 'Prénom *', max: 100),
               _Champ(controleur: _nomCompte, libelle: 'Nom *', max: 100),
               _Champ(controleur: _entreprise, libelle: 'Entreprise', max: 150),
-              _Champ(controleur: _whatsapp, libelle: 'Numéro WhatsApp *', clavier: TextInputType.phone, max: 30,
-                  aide: 'La décision et le lien de paiement vous seront envoyés sur ce numéro.'),
+              _Champ(controleur: _whatsapp, libelle: 'Téléphone *', clavier: TextInputType.phone, max: 30,
+                  aide: 'Reçoit la décision si vous choisissez WhatsApp ou SMS (étape 5).'),
               _Champ(controleur: _emailCompte, libelle: 'E-mail *', clavier: TextInputType.emailAddress, max: 150,
                   aide: 'Il servira d’identifiant pour vous connecter à votre espace.'),
               _Champ(controleur: _motDePasse, libelle: 'Mot de passe *', masque: true,
@@ -477,10 +492,33 @@ class _ReserverPubliciteScreenState extends ConsumerState<ReserverPubliciteScree
             _Bloc(numero: 4, titre: 'Vos informations', enfants: [
               _Champ(controleur: _nom, libelle: 'Nom complet *', max: 150),
               _Champ(controleur: _entreprise, libelle: 'Entreprise', max: 150),
-              _Champ(controleur: _whatsapp, libelle: 'Numéro WhatsApp *', clavier: TextInputType.phone, max: 30,
-                  aide: 'La décision et le lien de paiement vous seront envoyés sur ce numéro.'),
+              _Champ(controleur: _whatsapp, libelle: 'Téléphone *', clavier: TextInputType.phone, max: 30,
+                  aide: 'Reçoit la décision si vous choisissez WhatsApp ou SMS (étape 5).'),
               _Champ(controleur: _emailAnnonceur, libelle: 'E-mail', clavier: TextInputType.emailAddress, max: 150),
             ]),
+          _Bloc(numero: 5, titre: 'Où recevoir la décision ?', enfants: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Nous vous informons par ce canal de l’acceptation ou du refus de votre publicité. En cas '
+                'd’acceptation, le message contient le lien pour payer par carte bancaire ou Mobile Money.',
+                style: AppTextStyles.cardMeta,
+              ),
+            ),
+            // Destination mise à jour à la saisie du téléphone / de l'e-mail.
+            ListenableBuilder(
+              listenable: Listenable.merge([_whatsapp, _emailCompte, _emailAnnonceur]),
+              builder: (context, _) => Column(children: [
+                for (final c in CanalNotification.values)
+                  _CarteCanal(
+                    canal: c,
+                    choisi: _canal == c,
+                    destination: _destination(c, invite),
+                    onTap: () => setState(() => _canal = c),
+                  ),
+              ]),
+            ),
+          ]),
           const SizedBox(height: 12),
           ApsCheckRow(
             label: "J'accepte les Conditions générales d'utilisation et la "
@@ -587,6 +625,100 @@ class _Champ extends StatelessWidget {
           autocorrect: !masque,
           enableSuggestions: !masque,
           decoration: InputDecoration(labelText: libelle, helperText: aide, border: const OutlineInputBorder(), counterText: ''),
+        ),
+      );
+}
+
+/// Canal par lequel l'annonceur reçoit la décision (publicite.canal_notification).
+enum CanalNotification {
+  whatsapp('whatsapp', 'WhatsApp', 'Message instantané, lien de paiement en un clic.', 'par WhatsApp',
+      Icons.chat_outlined, Color(0xFF1FA855), Color(0xFFE7F7EE)),
+  sms('sms', 'SMS', 'Sur tout téléphone, même sans connexion Internet.', 'par SMS',
+      Icons.sms_outlined, AppColors.sky, AppColors.sky100),
+  email('email', 'E-mail', 'Récapitulatif détaillé et bouton de paiement.', 'par e-mail',
+      Icons.mail_outline, AppColors.amber700, AppColors.amber100);
+
+  const CanalNotification(this.code, this.titre, this.texte, this.par, this.icone, this.couleur, this.teinte);
+  final String code;
+  final String titre;
+  final String texte;
+  final String par;
+  final IconData icone;
+  final Color couleur;
+  final Color teinte;
+}
+
+/// Carte de choix d'un canal : icône teintée, description, destination,
+/// coche ronde à droite (sobre : bordure fine, pas d'ombre).
+class _CarteCanal extends StatelessWidget {
+  const _CarteCanal({required this.canal, required this.choisi, required this.destination, required this.onTap});
+  final CanalNotification canal;
+  final bool choisi;
+  final String? destination;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Semantics(
+          selected: choisi,
+          button: true,
+          label: 'Être notifié ${canal.par}',
+          child: Material(
+            color: choisi ? canal.teinte : AppColors.card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: BorderSide(color: choisi ? canal.couleur : AppColors.line, width: choisi ? 1.5 : 1),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: choisi ? canal.couleur : canal.teinte,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(canal.icone, color: choisi ? Colors.white : canal.couleur, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(canal.titre, style: AppTextStyles.cardTitle),
+                      const SizedBox(height: 2),
+                      Text(canal.texte, style: AppTextStyles.cardMeta),
+                      const SizedBox(height: 4),
+                      Text(
+                        destination ?? (canal == CanalNotification.email ? 'E-mail à renseigner' : 'Téléphone à renseigner'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: destination == null
+                            ? AppTextStyles.cardMeta.copyWith(fontStyle: FontStyle.italic)
+                            : AppTextStyles.small.copyWith(fontWeight: FontWeight.w600, color: AppColors.ink),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(width: 8),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: choisi ? canal.couleur : AppColors.card,
+                      border: Border.all(color: choisi ? canal.couleur : AppColors.lineStrong, width: 1.5),
+                    ),
+                    child: choisi ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+                  ),
+                ]),
+              ),
+            ),
+          ),
         ),
       );
 }

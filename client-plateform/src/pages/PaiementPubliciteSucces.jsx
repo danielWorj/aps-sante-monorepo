@@ -87,7 +87,7 @@ export default function PaiementPubliciteSucces() {
     const p = donnees.publicite;
     return (
       <StatusCard variant="success" icon="fa-check" badge="Paiement réussi" title="Votre publicité est programmée"
-        text={`« ${p.titre} » sera diffusée du ${formatJour(p.date_debut)} au ${formatJour(veille(p.date_fin))} inclus. Une confirmation avec votre facture vous a été envoyée par WhatsApp.`}>
+        text={`« ${p.titre} » sera diffusée du ${formatJour(p.date_debut)} au ${formatJour(veille(p.date_fin))} inclus. Une confirmation avec votre facture vous a été envoyée par le canal que vous avez choisi.`}>
         {p.facture_numero && (
           <div className="mb-3">
             <FactureChargee cle={`facture-publicite:${id}`} charger={() => obtenirFacturePublicite(id)} />
@@ -115,7 +115,7 @@ export default function PaiementPubliciteSucces() {
 
   return (
     <StatusCard variant="pending" icon="fa-clock" badge="En attente" title="Paiement en cours de traitement"
-      text="Votre paiement est en cours de confirmation. Vous recevrez un message WhatsApp dès qu’il sera validé.">
+      text="Votre paiement est en cours de confirmation. Vous recevrez un message dès qu’il sera validé.">
       <div className="status-card-actions">
         <Link to={`/portail/annonceur/publicites/${id}`} className="btn btn-outline-primary btn-lg-aps">Ma publicité</Link>
       </div>

@@ -190,6 +190,7 @@ const APS_MENU = [
       { key: "documents-legaux", label: "Documents légaux", icon: "fa-solid fa-file-contract", to: "/documents-legaux" },
       { key: "whatsapp", label: "WhatsApp", icon: "fa-brands fa-whatsapp", to: "/whatsapp" },
       { key: "sms", label: "SMS", icon: "fa-solid fa-comment-sms", to: "/sms" },
+      { key: "email", label: "E-mail", icon: "fa-solid fa-envelope", to: "/email" },
       { key: "apk", label: "Gestion APK", icon: "fa-solid fa-mobile-screen", to: "/apk" }
     ]
   }

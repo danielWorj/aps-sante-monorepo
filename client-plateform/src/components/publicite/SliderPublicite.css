@@ -18,10 +18,41 @@
   transition: opacity .45s ease, visibility .45s;
 }
 .pub-slide.is-actif { opacity: 1; visibility: visible; }
-.pub-slide img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
+
+/* Flyer entier (contain) sur un fond flouté de lui-même : jamais rogné. */
+.pub-slide-media {
+  position: relative; overflow: hidden; aspect-ratio: 4 / 3;
+  background: var(--surface-sunk);
+  isolation: isolate;
+}
+.pub-slide-media::before {
+  content: ""; position: absolute; inset: -20px; z-index: -1;
+  background: var(--pub-fond) center / cover no-repeat;
+  filter: blur(18px) saturate(1.1); opacity: .55;
+}
+.pub-slide-media img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+.pub-slider-fleche {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  display: grid; place-items: center; width: 2.1rem; height: 2.1rem; padding: 0;
+  border: 0; border-radius: 50%; background: rgba(255, 255, 255, .92); color: var(--ink);
+  box-shadow: 0 1px 4px rgba(15, 30, 25, .18); cursor: pointer; font-size: .8rem;
+  opacity: 0; transition: opacity .2s;
+}
+.pub-slider-fleche.is-prec { left: .6rem; }
+.pub-slider-fleche.is-suiv { right: .6rem; }
+.pub-slider-fleche:hover { background: #fff; color: var(--primary-dark); }
+.pub-slider-fleche:focus-visible { opacity: 1; outline: 2px solid var(--primary); outline-offset: 2px; }
+.pub-slider-cadre:hover .pub-slider-fleche { opacity: 1; }
+/* Écran tactile (pas de survol) : flèches toujours visibles. */
+@media (hover: none) { .pub-slider-fleche { opacity: .9; } }
+
+.pub-slide-description {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
+}
 
 .pub-slider--banniere .pub-slide { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: center; }
-.pub-slider--banniere .pub-slide img { aspect-ratio: 16 / 7; }
+.pub-slider--banniere .pub-slide-media { aspect-ratio: 16 / 7; }
 @media (max-width: 720px) {
   .pub-slider--banniere .pub-slide { grid-template-columns: 1fr; }
 }
@@ -31,12 +62,21 @@
 
 .pub-slider-points { display: flex; justify-content: center; gap: .4rem; padding: 0 0 .8rem; }
 .pub-slider-points button {
-  width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%;
+  position: relative; overflow: hidden;
+  width: 8px; height: 8px; padding: 0; border: 0; border-radius: 4px;
   background: var(--line-strong);
-  cursor: pointer;
+  cursor: pointer; transition: width .25s ease;
 }
-.pub-slider-points button.is-actif { background: var(--primary); width: 20px; border-radius: 4px; }
+/* Point actif : barre qui se remplit pendant l'affichage de la publicité. */
+.pub-slider-points button.is-actif { width: 24px; background: var(--primary-tint-strong); }
+.pub-slider-points button.is-actif::after {
+  content: ""; position: absolute; inset: 0; background: var(--primary);
+  transform-origin: left; animation: pub-progression var(--pub-intervalle, 6s) linear forwards;
+}
+.pub-slider-points.is-pause button.is-actif::after { animation-play-state: paused; }
+@keyframes pub-progression { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
 @media (prefers-reduced-motion: reduce) {
   .pub-slide { transition: none; }
+  .pub-slider-points button.is-actif::after { animation: none; transform: none; }
 }

@@ -14,11 +14,13 @@
 //      et la prochaine date libre viennent du serveur.
 //   3. La publicité : titre, brève description, flyer / image, contact
 //      téléphone, e-mail, localisation.
-//   4. L'annonceur : nom, entreprise, WhatsApp (reçoit la décision), e-mail —
-//      pré-remplis depuis le compte ou la dernière réservation.
+//   4. L'annonceur : nom, entreprise, téléphone, e-mail — pré-remplis depuis
+//      le compte ou la dernière réservation.
+//   5. Le canal de notification (WhatsApp, SMS ou e-mail), en cartes.
 //
 // Après validation, la demande part en modération : l'annonceur reçoit par
-// WhatsApp le refus motivé, ou l'acceptation avec le lien de paiement.
+// le canal choisi le refus motivé, ou l'acceptation avec le lien de
+// paiement (carte bancaire Stripe ou Mobile Money).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -62,6 +64,14 @@ const CHAMPS_VIDES = {
   annonceur_nom: '', annonceur_entreprise: '', annonceur_telephone: '', annonceur_email: '',
 };
 const COMPTE_VIDE = { prenom: '', nom: '', email: '', mot_de_passe: '', confirmation: '' };
+
+// Canaux de notification de l'annonceur (publicite.canal_notification).
+const CANAUX = [
+  { code: 'whatsapp', icone: 'fa-brands fa-whatsapp', titre: 'WhatsApp', texte: 'Message instantané, lien de paiement en un clic.', par: 'par WhatsApp' },
+  { code: 'sms', icone: 'fa-solid fa-comment-sms', titre: 'SMS', texte: 'Sur tout téléphone, même sans connexion Internet.', par: 'par SMS' },
+  { code: 'email', icone: 'fa-solid fa-envelope', titre: 'E-mail', texte: 'Récapitulatif détaillé et bouton de paiement.', par: 'par e-mail' },
+];
+const canalDe = (code) => CANAUX.find((c) => c.code === code) ?? CANAUX[0];
 const LONGUEUR_MIN_MOT_DE_PASSE = 8;
 
 // Brouillon conservé le temps d'aller se connecter (« Rejoindre mon espace ») :
@@ -94,6 +104,7 @@ export default function ReserverPublicite() {
   const [dateDebut, setDateDebut] = useState(brouillon?.dateDebut ?? '');
   const [champs, setChamps] = useState(() => ({ ...CHAMPS_VIDES, ...brouillon?.champs }));
   const [compte, setCompte] = useState(COMPTE_VIDE);
+  const [canal, setCanal] = useState(brouillon?.canal ?? 'whatsapp');
   const [visuel, setVisuel] = useState(null);
   const [apercu, setApercu] = useState(null);
   const [envoi, setEnvoi] = useState(false);
@@ -172,7 +183,7 @@ export default function ReserverPublicite() {
 
   const sauverBrouillon = () => {
     try {
-      sessionStorage.setItem(CLE_BROUILLON, JSON.stringify({ paysId, forfaitId, dateDebut, champs }));
+      sessionStorage.setItem(CLE_BROUILLON, JSON.stringify({ paysId, forfaitId, dateDebut, champs, canal }));
     } catch {
       // Stockage indisponible (navigation privée…) : la connexion reste possible.
     }
@@ -201,6 +212,9 @@ export default function ReserverPublicite() {
     if (!dateDebut) return setErreur('Choisissez la date de début de diffusion.');
     if (conflit) return setErreur('Cette position est déjà réservée sur la période choisie.');
     if (!visuel) return setErreur('Ajoutez le flyer ou l’image de votre publicité.');
+    if (canal === 'email' && !invite && !champs.annonceur_email.trim()) {
+      return setErreur('Indiquez votre e-mail pour recevoir la décision par e-mail.');
+    }
     if (!accepteCgu) return setErreur(MESSAGE_CGU_REQUISES);
     if (invite) {
       if (!compte.prenom.trim() || !compte.nom.trim()) return setErreur('Indiquez votre prénom et votre nom.');
@@ -213,7 +227,8 @@ export default function ReserverPublicite() {
     setEnvoi(true);
     try {
       const reservation = {
-        ...champs, forfait_publicitaire_id: forfait.forfait_publicitaire_id, date_debut: dateDebut, accepte_cgu: true,
+        ...champs, forfait_publicitaire_id: forfait.forfait_publicitaire_id, date_debut: dateDebut, canal_notification: canal,
+        accepte_cgu: true,
       };
       let r;
       if (invite) {
@@ -256,9 +271,11 @@ export default function ReserverPublicite() {
           <span className="status-card-badge">Demande envoyée</span>
           <h1>Merci, votre demande est en cours d’examen</h1>
           <p className="status-card-text">
-            Nous vérifions votre publicité « {succes.titre} ». Vous recevrez la décision par WhatsApp au{' '}
-            <strong>{succes.annonceur_telephone}</strong> : en cas d’acceptation, le message contient le lien pour
-            payer et programmer la diffusion.
+            Nous vérifions votre publicité « {succes.titre} ». Vous recevrez la décision {canalDe(succes.canal_notification).par}{' '}
+            {succes.canal_notification === 'email' ? 'à' : 'au'}{' '}
+            <strong>{succes.canal_notification === 'email' ? succes.annonceur_email : succes.annonceur_telephone}</strong> :
+            en cas d’acceptation, le message contient le lien pour payer (carte bancaire ou Mobile Money) et
+            programmer la diffusion.
           </p>
           {compteCree && (
             <p className="status-card-text">
@@ -458,10 +475,10 @@ export default function ReserverPublicite() {
                   value={champs.annonceur_entreprise} onChange={majChamp('annonceur_entreprise')} />
               </div>
               <div className="col-md-6">
-                <label className="form-label-aps" htmlFor="pub-wa">Numéro WhatsApp<span className="required-mark">*</span></label>
+                <label className="form-label-aps" htmlFor="pub-wa">Téléphone<span className="required-mark">*</span></label>
                 <input id="pub-wa" className="form-control" inputMode="tel" autoComplete="tel" value={champs.annonceur_telephone}
                   onChange={majChamp('annonceur_telephone')} required />
-                <p className="form-hint">La décision et le lien de paiement vous seront envoyés sur ce numéro.</p>
+                <p className="form-hint">Reçoit la décision si vous choisissez WhatsApp ou SMS (étape 5).</p>
               </div>
               <div className="col-md-12">
                 <label className="form-label-aps" htmlFor="cpt-email">E-mail<span className="required-mark">*</span></label>
@@ -495,18 +512,50 @@ export default function ReserverPublicite() {
                 <input id="pub-ent" className="form-control" maxLength={150} value={champs.annonceur_entreprise} onChange={majChamp('annonceur_entreprise')} />
               </div>
               <div className="col-md-6">
-                <label className="form-label-aps" htmlFor="pub-wa">Numéro WhatsApp<span className="required-mark">*</span></label>
+                <label className="form-label-aps" htmlFor="pub-wa">Téléphone<span className="required-mark">*</span></label>
                 <input id="pub-wa" className="form-control" inputMode="tel" value={champs.annonceur_telephone}
                   onChange={majChamp('annonceur_telephone')} required />
-                <p className="form-hint">La décision et le lien de paiement vous seront envoyés sur ce numéro.</p>
+                <p className="form-hint">Reçoit la décision si vous choisissez WhatsApp ou SMS (étape 5).</p>
               </div>
               <div className="col-md-6">
-                <label className="form-label-aps" htmlFor="pub-aemail">E-mail</label>
-                <input id="pub-aemail" type="email" className="form-control" value={champs.annonceur_email} onChange={majChamp('annonceur_email')} />
+                <label className="form-label-aps" htmlFor="pub-aemail">
+                  E-mail{canal === 'email' && <span className="required-mark">*</span>}
+                </label>
+                <input id="pub-aemail" type="email" className="form-control" value={champs.annonceur_email}
+                  onChange={majChamp('annonceur_email')} required={canal === 'email'} />
               </div>
             </div>
           </fieldset>
           )}
+
+          {/* 5. Canal de notification */}
+          <fieldset className="pub-bloc">
+            <legend><span className="pub-etape">5</span> Où recevoir la décision ?</legend>
+            <p className="form-hint mt-0">
+              Nous vous informons par ce canal de l’acceptation ou du refus de votre publicité. En cas d’acceptation,
+              le message contient le lien pour payer par carte bancaire (Stripe) ou Mobile Money.
+            </p>
+            <div className="pub-canaux" role="radiogroup" aria-label="Canal de notification">
+              {CANAUX.map((c) => {
+                const destination = c.code === 'email'
+                  ? (invite ? compte.email : champs.annonceur_email).trim()
+                  : champs.annonceur_telephone.trim();
+                return (
+                  <label key={c.code} className={`pub-canal is-${c.code}${canal === c.code ? ' is-choisi' : ''}`}>
+                    <input type="radio" name="canal_notification" value={c.code} className="visually-hidden"
+                      checked={canal === c.code} onChange={() => setCanal(c.code)} />
+                    <span className="pub-canal-coche" aria-hidden="true"><i className="fa-solid fa-check" /></span>
+                    <span className="pub-canal-icone" aria-hidden="true"><i className={c.icone} /></span>
+                    <span className="pub-canal-titre">{c.titre}</span>
+                    <span className="pub-canal-texte">{c.texte}</span>
+                    <span className={`pub-canal-destination${destination ? '' : ' is-vide'}`}>
+                      {destination || (c.code === 'email' ? 'E-mail à renseigner' : 'Téléphone à renseigner')}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
 
           {erreur && (
             <div className="alert alert-danger" role="alert">

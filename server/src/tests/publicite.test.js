@@ -63,6 +63,15 @@ client.$transaction = async (fn) => fn(client);
 mock.module("../lib/prisma.js", { defaultExport: client });
 mock.module("../lib/audit.js", { namedExports: { journaliserAudit: async () => {} } });
 mock.module("../lib/cloudinaryService.js", { namedExports: { construireUrl: (n) => `https://cdn/${n}`, televerserFichier: async () => ({ nom: "x" }), supprimerFichier: async () => {} } });
+mock.module("../services/sms.service.js", {
+  namedExports: { envoyerSms: async (p) => (base.envois.push({ canal: "sms", ...p }), { statut: "envoye" }) },
+});
+mock.module("../services/email.service.js", {
+  namedExports: {
+    envoyerEmail: async (p) => (base.envois.push({ canal: "email", ...p }), { statut: "envoye" }),
+    construireEmailHtml: ({ titre, bouton }) => `<h1>${titre}</h1><a href="${bouton?.url}">${bouton?.libelle}</a>`,
+  },
+});
 mock.module("../services/whatsapp.service.js", {
   namedExports: {
     envoyerWhatsapp: async (p) => (base.envois.push(p), { statut: "envoye" }),
@@ -111,6 +120,18 @@ test("validerChampsReservation : requis, formats, mode partiel", () => {
   assert.throws(() => svc.validerChampsReservation({ titre: "  " }, { partiel: true }), { code: "CHAMPS_REQUIS" });
 });
 
+test("validerChampsReservation : canal de notification (défaut WhatsApp, e-mail exige l'adresse)", () => {
+  const ok = { titre: "T", description: "D", telephone_contact: "690000000", annonceur_nom: "Awa", annonceur_telephone: "690000000" };
+  assert.equal(svc.validerChampsReservation(ok).canal_notification, "whatsapp");
+  assert.equal(svc.validerChampsReservation({ ...ok, canal_notification: "SMS" }).canal_notification, "sms");
+  assert.throws(() => svc.validerChampsReservation({ ...ok, canal_notification: "pigeon" }), { code: "CANAL_INVALIDE" });
+  assert.throws(() => svc.validerChampsReservation({ ...ok, canal_notification: "email" }), { code: "EMAIL_REQUIS" });
+  assert.equal(svc.validerChampsReservation({ ...ok, canal_notification: "email", annonceur_email: "a@b.cm" }).canal_notification, "email");
+  // Partiel : le canal seul est accepté (l'adresse enregistrée est contrôlée par l'appelant).
+  assert.deepEqual(svc.validerChampsReservation({ canal_notification: "email" }, { partiel: true }), { canal_notification: "email" });
+  assert.throws(() => svc.validerChampsReservation({ canal_notification: "email", annonceur_email: "" }, { partiel: true }), { code: "EMAIL_REQUIS" });
+});
+
 test("devis : montant initial, frais d'agrégateur en sus, montant final", () => {
   const devis = construireDevisPublicite({
     publicite: { publicite_id: "p", titre: "Promo", rang: 1, montant: "50000", devise: "xaf", date_debut: J("2026-11-01"), date_fin: J("2026-11-08") },
@@ -135,13 +156,16 @@ function reinitialiser() {
   base.remboursements = [];
   base.factures = [];
   base.envois = [];
-  base.modeles = { publicite_payee: { code: "publicite_payee", actif: true, texte: "Merci {annonceur} : facture {numero_facture}, {recapitulatif}", langue: "fr" } };
+  base.modeles = {
+    publicite_payee: { code: "publicite_payee", actif: true, texte: "Merci {annonceur} : facture {numero_facture}, {recapitulatif}", langue: "fr" },
+    publicite_acceptee: { code: "publicite_acceptee", actif: true, texte: "Acceptée : payez avant le {date_limite_paiement} : {lien_paiement}", langue: "fr" },
+  };
 }
 
 const demain = svc.ajouterJours(svc.jourUtc(), 1);
 const pub = (extra = {}) => ({
   publicite_id: "pub-1", utilisateur_id: "u-1", emplacement_publicitaire_id: "e-1", pays_id: "cm", rang: 1,
-  titre: "Promo", montant: 50000, devise: "xaf", annonceur_nom: "Awa", annonceur_telephone: "690000000",
+  titre: "Promo", montant: 50000, devise: "xaf", annonceur_nom: "Awa", annonceur_telephone: "690000000", canal_notification: "whatsapp",
   date_debut: demain, date_fin: svc.ajouterJours(demain, 7), statut: "en_attente_paiement", ...extra,
 });
 
@@ -186,5 +210,41 @@ test("finalisation : expirée et place reprise -> paiement tardif, remboursement
   assert.equal(base.publicites[0].statut, "expiree");
   assert.equal(base.remboursements.length, 1);
   assert.equal(base.remboursements[0].motif, MOTIF_PAIEMENT_TARDIF_PUBLICITE);
+  assert.equal(base.envois.length, 0);
+});
+
+test("notification : acceptation envoyée par e-mail avec le bouton de paiement", async () => {
+  reinitialiser();
+  base.publicites.push(pub({
+    canal_notification: "email", annonceur_email: "awa@exemple.cm",
+    date_moderation: new Date("2026-10-28T08:00:00Z"), date_limite_paiement: new Date("2026-10-31T08:00:00Z"),
+  }));
+  await svc.notifierPublicite("publicite_acceptee", "pub-1");
+  assert.equal(base.envois.length, 1);
+  const e = base.envois[0];
+  assert.equal(e.canal, "email");
+  assert.equal(e.destinataire, "awa@exemple.cm");
+  assert.equal(e.cle, `publicite_acceptee:pub-1:${new Date("2026-10-28T08:00:00Z").getTime()}`);
+  assert.match(e.sujet, /acceptée/);
+  assert.match(e.texte, /\/publicite\/pub-1\/paiement/);
+  assert.match(e.html, /Payer ma publicité/);
+});
+
+test("notification : canal SMS, même texte que le modèle", async () => {
+  reinitialiser();
+  base.publicites.push(pub({ canal_notification: "sms", date_limite_paiement: new Date("2026-10-31T08:00:00Z") }));
+  await svc.notifierPublicite("publicite_acceptee", "pub-1");
+  assert.equal(base.envois[0].canal, "sms");
+  assert.equal(base.envois[0].destinataire, "690000000");
+  assert.equal(base.envois[0].pays_iso2, "CM");
+  assert.match(base.envois[0].texte, /^Acceptée : payez avant le 31\/10\/2026/);
+});
+
+test("notification : modèle désactivé -> rien n'est envoyé, quel que soit le canal", async () => {
+  reinitialiser();
+  base.modeles.publicite_acceptee.actif = false;
+  base.publicites.push(pub({ canal_notification: "email", annonceur_email: "awa@exemple.cm" }));
+  const r = await svc.notifierPublicite("publicite_acceptee", "pub-1");
+  assert.equal(r.statut, "ignore");
   assert.equal(base.envois.length, 0);
 });

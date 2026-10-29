@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -14,6 +15,7 @@ import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.security.MessageDigest
 
 // flutter_stripe (PaymentSheet) exige FlutterFragmentActivity, pas FlutterActivity.
 class MainActivity : FlutterFragmentActivity() {
@@ -40,6 +42,23 @@ class MainActivity : FlutterFragmentActivity() {
                             resultat.success(analyserApk(File(chemin)))
                         }
                     }
+                    "empreinteSha256" -> {
+                        val chemin = appel.argument<String>("chemin")
+                        if (chemin == null) {
+                            resultat.error("argument", "Chemin de l'APK manquant", null)
+                        } else {
+                            // APK de plusieurs dizaines de Mo : lecture hors du fil principal.
+                            Thread {
+                                val empreinte = try {
+                                    empreinteSha256(File(chemin))
+                                } catch (e: Exception) {
+                                    null
+                                }
+                                runOnUiThread { resultat.success(empreinte) }
+                            }.start()
+                        }
+                    }
+                    "reseauNonFacture" -> resultat.success(reseauNonFacture())
                     "peutInstaller" -> resultat.success(peutInstaller())
                     "ouvrirReglagesInstallation" -> {
                         ouvrirReglagesInstallation()
@@ -120,6 +139,29 @@ class MainActivity : FlutterFragmentActivity() {
         } ?: return true
         val signesInstalle = installee.signingInfo?.apkContentsSigners ?: return true
         return signesInstalle.any { cle -> signesArchive.any { it == cle } }
+    }
+
+    // Empreinte SHA-256 (hexadécimal) de l'APK téléchargée, comparée à celle
+    // calculée par le serveur au téléversement : écarte un fichier tronqué ou
+    // altéré en chemin avant d'ouvrir l'installateur.
+    private fun empreinteSha256(fichier: File): String {
+        val condensat = MessageDigest.getInstance("SHA-256")
+        fichier.inputStream().use { flux ->
+            val tampon = ByteArray(64 * 1024)
+            while (true) {
+                val lus = flux.read(tampon)
+                if (lus < 0) break
+                condensat.update(tampon, 0, lus)
+            }
+        }
+        return condensat.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    // Wi-Fi ou réseau non facturé : le pré-téléchargement silencieux d'une
+    // mise à jour ne consomme pas le forfait mobile de l'utilisateur.
+    private fun reseauNonFacture(): Boolean {
+        val connectivite = getSystemService(ConnectivityManager::class.java) ?: return false
+        return connectivite.activeNetwork != null && !connectivite.isActiveNetworkMetered
     }
 
     // Android 8+ : l'utilisateur doit autoriser ApSa à installer des applications.

@@ -27,6 +27,7 @@ import { purgerVisiteursEngagement } from "../services/engagementMedecin.service
 import { purgerVisiteursEngagementLaboratoire } from "../services/portailLaboratoire.service.js";
 import { relancerMessagesWhatsapp } from "../services/whatsapp.service.js";
 import { relancerMessagesSms } from "../services/sms.service.js";
+import { relancerMessagesEmail, releverEmailsRecus } from "../services/email.service.js";
 import { purgerCodesVerification } from "../services/verificationTelephone.service.js";
 import { purgerDemandesConnexion } from "../services/connexionApplication.service.js";
 import { expirerPublicitesNonPayees } from "../services/publicite.service.js";
@@ -79,6 +80,10 @@ const CRON_RELANCE_WHATSAPP = process.env.CRON_RELANCE_WHATSAPP || "*/10 * * * *
 // SMS : relance des échecs transitoires (hors codes de vérification) et
 // purge quotidienne des codes de plus de 30 jours.
 const CRON_RELANCE_SMS = process.env.CRON_RELANCE_SMS || "*/10 * * * *";
+// E-mail : relance des échecs transitoires (10 min) et relève de la boîte
+// IMAP (5 min ; sans IMAP_HOST, la relève ne fait rien).
+const CRON_RELANCE_EMAIL = process.env.CRON_RELANCE_EMAIL || "*/10 * * * *";
+const CRON_RELEVE_EMAIL = process.env.CRON_RELEVE_EMAIL || "*/5 * * * *";
 const CRON_PURGE_CODES_VERIFICATION = process.env.CRON_PURGE_CODES_VERIFICATION || "50 3 * * *";
 
 // Publicités acceptées non payées dans le délai : place libérée (toutes les 5 min).
@@ -225,6 +230,26 @@ export function demarrerScheduler() {
     relancerMessagesSms().catch((err) => {
       console.error("[scheduler] Échec relance des SMS :", err);
     });
+  });
+
+  cron.schedule(CRON_RELANCE_EMAIL, () => {
+    relancerMessagesEmail().catch((err) => {
+      console.error("[scheduler] Échec relance des e-mails :", err);
+    });
+  });
+
+  // Pas de relève concurrente : une relève lente (grosse boîte) ne se chevauche pas.
+  let releveEnCours = false;
+  cron.schedule(CRON_RELEVE_EMAIL, async () => {
+    if (releveEnCours) return;
+    releveEnCours = true;
+    try {
+      await releverEmailsRecus();
+    } catch (err) {
+      console.error("[scheduler] Échec relève de la boîte e-mail (IMAP) :", err.message);
+    } finally {
+      releveEnCours = false;
+    }
   });
 
   cron.schedule(

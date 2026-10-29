@@ -121,11 +121,19 @@ enum StatutModerationPublicite {
 // dépend QUE de ce statut (payee) et de la période.
 enum StatutPublicite {
   en_moderation // soumise par l'annonceur, en attente de l'administration
-  rejetee // refusée (motif_rejet envoyé par WhatsApp)
+  rejetee // refusée (motif_rejet envoyé par le canal choisi)
   en_attente_paiement // acceptée : la place est bloquée jusqu'à date_limite_paiement
   expiree // acceptée mais non payée à temps : la place est libérée
   payee // payée : diffusée de date_debut à date_fin (exclue)
   annulee // retirée par l'annonceur avant paiement
+}
+
+// Canal choisi par l'annonceur pour recevoir la décision de modération,
+// le lien de paiement et la facture (voir notifierPublicite).
+enum CanalNotificationPublicite {
+  whatsapp
+  sms
+  email
 }
 
 enum StatutPlanningGarde {
@@ -530,6 +538,7 @@ model Utilisateur {
   messages_whatsapp      MessageWhatsapp[]
   // SMS qui lui ont été adressés (journal d'envoi, Twilio).
   messages_sms           MessageSms[]
+  messages_email         MessageEmail[]
   // Connexions web à valider depuis l'application mobile.
   demandes_connexion_web DemandeConnexionWeb[]
 
@@ -1416,7 +1425,9 @@ model Publicite {
   localisation      String? @db.VarChar(255)
 
   // Personne qui réserve l'espace (pré-rempli depuis le compte, modifiable).
-  // annonceur_telephone reçoit les messages WhatsApp.
+  // canal_notification dit par où l'annonceur reçoit la décision et le lien
+  // de paiement : annonceur_telephone (SMS, WhatsApp) ou annonceur_email.
+  canal_notification CanalNotificationPublicite @default(whatsapp)
   annonceur_nom        String? @db.VarChar(150)
   annonceur_entreprise String? @db.VarChar(150)
   annonceur_telephone  String? @db.VarChar(30)
@@ -2719,6 +2730,18 @@ model MobileApk {
   // Une seule version active par plateforme.
   plateforme String @default("android") @db.VarChar(10)
 
+  // Déploiement OTA (lus par l'application, controllers/mise_a_jour_controller.dart) :
+  //   - build_minimum : numéro de build en dessous duquel l'application est
+  //     bloquée sur l'écran « Mise à jour obligatoire » (null = jamais) ;
+  //   - deploiement_pourcentage : part des appareils (1-100) à qui la version
+  //     est proposée et pré-téléchargée automatiquement ; les autres la
+  //     trouvent toujours dans Paramètres > Mises à jour ;
+  //   - sha256 : empreinte de l'APK, calculée au téléversement et vérifiée
+  //     par l'application avant d'ouvrir l'installateur.
+  build_minimum           Int?
+  deploiement_pourcentage Int     @default(100)
+  sha256                  String? @db.VarChar(64)
+
   @@map("mobile_apk")
 }
 
@@ -3423,6 +3446,81 @@ model MessageSms {
   @@index([utilisateur_id])
   @@index([date_creation])
   @@map("message_sms")
+}
+
+// =====================================================================
+// E-mail (SMTP / IMAP) — socle d'envoi et de réception
+//
+// Les paramètres des serveurs restent en variables d'environnement
+// (SMTP_*, IMAP_*) : aucune donnée secrète en base. Tout envoi passe par
+// services/email.service.js ; la réception par le job relevant la boîte
+// IMAP (relever les e-mails reçus).
+// =====================================================================
+
+enum StatutMessageEmail {
+  en_attente // ligne créée, remise au serveur SMTP en cours (ou interrompue)
+  envoye // accepté par le serveur SMTP (identifiant_fournisseur = Message-ID)
+  echec // refusé ou injoignable ; `relancable` dit si le job peut réessayer
+}
+
+model MessageEmail {
+  message_email_id String @id @default(uuid()) @db.Uuid
+
+  // Idempotence (ex. « publicite_acceptee:<publicite_id>:<horodatage> »).
+  cle                     String?            @unique @db.VarChar(200)
+  // Service émetteur (ex. « publicite_acceptee », « test_back_office »).
+  origine                 String             @db.VarChar(60)
+  destinataire            String             @db.VarChar(254)
+  utilisateur_id          String?            @db.Uuid
+  sujet                   String             @db.VarChar(255)
+  texte                   String             @db.Text
+  html                    String?            @db.Text
+  statut                  StatutMessageEmail @default(en_attente)
+  // Message-ID attribué à l'envoi : relie une réponse reçue (In-Reply-To).
+  identifiant_fournisseur String?            @unique @db.VarChar(255)
+  erreur_code             String?            @db.VarChar(40)
+  erreur                  String?            @db.Text
+  relancable              Boolean            @default(false)
+  tentatives              Int                @default(0)
+
+  date_creation DateTime  @default(now())
+  date_envoi    DateTime?
+
+  utilisateur Utilisateur? @relation(fields: [utilisateur_id], references: [utilisateur_id], onDelete: SetNull)
+  reponses    EmailRecu[]
+
+  @@index([statut, relancable])
+  @@index([utilisateur_id])
+  @@index([date_creation])
+  @@map("message_email")
+}
+
+// E-mail reçu dans la boîte IMAP d'APS Santé (réponses des destinataires,
+// écrits spontanés). Relevé par le job ; jamais modifié sauf `lu`.
+model EmailRecu {
+  email_recu_id String @id @default(uuid()) @db.Uuid
+
+  // En-tête Message-ID : un e-mail n'est enregistré qu'une fois.
+  message_id       String   @unique @db.VarChar(512)
+  expediteur       String   @db.VarChar(254)
+  expediteur_nom   String?  @db.VarChar(255)
+  destinataire     String?  @db.VarChar(254)
+  sujet            String   @db.VarChar(500)
+  texte            String   @db.Text
+  html             String?  @db.Text
+  // In-Reply-To : message d'APS Santé auquel il répond, s'il est connu.
+  en_reponse_a     String?  @db.VarChar(512)
+  message_email_id String?  @db.Uuid
+  lu               Boolean  @default(false)
+  date_reception   DateTime
+  date_creation    DateTime @default(now())
+
+  message_email MessageEmail? @relation(fields: [message_email_id], references: [message_email_id], onDelete: SetNull)
+
+  @@index([lu])
+  @@index([date_reception])
+  @@index([message_email_id])
+  @@map("email_recu")
 }
 
 enum ObjetCodeVerification {

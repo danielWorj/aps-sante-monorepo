@@ -6,6 +6,8 @@
 // Sur iPhone, « mettre à jour » ouvre le lien App Store / TestFlight publié.
 // Accès : Paramètres (BoutonParametres), profils (CarteConnexionCompte), et proposition
 // automatique au démarrage (VeilleMiseAJour).
+// En mode [MiseAJourPage.obligatoire] (build sous le minimum requis), la page
+// remplace toute l'application (VeilleMiseAJour) et ne peut pas être quittée.
 
 import 'dart:io';
 
@@ -28,36 +30,56 @@ String _date(DateTime d) {
 }
 
 class MiseAJourPage extends ConsumerWidget {
-  const MiseAJourPage({super.key});
+  const MiseAJourPage({super.key, this.obligatoire = false});
+
+  /// Mise à jour exigée : pas de retour possible, message explicatif.
+  final bool obligatoire;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final etat = ref.watch(miseAJourProvider);
     final controleur = ref.read(miseAJourProvider.notifier);
 
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      body: SafeArea(
-        child: RefreshIndicator(
-          color: AppColors.b7,
-          onRefresh: controleur.verifier,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 32),
-            children: [
-              const ApsTopBar(title: 'Mises à jour', overline: 'APS Santé'),
-              _CarteVersionInstallee(etat: etat),
-              const SizedBox(height: 12),
-              _CarteStatut(etat: etat, controleur: controleur),
-              if (etat.erreur != null && etat.phase != PhaseMiseAJour.erreur) ...[
+    return PopScope(
+      canPop: !obligatoire,
+      child: Scaffold(
+        backgroundColor: AppColors.bg,
+        body: SafeArea(
+          child: RefreshIndicator(
+            color: AppColors.b7,
+            onRefresh: controleur.verifier,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 32),
+              children: [
+                ApsTopBar(
+                  title: obligatoire ? 'Mise à jour obligatoire' : 'Mises à jour',
+                  overline: 'APS Santé',
+                  showBack: !obligatoire,
+                ),
+                if (obligatoire) ...[
+                  ApsNote.text(
+                    'Cette version d’ApSa n’est plus prise en charge. Installez la nouvelle version pour continuer '
+                    'à utiliser l’application.',
+                    bold: 'Mise à jour requise.',
+                    icon: Icons.lock_clock_outlined,
+                    tone: ApsTone.amber,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                _CarteVersionInstallee(etat: etat),
                 const SizedBox(height: 12),
-                ApsNote.text(etat.erreur!, icon: Icons.error_outline_rounded, tone: ApsTone.red),
+                _CarteStatut(etat: etat, controleur: controleur),
+                if (etat.erreur != null && etat.phase != PhaseMiseAJour.erreur) ...[
+                  const SizedBox(height: 12),
+                  ApsNote.text(etat.erreur!, icon: Icons.error_outline_rounded, tone: ApsTone.red),
+                ],
+                const SizedBox(height: 12),
+                ApsNote.text(
+                  'Vos données, votre connexion et vos rendez-vous sont conservés pendant la mise à jour.',
+                  icon: Icons.verified_user_outlined,
+                ),
               ],
-              const SizedBox(height: 12),
-              ApsNote.text(
-                'Vos données, votre connexion et vos rendez-vous sont conservés pendant la mise à jour.',
-                icon: Icons.verified_user_outlined,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -95,10 +117,7 @@ class _CarteVersionInstallee extends StatelessWidget {
               children: [
                 Text('Version installée', style: AppTextStyles.xs),
                 const SizedBox(height: 2),
-                Text(
-                  v == null ? '…' : 'ApSa ${v.nom}',
-                  style: AppTextStyles.strong.copyWith(fontSize: 15),
-                ),
+                Text(v == null ? '…' : 'ApSa ${v.nom}', style: AppTextStyles.strong.copyWith(fontSize: 15)),
               ],
             ),
           ),
@@ -149,7 +168,12 @@ class _CarteStatut extends StatelessWidget {
                 texte: etat.erreur ?? 'Réessayez dans quelques instants.',
               ),
               const SizedBox(height: 14),
-              ApsButton(label: 'Réessayer', icon: Icons.refresh_rounded, variant: ApsButtonVariant.soft, onPressed: controleur.verifier),
+              ApsButton(
+                label: 'Réessayer',
+                icon: Icons.refresh_rounded,
+                variant: ApsButtonVariant.soft,
+                onPressed: controleur.verifier,
+              ),
             ],
           ),
         );
@@ -209,19 +233,13 @@ class _CarteNouvelleVersion extends StatelessWidget {
                   children: [
                     const ApsPill('Nouvelle version', dot: true),
                     const SizedBox(height: 4),
-                    Text(
-                      'ApSa ${v.nom ?? ''}'.trim(),
-                      style: AppTextStyles.strong.copyWith(fontSize: 16),
-                    ),
+                    Text('ApSa ${v.nom ?? ''}'.trim(), style: AppTextStyles.strong.copyWith(fontSize: 16)),
                   ],
                 ),
               ),
             ],
           ),
-          if (details.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(details, style: AppTextStyles.xs),
-          ],
+          if (details.isNotEmpty) ...[const SizedBox(height: 8), Text(details, style: AppTextStyles.xs)],
           if ((v.description ?? '').trim().isNotEmpty) ...[
             const ApsDivider(space: 14),
             Text('Nouveautés', style: AppTextStyles.strong),
@@ -242,12 +260,7 @@ class _CarteNouvelleVersion extends StatelessWidget {
         return [
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: p,
-              minHeight: 6,
-              color: AppColors.b7,
-              backgroundColor: AppColors.b1,
-            ),
+            child: LinearProgressIndicator(value: p, minHeight: 6, color: AppColors.b7, backgroundColor: AppColors.b1),
           ),
           const SizedBox(height: 8),
           Row(
@@ -262,7 +275,12 @@ class _CarteNouvelleVersion extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          ApsButton(label: 'Annuler', variant: ApsButtonVariant.ghost, small: true, onPressed: controleur.annulerTelechargement),
+          ApsButton(
+            label: 'Annuler',
+            variant: ApsButtonVariant.ghost,
+            small: true,
+            onPressed: controleur.annulerTelechargement,
+          ),
         ];
       case PhaseMiseAJour.pret:
         return [
@@ -275,7 +293,11 @@ class _CarteNouvelleVersion extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-          ApsButton(label: 'Installer la mise à jour', icon: Icons.install_mobile_rounded, onPressed: controleur.installer),
+          ApsButton(
+            label: 'Installer la mise à jour',
+            icon: Icons.install_mobile_rounded,
+            onPressed: controleur.installer,
+          ),
           const SizedBox(height: 8),
           Text(
             'Android vous demandera de confirmer : touchez « Mettre à jour ».',
