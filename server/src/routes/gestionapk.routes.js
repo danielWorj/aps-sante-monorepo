@@ -20,6 +20,7 @@ import {
   modifierApk,
   supprimerApk,
   telechargerApk,
+  redirigerVersApplication,
 } from "../controllers/gestionapk.controller.js";
 import { gererTeleversementApk } from "../middlewares/upload_apk.middleware.js";
 import { authentifier } from "../middlewares/auth.middleware.js";
@@ -124,6 +125,9 @@ router.get("/", authentifier, autoriser("superadmin"), listerApks);
  * réapparaître le même bug.
  */
 router.get("/active", obtenirApkActive);
+
+// PUBLIQUE — lien permanent vers la version active (e-mails). Avant "/:id".
+router.get("/telecharger/:plateforme", redirigerVersApplication);
 
 /**
  * GET /api/apks/:id

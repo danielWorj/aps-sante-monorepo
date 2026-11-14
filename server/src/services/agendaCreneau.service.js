@@ -413,3 +413,27 @@ export async function synchroniserTousLesAgendas({ maintenant = new Date() } = {
   }
   return bilan;
 }
+
+/**
+ * Le médecin a-t-il au moins une case RÉSERVABLE (« disponible », sans RDV,
+ * pas encore commencée) ? Même règle que GET /medecins/:id/agenda?libres=true.
+ * Sans case réservable, le patient peut lui adresser une demande directe
+ * (jour + heure de son choix, voir offreRdv.service.js).
+ * @param {string} medecin_id
+ * @param {{ maintenant?: Date }} [options]
+ * @param {object} [db]
+ * @returns {Promise<boolean>}
+ */
+export async function aDesCreneauxLibres(medecin_id, { maintenant = new Date() } = {}, db = prisma) {
+  // La veille comprise : une case de la veille à cheval sur minuit peut encore être à venir.
+  const veille = new Date(maintenant.getTime() - 2 * 86_400_000);
+  const cases = await db.creneauAgenda.findMany({
+    where: { medecin_id, statut: "disponible", rdv_id: null, date: { gte: veille } },
+    include: { horaire: true },
+    orderBy: [{ date: "asc" }],
+    take: 200,
+  });
+  if (!cases.length) return false;
+  const fuseau = await fuseauDuMedecin(medecin_id, db);
+  return cases.some((c) => bornesCreneau(c, fuseau).debut.getTime() > maintenant.getTime());
+}

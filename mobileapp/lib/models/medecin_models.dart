@@ -84,6 +84,37 @@ enum StatutVerificationMedecin {
   }
 }
 
+/// Miroir de l'enum Prisma `StatutOrdreMedecin` : appartenance au Tableau
+/// de l'Ordre National des Médecins du Cameroun (ONMC), tenue à jour par
+/// le serveur. `nonVerifie` : pas encore vérifié, ou exercice hors Cameroun.
+enum StatutOrdreMedecin {
+  inscrit,
+  nonInscrit,
+  nonVerifie;
+
+  static StatutOrdreMedecin fromApi(String? valeur) {
+    switch (valeur) {
+      case 'inscrit':
+        return StatutOrdreMedecin.inscrit;
+      case 'non_inscrit':
+        return StatutOrdreMedecin.nonInscrit;
+      default:
+        return StatutOrdreMedecin.nonVerifie;
+    }
+  }
+
+  String toApi() {
+    switch (this) {
+      case StatutOrdreMedecin.inscrit:
+        return 'inscrit';
+      case StatutOrdreMedecin.nonInscrit:
+        return 'non_inscrit';
+      case StatutOrdreMedecin.nonVerifie:
+        return 'non_verifie';
+    }
+  }
+}
+
 /// Miroir de l'enum Prisma `StatutCompte` (porté par `utilisateur`, pas
 /// par `medecin` lui-même — exposé ici pour lire le champ
 /// `statut_compte` renvoyé par GET /medecins/mon-profil).
@@ -595,6 +626,10 @@ class Medecin {
   /// recherche « Autour de moi » (`distance_km`).
   final double? distanceKm;
 
+  /// Tableau de l'Ordre (ONMC) : badge « Appartient à l'Ordre » /
+  /// « N'est pas dans l'Ordre » des listes.
+  final StatutOrdreMedecin statutOrdre;
+
   const Medecin({
     required this.medecinId,
     required this.utilisateurId,
@@ -621,6 +656,7 @@ class Medecin {
     this.noteMoyenne,
     this.nombreAvis = 0,
     this.distanceKm,
+    this.statutOrdre = StatutOrdreMedecin.nonVerifie,
   });
 
   bool get estPublie => statutVerification == StatutVerificationMedecin.publie;
@@ -668,6 +704,7 @@ class Medecin {
       noteMoyenne: json['note_moyenne'] == null ? null : _lireDecimal(json['note_moyenne']),
       nombreAvis: json['nombre_avis'] is num ? (json['nombre_avis'] as num).toInt() : 0,
       distanceKm: json['distance_km'] is num ? (json['distance_km'] as num).toDouble() : null,
+      statutOrdre: StatutOrdreMedecin.fromApi(json['statut_ordre'] as String?),
     );
   }
 
@@ -702,6 +739,7 @@ class Medecin {
     if (paysExercice != null) 'pays_exercice': paysExercice!.toJson(),
     'droits': {'prise_rdv_en_ligne': priseRdvEnLigne},
     if (contactTelephone != null) 'contact_telephone': contactTelephone,
+    'statut_ordre': statutOrdre.toApi(),
   };
 
   Medecin copyWith({
@@ -755,6 +793,7 @@ class Medecin {
       noteMoyenne: noteMoyenne,
       nombreAvis: nombreAvis,
       distanceKm: distanceKm,
+      statutOrdre: statutOrdre,
     );
   }
 

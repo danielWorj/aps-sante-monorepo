@@ -86,7 +86,7 @@ export default function AvisPublicsMedecin({ medecinId, nomMedecin }) {
 
       <p className="avis-publics-note">
         <i className="fa-solid fa-shield-halved" /> Seuls les patients ayant consulté ce médecin via APS Santé peuvent laisser un avis.
-        Chaque avis est vérifié avant publication.
+        Les avis sont publiés directement ; l&apos;administration peut retirer ceux qui ne respectent pas les règles.
       </p>
     </div>
   );

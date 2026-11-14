@@ -6,7 +6,7 @@
 // et ouverture d'une session complète (access token + refresh token en
 // cookie httpOnly), exactement comme un login réussi.
 import prisma from "../lib/prisma.js";
-import { espaceParDefaut, listerEspaces } from "./espaces.service.js";
+import { assurerEspaceOuvrable, espaceParDefaut, listerEspaces } from "./espaces.service.js";
 import {
   genererAccessToken,
   estClientMobile,
@@ -77,6 +77,8 @@ export async function ouvrirSession(req, res, utilisateur, options = {}) {
 export async function ouvrirSessionEspace(req, res, utilisateur, { espace, pinVerifie = false } = {}) {
   const espaces = await listerEspaces(utilisateur.utilisateur_id);
   const actif = espace === undefined ? espaceParDefaut(espaces, utilisateur.role.libelle) : espace;
+  // Espace médecin d'un compte non activé : aucune session (403).
+  assurerEspaceOuvrable(actif, utilisateur.role.libelle);
 
   // Le token porte le libellé du rôle de l'espace actif (ex: "patient",
   // "agent_pharmacie"), pas l'UUID role_id, pour rester exploitable par

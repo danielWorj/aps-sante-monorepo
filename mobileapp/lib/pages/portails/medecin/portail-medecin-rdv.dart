@@ -203,14 +203,11 @@ class _StatLine extends ConsumerWidget {
             data: (rdvList) {
                 // Compter les RDV par statut
                 final aujourd_hui = _compterAujourdhui(rdvList);
-                final cette_semaine = _compterCetteSemaine(rdvList);
-                final en_visio =
-                    rdvList
-                        .where((rdv) =>
-                            !rdv.estNonPaye &&
-                            rdv.typeRdv == TypeRdv.teleconsultation &&
-                            !rdv.estAReprogrammer)
-                        .length;
+                // « en vidéo » est une partie des RDV des 7 prochains jours,
+                // pas le total historique des téléconsultations.
+                final rdvSemaine = _rdvCetteSemaine(rdvList);
+                final cette_semaine = rdvSemaine.length;
+                final en_visio = rdvSemaine.where((rdv) => rdv.estTeleconsultation).length;
 
                 return IntrinsicHeight(
                   child: Row(
@@ -318,17 +315,18 @@ class _StatLine extends ConsumerWidget {
             .length;
     }
 
-    /// Compter les RDV de cette semaine
-    int _compterCetteSemaine(List<RendezVous> rdvList) {
+    /// RDV des 7 prochains jours (payés, ni annulés ni à reprogrammer).
+    List<RendezVous> _rdvCetteSemaine(List<RendezVous> rdvList) {
         final maintenant = DateTime.now();
         final finSemaine = maintenant.add(const Duration(days: 7));
         return rdvList
             .where((rdv) =>
-        !rdv.estNonPaye &&
-        !rdv.estAReprogrammer &&
-            rdv.dateCreneau.isAfter(maintenant) &&
-            rdv.dateCreneau.isBefore(finSemaine))
-            .length;
+                !rdv.estNonPaye &&
+                !rdv.estAReprogrammer &&
+                !rdv.estAnnule &&
+                rdv.dateCreneau.isAfter(maintenant) &&
+                rdv.dateCreneau.isBefore(finSemaine))
+            .toList();
     }
 
 }

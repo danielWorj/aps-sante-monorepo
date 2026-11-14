@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../style/colors.dart';
 import '../style/text_styles.dart';
 import '../ui/aps_ui.dart';
+import '../../models/medecin_models.dart' show StatutOrdreMedecin;
 import 'badge_chip.dart';
 
 /// Carte « Médecin » — carte de résultat de la refonte 2026 (écran 07).
@@ -32,6 +33,7 @@ class CardMedecin extends StatelessWidget {
     this.photoUrl,
     this.prixFcfa,
     this.verifieOrdre = false,
+    this.statutOrdre,
     this.teleconsultation = false,
     this.disponibleAujourdhui = false,
     this.noteMoyenne,
@@ -47,6 +49,10 @@ class CardMedecin extends StatelessWidget {
   final String? photoUrl;
   final int? prixFcfa;
   final bool verifieOrdre;
+
+  /// Tableau de l'Ordre (ONMC) : pastille « Appartient à l'Ordre » ou
+  /// « N'est pas dans l'Ordre » ; rien si null ou non vérifié.
+  final StatutOrdreMedecin? statutOrdre;
   final bool teleconsultation;
   final bool disponibleAujourdhui;
 
@@ -104,6 +110,15 @@ class CardMedecin extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.xs,
                     ),
+                    if (statutOrdre == StatutOrdreMedecin.inscrit ||
+                        statutOrdre == StatutOrdreMedecin.nonInscrit) ...[
+                      const SizedBox(height: 6),
+                      statutOrdre == StatutOrdreMedecin.inscrit
+                          ? const ApsPill("Appartient à l'Ordre",
+                              tone: ApsTone.green, icon: Icons.verified_user_outlined)
+                          : const ApsPill("N'est pas dans l'Ordre",
+                              tone: ApsTone.red, icon: Icons.gpp_bad_outlined),
+                    ],
                     if (nombreAvis > 0 && noteMoyenne != null) ...[
                       const SizedBox(height: 4),
                       ApsStars(noteMoyenne!, count: nombreAvis),

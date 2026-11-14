@@ -12,6 +12,7 @@
 // jamais avec ceux d'un autre.
 
 import prisma from "../lib/prisma.js";
+import { MESSAGE_COMPTE_NON_ACTIVE, estMedecinActive } from "../lib/activationMedecin.js";
 
 const STATUTS_FICHE = {
   publie: "Fiche publiée",
@@ -46,8 +47,8 @@ export class ErreurEspace extends Error {
   }
 }
 
-function espace(type, cle, libelle, detail, professionnel) {
-  return { cle, type, role: ROLE_PAR_TYPE_ESPACE[type], libelle, detail, professionnel };
+function espace(type, cle, libelle, detail, professionnel, ouvrable = true) {
+  return { cle, type, role: ROLE_PAR_TYPE_ESPACE[type], libelle, detail, professionnel, ouvrable };
 }
 
 /**
@@ -60,9 +61,12 @@ export async function listerEspaces(utilisateur_id) {
     where: { utilisateur_id },
     select: {
       dernier_espace: true,
+      statut_compte: true,
       role: { select: { libelle: true } },
       patient: { select: { patient_id: true } },
-      medecin: { select: { statut_verification: true, specialite: { select: { nom: true } } } },
+      medecin: {
+        select: { statut_verification: true, date_premiere_publication: true, specialite: { select: { nom: true } } },
+      },
       agents_pharmacie: { select: { pharmacie: { select: { pharmacie_id: true, nom: true, statut_verification: true } } } },
       agents_structure_sante: { select: { structure: { select: { structure_id: true, nom: true, statut_verification: true } } } },
       agents_assurance: { select: { service_assurance: { select: { service_assurance_id: true, nom: true, statut_verification: true } } } },
@@ -78,8 +82,12 @@ export async function listerEspaces(utilisateur_id) {
   const espaces = [];
 
   if (u.medecin) {
+    // Espace médecin ouvrable seulement une fois le compte activé par
+    // l'équipe APS Santé (lib/activationMedecin.js).
+    const active = estMedecinActive(u.medecin, u.statut_compte);
     espaces.push(espace("medecin", "medecin", "Espace médecin",
-      joindre(u.medecin.specialite?.nom, libelleStatut(u.medecin.statut_verification)), true));
+      joindre(u.medecin.specialite?.nom, active ? libelleStatut(u.medecin.statut_verification) : "Compte en attente d'activation"),
+      true, active));
   }
   if (u.patient || role === "patient") {
     espaces.push(espace("patient", "patient", "Espace patient", "Mes rendez-vous et ma santé", false));
@@ -118,10 +126,22 @@ export async function listerEspaces(utilisateur_id) {
  * un administrateur ou un compte sans espace.
  */
 export function espaceParDefaut(espaces, roleCompte) {
-  return espaces.find((e) => e.dernier)
-    ?? espaces.find((e) => e.role === roleCompte)
+  const ouvrables = espaces.filter((e) => e.ouvrable !== false);
+  return ouvrables.find((e) => e.dernier)
+    ?? ouvrables.find((e) => e.role === roleCompte)
+    ?? ouvrables[0]
     ?? espaces[0]
     ?? null;
+}
+
+/**
+ * Refuse l'ouverture d'une session sur un espace fermé : espace médecin
+ * d'un compte non activé, ou compte médecin sans aucun espace ouvrable.
+ * @throws {ErreurEspace} 403 COMPTE_NON_ACTIVE
+ */
+export function assurerEspaceOuvrable(espaceActif, roleCompte) {
+  const ferme = espaceActif ? espaceActif.ouvrable === false : roleCompte === "medecin";
+  if (ferme) throw new ErreurEspace(MESSAGE_COMPTE_NON_ACTIVE, 403, "COMPTE_NON_ACTIVE");
 }
 
 /** Espace du compte par sa clé, ou null s'il n'existe plus. */

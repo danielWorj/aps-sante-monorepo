@@ -24,3 +24,8 @@ export const refuserAppelVisio = (rdvId) => apiFetch(`/visio/${rdvId}/refus`, { 
 /** POST /visio/:id/presence — l'utilisateur est entré dans la salle (doublon
  *  volontaire du webhook Prosody, qui peut manquer). -> { enregistree } */
 export const signalerPresenceVisio = (rdvId) => apiFetch(`/visio/${rdvId}/presence`, { method: 'POST' });
+
+/** GET /visio/:id/duree — durée maximale de l'appel (réglée par pays) :
+ *  -> { duree: { duree_minutes, debut_le, fin_prevue_le, alerte_avant_fin_minutes, ecoulee, maintenant } }
+ *  `fin_prevue_le` est null tant que les deux parties ne sont pas présentes. */
+export const obtenirDureeVisio = (rdvId) => apiFetch(`/visio/${rdvId}/duree`);

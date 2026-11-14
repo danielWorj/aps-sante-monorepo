@@ -32,6 +32,8 @@ import { purgerCodesVerification } from "../services/verificationTelephone.servi
 import { purgerDemandesConnexion } from "../services/connexionApplication.service.js";
 import { expirerPublicitesNonPayees } from "../services/publicite.service.js";
 import { envoyerRappelsRdv } from "../services/rappelRdv.service.js";
+import { cloturerVisiosEchues } from "../services/dureeTeleconsultation.service.js";
+import { synchroniserRegistreOnmc, synchroniserSiPerime } from "../services/onmc.service.js";
 
 // Fréquence non précisée par le cahier des charges ni par le plan
 // ("fréquence courte, ex. toutes les 15 min") — valeur par défaut
@@ -61,6 +63,8 @@ const CRON_LIBERATION_FONDS = process.env.CRON_LIBERATION_FONDS || "*/5 * * * *"
 // l'horizon des cases générées depuis le gabarit (00h40 UTC par défaut ; un
 // passage a aussi lieu au démarrage).
 const CRON_EXPIRATION_CONFIRMATION = process.env.CRON_EXPIRATION_CONFIRMATION || "*/5 * * * *";
+// Téléconsultations dont la durée maximale est écoulée : clôture automatique.
+const CRON_DUREE_VISIO = process.env.CRON_DUREE_VISIO || "* * * * *";
 const CRON_SYNCHRO_AGENDAS = process.env.CRON_SYNCHRO_AGENDAS || "40 0 * * *";
 
 // Abonnements assurance (guide v3, §1.4.4) : expiration après grâce et
@@ -93,12 +97,35 @@ const CRON_EXPIRATION_PUBLICITES = process.env.CRON_EXPIRATION_PUBLICITES || "*/
 // « c'est l'heure » parte à l'heure du rendez-vous.
 const CRON_RAPPELS_RDV = process.env.CRON_RAPPELS_RDV || "* * * * *";
 
+// Tableau de l'Ordre (ONMC) : copie complète du registre public chaque lundi
+// à 02h30 UTC (~66 pages, environ une minute). Au démarrage, une
+// synchronisation est lancée si la dernière réussie date de plus de 7 jours.
+const CRON_SYNCHRO_ONMC = process.env.CRON_SYNCHRO_ONMC || "30 2 * * 1";
+
 /**
  * Démarre tous les jobs planifiés du back-end. Appelé une seule fois,
  * après app.listen() (voir index.js) — pas de raison de bloquer le
  * démarrage HTTP en attendant que le scheduler soit prêt.
  */
 export function demarrerScheduler() {
+  cron.schedule(
+    CRON_SYNCHRO_ONMC,
+    () => {
+      synchroniserRegistreOnmc({ declencheePar: "planifiee" }).catch((err) => {
+        console.error("[scheduler] Échec synchronisation du registre ONMC :", err?.message || err);
+      });
+    },
+    { timezone: "UTC" }
+  );
+  if (process.env.ONMC_SYNCHRO_AU_DEMARRAGE !== "false") {
+    // Différée d'une minute : le démarrage HTTP n'attend pas le registre.
+    setTimeout(() => {
+      synchroniserSiPerime(7).catch((err) => {
+        console.error("[scheduler] Échec synchronisation initiale du registre ONMC :", err?.message || err);
+      });
+    }, 60 * 1000).unref?.();
+  }
+
   cron.schedule(CRON_RAPPELS_RDV, () => {
     envoyerRappelsRdv().catch((err) => {
       console.error("[scheduler] Échec envoi des rappels de RDV :", err);
@@ -138,6 +165,19 @@ export function demarrerScheduler() {
     libererFondsEchusJob().catch((err) => {
       console.error("[scheduler] Échec libération différée des fonds :", err);
     });
+  });
+
+  let clotureVisioEnCours = false;
+  cron.schedule(CRON_DUREE_VISIO, async () => {
+    if (clotureVisioEnCours) return;
+    clotureVisioEnCours = true;
+    try {
+      await cloturerVisiosEchues();
+    } catch (err) {
+      console.error("[scheduler] Échec clôture des téléconsultations échues :", err);
+    } finally {
+      clotureVisioEnCours = false;
+    }
   });
 
   cron.schedule(CRON_EXPIRATION_CONFIRMATION, () => {

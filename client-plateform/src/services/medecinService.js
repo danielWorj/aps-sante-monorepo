@@ -924,6 +924,21 @@ export async function creerRendezVous(donnees) {
 }
 
 /**
+ * GET /medecins/:id/teleconsultation-possible (patient connecté).
+ * La téléconsultation n'est possible qu'après un RDV physique EFFECTUÉ avec
+ * ce médecin. Sert à griser l'option ; le serveur refuse de toute façon
+ * (409 TELECONSULTATION_SANS_RDV_PHYSIQUE).
+ * @returns {Promise<{ possible: boolean, message?: string }>}
+ */
+export async function teleconsultationPossible(medecinId) {
+  return apiFetch(`/medecins/${medecinId}/teleconsultation-possible`);
+}
+
+/** Texte affiché quand la téléconsultation n'est pas encore possible. */
+export const MESSAGE_TELECONSULTATION_APRES_PHYSIQUE =
+  'Possible seulement après un premier rendez-vous physique effectué avec ce médecin.';
+
+/**
  * PUT /rendez-vous/:id
  * Ouvert au patient concerné, au médecin concerné, ou à
  * admin/superadmin (ex. confirmation, reprogrammation, annulation

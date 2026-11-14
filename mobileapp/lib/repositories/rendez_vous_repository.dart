@@ -221,6 +221,15 @@ class RendezVousRepository {
     return RendezVous.fromJson(donnees['rendez_vous'] as Map<String, dynamic>);
   }
 
+  /// GET /medecins/:id/teleconsultation-possible — la téléconsultation n'est
+  /// possible qu'après un RDV physique EFFECTUÉ avec ce médecin. Sert à
+  /// masquer l'option ; le serveur refuse de toute façon (409
+  /// TELECONSULTATION_SANS_RDV_PHYSIQUE).
+  Future<bool> teleconsultationPossible(String medecinId, {required String token}) async {
+    final donnees = await _get(ApiRealEndpoints.teleconsultationPossible(medecinId), token: token);
+    return donnees is Map<String, dynamic> && donnees['possible'] == true;
+  }
+
   /// POST /rendez-vous
   /// Réservé à un compte patient (patient_id déduit du token, jamais
   /// saisi par le client). [payload.typeRdv] "teleconsultation" exige

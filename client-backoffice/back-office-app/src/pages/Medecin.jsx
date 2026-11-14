@@ -98,12 +98,13 @@ import {
   creerSpecialite,
   modifierSpecialite,
   supprimerSpecialite,
-  // Vérification d'appartenance au Tableau de l'Ordre National des
-  // Médecins du Cameroun (ONMC) — POST public /medecins/verifier-ordre
-  // (voir medecinService.js). Utilisée ici depuis la fiche détail pour
-  // vérifier a posteriori un numero_ordre déjà enregistré.
-  verifierAppartenanceOrdre,
 } from "../services/medecinService.js";
+// Tableau de l'Ordre (ONMC) : badge de la liste + vérification en direct
+// depuis la fiche détail (enregistre medecin.statut_ordre).
+import { lancerSynchronisationOnmc, obtenirEtatOnmc, verifierOrdreMedecin } from "../services/onmcService.js";
+import { useToast } from "../components/feedback";
+import BadgeOrdre from "../components/BadgeOrdre.jsx";
+import { STATUTS_ORDRE } from "../components/statutOrdre.js";
 // Moyens de paiement du médecin (Mobile Money / compte bancaire) —
 // lecture seule ici : simple liste affichée dans la fiche détail.
 // La gestion (ajout/édition/suppression) reste dans son propre écran
@@ -374,7 +375,7 @@ export default function Medecin() {
   const [statistiques, setStatistiques] = useState([]);
 
   const [filtres, setFiltres] = useState({
-    recherche: "", statut_verification: "", specialite_id: "", pays_exercice_id: "", ville_exercice_id: "",
+    recherche: "", statut_verification: "", statut_ordre: "", specialite_id: "", pays_exercice_id: "", ville_exercice_id: "",
   });
   const [filtresAppliques, setFiltresAppliques] = useState(filtres);
 
@@ -394,6 +395,9 @@ export default function Medecin() {
   const [parPage, setParPage] = useState(8);
 
   const [medecinSelectionne, setMedecinSelectionne] = useState(null);
+  const toast = useToast();
+  // Bouton « Rafraîchir » : relit le Tableau de l'Ordre (ONMC) puis la liste.
+  const [rafraichissement, setRafraichissement] = useState(false);
   // Pièces justificatives repliées par défaut dans la fiche détail ;
   // clé = id de la pièce ("cni" / "attestation"), valeur = dépliée ou
   // non. Réinitialisé à chaque changement de médecin affiché.
@@ -486,6 +490,46 @@ export default function Medecin() {
 
   useEffect(() => { chargerMedecins(); }, [chargerMedecins]);
 
+  /**
+   * « Rafraîchir » : va chercher les nouveaux médecins — relit le Tableau
+   * de l'Ordre (ONMC) sur son site, recalcule les badges, puis recharge la
+   * liste (nouvelles inscriptions sur APS Santé comprises).
+   */
+  async function rafraichirMedecins() {
+    setRafraichissement(true);
+    try {
+      try {
+        await lancerSynchronisationOnmc();
+      } catch (err) {
+        if (err.status !== 409) throw err; // 409 : déjà en cours, on attend sa fin.
+      }
+      const debut = Date.now();
+      let etat;
+      do {
+        await new Promise((r) => setTimeout(r, 4000));
+        etat = await obtenirEtatOnmc();
+      } while (etat.synchronisation_en_cours && Date.now() - debut < 5 * 60 * 1000);
+
+      await chargerMedecins();
+      const derniere = etat.historique?.[0];
+      if (etat.synchronisation_en_cours) {
+        toast.info("La lecture du Tableau de l'Ordre continue en arrière-plan. La liste a été rechargée.");
+      } else if (derniere?.statut === "reussie") {
+        toast.succes(
+          `Liste à jour : ${Number(derniere.total_recupere).toLocaleString("fr-FR")} médecins lus au Tableau de l'Ordre, ` +
+            `${derniere.medecins_inscrits ?? 0} de vos médecins y appartiennent, ${derniere.medecins_non_inscrits ?? 0} n'y sont pas.`
+        );
+      } else {
+        toast.erreur(`Tableau de l'Ordre non relu : ${derniere?.erreur || "erreur inconnue"}. La liste a été rechargée.`);
+      }
+    } catch (err) {
+      toast.erreur(err.message || "Rafraîchissement impossible.");
+      await chargerMedecins();
+    } finally {
+      setRafraichissement(false);
+    }
+  }
+
   // Referme tous les panneaux "pièce justificative" quand on ouvre la
   // fiche d'un autre médecin.
   useEffect(() => { setPiecesOuvertes({}); }, [medecinSelectionne?.medecin_id]);
@@ -529,16 +573,22 @@ export default function Medecin() {
   }, [medecinSelectionne?.medecin_id]);
 
   async function lancerVerificationOrdre() {
-    if (!medecinSelectionne?.numero_ordre) return;
+    if (!medecinSelectionne?.medecin_id) return;
     setVerificationOrdre({ enCours: true, resultat: null, erreur: null });
     try {
-      const reponse = await verifierAppartenanceOrdre(medecinSelectionne.numero_ordre);
-      setVerificationOrdre({ enCours: false, resultat: reponse, erreur: null });
+      const { medecin: statut, verification } = await verifierOrdreMedecin(medecinSelectionne.medecin_id);
+      // Statut enregistré côté serveur : badge de la fiche et de la liste à jour.
+      const maj = (m) => (m.medecin_id === statut.medecin_id ? { ...m, ...statut } : m);
+      setMedecinSelectionne((prev) => (prev ? maj(prev) : prev));
+      setMedecins((liste) => liste.map(maj));
+      setVerificationOrdre({
+        enCours: false,
+        resultat: verification ?? { hors_cameroun: statut.statut_ordre === "non_verifie" },
+        erreur: null,
+      });
     } catch (err) {
-      // 502 = vérification externe indisponible (site ONMC injoignable,
-      // timeout…) — à ne surtout pas confondre avec un numéro introuvable
-      // au tableau (celui-ci arrive en 200 avec appartient_ordre=false et
-      // suit donc la branche `resultat`, pas `erreur`).
+      // 502 = site ONMC injoignable sans copie locale — à ne pas confondre
+      // avec un numéro introuvable (200, appartient_ordre=false).
       setVerificationOrdre({
         enCours: false,
         resultat: null,
@@ -575,7 +625,7 @@ export default function Medecin() {
   function appliquerFiltres() { setFiltresAppliques(filtres); }
 
   function reinitialiserFiltres() {
-    const vide = { recherche: "", statut_verification: "", specialite_id: "", pays_exercice_id: "", ville_exercice_id: "" };
+    const vide = { recherche: "", statut_verification: "", statut_ordre: "", specialite_id: "", pays_exercice_id: "", ville_exercice_id: "" };
     setFiltres(vide);
     setFiltresAppliques(vide);
   }
@@ -1119,7 +1169,7 @@ export default function Medecin() {
         <div className="aps-card mb-3">
           <div className="aps-card__body">
             <div className="row g-3 align-items-end">
-              <div className="col-md-3">
+              <div className="col-md-2">
                 <label className="form-label">Rechercher</label>
                 <div className="position-relative">
                   <i className="fa-solid fa-magnifying-glass position-absolute"
@@ -1137,6 +1187,13 @@ export default function Medecin() {
                 <select className="form-select" value={filtres.statut_verification} onChange={(e) => modifierFiltre("statut_verification", e.target.value)}>
                   <option value="">Tous</option>
                   {STATUTS_VERIFICATION_MEDECIN.map((s) => <option key={s.valeur} value={s.valeur}>{s.libelle}</option>)}
+                </select>
+              </div>
+              <div className="col-md-1">
+                <label className="form-label">Ordre</label>
+                <select className="form-select" value={filtres.statut_ordre} onChange={(e) => modifierFiltre("statut_ordre", e.target.value)}>
+                  <option value="">Tous</option>
+                  {STATUTS_ORDRE.map((s) => <option key={s.valeur} value={s.valeur}>{s.libelle}</option>)}
                 </select>
               </div>
               <div className="col-md-2">
@@ -1198,6 +1255,19 @@ export default function Medecin() {
                 <option value="specialite">Spécialité</option>
                 <option value="statut">Statut</option>
               </select>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-primary"
+                onClick={rafraichirMedecins}
+                disabled={rafraichissement}
+                title="Relit le Tableau de l'Ordre (ONMC) et recharge la liste des médecins"
+              >
+                {rafraichissement ? (
+                  <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Recherche de nouveaux médecins…</>
+                ) : (
+                  <><i className="fa-solid fa-rotate me-1"></i>Rafraîchir</>
+                )}
+              </button>
             </div>
           </div>
 
@@ -1210,6 +1280,7 @@ export default function Medecin() {
                   <th>Téléphone</th>
                   <th>Ville / Pays</th>
                   <th>N° d'ordre</th>
+                  <th>Ordre (ONMC)</th>
                   <th>Statut</th>
                   <th className="text-end">Actions</th>
                 </tr>
@@ -1217,7 +1288,7 @@ export default function Medecin() {
               <tbody>
                 {!chargement && medecinsPage.length === 0 && (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <div className="aps-empty-state">
                         <i className="fa-solid fa-user-doctor"></i>
                         <div>Aucun médecin ne correspond à ces critères.</div>
@@ -1265,6 +1336,7 @@ export default function Medecin() {
                         {!ville && !paysNom && "—"}
                       </td>
                       <td>{medecin.numero_ordre || "—"}</td>
+                      <td><BadgeOrdre medecin={medecin} /></td>
                       <td>
                         <span className={`aps-badge ${statut.badge || "is-info"}`}>
                           <i className="fa-solid fa-circle"></i> {statut.libelle || "—"}
@@ -1442,61 +1514,85 @@ export default function Medecin() {
                         </div>
                       </div>
 
-                      {/* Vérification ONMC — action explicite, pas
-                          automatique (voir onmcVerificationService.js :
-                          l'appel pilote un navigateur headless côté
-                          serveur, donc plus coûteux qu'un simple fetch). */}
-                      {medecinSelectionne.numero_ordre && (
-                        <div className="mt-2">
-                          <button
-                            type="button"
-                            className="btn btn-outline-primary btn-sm w-100"
-                            onClick={lancerVerificationOrdre}
-                            disabled={verificationOrdre.enCours}
-                          >
-                            {verificationOrdre.enCours ? (
-                              <>
-                                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                                Vérification en cours…
-                              </>
-                            ) : (
-                              <>
-                                <i className="fa-solid fa-shield-halved me-1"></i>
-                                Vérifier l'appartenance à l'ONMC
-                              </>
-                            )}
-                          </button>
-
-                          {verificationOrdre.erreur && (
-                            <div className="alert alert-warning py-2 px-2 mt-2 mb-0" style={{ fontSize: 12 }}>
-                              <i className="fa-solid fa-triangle-exclamation me-1"></i>
-                              {verificationOrdre.erreur}
-                            </div>
-                          )}
-
-                          {verificationOrdre.resultat && (
-                            verificationOrdre.resultat.appartient_ordre ? (
-                              <div className="alert alert-success py-2 px-2 mt-2 mb-0" style={{ fontSize: 12 }}>
-                                <i className="fa-solid fa-circle-check me-1"></i>
-                                Inscrit au Tableau de l'Ordre National des Médecins du Cameroun
-                                {verificationOrdre.resultat.nom_complet && (
-                                  <div className="aps-text-muted mt-1">
-                                    Nom au tableau : {verificationOrdre.resultat.nom_complet}
-                                    {verificationOrdre.resultat.numero_ordre_onmc
-                                      ? ` (${verificationOrdre.resultat.numero_ordre_onmc})`
-                                      : ""}
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="alert alert-danger py-2 px-2 mt-2 mb-0" style={{ fontSize: 12 }}>
-                                <i className="fa-solid fa-circle-xmark me-1"></i>
-                                Ce numéro d'ordre n'a pas été retrouvé au Tableau de l'Ordre National des Médecins du Cameroun
-                              </div>
-                            )
+                      {/* Tableau de l'Ordre (ONMC) : statut enregistré (mis à jour
+                          à chaque synchronisation hebdomadaire du registre) et
+                          vérification en direct à la demande. */}
+                      <div className="mt-2">
+                        <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
+                          <BadgeOrdre medecin={medecinSelectionne} />
+                          {medecinSelectionne.ordre_verifie_le && (
+                            <span className="aps-text-muted" style={{ fontSize: 11 }}>
+                              le {new Date(medecinSelectionne.ordre_verifie_le).toLocaleDateString("fr-FR")}
+                            </span>
                           )}
                         </div>
-                      )}
+                        {medecinSelectionne.ordre_nom_onmc && (
+                          <div className="aps-text-muted mb-2" style={{ fontSize: 12 }}>
+                            Nom au tableau : {medecinSelectionne.ordre_nom_onmc}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-sm w-100"
+                          onClick={lancerVerificationOrdre}
+                          disabled={verificationOrdre.enCours}
+                        >
+                          {verificationOrdre.enCours ? (
+                            <>
+                              <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                              Vérification en cours…
+                            </>
+                          ) : (
+                            <>
+                              <i className="fa-solid fa-shield-halved me-1"></i>
+                              Revérifier auprès de l'ONMC
+                            </>
+                          )}
+                        </button>
+
+                        {verificationOrdre.erreur && (
+                          <div className="alert alert-warning py-2 px-2 mt-2 mb-0" style={{ fontSize: 12 }}>
+                            <i className="fa-solid fa-triangle-exclamation me-1"></i>
+                            {verificationOrdre.erreur}
+                          </div>
+                        )}
+
+                        {verificationOrdre.resultat && (
+                          verificationOrdre.resultat.hors_cameroun ? (
+                            <div className="alert alert-secondary py-2 px-2 mt-2 mb-0" style={{ fontSize: 12 }}>
+                              <i className="fa-solid fa-circle-info me-1"></i>
+                              Le registre de l'ONMC ne couvre que les médecins exerçant au Cameroun.
+                            </div>
+                          ) : verificationOrdre.resultat.appartient_ordre ? (
+                            <div className="alert alert-success py-2 px-2 mt-2 mb-0" style={{ fontSize: 12 }}>
+                              <i className="fa-solid fa-circle-check me-1"></i>
+                              Appartient à l'Ordre National des Médecins du Cameroun
+                              {verificationOrdre.resultat.nom_complet && (
+                                <div className="aps-text-muted mt-1">
+                                  Nom au tableau : {verificationOrdre.resultat.nom_complet}
+                                  {verificationOrdre.resultat.numero_ordre_onmc
+                                    ? ` (${verificationOrdre.resultat.numero_ordre_onmc})`
+                                    : ""}
+                                </div>
+                              )}
+                              {verificationOrdre.resultat.nom_correspond === false && (
+                                <div className="text-warning mt-1">
+                                  <i className="fa-solid fa-triangle-exclamation me-1"></i>
+                                  Le nom inscrit au tableau diffère du nom de la fiche : à contrôler.
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="alert alert-danger py-2 px-2 mt-2 mb-0" style={{ fontSize: 12 }}>
+                              <i className="fa-solid fa-circle-xmark me-1"></i>
+                              N'est pas dans l'Ordre : numéro introuvable au Tableau de l'Ordre National des Médecins du Cameroun
+                              {verificationOrdre.resultat.verification_directe_indisponible && (
+                                <div className="mt-1">Site de l'ONMC injoignable : statut de la fiche inchangé.</div>
+                              )}
+                            </div>
+                          )
+                        )}
+                      </div>
                     </div>
 
                     {/* ── Colonne infos + pièces justificatives ────── */}

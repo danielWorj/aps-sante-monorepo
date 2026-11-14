@@ -17,3 +17,12 @@ export const listerParametresDelaiConfirmation = () => apiFetch('/parametres-del
  *  ne s'applique qu'aux rendez-vous demandés ensuite (H est figé sur chaque RDV). */
 export const creerParametreDelaiConfirmation = (body) =>
   apiFetch('/parametres-delai-confirmation', { method: 'POST', body });
+
+/** GET /parametres-duree-teleconsultation (admin + superadmin)
+ * -> { parametres_duree_teleconsultation, minutes_par_defaut, minutes_min, minutes_max, alerte_avant_fin_minutes } */
+export const listerParametresDureeTeleconsultation = () => apiFetch('/parametres-duree-teleconsultation');
+
+/** POST /parametres-duree-teleconsultation { pays_id, libelle, minutes } (admin + superadmin)
+ * Crée une nouvelle version active (l'ancienne est désactivée). */
+export const creerParametreDureeTeleconsultation = (body) =>
+  apiFetch('/parametres-duree-teleconsultation', { method: 'POST', body });

@@ -34,6 +34,12 @@ const ICONES = {
   rdv_visio_demarree: 'fa-video',
   // Le médecin a changé le type du RDV (physique <-> téléconsultation) (patient).
   rdv_type_modifie: 'fa-right-left',
+  // Demande directe (médecin sans créneau libre) : reçue (médecin), acceptée / refusée (patient).
+  demande_rdv_directe: 'fa-calendar-plus',
+  demande_rdv_directe_acceptee: 'fa-calendar-check',
+  demande_rdv_directe_refusee: 'fa-user-xmark',
+  // Téléconsultation refusée faute de RDV physique effectué avec ce médecin (patient).
+  rdv_teleconsultation_refusee: 'fa-video-slash',
   // Portail assurance : nouvelle demande de mise en relation, abonnement de la fiche.
   mise_en_relation_recue: 'fa-inbox',
   abonnement_assurance_active: 'fa-id-card',

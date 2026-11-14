@@ -12,6 +12,8 @@ import './Confirmationrdv.dart';
 import '../../../components/buttons/bouton_payer_rdv.dart';
 import '../../../controllers/agenda_controller.dart';
 import '../../../controllers/authentification_controller.dart';
+import '../../../controllers/offre_rdv_controller.dart' show offreRdvRepositoryProvider;
+import '../../../models/offre_rdv_models.dart' show TypeRdvOffre;
 import '../../../controllers/paiement_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/agenda_models.dart';
@@ -80,7 +82,8 @@ class CreneauJour {
   bool get aDesCreneauxLibres => creneaux.any((c) => c.disponible);
 
   /// Regroupe les créneaux réservables de l'agenda (déjà triés par heure)
-  /// en jours locaux. Seuls les jours qui ont au moins un créneau libre
+  /// par jour du cabinet (jour et heure affichés tels que déclarés par le
+  /// médecin, sans conversion dans le fuseau du téléphone). Seuls les jours qui ont au moins un créneau libre
   /// apparaissent : ce sont les jours de consultation déclarés par le
   /// médecin, moins les créneaux déjà demandés ou confirmés.
   static List<CreneauJour> depuisAgenda(List<CreneauAgenda> creneaux) {
@@ -91,7 +94,7 @@ class CreneauJour {
     return [
       for (final liste in parJour.values)
         CreneauJour(
-          date: liste.first.instantUtc!.toLocal(),
+          date: _jourCivil(liste.first.cleJour) ?? liste.first.instantUtc!.toLocal(),
           creneaux: [
             for (final c in liste)
               CreneauHoraire(
@@ -103,6 +106,14 @@ class CreneauJour {
         ),
     ];
   }
+}
+
+/// « AAAA-MM-JJ » -> DateTime civil (minuit local), pour les libellés de
+/// jour (« JEU 28 »). `null` si la clé est illisible.
+DateTime? _jourCivil(String cle) {
+  final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(cle);
+  if (m == null) return null;
+  return DateTime(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!));
 }
 
 /// Codes renvoyés par POST /rendez-vous quand le créneau choisi n'est plus
@@ -419,8 +430,22 @@ class _RendezVousPageState extends State<RendezVousPage> {
   bool _reservationEnCours = false;
 
   /// Type de rendez-vous choisi — verrouillé sur [TypeRdv.physique] si
-  /// [RendezVousPage.teleconsultationDisponible] est faux.
+  /// [RendezVousPage.teleconsultationDisponible] est faux, ou tant que le
+  /// patient n'a pas eu de RDV physique effectué avec ce médecin.
   TypeRdv _typeChoisi = TypeRdv.physique;
+
+  /// Téléconsultation permise (RDV physique déjà effectué avec ce médecin) ?
+  /// `false` sans session : un nouveau compte n'a encore eu aucun RDV.
+  bool _teleAutorisee = false;
+
+  /// Demande directe (médecin sans créneau libre) : jour + heure proposés
+  /// par le patient (heure de la ville du médecin).
+  DateTime? _jourPropose;
+  TimeOfDay? _heureProposee;
+
+  /// Aucun créneau libre : le patient propose un jour et une heure, le
+  /// médecin accepte ou refuse sous 24 h (POST /offres-rdv/directe).
+  bool get _modeDemandeDirecte => _jours.every((j) => !j.aDesCreneauxLibres);
 
   /// Token à utiliser pour les appels authentifiés de cet écran :
   /// [RendezVousPage.token] si le patient était déjà connecté en
@@ -435,6 +460,108 @@ class _RendezVousPageState extends State<RendezVousPage> {
     super.initState();
     _charger();
     _chargerPaysDisponibles();
+    _verifierTeleconsultation();
+  }
+
+  /// Téléconsultation possible seulement après un RDV physique effectué
+  /// avec ce médecin : sinon l'option « En vidéo » est masquée.
+  Future<void> _verifierTeleconsultation() async {
+    final token = _tokenEffectif;
+    if (!widget.teleconsultationDisponible || token == null) return;
+    try {
+      final possible = await _container
+          .read(rendezVousRepositoryProvider)
+          .teleconsultationPossible(widget.medecinId, token: token);
+      if (mounted) setState(() => _teleAutorisee = possible);
+    } catch (_) {
+      // Indisponible : l'option reste masquée (le serveur tranche de toute façon).
+    }
+  }
+
+  Future<void> _choisirJourPropose() async {
+    final maintenant = DateTime.now();
+    final choisi = await showDatePicker(
+      context: context,
+      initialDate: _jourPropose ?? maintenant,
+      firstDate: DateTime(maintenant.year, maintenant.month, maintenant.day),
+      lastDate: maintenant.add(const Duration(days: 60)),
+    );
+    if (choisi != null) setState(() => _jourPropose = choisi);
+  }
+
+  Future<void> _choisirHeureProposee() async {
+    final choisie = await showTimePicker(
+      context: context,
+      initialTime: _heureProposee ?? const TimeOfDay(hour: 9, minute: 0),
+    );
+    if (choisie != null) setState(() => _heureProposee = choisie);
+  }
+
+  String get _jourProposeApi {
+    final d = _jourPropose!;
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  }
+
+  String get _heureProposeeApi {
+    final h = _heureProposee!;
+    return '${h.hour.toString().padLeft(2, '0')}:${h.minute.toString().padLeft(2, '0')}';
+  }
+
+  /// Envoie la demande directe (après création du compte si nécessaire).
+  Future<void> _envoyerDemandeDirecte() async {
+    if (_jourPropose == null || _heureProposee == null) {
+      _afficherErreur('Choisissez le jour et l\'heure qui vous conviennent.');
+      return;
+    }
+    if (_reservationEnCours) return;
+    final besoinDeCreerUnCompte = _tokenEffectif == null;
+    if (besoinDeCreerUnCompte && !_formulaireCompteValide()) return;
+
+    setState(() => _reservationEnCours = true);
+    var compteVientDetreCree = false;
+    try {
+      var token = _tokenEffectif;
+      if (besoinDeCreerUnCompte) {
+        token = await _creerCompteEtSeConnecter();
+        compteVientDetreCree = true;
+        _tokenLocal = token;
+      }
+      await _container.read(offreRdvRepositoryProvider).publierDemandeDirecte(
+            token: token!,
+            medecinId: widget.medecinId,
+            typeRdv: _typeChoisi == TypeRdv.teleconsultation
+                ? TypeRdvOffre.teleconsultation
+                : TypeRdvOffre.physique,
+            jour: _jourProposeApi,
+            heure: _heureProposeeApi,
+            motif: _motifController.text,
+          );
+      if (!mounted) return;
+      setState(() => _reservationEnCours = false);
+      await showDialog<void>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Demande envoyée'),
+          content: Text(
+            '${widget.medecinNom} a 24 h pour accepter ou refuser. Vous serez notifié de sa réponse : '
+            "s'il accepte, il vous restera à payer pour confirmer. S'il refuse ou ne répond pas, "
+            "vous pourrez choisir un autre médecin ou recevoir les candidatures d'autres médecins.\n\n"
+            'Suivez votre demande dans l\'onglet « Demandes » de votre espace patient.',
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
+        ),
+      );
+      if (mounted) Navigator.of(context).maybePop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _reservationEnCours = false);
+      final message = e is ErreurAuthentification
+          ? e.message
+          : (e is rdv_repo.ApiException ? e.message : '$e');
+      _afficherErreur(
+        compteVientDetreCree ? 'Compte créé, mais envoi impossible : $message' : 'Envoi impossible : $message',
+      );
+    }
   }
 
   @override
@@ -512,40 +639,7 @@ class _RendezVousPageState extends State<RendezVousPage> {
     final besoinDeCreerUnCompte =
         utiliseReservationParDefaut && _tokenEffectif == null;
 
-    if (besoinDeCreerUnCompte) {
-      final formOk = _formCompteKey.currentState?.validate() ?? false;
-      if (_dateNaissance == null) {
-        _afficherErreur('Merci de renseigner votre date de naissance.');
-        return;
-      }
-      if (_paysId == null) {
-        _afficherErreur('Merci de sélectionner votre pays.');
-        return;
-      }
-      // Garde-fou : si le référentiel réel n'a pas encore chargé (ou a
-      // échoué) et que la sélection provient encore de _paysDemo, son
-      // `id` n'est PAS un UUID valide (ex. "cm") et ferait échouer
-      // POST /auth/register côté backend (Prisma "invalid input value
-      // ... for type uuid"). On bloque ici plutôt que de laisser
-      // partir un appel voué à l'échec.
-      if (_paysCharges.isEmpty || !_paysCharges.any((p) => p.id == _paysId)) {
-        _afficherErreur(
-          _chargementPays
-              ? 'Chargement de la liste des pays en cours, merci de patienter.'
-              : 'Liste des pays indisponible, merci de réessayer.',
-        );
-        if (!_chargementPays) unawaited(_chargerPaysDisponibles());
-        return;
-      }
-      if (!_accepteConditions) {
-        _afficherErreur(
-          "Merci d'accepter les conditions d'utilisation et la politique "
-              "de confidentialité.",
-        );
-        return;
-      }
-      if (!formOk) return;
-    }
+    if (besoinDeCreerUnCompte && !_formulaireCompteValide()) return;
 
     final jour = _jours[_indexJour];
     setState(() => _reservationEnCours = true);
@@ -603,6 +697,40 @@ class _RendezVousPageState extends State<RendezVousPage> {
         compteVientDetreCree: compteVientDetreCree,
       );
     }
+  }
+
+  /// Contrôle le formulaire de création de compte intégré (patient sans
+  /// session) ; affiche le premier problème et renvoie `false`.
+  bool _formulaireCompteValide() {
+    final formOk = _formCompteKey.currentState?.validate() ?? false;
+    if (_dateNaissance == null) {
+      _afficherErreur('Merci de renseigner votre date de naissance.');
+      return false;
+    }
+    if (_paysId == null) {
+      _afficherErreur('Merci de sélectionner votre pays.');
+      return false;
+    }
+    // Garde-fou : si le référentiel réel n'a pas encore chargé (ou a échoué)
+    // et que la sélection provient encore de _paysDemo, son `id` n'est PAS
+    // un UUID valide (ex. "cm") et ferait échouer POST /auth/register.
+    if (_paysCharges.isEmpty || !_paysCharges.any((p) => p.id == _paysId)) {
+      _afficherErreur(
+        _chargementPays
+            ? 'Chargement de la liste des pays en cours, merci de patienter.'
+            : 'Liste des pays indisponible, merci de réessayer.',
+      );
+      if (!_chargementPays) unawaited(_chargerPaysDisponibles());
+      return false;
+    }
+    if (!_accepteConditions) {
+      _afficherErreur(
+        "Merci d'accepter les conditions d'utilisation et la politique "
+            "de confidentialité.",
+      );
+      return false;
+    }
+    return formOk;
   }
 
   /// Crée le compte patient (POST /auth/register) puis ouvre aussitôt
@@ -814,12 +942,12 @@ class _RendezVousPageState extends State<RendezVousPage> {
 
   @override
   Widget build(BuildContext context) {
-    final besoinCompte =
-        widget.onConfirmerReservation == null && _tokenEffectif == null;
     // Étapes : 1 créneau, 2 consultation (motif), 3 compte/paiement.
-    final etape = _creneauChoisi == null
-        ? 1
-        : (_motifController.text.trim().isEmpty && !besoinCompte ? 2 : 3);
+    // L'étape 2 s'affiche dès le créneau choisi, même si un compte reste à
+    // créer : on ne passe à 3 qu'une fois le motif renseigné.
+    final directe = _etat == _Etat.pret && _modeDemandeDirecte;
+    final pret = directe ? (_jourPropose != null && _heureProposee != null) : _creneauChoisi != null;
+    final etape = !pret ? 1 : (_motifController.text.trim().isEmpty ? 2 : 3);
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
@@ -831,8 +959,8 @@ class _RendezVousPageState extends State<RendezVousPage> {
                 children: [
                   ApsTopBar(
                     overline: 'Étape $etape sur 3',
-                    title: _creneauChoisi == null
-                        ? 'Choisir un créneau'
+                    title: !pret
+                        ? (directe ? 'Proposer une date' : 'Choisir un créneau')
                         : 'Votre consultation',
                     trailing: ApsIconButton(
                       icon: Icons.close_rounded,
@@ -872,18 +1000,20 @@ class _RendezVousPageState extends State<RendezVousPage> {
           ),
         );
       case _Etat.pret:
-        if (_jours.isEmpty) {
+        if (_modeDemandeDirecte) {
           return ListView(
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
             children: [
               _buildHeader(),
-              const ApsEmptyState(
-                icon: Icons.event_busy_outlined,
-                tone: ApsTone.amber,
-                title: 'Aucun créneau libre',
-                message:
-                    "Ce médecin n'a pas de créneau disponible pour l'instant. Réessayez plus tard ou publiez une demande express.",
-              ),
+              ..._buildTypeRdv(),
+              const SizedBox(height: 14),
+              _buildDemandeDirecte(),
+              const SizedBox(height: 22),
+              _buildMotifField(),
+              if (_tokenEffectif == null) ...[
+                const SizedBox(height: 18),
+                _buildCompteSection(),
+              ],
             ],
           );
         }
@@ -891,10 +1021,7 @@ class _RendezVousPageState extends State<RendezVousPage> {
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
           children: [
             _buildHeader(),
-            if (widget.teleconsultationDisponible) ...[
-              const SizedBox(height: 14),
-              _buildTypeRdvSelector(),
-            ],
+            ..._buildTypeRdv(),
             const SizedBox(height: 16),
             _buildDateStrip(),
             const SizedBox(height: 4),
@@ -1070,6 +1197,76 @@ class _RendezVousPageState extends State<RendezVousPage> {
   // N'apparaît que si le médecin a activé la téléconsultation (voir
   // Medecin.teleconsultationActivee) : POST /rendez-vous refuse sinon une
   // demande de type "teleconsultation" pour ce médecin.
+
+  /// Type de RDV : « En vidéo » seulement si le médecin l'a activée ET que le
+  /// patient a déjà eu un RDV physique effectué avec lui ; sinon une note
+  /// explique pourquoi la téléconsultation n'est pas proposée.
+  List<Widget> _buildTypeRdv() {
+    if (!widget.teleconsultationDisponible) return const [];
+    if (!_teleAutorisee) {
+      return [
+        const SizedBox(height: 14),
+        ApsNote.text(
+          'Possible seulement après un premier rendez-vous physique effectué avec ce médecin.',
+          bold: 'Téléconsultation.',
+          icon: Icons.videocam_off_outlined,
+          tone: ApsTone.neutral,
+        ),
+      ];
+    }
+    return [const SizedBox(height: 14), _buildTypeRdvSelector()];
+  }
+
+  /// Médecin sans créneau libre : le patient propose un jour et une heure.
+  Widget _buildDemandeDirecte() {
+    final jour = _jourPropose;
+    final heure = _heureProposee;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ApsNote.text(
+          "Indiquez le jour et l'heure qui vous conviennent : il aura 24 h pour accepter ou refuser. "
+          "S'il refuse ou ne répond pas, vous pourrez choisir un autre médecin ou recevoir "
+          "les candidatures d'autres médecins.",
+          bold: "Ce médecin n'a plus de créneau libre.",
+          icon: Icons.event_busy_outlined,
+          tone: ApsTone.amber,
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: ApsButton(
+                label: jour == null
+                    ? 'Choisir le jour'
+                    : '${jour.day.toString().padLeft(2, '0')}/${jour.month.toString().padLeft(2, '0')}/${jour.year}',
+                icon: Icons.calendar_today_outlined,
+                variant: ApsButtonVariant.ghost,
+                small: true,
+                onPressed: _choisirJourPropose,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ApsButton(
+                label: heure == null
+                    ? "Choisir l'heure"
+                    : '${heure.hour.toString().padLeft(2, '0')}:${heure.minute.toString().padLeft(2, '0')}',
+                icon: Icons.schedule_rounded,
+                variant: ApsButtonVariant.ghost,
+                small: true,
+                onPressed: _choisirHeureProposee,
+              ),
+            ),
+          ],
+        ),
+        if (widget.medecinVille != null && widget.medecinVille!.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text('Heure de ${widget.medecinVille}.', style: AppTextStyles.xs),
+        ],
+      ],
+    );
+  }
 
   Widget _buildTypeRdvSelector() {
     return ApsSegmented<TypeRdv>(
@@ -1492,6 +1689,20 @@ class _RendezVousPageState extends State<RendezVousPage> {
   // ---------------------------------------------------------------------
 
   Widget _buildStickyCta() {
+    if (_modeDemandeDirecte) {
+      final sansCompte = _tokenEffectif == null;
+      return ApsCtaBar(
+        priceLabel: 'Demande au médecin',
+        priceValue: _heureProposee == null ? '—' : _heureProposeeApi,
+        child: ApsButton(
+          label: _reservationEnCours
+              ? (sansCompte ? 'Création du compte…' : 'Envoi…')
+              : (sansCompte ? 'Créer mon compte et envoyer' : 'Envoyer la demande'),
+          loading: _reservationEnCours,
+          onPressed: _envoyerDemandeDirecte,
+        ),
+      );
+    }
     final jour = _jours.isNotEmpty ? _jours[_indexJour] : null;
     final besoinDeCreerUnCompte =
         widget.onConfirmerReservation == null && _tokenEffectif == null;

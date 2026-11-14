@@ -47,6 +47,7 @@ import Urgences from './pages/urgences';
 //MEDECIN 
 import Medecin from './pages/Medecin';
 import AvisMedecin from './pages/avisMedecin';
+import RegistreOnmc from './pages/RegistreOnmc';
 import AbonnementMedecin from './pages/AbonnementMedecin';
 import Ordonnance from './pages/Ordonnance';
 import Retraits from './pages/Retraits';
@@ -80,6 +81,7 @@ import LignesTarifaires from './pages/LignesTarifaires';
 import ParametreAmende from './pages/ParametreAmende';
 import ParametreDelaiLiberation from './pages/ParametreDelaiLiberation';
 import ParametreDelaiConfirmation from './pages/ParametreDelaiConfirmation';
+import ParametreDureeTeleconsultation from './pages/ParametreDureeTeleconsultation';
 import OffresRdv from './pages/OffresRdv';
 import RemboursementsCampay from './pages/RemboursementsCampay';
 
@@ -134,6 +136,7 @@ export const router = createBrowserRouter([
           //MEDECIN
           { path: '/medecin', element: <Medecin /> },
           { path: '/avis-medecin', element: <AvisMedecin /> },
+          { path: '/registre-onmc', element: <RegistreOnmc /> },
           { path: '/abonnement-medecin', element: <AbonnementMedecin /> },
           { path: '/ordonnance', element: <Ordonnance /> },
           { path: '/retraits', element: <Retraits /> },
@@ -142,6 +145,7 @@ export const router = createBrowserRouter([
           { path: '/parametre-amende', element: <ParametreAmende /> },
           { path: '/parametre-delai-liberation', element: <ParametreDelaiLiberation /> },
           { path: '/parametre-delai-confirmation', element: <ParametreDelaiConfirmation /> },
+          { path: '/parametre-duree-teleconsultation', element: <ParametreDureeTeleconsultation /> },
           { path: '/remboursements-campay', element: <RemboursementsCampay /> },
 
           // RENDEZ VOUS 

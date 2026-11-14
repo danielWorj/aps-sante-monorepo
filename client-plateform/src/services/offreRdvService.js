@@ -14,7 +14,13 @@ export const STATUTS_OFFRE = {
   attribuee: { label: 'Médecin validé', chip: 'chip-st-confirme', icone: 'fa-user-check' },
   expiree: { label: 'Expirée', chip: 'chip-st-annule', icone: 'fa-hourglass-end' },
   annulee: { label: 'Annulée', chip: 'chip-st-annule', icone: 'fa-ban' },
+  // Demande directe à un médecin sans créneau libre.
+  en_attente_medecin: { label: 'En attente du médecin', chip: 'chip-st-attente', icone: 'fa-user-clock' },
+  refusee: { label: 'Médecin indisponible', chip: 'chip-st-annule', icone: 'fa-user-xmark' },
 };
+
+/** Délai de réponse du médecin à une demande directe (aligné sur le serveur). */
+export const DELAI_REPONSE_DIRECTE_HEURES = 24;
 
 /**
  * « mardi 20 octobre à 10:00 » : jour et heure choisis par le patient, dans
@@ -63,6 +69,23 @@ export function publierOffre(donnees) {
   return apiFetch('/offres-rdv', { method: 'POST', body: donnees });
 }
 
+/**
+ * POST /offres-rdv/directe — { medecin_id, type_rdv, jour (AAAA-MM-JJ),
+ * heure (HH:mm, heure de la ville du médecin), motif? }. Réservé à un médecin
+ * SANS créneau libre : il accepte ou refuse sous 24 h.
+ */
+export function publierDemandeDirecte(donnees) {
+  return apiFetch('/offres-rdv/directe', { method: 'POST', body: donnees });
+}
+
+/**
+ * POST /offres-rdv/:id/diffuser — après refus (ou silence) du médecin : la
+ * demande est proposée aux autres médecins (même spécialité, ville, date).
+ */
+export function diffuserDemande(offreId) {
+  return apiFetch(`/offres-rdv/${offreId}/diffuser`, { method: 'POST' });
+}
+
 /** GET /offres-rdv/mes-offres — offres du patient avec les médecins qui ont répondu. */
 export async function listerMesOffres() {
   const data = await apiFetch('/offres-rdv/mes-offres');
@@ -85,13 +108,23 @@ export function validerMedecin(offreId, reponseId) {
 /* ---------------------------- Médecin ---------------------------- */
 
 /**
- * GET /offres-rdv/medecin?vue=ouvertes|mes_reponses
+ * GET /offres-rdv/medecin?vue=ouvertes|mes_reponses|directes
  * @returns {Promise<{ offres: Array, raison: string|null }>} `raison` : pourquoi
  *   le médecin ne reçoit aucune demande (fiche non publiée, abonnement…).
  */
 export async function listerOffresMedecin(vue = 'ouvertes') {
   const data = await apiFetch(`/offres-rdv/medecin?vue=${encodeURIComponent(vue)}`);
   return { offres: data.offres || [], raison: data.raison_ineligibilite || null };
+}
+
+/** POST /offres-rdv/:id/accepter — le médecin accepte une demande directe (le RDV est créé, le patient paie). */
+export function accepterDemandeDirecte(offreId) {
+  return apiFetch(`/offres-rdv/${offreId}/accepter`, { method: 'POST' });
+}
+
+/** POST /offres-rdv/:id/refuser — { motif? } : le médecin décline une demande directe. */
+export function refuserDemandeDirecte(offreId, motif) {
+  return apiFetch(`/offres-rdv/${offreId}/refuser`, { method: 'POST', body: { motif: motif || null } });
 }
 
 /** POST /offres-rdv/:id/reponse — { message? } */

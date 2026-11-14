@@ -183,20 +183,30 @@ class CreneauAgenda {
   /// Instant UTC du début du créneau. `null` si la date est illisible.
   DateTime? get instantUtc => DateTime.tryParse(iso)?.toUtc();
 
-  /// Jour lisible dans le fuseau de l'appareil, « lundi 12 octobre ».
+  /// Vrai si le jour et l'heure muraux du médecin sont connus.
+  bool get _aHeureMurale =>
+      date.length >= 10 && horaire != null && horaire!.heureDebut.isNotEmpty;
+
+  /// Jour lisible À L'HEURE DU CABINET, « lundi 12 octobre » : patient et
+  /// médecin lisent le même jour, quel que soit le fuseau de l'appareil
+  /// (même convention que `date_murale` des offres de RDV).
   String get libelleJour {
+    if (_aHeureMurale) return libelleJourCreneau(date);
     final i = instantUtc;
     return i == null ? libelleJourCreneau(date) : jourLongLocal(i);
   }
 
-  /// Heure lisible dans le fuseau de l'appareil, « 09:30 ».
+  /// Heure lisible à l'heure du cabinet, « 09:30 » (celle déclarée par le
+  /// médecin dans son agenda, sans conversion de fuseau).
   String get libelleHeure {
+    if (_aHeureMurale) return libelleHeureCreneau(horaire!.heureDebut);
     final i = instantUtc;
     return i == null ? libelleHeureCreneau(horaire?.heureDebut ?? '') : heureLocale(i);
   }
 
-  /// Clé de regroupement par jour local (AAAA-MM-JJ).
+  /// Clé de regroupement par jour du cabinet (AAAA-MM-JJ).
   String get cleJour {
+    if (_aHeureMurale) return cleJourMural;
     final i = instantUtc;
     if (i != null) return cleJourLocal(i);
     return date.length >= 10 ? date.substring(0, 10) : date;

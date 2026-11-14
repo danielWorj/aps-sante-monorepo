@@ -1,6 +1,7 @@
 // src/routes/visio.routes.js
 import { Router } from "express";
-import { cloturerVisio, obtenirAppelEntrant, refuserAppelVisio, obtenirBilanVisio, obtenirTokenVisio, signalerPresenceVisio } from "../controllers/visio.controller.js";
+import { cloturerVisio, obtenirAppelEntrant, refuserAppelVisio, obtenirBilanVisio,
+  obtenirDureeVisio, obtenirTokenVisio, signalerPresenceVisio } from "../controllers/visio.controller.js";
 import { authentifier } from "../middlewares/auth.middleware.js";
 
 const router = Router();
@@ -21,5 +22,7 @@ router.post("/visio/:id/presence", authentifier, signalerPresenceVisio);
 // T heures) ; le patient lit le bilan (noter, avis, litige).
 router.post("/visio/:id/cloture", authentifier, cloturerVisio);
 router.get("/visio/:id/cloture", authentifier, obtenirBilanVisio);
+// Durée maximale de l'appel (réglée par pays au back-office) et fin prévue.
+router.get("/visio/:id/duree", authentifier, obtenirDureeVisio);
 
 export default router;

@@ -1248,6 +1248,14 @@ enum TypeNotification {
   // Espace pharmacie / centre de santé : message reçu par le formulaire de
   // contact de la fiche publique. Un appui ouvre les messages.
   messageFicheRecu('message_fiche_recu'),
+  // Demande directe (médecin sans créneau libre) : reçue (médecin), acceptée
+  // (patient, à payer), refusée ou sans réponse sous 24 h (patient : changer
+  // de médecin ou recevoir d'autres candidatures). Ouvrent l'onglet Demandes.
+  demandeRdvDirecte('demande_rdv_directe'),
+  demandeRdvDirecteAcceptee('demande_rdv_directe_acceptee'),
+  demandeRdvDirecteRefusee('demande_rdv_directe_refusee'),
+  // Patient : téléconsultation refusée faute de RDV physique effectué avec ce médecin.
+  rdvTeleconsultationRefusee('rdv_teleconsultation_refusee'),
   inconnu('');
 
   const TypeNotification(this.valeurApi);

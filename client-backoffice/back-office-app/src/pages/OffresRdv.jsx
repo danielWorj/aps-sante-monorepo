@@ -15,6 +15,9 @@ const STATUTS = {
   attribuee: { libelle: 'Médecin validé', badge: 'is-success', icone: 'fa-user-check' },
   expiree: { libelle: 'Expirée', badge: 'is-neutral', icone: 'fa-hourglass-end' },
   annulee: { libelle: 'Annulée', badge: 'is-danger', icone: 'fa-ban' },
+  // Demande directe (médecin sans créneau libre).
+  en_attente_medecin: { libelle: 'Attente du médecin', badge: 'is-warning', icone: 'fa-user-clock' },
+  refusee: { libelle: 'Déclinée par le médecin', badge: 'is-danger', icone: 'fa-user-xmark' },
 };
 const STATUTS_REPONSE = { proposee: 'Proposée', retiree: 'Retirée', retenue: 'Retenue' };
 const STATUTS_RDV = {
@@ -196,6 +199,13 @@ export default function OffresRdv() {
                         <td>
                           <span className={`aps-badge ${st.badge}`}><i className={`fa-solid ${st.icone} me-1`}></i>{st.libelle}</span>
                           {retenue && <div className="small mt-1">{nom(retenue.medecin?.utilisateur, 'Dr ')}</div>}
+                          {o.medecin_cible && (
+                            <div className="small aps-text-muted">
+                              Demande directe : {nom(o.medecin_cible.utilisateur, 'Dr ')}
+                              {o.statut === 'refusee' && (o.sans_reponse ? ' (sans réponse sous 24 h)' : ' (refus)')}
+                              {o.diffusee_le && ' · proposée aux autres médecins'}
+                            </div>
+                          )}
                           {o.rendez_vous && (
                             <div className="small aps-text-muted">RDV : {STATUTS_RDV[o.rendez_vous.statut] || o.rendez_vous.statut}</div>
                           )}

@@ -22,7 +22,7 @@ import {
   validerMotDePasse,
 } from "../services/compte.service.js";
 import { donneesPinCreation, ErreurPin, genererPinProvisoire } from "../services/pin.service.js";
-import { espaceParDefaut, listerEspaces, trouverEspace } from "../services/espaces.service.js";
+import { assurerEspaceOuvrable, espaceParDefaut, listerEspaces, trouverEspace } from "../services/espaces.service.js";
 import { ouvrirSessionEspace } from "../services/compte.service.js";
 import { MESSAGE_CGU_REFUSEES, cguRefusees, enregistrerAcceptationsLegales } from "../services/documentLegal.service.js";
 
@@ -785,6 +785,18 @@ export async function rafraichirToken(req, res, next) {
     if (!espace) {
       const espaces = await listerEspaces(enregistrement.utilisateur_id);
       espace = espaceParDefaut(espaces, enregistrement.utilisateur.role.libelle);
+    }
+    // Compte médecin désactivé (ou pas encore activé) depuis l'ouverture
+    // de la session : plus de renouvellement, la session est close.
+    try {
+      assurerEspaceOuvrable(espace, enregistrement.utilisateur.role.libelle);
+    } catch (errEspace) {
+      await prisma.refreshToken.update({
+        where: { refresh_token_id: enregistrement.refresh_token_id },
+        data: { statut: "revoque", date_revocation: new Date() },
+      });
+      res.clearCookie(NOM_COOKIE_REFRESH_TOKEN, optionsClearCookieRefreshToken());
+      return res.status(errEspace.status).json({ message: errEspace.message, code: errEspace.code });
     }
 
     await prisma.$transaction([

@@ -538,3 +538,24 @@
 @media (prefers-reduced-motion: reduce) {
   .tcc-carte, .tcc-spinner { animation: none; }
 }
+
+/* Durée maximale de la téléconsultation : bandeau en haut de l'appel. */
+.tc-duree {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1055;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(15, 34, 54, .85);
+  color: #fff;
+  font-size: .82rem;
+  font-weight: 600;
+  max-width: calc(100% - 24px);
+  text-align: center;
+  pointer-events: none;
+}
+.tc-duree.is-alerte {
+  background: var(--urgence, #E5484D);
+}

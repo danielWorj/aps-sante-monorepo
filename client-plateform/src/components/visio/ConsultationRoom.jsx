@@ -45,7 +45,10 @@ function ConsultationRoom({ rdvId, onCallEnded, onReady, onApi, onParticipantLef
           estErreurRdvNonPaye(err)
             ? err.data?.message ||
                 "Ce rendez-vous n'est pas encore payé : la visio sera accessible une fois le paiement confirmé."
-            : "Impossible de démarrer la consultation."
+            : // Durée maximale écoulée (ou visio non lancée) : message du serveur.
+              ["VISIO_DUREE_ECOULEE", "VISIO_NON_LANCEE"].includes(err.data?.code ?? err.code)
+              ? err.data?.message || err.message
+              : "Impossible de démarrer la consultation."
         );
       });
 

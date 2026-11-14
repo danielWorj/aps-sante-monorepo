@@ -8,13 +8,17 @@ import { ROLES_VISIBILITE, projeterRdvPourRole } from "../services/visibiliteRol
 import {
   ErreurOffre,
   STATUTS_OFFRE,
+  accepterDemandeDirecte,
   annulerOffre,
   annulerOffreAdmin,
   listerOffresAdmin,
   listerOffresMedecin,
   listerOffresPatient,
   obtenirOffrePatient,
+  diffuserDemande,
+  publierDemandeDirecte,
   publierOffre,
+  refuserDemandeDirecte,
   repondreOffre,
   retirerReponse,
   validerMedecin,
@@ -48,6 +52,36 @@ export async function creerOffre(req, res, next) {
     if (!patient) return;
     const { offre, medecins_notifies } = await publierOffre(patient, req.body);
     return res.status(201).json({ message: "Demande publiée.", offre, medecins_notifies });
+  } catch (err) {
+    return gererErreur(err, res, next);
+  }
+}
+
+/**
+ * POST /api/offres-rdv/directe — { medecin_id, type_rdv, jour, heure (heure murale du pays du médecin), motif? }
+ * Demande directe à un médecin SANS créneau libre : il accepte ou refuse sous 24 h.
+ */
+export async function creerDemandeDirecte(req, res, next) {
+  try {
+    const patient = await patientCourant(req, res);
+    if (!patient) return;
+    const { offre } = await publierDemandeDirecte(patient, req.body ?? {});
+    return res.status(201).json({ message: "Demande envoyée au médecin.", offre });
+  } catch (err) {
+    return gererErreur(err, res, next);
+  }
+}
+
+/**
+ * POST /api/offres-rdv/:id/diffuser — après un refus (ou un silence) du
+ * médecin, le patient demande les candidatures des autres médecins.
+ */
+export async function diffuserMaDemande(req, res, next) {
+  try {
+    const patient = await patientCourant(req, res);
+    if (!patient) return;
+    const { offre, medecins_notifies } = await diffuserDemande(patient, req.params.id);
+    return res.status(200).json({ message: "Demande proposée aux autres médecins.", offre, medecins_notifies });
   } catch (err) {
     return gererErreur(err, res, next);
   }
@@ -114,12 +148,12 @@ export async function validerReponse(req, res, next) {
 
 /* ---------------------------- Médecin ---------------------------- */
 
-/** GET /api/offres-rdv/medecin?vue=ouvertes|mes_reponses */
+/** GET /api/offres-rdv/medecin?vue=ouvertes|mes_reponses|directes */
 export async function listerOffresPourMedecin(req, res, next) {
   try {
     const medecin = await medecinCourant(req, res);
     if (!medecin) return;
-    const vue = req.query.vue === "mes_reponses" ? "mes_reponses" : "ouvertes";
+    const vue = ["mes_reponses", "directes"].includes(req.query.vue) ? req.query.vue : "ouvertes";
     const { offres, raison } = await listerOffresMedecin(medecin, { vue });
     // `raison_ineligibilite` : pourquoi le médecin ne reçoit aucune demande (fiche non publiée…).
     return res.status(200).json({ offres, raison_ineligibilite: raison });
@@ -147,6 +181,36 @@ export async function retirer(req, res, next) {
     if (!medecin) return;
     await retirerReponse(medecin, req.params.id);
     return res.status(200).json({ message: "Réponse retirée." });
+  } catch (err) {
+    return gererErreur(err, res, next);
+  }
+}
+
+/**
+ * POST /api/offres-rdv/:id/accepter — le médecin accepte une demande directe :
+ * le RDV est créé (« cree »), le patient est notifié et doit payer.
+ */
+export async function accepterDemande(req, res, next) {
+  try {
+    const medecin = await medecinCourant(req, res);
+    if (!medecin) return;
+    const { rdv } = await accepterDemandeDirecte(medecin, req.params.id);
+    return res.status(201).json({
+      message: "Demande acceptée : le patient doit maintenant payer pour confirmer le rendez-vous.",
+      rendez_vous: projeterRdvPourRole(rdv, ROLES_VISIBILITE.MEDECIN),
+    });
+  } catch (err) {
+    return gererErreur(err, res, next);
+  }
+}
+
+/** POST /api/offres-rdv/:id/refuser — { motif? } : le médecin décline une demande directe. */
+export async function refuserDemande(req, res, next) {
+  try {
+    const medecin = await medecinCourant(req, res);
+    if (!medecin) return;
+    await refuserDemandeDirecte(medecin, req.params.id, req.body ?? {});
+    return res.status(200).json({ message: "Demande déclinée : le patient est prévenu." });
   } catch (err) {
     return gererErreur(err, res, next);
   }

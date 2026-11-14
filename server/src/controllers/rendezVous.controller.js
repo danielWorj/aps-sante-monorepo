@@ -42,6 +42,12 @@ import {
 import { resoudreDelaiConfirmationMedecin } from "../services/parametreDelaiConfirmation.service.js";
 import { echeanceConfirmation } from "../lib/delaiConfirmation.js";
 import { resoudreDroitsPresence } from "../lib/droitsPresence.js";
+import {
+  CODE_TELECONSULTATION_SANS_RDV_PHYSIQUE,
+  MESSAGE_TELECONSULTATION_SANS_RDV_PHYSIQUE,
+  aEuRdvPhysiqueEffectue,
+  notifierRefusTeleconsultation,
+} from "../services/teleconsultationPrealable.service.js";
 
 function repondreErreurCreneau(res, err) {
   return res.status(err.status).json({ message: err.message, code: err.code });
@@ -487,6 +493,15 @@ export async function creerRendezVous(req, res, next) {
         message: "Ce médecin n'a pas activé la téléconsultation.",
       });
     }
+    // Téléconsultation : seulement après un RDV physique effectué avec ce
+    // médecin (teleconsultationPrealable.service.js).
+    if (type_rdv === "teleconsultation" && !(await aEuRdvPhysiqueEffectue(patient.patient_id, medecin_id))) {
+      await notifierRefusTeleconsultation(patient.patient_id, { medecin_id });
+      return res.status(409).json({
+        code: CODE_TELECONSULTATION_SANS_RDV_PHYSIQUE,
+        message: MESSAGE_TELECONSULTATION_SANS_RDV_PHYSIQUE,
+      });
+    }
     // Abonnement de présence : dans un pays où l'abonnement des médecins est
     // obligatoire, la prise de RDV en ligne exige un abonnement actif qui
     // l'inclut (sinon droits « sans obligation » : toujours autorisée).
@@ -547,6 +562,26 @@ export async function creerRendezVous(req, res, next) {
     // Politique de fonds v2 §6 : index unique partiel — un seul RDV actif
     // par (médecin, créneau). Course entre deux réservations simultanées.
     if (estViolationCreneauActif(err)) return res.status(409).json({ message: MESSAGE_CRENEAU_PRIS });
+    next(err);
+  }
+}
+
+/**
+ * GET /api/medecins/:medecinId/teleconsultation-possible
+ * Patient connecté : peut-il prendre une téléconsultation avec ce médecin ?
+ * Seulement après un RDV physique effectué avec lui. Sert aux clients à
+ * griser l'option « Téléconsultation » ; le contrôle qui fait foi reste celui
+ * de la création du RDV. Un compte non patient reçoit `possible: false`.
+ */
+export async function teleconsultationPossible(req, res, next) {
+  try {
+    const patient = await profilPatientCourant(req.utilisateur);
+    const possible = Boolean(patient) && (await aEuRdvPhysiqueEffectue(patient.patient_id, req.params.medecinId));
+    return res.status(200).json({
+      possible,
+      ...(possible ? {} : { code: CODE_TELECONSULTATION_SANS_RDV_PHYSIQUE, message: MESSAGE_TELECONSULTATION_SANS_RDV_PHYSIQUE }),
+    });
+  } catch (err) {
     next(err);
   }
 }

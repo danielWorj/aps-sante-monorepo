@@ -23,13 +23,13 @@ final mesOffresRdvProvider = FutureProvider.autoDispose<List<OffreRdv>>((ref) {
       .appelAuthentifie((token) => repo.listerMesOffres(token: token));
 });
 
-/// Offres vues par le médecin connecté : `false` = demandes ouvertes qui le
-/// concernent, `true` = celles auxquelles il a répondu.
+/// Offres vues par le médecin connecté, par onglet : demandes directes à
+/// traiter, demandes ouvertes qui le concernent, ou celles auxquelles il a répondu.
 final offresRdvMedecinProvider =
-    FutureProvider.autoDispose.family<OffresMedecin, bool>((ref, mesReponses) {
+    FutureProvider.autoDispose.family<OffresMedecin, VueOffresMedecin>((ref, vue) {
   ref.watch(authTokenProvider);
   final repo = ref.read(offreRdvRepositoryProvider);
   return ref.read(sessionControllerProvider.notifier).appelAuthentifie(
-        (token) => repo.listerPourMedecin(token: token, mesReponses: mesReponses),
+        (token) => repo.listerPourMedecin(token: token, vue: vue),
       );
 });

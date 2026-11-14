@@ -60,7 +60,8 @@ const APS_MENU = [
         icon: "fa-solid fa-user-doctor",
         to: "/medecin",
         children: [
-          { key: "avis-medecin", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-medecin" }
+          { key: "avis-medecin", label: "Avis", icon: "fa-solid fa-star-half-stroke", to: "/avis-medecin" },
+          { key: "registre-onmc", label: "Registre ONMC", icon: "fa-solid fa-shield-halved", to: "/registre-onmc" }
         ]
       },
       {
@@ -179,6 +180,7 @@ const APS_MENU = [
     group: "Règles métier",
     items: [
       { key: "parametre-delai-confirmation", label: "Délai de confirmation", icon: "fa-solid fa-hourglass-start", to: "/parametre-delai-confirmation" },
+      { key: "parametre-duree-teleconsultation", label: "Durée des téléconsultations", icon: "fa-solid fa-video", to: "/parametre-duree-teleconsultation" },
       { key: "parametre-delai-liberation", label: "Délai de libération (T)", icon: "fa-solid fa-hourglass-half", to: "/parametre-delai-liberation" },
       { key: "parametre-amende", label: "Amendes médecins", icon: "fa-solid fa-gavel", to: "/parametre-amende" }
     ]

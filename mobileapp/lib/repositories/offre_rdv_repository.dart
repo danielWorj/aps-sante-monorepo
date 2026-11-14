@@ -86,6 +86,34 @@ class OffreRdvRepository {
     return n is num ? n.toInt() : 0;
   }
 
+  /// POST /offres-rdv/directe — demande à un médecin SANS créneau libre :
+  /// [jour] (« AAAA-MM-JJ ») et [heure] (« HH:mm ») de la ville du médecin.
+  /// Il accepte ou refuse sous 24 h.
+  Future<void> publierDemandeDirecte({
+    required String token,
+    required String medecinId,
+    required TypeRdvOffre typeRdv,
+    required String jour,
+    required String heure,
+    String? motif,
+  }) async {
+    await _post(ApiRealEndpoints.demandeDirecteRdv, token, {
+      'medecin_id': medecinId,
+      'type_rdv': typeRdv.valeurApi,
+      'jour': jour,
+      'heure': heure,
+      if (motif != null && motif.trim().isNotEmpty) 'motif': motif.trim(),
+    });
+  }
+
+  /// POST /offres-rdv/:id/diffuser — après refus (ou silence) du médecin :
+  /// la demande est proposée aux autres médecins. Renvoie le nombre prévenu.
+  Future<int> diffuser(String offreId, {required String token}) async {
+    final donnees = await _post(ApiRealEndpoints.diffuserDemandeRdv(offreId), token);
+    final n = donnees is Map<String, dynamic> ? donnees['medecins_notifies'] : null;
+    return n is num ? n.toInt() : 0;
+  }
+
   /// GET /offres-rdv/mes-offres — avec les médecins qui ont répondu.
   Future<List<OffreRdv>> listerMesOffres({required String token}) async {
     final reponse = await http
@@ -113,17 +141,30 @@ class OffreRdvRepository {
 
   /* ---------------------------- Médecin ---------------------------- */
 
-  /// GET /offres-rdv/medecin?vue=ouvertes|mes_reponses
+  /// GET /offres-rdv/medecin?vue=ouvertes|mes_reponses|directes
   Future<OffresMedecin> listerPourMedecin({
     required String token,
-    bool mesReponses = false,
+    VueOffresMedecin vue = VueOffresMedecin.ouvertes,
   }) async {
     final uri = Uri.parse(ApiRealEndpoints.offresRdvMedecin)
-        .replace(queryParameters: {'vue': mesReponses ? 'mes_reponses' : 'ouvertes'});
+        .replace(queryParameters: {'vue': vue.valeurApi});
     final reponse = await http.get(uri, headers: _entetes(token)).timeout(_timeout);
     final donnees = _decoder(reponse);
     final raison = donnees is Map<String, dynamic> ? donnees['raison_ineligibilite'] : null;
     return OffresMedecin(offres: _offres(donnees), raison: raison is String ? raison : null);
+  }
+
+  /// POST /offres-rdv/:id/accepter — demande directe acceptée : le RDV est
+  /// créé, le patient doit payer.
+  Future<void> accepterDemandeDirecte(String offreId, {required String token}) async {
+    await _post(ApiRealEndpoints.accepterDemandeDirecte(offreId), token);
+  }
+
+  /// POST /offres-rdv/:id/refuser — { motif? } transmis au patient.
+  Future<void> refuserDemandeDirecte(String offreId, {required String token, String? motif}) async {
+    await _post(ApiRealEndpoints.refuserDemandeDirecte(offreId), token, {
+      'motif': (motif != null && motif.trim().isNotEmpty) ? motif.trim() : null,
+    });
   }
 
   /// POST /offres-rdv/:id/reponse — { message? }

@@ -60,6 +60,7 @@ import { estRdvNonPaye, estErreurRdvNonPaye, visioLancee, INTERVALLE_ATTENTE_VIS
 import { useAuth } from "../context/AuthContext";
 import ConsultationRoom from "../components/visio/ConsultationRoom";
 import ClotureConsultation from "../components/visio/ClotureConsultation";
+import CompteAReboursVisio from "../components/visio/CompteAReboursVisio";
 import { obtenirBilanVisio } from "../services/visioService";
 import "../assets/styles/teleconsultation.css";
 
@@ -252,6 +253,17 @@ export default function Teleconsultation() {
     }
   }, [estLeMedecin, id, gererFinAppel]);
 
+  // Durée maximale écoulée : on raccroche ; la carte de clôture prend le relais.
+  const couperAppelDureeEcoulee = useCallback(() => {
+    if (phaseRef.current !== "session") return;
+    try {
+      apiRef.current?.executeCommand("hangup");
+    } catch {
+      // l'appel est déjà terminé
+    }
+    setTimeout(gererFinAppel, 1500);
+  }, [gererFinAppel]);
+
   // Filet de sécurité côté patient : un départ du médecin manqué par Jitsi
   // le laisserait seul dans la salle, on relit donc le bilan pendant l'appel.
   useEffect(() => {
@@ -310,6 +322,10 @@ export default function Teleconsultation() {
           // La clôture du médecin peut suivre de peu son départ : relectures.
           onParticipantLeft={() => [0, 3000, 8000].forEach((d) => setTimeout(verifierClotureMedecin, d))}
         />
+        {/* Durée maximale (back-office, par pays) : alerte avant la fin, puis
+            l'appel est coupé pour les deux parties (le médecin clôt ainsi la
+            consultation ; le serveur la clôt de toute façon après une marge). */}
+        <CompteAReboursVisio rdvId={rdv.rdv_id} onEcoulee={couperAppelDureeEcoulee} />
       </div>
     );
   }

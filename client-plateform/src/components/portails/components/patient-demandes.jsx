@@ -12,6 +12,13 @@
 // dans l'agenda : sans paiement dans le délai, il est annulé et la demande
 // redevient ouverte).
 //
+// DEMANDE DIRECTE (médecin sans créneau libre, envoyée depuis la page de
+// prise de RDV) : « en attente du médecin » pendant 24 h, puis s'il refuse ou
+// ne répond pas, le patient choisit : changer de médecin (la demande est
+// retirée, l'annuaire s'ouvre sur la même spécialité et la même ville) ou
+// recevoir les candidatures des autres médecins (la demande devient une
+// demande rapide classique).
+//
 // Le client n'invente aucun montant : il affiche le tarif indicatif renvoyé
 // par le serveur ; le total (frais et commission) est celui du devis de
 // paiement (ChoixMoyenPaiement).
@@ -29,6 +36,7 @@ import {
   STATUTS_OFFRE,
   annulerOffre,
   dateOffreLisible,
+  diffuserDemande,
   listerMesOffres,
   partiesDateOffre,
   publierOffre,
@@ -56,6 +64,9 @@ function initiales(m) {
   const u = m?.utilisateur;
   return `${u?.prenom?.[0] ?? ""}${u?.nom?.[0] ?? ""}`.toUpperCase() || "Dr";
 }
+
+// Statuts d'une demande encore « en cours » pour le patient.
+const STATUTS_EN_COURS = ["ouverte", "attribuee", "en_attente_medecin", "refusee"];
 
 const FORMULAIRE_VIDE = { specialite_id: "", ville_id: "", type_rdv: "physique", jour: "", heure: "", motif: "" };
 
@@ -258,10 +269,48 @@ export default function PatientDemandes() {
     }
   };
 
+  // Demande directe refusée : « Changer de médecin » retire la demande et
+  // ouvre l'annuaire sur la même spécialité et la même ville.
+  const changerDeMedecin = async (offre) => {
+    setActionEnCours(offre.offre_id);
+    try {
+      await annulerOffre(offre.offre_id);
+      const params = new URLSearchParams();
+      if (offre.specialite_id) params.set("specialite_id", offre.specialite_id);
+      if (offre.ville_id) params.set("ville_exercice_id", offre.ville_id);
+      if (offre.pays_id) params.set("pays_exercice_id", offre.pays_id);
+      navigate(`/medecin?${params.toString()}`);
+    } catch (err) {
+      toast.erreur(err.message || "Action impossible.");
+      charger();
+    } finally {
+      setActionEnCours(null);
+    }
+  };
+
+  // Demande directe refusée : « Recevoir d'autres candidatures » la propose
+  // aux autres médecins de la spécialité dans la ville.
+  const diffuser = async (offre) => {
+    setActionEnCours(offre.offre_id);
+    try {
+      const data = await diffuserDemande(offre.offre_id);
+      toast.succes(
+        data.medecins_notifies > 0
+          ? `Demande proposée à ${data.medecins_notifies} autre(s) médecin(s) : leurs réponses apparaîtront ici.`
+          : "Demande proposée aux autres médecins : leurs réponses apparaîtront ici."
+      );
+      charger();
+    } catch (err) {
+      toast.erreur(err.message || "Action impossible.");
+    } finally {
+      setActionEnCours(null);
+    }
+  };
+
   const [enCours, terminees] = useMemo(() => {
     const a = [];
     const b = [];
-    for (const o of offres) (o.statut === "ouverte" || o.statut === "attribuee" ? a : b).push(o);
+    for (const o of offres) (STATUTS_EN_COURS.includes(o.statut) ? a : b).push(o);
     return [a, b];
   }, [offres]);
 
@@ -325,13 +374,32 @@ export default function PatientDemandes() {
   };
 
   // Statut : pastille neutre + point de couleur (pas d'aplat coloré).
-  const TON_STATUT = { ouverte: "attente", attribuee: "ok", expiree: "neutre", annulee: "neutre" };
+  const TON_STATUT = {
+    ouverte: "attente",
+    attribuee: "ok",
+    expiree: "neutre",
+    annulee: "neutre",
+    en_attente_medecin: "attente",
+    refusee: "attente",
+  };
 
   const renderOffre = (o) => {
     const st = STATUTS_OFFRE[o.statut] || { label: o.statut };
     const rdv = o.rendez_vous;
     const date = partiesDateOffre(o);
-    const enCoursOffre = o.statut === "ouverte" || o.statut === "attribuee";
+    const enCoursOffre = STATUTS_EN_COURS.includes(o.statut);
+    const avecReponses = o.statut === "ouverte" || o.statut === "attribuee";
+    // Demande directe jamais proposée aux autres : elle ne concerne que ce médecin.
+    const directe = Boolean(o.medecin_cible) && !o.diffusee_le;
+    const echeanceReponse = o.echeance_reponse_medecin
+      ? new Date(o.echeance_reponse_medecin).toLocaleString("fr-FR", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : null;
     const nbReponses = o.reponses.length;
     const publieeLe = o.date_creation
       ? new Date(o.date_creation).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
@@ -371,6 +439,12 @@ export default function PatientDemandes() {
                 <i className="fa-solid fa-location-dot"></i>
                 {o.ville?.nom}
               </li>
+              {o.medecin_cible && (
+                <li>
+                  <i className="fa-solid fa-user-doctor"></i>
+                  Demande à {nomMedecin(o.medecin_cible)}
+                </li>
+              )}
             </ul>
           </div>
         </header>
@@ -382,12 +456,60 @@ export default function PatientDemandes() {
           </div>
         )}
 
+        {o.statut === "en_attente_medecin" && (
+          <div className="dr-panel">
+            <i className="fa-solid fa-user-clock"></i>
+            <span className="flex-grow-1">
+              Demande envoyée à {nomMedecin(o.medecin_cible)}.
+              {echeanceReponse ? ` Il a jusqu'au ${echeanceReponse} pour accepter ou refuser.` : ""}
+            </span>
+          </div>
+        )}
+
+        {o.statut === "refusee" && (
+          <div className="dr-panel">
+            <i className="fa-solid fa-user-xmark"></i>
+            <span className="flex-grow-1">
+              {o.sans_reponse
+                ? `${nomMedecin(o.medecin_cible)} n'a pas répondu à temps.`
+                : `${nomMedecin(o.medecin_cible)} ne peut pas vous recevoir à cette heure.`}
+              {o.motif_refus && <> « {o.motif_refus} »</>}
+              <br />
+              Souhaitez-vous changer de médecin, ou recevoir les candidatures d&apos;autres médecins pour la même date ?
+            </span>
+            <div className="d-flex gap-2 flex-wrap">
+              <button
+                type="button"
+                className="btn btn-outline-primary btn-sm-aps"
+                disabled={actionEnCours !== null}
+                onClick={() => changerDeMedecin(o)}
+              >
+                <i className="fa-solid fa-user-doctor"></i> Changer de médecin
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm-aps"
+                disabled={actionEnCours !== null}
+                onClick={() => diffuser(o)}
+              >
+                {actionEnCours === o.offre_id ? (
+                  "Envoi…"
+                ) : (
+                  <><i className="fa-solid fa-bullhorn"></i> Recevoir d&apos;autres candidatures</>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
         {o.statut === "attribuee" && rdv && (
           <div className="dr-panel">
             <i className={`fa-solid ${rdv.statut === "cree" ? "fa-credit-card" : "fa-circle-check"}`}></i>
             <span className="flex-grow-1">
               {rdv.statut === "cree"
-                ? "Rendez-vous créé : réglez-le pour le confirmer. Sans paiement dans le délai, il est annulé et la demande redevient ouverte."
+                ? directe
+                  ? `${nomMedecin(o.medecin_cible)} a accepté : réglez le rendez-vous pour le confirmer. Sans paiement dans le délai, il est annulé.`
+                  : "Rendez-vous créé : réglez-le pour le confirmer. Sans paiement dans le délai, il est annulé et la demande redevient ouverte."
                 : "Rendez-vous confirmé : retrouvez-le dans vos rendez-vous."}
             </span>
             {rdv.statut === "cree" ? (
@@ -402,7 +524,7 @@ export default function PatientDemandes() {
           </div>
         )}
 
-        {enCoursOffre && (
+        {avecReponses && !directe && (
           <section className="dr-reponses">
             {nbReponses === 0 ? (
               <div className="dr-attente">
@@ -429,7 +551,7 @@ export default function PatientDemandes() {
 
         <footer className="dr-card-foot">
           <span className="dr-publiee">{publieeLe ? `Publiée le ${publieeLe}` : ""}</span>
-          {o.statut === "ouverte" && (
+          {(o.statut === "ouverte" || o.statut === "en_attente_medecin") && (
             <button
               type="button"
               className="dr-lien-retirer"

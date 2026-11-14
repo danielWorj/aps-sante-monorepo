@@ -10,13 +10,14 @@ import {
   listerDisponibilitesMedecin,
   JOURS_SEMAINE_AGENDA,
 } from '../services/medecinService';
-import { dateHeureLisible, grouperParJour, heureLocale, plageRecherche } from '../utils/creneaux';
+import { dateHeureCabinet, grouperParJour, heureCabinet, jourCourtCabinet, plageRecherche } from '../utils/creneaux';
 import GoogleMapView from '../components/maps/GoogleMapView';
 import AvisPublicsMedecin from '../components/avis/AvisPublicsMedecin';
 import { Etoiles } from '../components/avis/Etoiles';
 import { signalerEngagement } from '../services/reputationMedecinService';
 import { useToast } from '../components/feedback';
 import { aUnTarif, libelleTarif, montantTarif } from '../utils/tarif';
+import BadgeOrdre from '../components/medecin/BadgeOrdre';
 // La prise de rendez-vous (créneau, motif, inscription patient,
 // POST /rendez-vous...) ne se fait plus dans une modale sur cette
 // page : elle vit désormais entièrement dans src/pages/RendezVous.jsx,
@@ -269,12 +270,7 @@ export default function ProfilMedecin() {
                 )}
               </div>
               <div className="d-flex gap-2 flex-wrap">
-                {medecin.statut_verification === 'publie' && (
-                  <span className="chip chip-verifie">
-                    <i className="fa-solid fa-circle" /> Vérifiée à l&apos;Ordre
-                    {medecin.numero_ordre ? ` — ${medecin.numero_ordre}` : ''}
-                  </span>
-                )}
+                <BadgeOrdre medecin={medecin} avecNumero />
                 {medecin.teleconsultation_activee && (
                   <span className="chip chip-dispo"><i className="fa-solid fa-circle" /> Téléconsultation disponible</span>
                 )}
@@ -477,13 +473,13 @@ export default function ProfilMedecin() {
                           type="button"
                           className="slot-mini"
                           key={c.creneau_id}
-                          title={dateHeureLisible(c.debut)}
+                          title={dateHeureCabinet(c)}
                           onClick={() => allerVersRendezVous('physique', c.creneau_id)}
                           style={{ cursor: 'pointer', border: 0 }}
                         >
-                          {new Date(c.debut).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })}
+                          {jourCourtCabinet(c)}
                           {' · '}
-                          {heureLocale(c.debut)}
+                          {heureCabinet(c)}
                         </button>
                       ))}
                     </div>

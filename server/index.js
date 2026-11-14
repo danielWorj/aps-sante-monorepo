@@ -18,6 +18,7 @@ import portailAssuranceRoutes from "./src/routes/portailAssurance.routes.js";
 import laboratoireRoutes from "./src/routes/laboratoire.routes.js";
 import urgencesRoutes from "./src/routes/urgences.routes.js";
 import medecinRoutes from "./src/routes/medecin.routes.js";
+import onmcRoutes from "./src/routes/onmc.routes.js";
 import patientRoutes from "./src/routes/patient.routes.js";
 import moyenPaiementRoutes from "./src/routes/moyenPaiement.routes.js";
 import contactRoutes from "./src/routes/contact.routes.js";
@@ -36,6 +37,7 @@ import fraisAgregateurRoutes from "./src/routes/fraisAgregateur.routes.js";
 import parametreAmendeRoutes from "./src/routes/parametreAmende.routes.js";
 import parametreDelaiLiberationRoutes from "./src/routes/parametreDelaiLiberation.routes.js";
 import parametreDelaiConfirmationRoutes from "./src/routes/parametreDelaiConfirmation.routes.js";
+import parametreDureeTeleconsultationRoutes from "./src/routes/parametreDureeTeleconsultation.routes.js";
 import portefeuilleRoutes from "./src/routes/portefeuille.routes.js";
 import retraitRoutes from "./src/routes/retrait.routes.js";
 import remboursementRoutes from "./src/routes/remboursement.routes.js";
@@ -175,6 +177,8 @@ app.use("/api", portailAssuranceRoutes);
 // Annuaire et portail des laboratoires d'analyses.
 app.use("/api", laboratoireRoutes);
 app.use("/api", urgencesRoutes);
+// Avant medecinRoutes : POST /medecins/verifier-ordre et /medecins/:id/verifier-ordre.
+app.use("/api", onmcRoutes);
 app.use("/api", medecinRoutes);
 app.use("/api", patientRoutes);
 app.use("/api", moyenPaiementRoutes);
@@ -195,6 +199,7 @@ app.use("/api", fraisAgregateurRoutes);
 app.use("/api", parametreAmendeRoutes);
 app.use("/api", parametreDelaiLiberationRoutes);
 app.use("/api", parametreDelaiConfirmationRoutes);
+app.use("/api", parametreDureeTeleconsultationRoutes);
 app.use("/api", portefeuilleRoutes);
 app.use("/api", retraitRoutes);
 app.use("/api", remboursementRoutes);
@@ -215,6 +220,10 @@ app.use("/api", emailRoutes);
 
 // ─── Gestion d'erreurs centralisée ─────────────────────────────
 app.use((err, _req, res, _next) => {
+  // Espace refusé à l'ouverture de session (ex. compte médecin non activé).
+  if (err?.name === "ErreurEspace" && err.status) {
+    return res.status(err.status).json({ message: err.message, code: err.code });
+  }
   if (err instanceof ErreurHorsPerimetre) {
     return res.status(403).json({ message: err.message });
   }

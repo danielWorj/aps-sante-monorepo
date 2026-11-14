@@ -17,6 +17,7 @@ import { usePaysFiltre } from '../context/PaysContext';
 import { useGeolocation } from '../hooks/useGeolocation';
 import GoogleMapListe from '../components/maps/GoogleMapListe';
 import BanniereExpress from '../components/medecin/BanniereExpress';
+import BadgeOrdre from '../components/medecin/BadgeOrdre';
 import { aUnTarif, libelleTarif } from '../utils/tarif';
 import './../assets/styles/medecin.css';
 import './../assets/styles/annuaire-2026.css';
@@ -507,11 +508,12 @@ export default function Medecin() {
                         <div className="aps-dc-info">
                           <div className="aps-dc-nm">
                             {nomComplet}
-                            {m.statut_verification === 'publie' && (
-                              <i className="fa-solid fa-circle-check verif" title="Vérifié à l'Ordre" />
+                            {m.statut_ordre === 'inscrit' && (
+                              <i className="fa-solid fa-circle-check verif" title="Inscrit au Tableau de l'Ordre (ONMC)" />
                             )}
                           </div>
                           <div className="aps-dc-sp">{lieu}</div>
+                          <BadgeOrdre medecin={m} className="aps-dc-ordre" />
                           <div className="aps-dc-ft">
                             {m.nombre_avis > 0 ? (
                               <Link to={`/profil/${m.medecin_id}?onglet=avis`} className="aps-stars">
