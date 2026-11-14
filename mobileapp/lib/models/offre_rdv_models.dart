@@ -11,6 +11,10 @@
 //   - médecin : [maReponse], [nombreReponses], [attribueeAMoi] (jamais
 //     l'identité du patient).
 //
+// DEMANDE DIRECTE (médecin sans créneau libre) : statut « en attente du
+// médecin » (24 h), puis « refusee » s'il refuse ou ne répond pas ; le
+// patient change alors de médecin (annuler) ou diffuse la demande aux autres.
+//
 // Date : on affiche `date_murale` (jour + heure dans le fuseau du pays de la
 // demande, calculés par le serveur), jamais `date_souhaitee` convertie dans
 // le fuseau de l'appareil : patient et médecins lisent la même heure.
@@ -44,6 +48,8 @@ enum StatutOffreRdv {
   attribuee('attribuee', 'Médecin validé'),
   expiree('expiree', 'Expirée'),
   annulee('annulee', 'Annulée'),
+  enAttenteMedecin('en_attente_medecin', 'En attente du médecin'),
+  refusee('refusee', 'Médecin indisponible'),
   inconnu('', 'Inconnu');
 
   const StatutOffreRdv(this.valeurApi, this.libelle);
@@ -51,7 +57,7 @@ enum StatutOffreRdv {
   final String valeurApi;
   final String libelle;
 
-  bool get estEnCours => this == ouverte || this == attribuee;
+  bool get estEnCours => this == ouverte || this == attribuee || this == enAttenteMedecin || this == refusee;
 
   static StatutOffreRdv fromApi(String? v) => StatutOffreRdv.values
       .firstWhere((s) => s != inconnu && s.valeurApi == v, orElse: () => inconnu);
@@ -206,6 +212,26 @@ class OffreRdv {
   final int? nombreReponses;
   final bool attribueeAMoi;
 
+  // Demande directe (médecin sans créneau libre).
+  final String? specialiteId;
+  final String? villeId;
+  final String? paysId;
+
+  /// Patient : médecin sollicité (« Dr Prénom Nom »), null pour une demande rapide.
+  final String? medecinCibleNom;
+  final DateTime? echeanceReponseMedecin;
+  final String? motifRefus;
+  final bool sansReponse;
+
+  /// La demande a été proposée aux autres médecins après le refus.
+  final bool diffusee;
+
+  /// Médecin : vrai si cette demande lui a été adressée directement.
+  final bool demandeDirecte;
+
+  /// Demande directe pas (encore) proposée aux autres médecins.
+  bool get estDirecteNonDiffusee => medecinCibleNom != null && !diffusee;
+
   const OffreRdv({
     required this.offreId,
     required this.specialite,
@@ -222,6 +248,15 @@ class OffreRdv {
     this.maReponse,
     this.nombreReponses,
     this.attribueeAMoi = false,
+    this.specialiteId,
+    this.villeId,
+    this.paysId,
+    this.medecinCibleNom,
+    this.echeanceReponseMedecin,
+    this.motifRefus,
+    this.sansReponse = false,
+    this.diffusee = false,
+    this.demandeDirecte = false,
   });
 
   /// « mardi 20 octobre à 10:00 » : jour et heure choisis par le patient,
@@ -240,6 +275,11 @@ class OffreRdv {
     final murale = _objet(json, 'date_murale') ?? const {};
     final reps = json['reponses'];
     final ma = _objet(json, 'ma_reponse');
+    final cible = _objet(json, 'medecin_cible');
+    final uCible = cible == null ? null : _objet(cible, 'utilisateur');
+    final nomCible = uCible == null
+        ? null
+        : 'Dr ${'${_lire<String>(uCible, 'prenom') ?? ''} ${_lire<String>(uCible, 'nom') ?? ''}'.trim()}';
     return OffreRdv(
       offreId: _lire<String>(json, 'offre_id') ?? '',
       specialite: _lire<String>(_objet(json, 'specialite') ?? const {}, 'nom') ?? '',
@@ -263,8 +303,28 @@ class OffreRdv {
       maReponse: ma == null ? null : ReponseOffre.fromJson(ma),
       nombreReponses: _nombre(json['nombre_reponses'])?.toInt(),
       attribueeAMoi: json['attribuee_a_moi'] == true,
+      specialiteId: _lire<String>(json, 'specialite_id'),
+      villeId: _lire<String>(json, 'ville_id'),
+      paysId: _lire<String>(json, 'pays_id'),
+      medecinCibleNom: nomCible,
+      echeanceReponseMedecin: _date(json, 'echeance_reponse_medecin'),
+      motifRefus: _lire<String>(json, 'motif_refus'),
+      sansReponse: json['sans_reponse'] == true,
+      diffusee: json['diffusee_le'] is String,
+      demandeDirecte: json['demande_directe'] == true,
     );
   }
+}
+
+/// Onglets des demandes côté médecin (paramètre `vue` de l'API).
+enum VueOffresMedecin {
+  directes('directes'),
+  ouvertes('ouvertes'),
+  mesReponses('mes_reponses');
+
+  const VueOffresMedecin(this.valeurApi);
+
+  final String valeurApi;
 }
 
 /// Demandes vues par le médecin, avec la raison pour laquelle il n'en reçoit

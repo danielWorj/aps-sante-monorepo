@@ -317,51 +317,8 @@ export async function marquerEmailRecu(email_recu_id, lu) {
 }
 
 /* ===================================================================
- * Mise en forme
+ * Mise en forme : gabarit commun dans lib/gabaritEmail.js (logo joint,
+ * en-tête, carte, boutons, pied de page).
  * =================================================================== */
 
-const echapper = (s) =>
-  String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-
-// Les URL du texte deviennent des liens cliquables.
-const avecLiens = (s) => echapper(s).replace(/https?:\/\/[^\s<]+/g, (url) => `<a href="${url}" style="color:#0f7a55;">${url}</a>`);
-
-/**
- * Gabarit HTML commun des e-mails d'APS Santé (tableaux et styles en ligne :
- * compatibles avec les clients de messagerie).
- * @param {{ titre: string, paragraphes: string[], bouton?: { libelle: string, url: string }|null,
- *   details?: Array<[string, string]>, pied?: string }} p
- */
-export function construireEmailHtml({ titre, paragraphes = [], bouton = null, details = [], pied = null }) {
-  const corps = paragraphes
-    .filter(Boolean)
-    .map((p) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#1f2a37;">${avecLiens(p)}</p>`)
-    .join("");
-  const tableau = details.length
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 18px;border:1px solid #e3e8ef;border-radius:10px;border-collapse:separate;">${details
-        .map(
-          ([k, v], i) =>
-            `<tr><td style="padding:10px 14px;font-size:13px;color:#64748b;${i ? "border-top:1px solid #e3e8ef;" : ""}">${echapper(k)}</td>` +
-            `<td style="padding:10px 14px;font-size:14px;color:#1f2a37;font-weight:600;text-align:right;${i ? "border-top:1px solid #e3e8ef;" : ""}">${echapper(v)}</td></tr>`
-        )
-        .join("")}</table>`
-    : "";
-  const cta = bouton
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 18px;"><tr><td style="border-radius:10px;background:#16996c;">` +
-      `<a href="${echapper(bouton.url)}" style="display:inline-block;padding:13px 26px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;">${echapper(bouton.libelle)}</a>` +
-      `</td></tr></table>`
-    : "";
-  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${echapper(titre)}</title></head>
-<body style="margin:0;padding:0;background:#f3f6f8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6f8;padding:24px 12px;"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;background:#ffffff;border:1px solid #e3e8ef;border-radius:14px;">
-<tr><td style="padding:22px 28px;border-bottom:1px solid #e3e8ef;font-size:18px;font-weight:700;color:#16996c;">APS Santé</td></tr>
-<tr><td style="padding:26px 28px 10px;">
-<h1 style="margin:0 0 16px;font-size:20px;line-height:1.35;color:#0f172a;">${echapper(titre)}</h1>
-${corps}${tableau}${cta}
-</td></tr>
-<tr><td style="padding:16px 28px 22px;border-top:1px solid #e3e8ef;font-size:12px;line-height:1.5;color:#94a3b8;">${echapper(
-    pied ?? "Vous recevez cet e-mail car vous avez une demande en cours sur APS Santé."
-  )}</td></tr>
-</table></td></tr></table></body></html>`;
-}
+export { construireEmailHtml } from "../lib/gabaritEmail.js";

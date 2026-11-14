@@ -58,9 +58,16 @@ export default function ChoisirEspace() {
               key={e.cle}
               type="button"
               className="info-card text-start d-flex align-items-center gap-3"
-              style={{ padding: '1rem 1.1rem', margin: 0, cursor: 'pointer', border: e.dernier ? '1.5px solid var(--primary)' : undefined }}
+              style={{
+                padding: '1rem 1.1rem', margin: 0,
+                cursor: e.ouvrable === false ? 'not-allowed' : 'pointer',
+                opacity: e.ouvrable === false ? 0.6 : 1,
+                border: e.dernier ? '1.5px solid var(--primary)' : undefined,
+              }}
               onClick={() => ouvrir(e)}
-              disabled={occupe !== null}
+              // Espace médecin d'un compte pas encore activé : fermé.
+              disabled={occupe !== null || e.ouvrable === false}
+              title={e.ouvrable === false ? "Votre compte médecin n'est pas encore activé" : undefined}
             >
               <span
                 style={{

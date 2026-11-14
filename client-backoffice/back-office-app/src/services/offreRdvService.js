@@ -8,7 +8,7 @@
 import { apiFetch } from '../lib/apiClient';
 
 /**
- * GET /offres-rdv/admin -> { offres, total, page, limite, statistiques: { ouverte, attribuee, expiree, annulee } }
+ * GET /offres-rdv/admin -> { offres, total, page, limite, statistiques: { ouverte, attribuee, expiree, annulee, en_attente_medecin, refusee } }
  * @param {{ statut?: string, pays_id?: string, page?: number, limite?: number }} filtres
  */
 export function listerOffres(filtres = {}) {

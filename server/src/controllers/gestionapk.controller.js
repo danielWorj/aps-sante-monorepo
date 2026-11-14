@@ -944,3 +944,27 @@ try {
 } catch (err) {
   console.error(`❌ Impossible d'initialiser le stockage des APKs. L'application peut ne pas fonctionner correctement.`);
 }
+
+/**
+ * GET /api/apks/telecharger/:plateforme   (android | ios) — PUBLIQUE
+ * Lien permanent vers la version active de l'application (utilisé dans les
+ * e-mails, qui ne doivent pas figer l'URL d'une APK précise) : redirige vers
+ * le fichier APK actif (Android) ou le lien App Store / TestFlight (iOS),
+ * à défaut vers le site public.
+ */
+export async function redirigerVersApplication(req, res, next) {
+  try {
+    const plateforme = lirePlateforme(req.params.plateforme);
+    const site = process.env.FRONTEND_URL || "http://localhost:5173";
+    if (!plateforme) return res.redirect(302, site);
+
+    const apk = await prisma.mobileApk.findFirst({
+      where: { status: true, plateforme },
+      orderBy: { date_upload: "desc" },
+    });
+    if (!apk) return res.redirect(302, site);
+    return res.redirect(302, plateforme === "ios" ? apk.file_url : construireUrlTelechargement(apk.id, apk.file_url));
+  } catch (err) {
+    next(err);
+  }
+}

@@ -7,7 +7,7 @@ export default function PortailParentLayout() {
     <div className="portail">
       <PatientPortailNavbar />
       <Outlet />
-      <PortailFooter />
+      <PortailFooter espace="Espace patient · Paiement sous séquestre à chaque étape" />
     </div>
   );
 }

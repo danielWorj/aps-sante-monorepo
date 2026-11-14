@@ -1,5 +1,6 @@
 import ServiceCard from './ServiceCard';
 import OnboardingSkip from './OnboardingSkip';
+import OnboardingLogo from './OnboardingLogo';
 
 /**
  * Écran 1.1 — Liste des services de ApSa Santé.
@@ -20,6 +21,7 @@ export default function OnboardingServices() {
   return (
     <section className="onboarding-shell onboarding-shell-top">
       <div className="container-aps onboarding-container-lg">
+        <OnboardingLogo />
         <span className="eyebrow">ApSa Santé</span>
         <h1 style={{ fontSize: '1.6rem', marginTop: '.5rem', marginBottom: '1.6rem' }}>
           Liste des services de ApSa Santé

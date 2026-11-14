@@ -59,15 +59,18 @@ import {
   obtenirMedecin,
   creerRendezVous,
   listerCreneauxLibres,
+  teleconsultationPossible,
+  MESSAGE_TELECONSULTATION_APRES_PHYSIQUE,
   TYPES_RENDEZ_VOUS,
   MOTIF_RENDEZ_VOUS_LONGUEUR_MAX,
 } from '../services/medecinService';
+import { DELAI_REPONSE_DIRECTE_HEURES, publierDemandeDirecte } from '../services/offreRdvService';
 import {
   dateHeureLisible,
-  dateLocaleISO,
   estCreneauPerdu,
   grouperParJour,
-  heureLocale,
+  heureCabinet,
+  jourCabinet,
   plageRecherche,
 } from '../utils/creneaux';
 import { inscrirePatient } from '../services/authService';
@@ -268,7 +271,7 @@ function CarteHeure({ creneaux, creneauSelectionne, onSelectionner, desactivee }
                   color: actif ? '#fff' : undefined,
                 }}
               >
-                {heureLocale(c.debut)}
+                {heureCabinet(c)}
               </button>
             );
           })}
@@ -291,7 +294,7 @@ export default function RendezVous() {
   const formRef = useRef(null);
 
   // Étape 1 — créneau souhaité
-  const [typeRdv, setTypeRdv] = useState(typeDemande === 'teleconsultation' ? 'teleconsultation' : 'physique');
+  const [typeRdvChoisi, setTypeRdv] = useState(typeDemande === 'teleconsultation' ? 'teleconsultation' : 'physique');
   const [date, setDate] = useState('');
   const [creneauId, setCreneauId] = useState('');
   const [motif, setMotif] = useState('');
@@ -327,6 +330,17 @@ export default function RendezVous() {
   const [erreurEnvoi, setErreurEnvoi] = useState(null);
   const [rendezVousCree, setRendezVousCree] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  // Demande directe : le médecin n'a AUCUN créneau libre. Le patient propose
+  // un jour + une heure (heure de la ville du médecin) ; le médecin accepte ou
+  // refuse sous 24 h (POST /offres-rdv/directe). Pas de paiement à ce stade.
+  const [jourPropose, setJourPropose] = useState('');
+  const [heureProposee, setHeureProposee] = useState('');
+  const [demandeEnvoyee, setDemandeEnvoyee] = useState(null);
+
+  // Téléconsultation : seulement après un RDV physique effectué avec ce
+  // médecin. null = inconnu (chargement), true / false sinon.
+  const [teleAutorisee, setTeleAutorisee] = useState(null);
 
   // Paiement : le bouton « Payer » du ticket ouvre la pop-up de choix
   // (Carte bancaire Stripe ou Mobile Money CamPay), une fois le RDV créé.
@@ -409,7 +423,7 @@ export default function RendezVous() {
         setCreneauxLibres(liste);
         const preselection = creneauDemande && liste.find((c) => c.creneau_id === creneauDemande);
         if (preselection) {
-          setDate(dateLocaleISO(preselection.debut));
+          setDate(jourCabinet(preselection));
           setCreneauId(preselection.creneau_id);
         }
       })
@@ -422,6 +436,27 @@ export default function RendezVous() {
     };
   }, [medecinId, recupererCreneaux, creneauDemande]);
 
+  // Téléconsultation possible ? Un visiteur non connecté (ou un nouveau
+  // compte) n'a encore eu aucun RDV physique : option grisée.
+  useEffect(() => {
+    let annule = false;
+    if (!medecinId || !isAuthenticated) return undefined;
+    teleconsultationPossible(medecinId)
+      .then((r) => { if (!annule) setTeleAutorisee(Boolean(r?.possible)); })
+      .catch(() => { if (!annule) setTeleAutorisee(false); });
+    return () => {
+      annule = true;
+    };
+  }, [medecinId, isAuthenticated]);
+
+  const teleconsultationAutorisee = isAuthenticated && teleAutorisee === true;
+  // Téléconsultation choisie (ou présélectionnée par ?type=) mais pas encore
+  // permise : on retombe sur la consultation physique.
+  const typeRdv = typeRdvChoisi === 'teleconsultation' && !teleconsultationAutorisee ? 'physique' : typeRdvChoisi;
+
+  // Aucun créneau libre : le patient propose lui-même un jour et une heure.
+  const modeDemandeDirecte = !chargementCreneaux && !erreurCreneaux && creneauxLibres.length === 0;
+
   const creneauxParJour = useMemo(() => grouperParJour(creneauxLibres), [creneauxLibres]);
   const joursDisponibles = useMemo(
     () => new Map([...creneauxParJour].map(([jour, liste]) => [jour, liste.length])),
@@ -432,7 +467,7 @@ export default function RendezVous() {
     () => creneauxLibres.find((c) => c.creneau_id === creneauId) || null,
     [creneauxLibres, creneauId]
   );
-  const heure = creneauChoisi ? heureLocale(creneauChoisi.debut) : '';
+  const heure = modeDemandeDirecte ? heureProposee : creneauChoisi ? heureCabinet(creneauChoisi) : '';
 
   const nomComplet = medecin
     ? `Dr. ${medecin.utilisateur?.prenom ?? ''} ${medecin.utilisateur?.nom ?? ''}`.trim()
@@ -444,7 +479,7 @@ export default function RendezVous() {
     ? `${Number(medecin.tarif_indicatif).toLocaleString('fr-FR')} FCFA`
     : '';
 
-  const dateLabel = formatDateLabel(date);
+  const dateLabel = formatDateLabel(modeDemandeDirecte ? jourPropose : date);
   const typeRdvLabel = TYPES_RENDEZ_VOUS.find((t) => t.valeur === typeRdv)?.libelle ?? typeRdv;
 
   // Valide (HTML5 checkValidity) les champs `required` d'une page du
@@ -465,7 +500,8 @@ export default function RendezVous() {
   };
 
   const goNext = () => {
-    if (step === 1 && !creneauChoisi) {
+    // Demande directe : jour et heure sont des champs `required` (validerPage).
+    if (step === 1 && !modeDemandeDirecte && !creneauChoisi) {
       setErreurCreneaux('Choisissez un jour puis un horaire parmi les créneaux disponibles.');
       return;
     }
@@ -509,6 +545,19 @@ export default function RendezVous() {
         // déduit du token par le serveur pour le POST /rendez-vous
         // ci-dessous.
         await connecter(inscEmail.trim(), inscMotDePasse);
+      }
+
+      if (modeDemandeDirecte) {
+        const resultat = await publierDemandeDirecte({
+          medecin_id: medecinId,
+          type_rdv: typeRdv,
+          jour: jourPropose,
+          heure: heureProposee,
+          ...(motif.trim() ? { motif: motif.trim() } : {}),
+        });
+        setDemandeEnvoyee(resultat?.offre || {});
+        setStep(3);
+        return;
       }
 
       const donnees = {
@@ -635,7 +684,10 @@ export default function RendezVous() {
               </div>
 
               <div>
-                <StepperNav steps={['Créneau', 'Vos informations', 'Confirmation']} current={step} />
+                <StepperNav
+                  steps={[modeDemandeDirecte ? 'Date souhaitée' : 'Créneau', 'Vos informations', 'Confirmation']}
+                  current={step}
+                />
 
                 <div className="rdv-shell">
                   <form ref={formRef} onSubmit={(e) => e.preventDefault()}>
@@ -645,7 +697,9 @@ export default function RendezVous() {
                         <h3><i className="fa-solid fa-stethoscope" /> Type de consultation</h3>
                         <div className="row g-2">
                           {TYPES_RENDEZ_VOUS.map((t) => {
-                            const desactive = t.valeur === 'teleconsultation' && !teleconsultationDisponible;
+                            const nonProposee = t.valeur === 'teleconsultation' && !teleconsultationDisponible;
+                            const sansRdvPhysique = t.valeur === 'teleconsultation' && !nonProposee && !teleconsultationAutorisee;
+                            const desactive = nonProposee || sansRdvPhysique;
                             return (
                               <div className="col-md-6" key={t.valeur}>
                                 <div className="form-check border rounded-3 p-3" style={{ borderColor: 'var(--line-strong)' }}>
@@ -661,9 +715,14 @@ export default function RendezVous() {
                                   <label className="form-check-label" htmlFor={`type-${t.valeur}`} style={{ fontSize: '.86rem', fontWeight: 700 }}>
                                     {t.libelle}
                                   </label>
-                                  {desactive && (
+                                  {nonProposee && (
                                     <div className="text-faint" style={{ fontSize: '.75rem' }}>
                                       Non proposée par ce médecin
+                                    </div>
+                                  )}
+                                  {sansRdvPhysique && (
+                                    <div className="text-faint" style={{ fontSize: '.75rem' }}>
+                                      {MESSAGE_TELECONSULTATION_APRES_PHYSIQUE}
                                     </div>
                                   )}
                                 </div>
@@ -673,21 +732,66 @@ export default function RendezVous() {
                         </div>
                       </div>
 
-                      <CalendrierJour
-                        jourSelectionne={date}
-                        onSelectionner={(iso) => { setDate(iso); setCreneauId(''); setErreurCreneaux(null); }}
-                        joursDisponibles={joursDisponibles}
-                        chargement={chargementCreneaux}
-                      />
+                      {modeDemandeDirecte ? (
+                        <div className="info-card">
+                          <h3><i className="fa-solid fa-calendar-plus" /> Proposez un jour et une heure</h3>
+                          <p className="text-faint" style={{ fontSize: '.84rem' }}>
+                            Ce médecin n&apos;a plus de créneau libre dans son agenda. Indiquez le jour et
+                            l&apos;heure qui vous conviennent : il aura {DELAI_REPONSE_DIRECTE_HEURES} h pour
+                            accepter ou refuser. S&apos;il refuse ou ne répond pas, vous pourrez choisir un autre
+                            médecin ou recevoir les candidatures d&apos;autres médecins.
+                          </p>
+                          <div className="row g-2">
+                            <div className="col-md-6">
+                              <label className="form-label" htmlFor="rdv-jour-propose">Jour</label>
+                              <input
+                                id="rdv-jour-propose"
+                                type="date"
+                                className="form-control"
+                                required
+                                min={dateDuJourISO()}
+                                value={jourPropose}
+                                onChange={(e) => setJourPropose(e.target.value)}
+                              />
+                            </div>
+                            <div className="col-md-6">
+                              <label className="form-label" htmlFor="rdv-heure-proposee">Heure</label>
+                              <input
+                                id="rdv-heure-proposee"
+                                type="time"
+                                className="form-control"
+                                required
+                                step="900"
+                                value={heureProposee}
+                                onChange={(e) => setHeureProposee(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          {villeLabel && (
+                            <div className="text-faint mt-2" style={{ fontSize: '.75rem' }}>
+                              Heure de {villeLabel}.
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          <CalendrierJour
+                            jourSelectionne={date}
+                            onSelectionner={(iso) => { setDate(iso); setCreneauId(''); setErreurCreneaux(null); }}
+                            joursDisponibles={joursDisponibles}
+                            chargement={chargementCreneaux}
+                          />
 
-                      <div className="mt-3">
-                        <CarteHeure
-                          creneaux={creneauxDuJour}
-                          creneauSelectionne={creneauId}
-                          onSelectionner={(id) => { setCreneauId(id); setErreurCreneaux(null); }}
-                          desactivee={!date}
-                        />
-                      </div>
+                          <div className="mt-3">
+                            <CarteHeure
+                              creneaux={creneauxDuJour}
+                              creneauSelectionne={creneauId}
+                              onSelectionner={(id) => { setCreneauId(id); setErreurCreneaux(null); }}
+                              desactivee={!date}
+                            />
+                          </div>
+                        </>
+                      )}
 
                       {erreurCreneaux && (
                         <div
@@ -878,15 +982,52 @@ export default function RendezVous() {
                           type="button"
                           className="btn btn-primary"
                           onClick={confirmerRendezVous}
-                          disabled={envoiEnCours || !creneauId}
+                          disabled={envoiEnCours || (modeDemandeDirecte ? !jourPropose || !heureProposee : !creneauId)}
                         >
-                          {envoiEnCours ? 'Envoi…' : 'Confirmer le rendez-vous'} <i className="fa-solid fa-check" />
+                          {envoiEnCours
+                            ? 'Envoi…'
+                            : modeDemandeDirecte ? 'Envoyer la demande au médecin' : 'Confirmer le rendez-vous'}{' '}
+                          <i className="fa-solid fa-check" />
                         </button>
                       </div>
                     </div>
 
                     {/* Étape 3 : confirmation */}
                     <div className={`form-page ${step === 3 ? 'active' : ''}`} data-step-page="3">
+                      {demandeEnvoyee && (
+                        <div className="ticket">
+                          <div className="ticket-top">
+                            <div className="ticket-check"><i className="fa-solid fa-paper-plane" /></div>
+                            <h3 style={{ fontSize: '1.15rem', marginBottom: '.3rem' }}>Demande envoyée</h3>
+                            <p style={{ fontSize: '.87rem', marginBottom: 0 }}>
+                              {nomComplet} a {DELAI_REPONSE_DIRECTE_HEURES} h pour accepter ou refuser votre demande.
+                            </p>
+                          </div>
+                          <div className="ticket-divider" />
+                          <div className="ticket-bottom">
+                            <table className="hours-table">
+                              <tbody>
+                                <tr><td>Professionnel</td><td>{nomComplet}</td></tr>
+                                <tr><td>Type</td><td>{typeRdvLabel}</td></tr>
+                                <tr><td>Date</td><td>{dateLabel}</td></tr>
+                                <tr><td>Heure</td><td>{heure}</td></tr>
+                                {motif.trim() && <tr><td>Motif</td><td>{motif.trim()}</td></tr>}
+                              </tbody>
+                            </table>
+                            <p className="text-faint mb-3" style={{ fontSize: '.82rem' }}>
+                              Vous serez notifié de sa réponse. S&apos;il accepte, il vous restera à payer pour
+                              confirmer le rendez-vous. S&apos;il refuse ou ne répond pas, vous pourrez choisir un
+                              autre médecin ou recevoir les candidatures d&apos;autres médecins.
+                            </p>
+                            <div className="d-flex gap-2 mt-3">
+                              <Link to="/portail/patient-demandes" className="btn btn-primary btn-block-aps">
+                                Suivre ma demande
+                              </Link>
+                              <Link to="/medecin" className="btn btn-outline-primary btn-block-aps">Retour à l&apos;annuaire</Link>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       {rendezVousCree && (
                         <div className="ticket">
                           <div className="ticket-top">

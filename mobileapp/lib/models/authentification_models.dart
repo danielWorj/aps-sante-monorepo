@@ -369,6 +369,9 @@ class EspaceCompte {
   /// Dernier espace utilisé (proposé en premier).
   final bool dernier;
 
+  /// false : espace fermé (espace médecin d'un compte pas encore activé).
+  final bool ouvrable;
+
   const EspaceCompte({
     required this.cle,
     required this.type,
@@ -376,6 +379,7 @@ class EspaceCompte {
     this.detail,
     this.professionnel = false,
     this.dernier = false,
+    this.ouvrable = true,
   });
 
   factory EspaceCompte.fromJson(Map<String, dynamic> json) => EspaceCompte(
@@ -385,6 +389,7 @@ class EspaceCompte {
     detail: _lire<String>(json, 'detail'),
     professionnel: _lire<bool>(json, 'professionnel') ?? false,
     dernier: _lire<bool>(json, 'dernier') ?? false,
+    ouvrable: _lire<bool>(json, 'ouvrable') ?? true,
   );
 
   static List<EspaceCompte> listeDepuisJson(dynamic json) => json is List

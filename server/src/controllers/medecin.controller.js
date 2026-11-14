@@ -59,7 +59,9 @@ import crypto from "node:crypto";
 import bcrypt from "bcrypt"; // ajuster vers "bcryptjs" si c'est la lib utilisée ailleurs dans le projet
 import prisma from "../lib/prisma.js";
 import cloudinaryService, { construireUrl } from "../lib/cloudinaryService.js";
-import { verifierAppartenanceOrdreONMC } from "../lib/onmcVerificationService.js";
+import { verifierMedecinEnArrierePlan } from "../services/onmc.service.js";
+import { estMedecinActive, filtreMedecinsActives } from "../lib/activationMedecin.js";
+import { notifierActivationSiNecessaire } from "../services/activationMedecin.service.js";
 import {
   creerAccesseurGeospatial,
   analyserParametresProximite,
@@ -94,6 +96,7 @@ export {
   listerRendezVous,
   obtenirRendezVous,
   creerRendezVous,
+  teleconsultationPossible,
   modifierRendezVous,
   changerStatutRendezVous,
   // Libération différée des fonds : fin d'un RDV physique par saisie du code
@@ -173,6 +176,9 @@ function versBooleen(valeur) {
 // Champs de fiche modifiables par le médecin lui-même ou un admin —
 // statut_verification, cni_url et attestation_url sont traités à part
 // ci-dessous (règles spécifiques).
+// Tableau de l'Ordre (ONMC) — voir services/onmc.service.js.
+const STATUTS_ORDRE_MEDECIN = ["inscrit", "non_inscrit", "non_verifie"];
+
 const CHAMPS_MODIFIABLES_MEDECIN = [
   "specialite_id",
   "numero_ordre",
@@ -257,6 +263,15 @@ const INCLUSION_MEDECIN_PROPRIETAIRE = {
   ville_exercice: SELECTION_VILLE_PUBLIC,
   pays_exercice: SELECTION_PAYS_PUBLIC,
 };
+
+/** Le médecin est-il activé (fiche + compte) ? Lecture du compte lié. */
+async function medecinEstActive(medecin) {
+  const utilisateur = await prisma.utilisateur.findUnique({
+    where: { utilisateur_id: medecin.utilisateur_id },
+    select: { statut_compte: true },
+  });
+  return estMedecinActive(medecin, utilisateur?.statut_compte);
+}
 
 function estAdmin(utilisateur) {
   return utilisateur?.role === "admin" || utilisateur?.role === "superadmin";
@@ -538,6 +553,9 @@ export async function creerMedecin(req, res, next) {
         utilisateurId: utilisateur.utilisateur_id, req, contexte: "inscription_medecin",
       });
 
+      // Tableau de l'Ordre (ONMC) : statut_ordre calculé en tâche de fond.
+      verifierMedecinEnArrierePlan(medecin.medecin_id);
+
       // Position (facultative) écrite APRÈS la transaction (lib/geo.js
       // passe par le client Prisma global, pas par `tx`). Les
       // coordonnées sont déjà validées : une erreur ici ne peut être
@@ -630,7 +648,14 @@ export async function listerMedecins(req, res, next) {
       pays_exercice_id,
       recherche,
       statut_verification,
+      statut_ordre,
     } = req.query;
+
+    if (statut_ordre && !STATUTS_ORDRE_MEDECIN.includes(statut_ordre)) {
+      return res.status(400).json({
+        message: `statut_ordre invalide. Valeurs acceptées : ${STATUTS_ORDRE_MEDECIN.join(", ")}.`,
+      });
+    }
 
     if (statut_verification && !STATUTS_VERIFICATION_MEDECIN.includes(statut_verification)) {
       return res.status(400).json({
@@ -650,6 +675,7 @@ export async function listerMedecins(req, res, next) {
     if (ville_exercice_id) whereGeo.ville_exercice_id = ville_exercice_id;
     if (pays_exercice_id) whereGeo.pays_exercice_id = pays_exercice_id;
     if (statut_verification) whereGeo.statut_verification = statut_verification;
+    if (statut_ordre) whereGeo.statut_ordre = statut_ordre;
 
     // Filtre complet = filtres "à plat" + filtres RELATIONNELS (nom de
     // spécialité, nom/prénom de l'utilisateur) que geo.js refuse :
@@ -665,6 +691,12 @@ export async function listerMedecins(req, res, next) {
           { prenom: { contains: recherche, mode: "insensitive" } },
         ],
       };
+    }
+    // Public (site, application mobile) : uniquement les médecins activés
+    // (lib/activationMedecin.js), quels que soient les filtres envoyés.
+    // Le back-office (admin/superadmin) voit toutes les fiches.
+    if (!estAdmin(req.utilisateur)) {
+      where.AND = [filtreMedecinsActives()];
     }
 
     const include = {
@@ -754,6 +786,14 @@ export async function obtenirMedecin(req, res, next) {
     });
     if (!medecin) {
       return res.status(404).json({ message: "Médecin introuvable." });
+    }
+    // Fiche d'un médecin non activé : visible seulement par lui-même et l'admin.
+    const proprietaire = !!req.utilisateur && req.utilisateur.utilisateur_id === medecin.utilisateur_id;
+    if (!estAdmin(req.utilisateur) && !proprietaire) {
+      const visible = await prisma.medecin.count({
+        where: { medecin_id: medecin.medecin_id, ...filtreMedecinsActives() },
+      });
+      if (!visible) return res.status(404).json({ message: "Médecin introuvable." });
     }
 
     const [restitue] = await restituerMedecins(req, [avecUrlsFichiersMedecin(await avecGeolocalisation(medecin))]);
@@ -1053,6 +1093,9 @@ export async function modifierMedecin(req, res, next) {
     // utilisateur (nom/prenom/telephone) peuvent être modifiés dans la
     // même requête — on les écrit ensemble pour éviter un état
     // incohérent si l'un des deux échoue.
+    // Activation par un admin (statut "publie" fixé ici) : e-mail plus bas.
+    const etaitActive = donnees.statut_verification === "publie" ? await medecinEstActive(medecin) : true;
+
     const [, medecinMisAJour] = await prisma.$transaction([
       ...(Object.keys(donneesUtilisateur).length > 0
         ? [
@@ -1079,6 +1122,13 @@ export async function modifierMedecin(req, res, next) {
             include: INCLUSION_MEDECIN_PROPRIETAIRE,
           }),
     ]);
+
+    // Tableau de l'Ordre (ONMC) : nouveau numéro ou nouveau pays d'exercice
+    // -> nouvelle vérification en tâche de fond.
+    if (donnees.numero_ordre !== undefined || donnees.pays_exercice_id !== undefined) {
+      verifierMedecinEnArrierePlan(req.params.id);
+    }
+    notifierActivationSiNecessaire(req.params.id, etaitActive);
 
     // Nettoyage best effort des anciens fichiers remplacés.
     await Promise.all([
@@ -1142,6 +1192,7 @@ export async function publierMedecin(req, res, next) {
       });
     }
 
+    const etaitActive = await medecinEstActive(medecin);
     const medecinMisAJour = await prisma.medecin.update({
       where: { medecin_id: req.params.id },
       data: { statut_verification: "publie" },
@@ -1152,6 +1203,9 @@ export async function publierMedecin(req, res, next) {
         pays_exercice: SELECTION_PAYS_PUBLIC,
       },
     });
+
+    // Compte activé : e-mail de bienvenue (connexion + application mobile).
+    notifierActivationSiNecessaire(medecinMisAJour.medecin_id, etaitActive);
 
     return res.status(200).json({
       message: "Fiche médecin publiée.",
@@ -1245,6 +1299,8 @@ export async function reactiverMedecin(req, res, next) {
       where: { utilisateur_id: medecin.utilisateur_id },
       data: { statut_compte: "actif" },
     });
+    // Fiche restée publiée : la réactivation du compte suffit à activer.
+    notifierActivationSiNecessaire(medecin.medecin_id, false);
 
     return res.status(200).json({
       message: "Compte médecin réactivé. Pensez à republier la fiche (PATCH /medecins/:id/publier) si nécessaire.",
@@ -1281,63 +1337,6 @@ export async function supprimerMedecin(req, res, next) {
           "Impossible de supprimer ce médecin : des avis, abonnements, rendez-vous ou ordonnances y sont encore rattachés.",
       });
     }
-    next(err);
-  }
-}
-
-/**
- * POST /api/medecins/verifier-ordre
- * PUBLIQUE — aucune authentification requise. Corps attendu :
- *   { "numero_ordre": "3261/1990" }
- * Vérifie l'appartenance au Tableau de l'Ordre National des Médecins
- * du Cameroun (ONMC) en interrogeant https://onmc.app/tableau_de_lordre
- * (seule source publique connue — voir onmcVerificationService.js pour
- * le détail et les limites de cette vérification, ce site n'exposant
- * aucune API documentée).
- * Utile notamment en amont de POST /medecins (candidature) pour
- * pré-valider un numero_ordre avant upload des pièces, et/ou côté
- * admin lors de la vérification d'une fiche avant publication.
- * ⚠️ Cette vérification est INDÉPENDANTE de numero_ordre en base
- * locale (medecin.numero_ordre n'est pas unique — voir en-tête de
- * fichier) : elle ne fait qu'interroger la source externe ONMC, sans
- * toucher à notre propre table medecin.
- * Réponse 200 :
- *   { numero_ordre, appartient_ordre: boolean, nom_complet? }
- * Réponse 502 si l'ONMC est injoignable / le site a changé de
- * structure (voir onmcVerificationService.js) — on ne renvoie jamais
- * une fausse confirmation d'appartenance dans ce cas.
- */
-export async function verifierAppartenanceOrdre(req, res, next) {
-  try {
-    const { numero_ordre } = req.body;
-
-    if (!numero_ordre || !String(numero_ordre).trim()) {
-      return res.status(400).json({ message: "Le champ numero_ordre est obligatoire." });
-    }
-
-    let resultat;
-    try {
-      resultat = await verifierAppartenanceOrdreONMC(numero_ordre);
-    } catch (errVerification) {
-      // Échec de la vérification externe (site ONMC injoignable,
-      // structure de page changée, timeout, etc.) — distinct d'un
-      // numero_ordre simplement introuvable. On ne fait JAMAIS
-      // remonter ceci comme appartient_ordre=false, pour éviter de
-      // rejeter à tort un médecin réellement inscrit.
-      return res.status(502).json({
-        message:
-          "Impossible de vérifier ce numéro auprès du Tableau de l'Ordre (ONMC) pour le moment. Réessayez plus tard.",
-      });
-    }
-
-    return res.status(200).json({
-      numero_ordre,
-      appartient_ordre: resultat.appartientOrdre,
-      ...(resultat.appartientOrdre
-        ? { nom_complet: resultat.nomComplet, numero_ordre_onmc: resultat.numeroOrdre }
-        : {}),
-    });
-  } catch (err) {
     next(err);
   }
 }

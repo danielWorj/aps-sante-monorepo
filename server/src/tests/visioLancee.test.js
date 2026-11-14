@@ -23,6 +23,8 @@ mock.module("../lib/prisma.js", {
         return base.rdv;
       },
     },
+    // Durée de téléconsultation : pays sans paramètre -> valeur par défaut.
+    medecin: { findUnique: async () => ({ pays_exercice_id: null }) },
   },
 });
 mock.module("../services/jitsi.service.js", { namedExports: { genererJitsiToken: () => "jeton-jitsi" } });

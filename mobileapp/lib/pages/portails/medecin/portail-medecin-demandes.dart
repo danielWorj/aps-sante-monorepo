@@ -9,6 +9,11 @@
 // tarif ni horaire (c'est son profil qui est présenté), seulement un mot
 // facultatif. Le patient choisit ensuite parmi les médecins qui ont répondu.
 //
+// Onglet « Directes » : un patient a choisi CE médecin alors que son agenda
+// n'a plus de créneau libre, et propose un jour + une heure. Le médecin
+// accepte (le RDV est créé, le patient paie) ou refuse sous 24 h ; sans
+// réponse, la demande est considérée comme refusée.
+//
 // D8 : l'identité du patient n'apparaît jamais ici. S'il est retenu, le
 // médecin reçoit le rendez-vous une fois PAYÉ (notification « rdv_paye »).
 
@@ -35,18 +40,21 @@ class PortailMedecinDemandes extends ConsumerStatefulWidget {
 }
 
 class _PortailMedecinDemandesState extends ConsumerState<PortailMedecinDemandes> {
-  bool _mesReponses = false;
+  VueOffresMedecin _vue = VueOffresMedecin.ouvertes;
+
+  bool get _mesReponses => _vue == VueOffresMedecin.mesReponses;
+  bool get _directes => _vue == VueOffresMedecin.directes;
 
   @override
   Widget build(BuildContext context) {
-    final offresAsync = ref.watch(offresRdvMedecinProvider(_mesReponses));
+    final offresAsync = ref.watch(offresRdvMedecinProvider(_vue));
 
     // Onglet du shell (MedecinHomeShell) : pas de Scaffold ici.
     return Container(
       color: AppColors.bg,
       child: RefreshIndicator(
         color: AppColors.violet,
-        onRefresh: () => ref.refresh(offresRdvMedecinProvider(_mesReponses).future),
+        onRefresh: () => ref.refresh(offresRdvMedecinProvider(_vue).future),
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 0, 18, 120),
           children: [
@@ -58,12 +66,13 @@ class _PortailMedecinDemandesState extends ConsumerState<PortailMedecinDemandes>
               tone: ApsTone.violet,
             ),
             const SizedBox(height: 14),
-            ApsSegmented<bool>(
-              value: _mesReponses,
-              onChanged: (v) => setState(() => _mesReponses = v),
+            ApsSegmented<VueOffresMedecin>(
+              value: _vue,
+              onChanged: (v) => setState(() => _vue = v),
               segments: const [
-                ApsSegment(false, 'Ouvertes', icon: Icons.campaign_outlined),
-                ApsSegment(true, 'Mes réponses', icon: Icons.send_outlined),
+                ApsSegment(VueOffresMedecin.directes, 'Directes', icon: Icons.event_note_outlined),
+                ApsSegment(VueOffresMedecin.ouvertes, 'Ouvertes', icon: Icons.campaign_outlined),
+                ApsSegment(VueOffresMedecin.mesReponses, 'Réponses', icon: Icons.send_outlined),
               ],
             ),
             const SizedBox(height: 14),
@@ -78,10 +87,10 @@ class _PortailMedecinDemandesState extends ConsumerState<PortailMedecinDemandes>
                 title: 'Demandes indisponibles',
                 message: '$err',
                 actionLabel: 'Réessayer',
-                onAction: () => ref.invalidate(offresRdvMedecinProvider(_mesReponses)),
+                onAction: () => ref.invalidate(offresRdvMedecinProvider(_vue)),
               ),
               data: (resultat) => resultat.offres.isEmpty
-                  ? (!_mesReponses && resultat.raison != null)
+                  ? (_vue == VueOffresMedecin.ouvertes && resultat.raison != null)
                       ? ApsNote.text(
                           resultat.raison!,
                           icon: Icons.info_outline_rounded,
@@ -90,14 +99,23 @@ class _PortailMedecinDemandesState extends ConsumerState<PortailMedecinDemandes>
                       : ApsEmptyState(
                       icon: Icons.inbox_outlined,
                       tone: ApsTone.violet,
-                      title: _mesReponses ? 'Aucune réponse' : 'Aucune demande ouverte',
-                      message: _mesReponses
-                          ? "Vous n'avez répondu à aucune demande."
-                          : 'Aucune demande pour votre spécialité dans votre ville.',
+                      title: _directes
+                          ? 'Aucune demande directe'
+                          : _mesReponses
+                              ? 'Aucune réponse'
+                              : 'Aucune demande ouverte',
+                      message: _directes
+                          ? "Elles arrivent quand votre agenda n'a plus de créneau libre."
+                          : _mesReponses
+                              ? "Vous n'avez répondu à aucune demande."
+                              : 'Aucune demande pour votre spécialité dans votre ville.',
                     )
                   : Column(
                       children: [
-                        for (final o in resultat.offres) _CarteDemande(key: ValueKey(o.offreId), offre: o, mesReponses: _mesReponses),
+                        for (final o in resultat.offres)
+                          _directes
+                              ? _CarteDemandeDirecte(key: ValueKey('d-${o.offreId}'), offre: o)
+                              : _CarteDemande(key: ValueKey(o.offreId), offre: o, mesReponses: _mesReponses),
                       ],
                     ),
             ),
@@ -128,10 +146,7 @@ class _CarteDemandeState extends ConsumerState<_CarteDemande> {
     super.dispose();
   }
 
-  void _recharger() {
-    ref.invalidate(offresRdvMedecinProvider(false));
-    ref.invalidate(offresRdvMedecinProvider(true));
-  }
+  void _recharger() => ref.invalidate(offresRdvMedecinProvider);
 
   Future<void> _repondre() async {
     setState(() => _enCours = true);
@@ -290,6 +305,164 @@ class _CarteDemandeState extends ConsumerState<_CarteDemande> {
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Demande directe : le patient a choisi ce médecin (agenda sans créneau
+/// libre) et propose un jour + une heure. Accepter ou refuser sous 24 h.
+class _CarteDemandeDirecte extends ConsumerStatefulWidget {
+  final OffreRdv offre;
+
+  const _CarteDemandeDirecte({super.key, required this.offre});
+
+  @override
+  ConsumerState<_CarteDemandeDirecte> createState() => _CarteDemandeDirecteState();
+}
+
+class _CarteDemandeDirecteState extends ConsumerState<_CarteDemandeDirecte> {
+  final _motif = TextEditingController();
+  bool _enCours = false;
+
+  @override
+  void dispose() {
+    _motif.dispose();
+    super.dispose();
+  }
+
+  Future<bool> _confirmer(String titre, String message, String action, {bool danger = false}) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(titre),
+        content: Text(message),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Retour')),
+          TextButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: danger ? TextButton.styleFrom(foregroundColor: AppColors.coral600) : null,
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  Future<void> _agir({required bool accepter}) async {
+    final o = widget.offre;
+    final ok = accepter
+        ? await _confirmer(
+            'Accepter la demande ?',
+            '${o.dateLisible} — ${o.typeRdv.libelle}.\nLe patient devra payer pour confirmer le rendez-vous.',
+            'Accepter',
+          )
+        : await _confirmer(
+            'Refuser la demande ?',
+            'Le patient sera prévenu et pourra choisir un autre médecin.',
+            'Refuser',
+            danger: true,
+          );
+    if (!ok) return;
+    setState(() => _enCours = true);
+    try {
+      final repo = ref.read(offreRdvRepositoryProvider);
+      await ref.read(sessionControllerProvider.notifier).appelAuthentifie(
+            (token) => accepter
+                ? repo.accepterDemandeDirecte(o.offreId, token: token)
+                : repo.refuserDemandeDirecte(o.offreId, token: token, motif: _motif.text),
+          );
+      if (mounted) {
+        _snack(
+          context,
+          accepter
+              ? 'Demande acceptée : le rendez-vous sera confirmé dès le paiement du patient.'
+              : 'Demande refusée : le patient est prévenu.',
+        );
+      }
+    } catch (e) {
+      if (mounted) _snack(context, 'Erreur : $e');
+    } finally {
+      if (mounted) setState(() => _enCours = false);
+      ref.invalidate(offresRdvMedecinProvider);
+    }
+  }
+
+  String _echeance(DateTime d) {
+    final h = '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')} à $h';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final o = widget.offre;
+    return ApsCard(
+      margin: const EdgeInsets.only(bottom: 10),
+      radius: 10,
+      color: AppColors.violet100,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              ApsPill('Demande directe', tone: ApsTone.violet, dot: true, background: Colors.white),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('${o.specialite} · ${o.dateLisible}', style: AppTextStyles.strong),
+          const SizedBox(height: 2),
+          Text(
+            [
+              o.ville,
+              o.typeRdv.libelle,
+              if (o.motif != null && o.motif!.isNotEmpty) '« ${o.motif} »',
+            ].join(' · '),
+            style: AppTextStyles.xs,
+          ),
+          if (o.echeanceReponseMedecin != null) ...[
+            const SizedBox(height: 10),
+            ApsNote.text(
+              'Sans réponse, la demande sera considérée comme refusée.',
+              bold: 'À traiter avant le ${_echeance(o.echeanceReponseMedecin!)}.',
+              icon: Icons.hourglass_top_rounded,
+              tone: ApsTone.amber,
+            ),
+          ],
+          const SizedBox(height: 10),
+          TextField(
+            controller: _motif,
+            maxLength: 500,
+            decoration: const InputDecoration(
+              labelText: 'Motif en cas de refus (facultatif)',
+              hintText: 'Ex. absent ce jour-là',
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: ApsButton(
+                  label: 'Refuser',
+                  icon: Icons.close_rounded,
+                  variant: ApsButtonVariant.ghost,
+                  small: true,
+                  onPressed: _enCours ? null : () => _agir(accepter: false),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ApsButton(
+                  label: 'Accepter',
+                  icon: Icons.check_rounded,
+                  variant: ApsButtonVariant.violet,
+                  small: true,
+                  loading: _enCours,
+                  onPressed: _enCours ? null : () => _agir(accepter: true),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

@@ -21,6 +21,12 @@
 import nodemailer from "nodemailer";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { LOGO_EMAIL_CID } from "./gabaritEmail.js";
+
+// Logo joint aux e-mails HTML qui le référencent (cid:…, voir gabaritEmail.js).
+const CHEMIN_LOGO_EMAIL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../assets/email/logo-aps.jpg");
 
 const DELAI_APPEL_MS = 20_000;
 
@@ -126,6 +132,9 @@ export async function envoyerEmailSmtp({ destinataire, sujet, texte, html = null
       subject: sujet,
       text: texte,
       ...(html && { html }),
+      ...(html?.includes(`cid:${LOGO_EMAIL_CID}`) && {
+        attachments: [{ filename: "logo-aps.jpg", path: CHEMIN_LOGO_EMAIL, cid: LOGO_EMAIL_CID, contentDisposition: "inline" }],
+      }),
       ...(messageId && { messageId }),
     });
     if (info.rejected?.length) {

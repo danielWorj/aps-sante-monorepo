@@ -88,8 +88,11 @@ class ChoisirEspaceScreen extends ConsumerWidget {
                     flat: true,
                     radius: 10,
                     borderColor: e.dernier ? AppColors.b6 : null,
-                    onTap: () => ouvrirEspace(context, ref, e),
-                    child: Row(
+                    // Espace médecin d'un compte pas encore activé : fermé.
+                    onTap: e.ouvrable ? () => ouvrirEspace(context, ref, e) : null,
+                    child: Opacity(
+                      opacity: e.ouvrable ? 1 : 0.55,
+                      child: Row(
                       children: [
                         ApsIconTile(iconeEspace(e.type), tone: e.professionnel ? ApsTone.green : ApsTone.sky),
                         const SizedBox(width: 12),
@@ -110,6 +113,7 @@ class ChoisirEspaceScreen extends ConsumerWidget {
                           ),
                         const Icon(Icons.chevron_right_rounded, color: AppColors.ink3),
                       ],
+                    ),
                     ),
                   ),
                   const SizedBox(height: 10),

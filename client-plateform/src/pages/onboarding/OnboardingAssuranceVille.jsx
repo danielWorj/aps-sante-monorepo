@@ -4,6 +4,7 @@ import { listerPays, listerVilles } from '../../services/geoService';
 import { detecterPaysUtilisateur } from '../../lib/geoloc';
 import OnboardingProgress from './OnboardingProgess';
 import OnboardingSkip from './OnboardingSkip';
+import OnboardingLogo from './OnboardingLogo';
 
 /**
  * Écran 1.3.1 — Choix de la ville (étape 1/2 du sous-parcours
@@ -132,6 +133,7 @@ export default function OnboardingAssuranceVille() {
   return (
     <section className="onboarding-shell onboarding-shell-top">
       <div className="container-aps onboarding-container-lg">
+        <OnboardingLogo />
         <OnboardingProgress current={1} total={2} />
 
         <span className="eyebrow">Assurances</span>

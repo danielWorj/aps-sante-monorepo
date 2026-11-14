@@ -452,8 +452,9 @@ if (isSubmitted) {
               <h3 className="confirm-title">Demande envoyée</h3>
               <p className="confirm-subtitle">
                 Votre numéro d'inscription à l'Ordre et vos justificatifs sont
-                en cours de vérification. Vous recevrez un e-mail dès la mise
-                en ligne de votre fiche.
+                en cours de vérification. Votre espace médecin sera accessible
+                dès l'activation de votre compte : vous recevrez alors un e-mail
+                avec le lien de connexion et l'application mobile.
               </p>
 
               {/* Bloc identifiants */}

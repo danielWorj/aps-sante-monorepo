@@ -130,6 +130,7 @@ export const REGLES = {
   ParametreAmende: direct(),
   ParametreDelaiLiberation: direct(),
   ParametreDelaiConfirmation: direct(),
+  ParametreDureeTeleconsultation: direct(),
   Urgence: direct(),
   TypeMobileMoney: direct(),
   TarifAbonnementAssurance: direct(),

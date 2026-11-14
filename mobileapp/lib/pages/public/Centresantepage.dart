@@ -156,8 +156,15 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _paysParDefaut());
-    PaysUtilisateurService.instance.addListener(_paysParDefaut);
+    PaysUtilisateurService.instance.addListener(_surChangementPays);
+    // Riverpod interdit de modifier un provider pendant la construction de
+    // l'arbre (initState en fait partie) : les écritures initiales sont
+    // donc faites juste après la première image.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initialiserFiltres());
+  }
+
+  void _initialiserFiltres() {
+    if (!mounted) return;
     // Annuaire public : on ne demande à l'API que les fiches déjà
     // vérifiées/publiées (voir StatutVerificationStructure côté modèle) —
     // une fiche « en_cours » ou « non_publie » ne doit pas être visible
@@ -165,8 +172,8 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
     // Ce filtre est partagé (filtresCentresSanteProvider) : le controller
     // recharge automatiquement dès qu'il change (voir ref.listen dans
     // ListeCentresSanteController.build()).
-    ref.read(filtresCentresSanteProvider.notifier).state =
-    const CentresSanteFiltre(
+    ref.read(filtresCentresSanteProvider.notifier).state = CentresSanteFiltre(
+      paysId: PaysUtilisateurService.instance.paysId,
       statutVerification: StatutVerificationStructure.publie,
     );
 
@@ -178,9 +185,15 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
     }
   }
 
+  /// Le pays détecté peut changer pendant une construction : on applique
+  /// le nouveau filtre après l'image en cours.
+  void _surChangementPays() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _paysParDefaut());
+  }
+
   @override
   void dispose() {
-    PaysUtilisateurService.instance.removeListener(_paysParDefaut);
+    PaysUtilisateurService.instance.removeListener(_surChangementPays);
     _searchController.dispose();
     super.dispose();
   }

@@ -58,7 +58,6 @@ import {
   publierMedecin,
   suspendreMedecin,
   reactiverMedecin,
-  verifierAppartenanceOrdre,
   // Avis médecin
   listerAvisMedecin,
   obtenirAvisMedecin,
@@ -81,6 +80,7 @@ import {
   listerRendezVous,
   obtenirRendezVous,
   creerRendezVous,
+  teleconsultationPossible,
   modifierRendezVous,
   changerStatutRendezVous,
   terminerRendezVous,
@@ -213,14 +213,7 @@ router.patch("/medecins/:id/publier", authentifier, autoriser("admin", "superadm
 router.patch("/medecins/:id/suspendre", authentifier, autoriser("admin", "superadmin"), suspendreMedecin);
 router.patch("/medecins/:id/reactiver", authentifier, autoriser("admin", "superadmin"), reactiverMedecin);
 
-// PUBLIQUE — vérifie l'appartenance d'un médecin au Tableau de l'Ordre
-// National des Médecins du Cameroun (ONMC) à partir de son
-// numero_ordre, en interrogeant https://onmc.app/tableau_de_lordre
-// (voir onmcVerificationService.js — ce site n'a pas d'API publique
-// documentée, la vérification pilote donc un navigateur headless).
-// Volontairement PUBLIQUE (pas de authentifier) : utile en amont de
-// POST /medecins, avant même la création d'un compte.
-router.post("/medecins/verifier-ordre", verifierAppartenanceOrdre);
+// Vérification ONMC (POST /medecins/verifier-ordre, /medecins/:id/verifier-ordre) : routes/onmc.routes.js.
 
 // PUBLIQUE — avis publiés d'une fiche + synthèse des notes (sans
 // identifiant d'auteur). ?note=1..5&tri=recent|ancien|note_haute|note_basse&commentaire=avec&page=
@@ -373,6 +366,8 @@ router.delete("/lignes-abonnement-medecin/:ligneId", authentifier, supprimerLign
 router.get("/rendez-vous", authentifier, listerRendezVous);
 router.get("/rendez-vous/:id", authentifier, obtenirRendezVous);
 router.post("/rendez-vous", authentifier, creerRendezVous);
+// Téléconsultation possible seulement après un RDV physique effectué avec ce médecin.
+router.get("/medecins/:medecinId/teleconsultation-possible", authentifier, teleconsultationPossible);
 router.put("/rendez-vous/:id", authentifier, modifierRendezVous);
 
 // Action dédiée au changement de statut (confirmation, annulation,

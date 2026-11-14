@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { listerSpecialites } from '../../services/medecinService';
 import OnboardingProgress from './OnboardingProgess';
 import OnboardingSkip from './OnboardingSkip';
+import OnboardingLogo from './OnboardingLogo';
 
 /**
  * Écran 1.1.2 — Choix de la spécialité (étape 2/2 du sous-parcours
@@ -81,6 +82,7 @@ export default function OnboardingMedecinSpecialite() {
   return (
     <section className="onboarding-shell onboarding-shell-top">
       <div className="container-aps onboarding-container-lg">
+        <OnboardingLogo />
         <OnboardingProgress current={2} total={2} />
 
         <span className="eyebrow">Médecins et autres professionnels</span>

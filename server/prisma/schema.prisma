@@ -44,6 +44,22 @@ enum StatutVerificationMedecin {
   publie
 }
 
+// Appartenance au Tableau de l'Ordre National des Médecins du Cameroun
+// (ONMC), recalculée à chaque synchronisation du registre (voir
+// services/onmc.service.js). non_verifie : numéro pas encore confronté au
+// registre, ou médecin exerçant hors Cameroun.
+enum StatutOrdreMedecin {
+  inscrit
+  non_inscrit
+  non_verifie
+}
+
+enum StatutSynchronisationOnmc {
+  en_cours
+  reussie
+  echouee
+}
+
 enum StatutRefreshToken {
   actif
   revoque
@@ -266,6 +282,18 @@ enum TypeNotification {
   // Le MÉDECIN a changé le type d'un RDV payé (physique <-> téléconsultation) :
   // le PATIENT est notifié (nouveau type dans `donnees.type_rdv`).
   rdv_type_modifie
+  // Demande DIRECTE (médecin sans créneau libre) : reçue par le MÉDECIN ;
+  // acceptée (PATIENT, à payer) ; refusée ou restée sans réponse 24 h
+  // (PATIENT : changer de médecin ou recevoir d'autres candidatures).
+  demande_rdv_directe
+  demande_rdv_directe_acceptee
+  demande_rdv_directe_refusee
+  // Le PATIENT a demandé une téléconsultation avec un médecin qui ne l'a
+  // jamais reçu en consultation physique effectuée : demande refusée.
+  rdv_teleconsultation_refusee
+  // Téléconsultation en cours : la durée maximale (back-office, par pays) se
+  // termine bientôt (MÉDECIN et PATIENT) ; l'appel sera coupé à l'échéance.
+  rdv_visio_fin_proche
 }
 
 // Motif d'annulation d'un rendez-vous — liste fermée exigée par la
@@ -410,6 +438,7 @@ model Pays {
   // bloque son créneau avant annulation automatique, par pays, versionné
   // (voir ParametreDelaiConfirmation plus bas).
   parametres_delai_confirmation ParametreDelaiConfirmation[]
+  parametres_duree_teleconsultation ParametreDureeTeleconsultation[]
 
   // Abonnements assurance : grille tarifaire et configuration (gratuité
   // d'amorçage, durée de grâce) par pays.
@@ -653,6 +682,13 @@ model Medecin {
   note_moyenne Decimal? @db.Decimal(3, 2)
   nombre_avis  Int      @default(0)
 
+  // Tableau de l'Ordre (ONMC) : statut tenu à jour par la synchronisation
+  // du registre et à chaque changement de numero_ordre. ordre_nom_onmc =
+  // nom tel qu'inscrit au tableau (contrôle visuel côté back-office).
+  statut_ordre     StatutOrdreMedecin @default(non_verifie)
+  ordre_verifie_le DateTime?
+  ordre_nom_onmc   String?            @db.VarChar(255)
+
   date_creation DateTime @default(now())
 
   utilisateur    Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
@@ -700,6 +736,8 @@ model Medecin {
   abonnements_presence AbonnementPresence[]
   // RDV aléatoire : réponses de ce médecin aux offres des patients.
   reponses_offre_rdv   ReponseOffreRdv[]
+  // Demandes directes reçues (médecin sans créneau libre).
+  offres_rdv_ciblees   OffreRdv[]           @relation("OffreRdvCible")
   // Tableau de bord : interactions des visiteurs avec la fiche publique.
   engagements          EngagementMedecin[]
 
@@ -2322,6 +2360,11 @@ model RendezVous {
   // rejoint) : l'appel ne sonne plus sur aucun de ses appareils. Répondu si
   // visio_appel_repondu_le >= visio_lancee_le.
   visio_appel_repondu_le  DateTime?
+  // Durée maximale de la téléconsultation (minutes), FIGÉE dès que les deux
+  // parties sont présentes (parametre_duree_teleconsultation du pays du
+  // médecin). Fin prévue = max(medecin_present_le, patient_present_le) + durée :
+  // alerte 5 min avant, puis l'appel est coupé et la consultation clôturée.
+  visio_duree_minutes     Int?
   // T (en heures) figé à la validation, lu dans parametre_delai_liberation
   // (comme taux_applique pour les amendes) : une modification ultérieure
   // de T ne touche pas les RDV déjà terminés.
@@ -2591,6 +2634,23 @@ model CreneauAgenda {
 // 4 h par défaut (DELAI_CONFIRMATION_PAR_DEFAUT_H). Un seul actif par
 // pays : index unique PARTIEL déclaré dans la migration.
 // -----------------------------------------------------------------
+// Durée maximale d'une téléconsultation (minutes), PAR PAYS (pays d'exercice
+// du médecin), VERSIONNÉE comme ParametreDelaiConfirmation. Sans paramètre
+// actif : valeur par défaut (30 min, lib/dureeTeleconsultation.js).
+model ParametreDureeTeleconsultation {
+  parametre_duree_teleconsultation_id String   @id @default(uuid()) @db.Uuid
+  pays_id                             String   @db.Uuid
+  libelle                             String   @db.VarChar(100)
+  minutes                             Int
+  actif                               Boolean  @default(true)
+  date_debut_validite                 DateTime @default(now())
+
+  pays Pays @relation(fields: [pays_id], references: [pays_id])
+
+  @@index([pays_id])
+  @@map("parametre_duree_teleconsultation")
+}
+
 model ParametreDelaiConfirmation {
   parametre_delai_confirmation_id String   @id @default(uuid()) @db.Uuid
   pays_id                         String   @db.Uuid
@@ -3224,11 +3284,24 @@ model EngagementMedecinVisiteur {
 //                 (rdv_id effacé) tant que sa date n'est pas passée ;
 //   - expiree   : la date souhaitée est passée sans médecin validé (cron) ;
 //   - annulee   : retirée par le patient.
+//
+// Demande DIRECTE (medecin_cible_id renseigné) : le médecin choisi n'a aucun
+// créneau libre, le patient propose un jour + une heure à CE médecin.
+//   - en_attente_medecin : le médecin a jusqu'à `echeance_reponse_medecin`
+//                          (24 h, ou la date du RDV si plus proche) pour
+//                          accepter (RDV « cree » créé, offre « attribuee »)
+//                          ou refuser ;
+//   - refusee            : refus du médecin ou absence de réponse (cron) ; le
+//                          patient choisit : changer de médecin (offre
+//                          « annulee ») ou recevoir les candidatures des
+//                          autres médecins (offre « ouverte », `diffusee_le`).
 enum StatutOffreRdv {
   ouverte
   attribuee
   expiree
   annulee
+  en_attente_medecin
+  refusee
 }
 
 // Statut d'une réponse de médecin :
@@ -3263,8 +3336,20 @@ model OffreRdv {
   date_creation   DateTime  @default(now())
   date_annulation DateTime?
 
-  patient     Patient     @relation(fields: [patient_id], references: [patient_id])
-  specialite  Specialite  @relation(fields: [specialite_id], references: [specialite_id])
+  // Demande directe à un médecin sans créneau libre (voir StatutOffreRdv).
+  medecin_cible_id         String?   @db.Uuid
+  echeance_reponse_medecin DateTime?
+  // Refus explicite (motif facultatif du médecin) ou absence de réponse
+  // (refusee_le renseigné, motif_refus null, sans_reponse = true).
+  refusee_le               DateTime?
+  motif_refus              String?   @db.VarChar(500)
+  sans_reponse             Boolean   @default(false)
+  // Le patient a ouvert sa demande aux autres médecins après le refus.
+  diffusee_le              DateTime?
+
+  patient       Patient     @relation(fields: [patient_id], references: [patient_id])
+  medecin_cible Medecin?    @relation("OffreRdvCible", fields: [medecin_cible_id], references: [medecin_id])
+  specialite    Specialite  @relation(fields: [specialite_id], references: [specialite_id])
   pays        Pays        @relation(fields: [pays_id], references: [pays_id])
   ville       Ville       @relation(fields: [ville_id], references: [ville_id])
   rendez_vous RendezVous? @relation(fields: [rdv_id], references: [rdv_id])
@@ -3274,6 +3359,8 @@ model OffreRdv {
   @@index([patient_id])
   @@index([statut, specialite_id, ville_id])
   @@index([date_souhaitee])
+  @@index([medecin_cible_id, statut])
+  @@index([statut, echeance_reponse_medecin])
   @@map("offre_rdv")
 }
 
@@ -4044,4 +4131,54 @@ model PrestationStructure {
 
   @@index([structure_id, categorie])
   @@map("prestation_structure")
+}
+
+/* ===================================================================
+ * Tableau de l'Ordre National des Médecins du Cameroun (ONMC)
+ *
+ * Copie locale du registre public https://onmc.app/tableau_de_lordre,
+ * remplacée en bloc à chaque synchronisation réussie (services/onmc.service.js).
+ * Sert à vérifier un numéro d'ordre sans solliciter le site à chaque appel.
+ * =================================================================== */
+
+model OnmcMedecin {
+  onmc_medecin_id String @id @default(uuid()) @db.Uuid
+
+  // Numéro tel qu'affiché au tableau (ex. "P4984/2005", "08242/2016").
+  numero_ordre     String  @db.VarChar(50)
+  // Clé de rapprochement (voir normaliserNumeroOrdre) : majuscules, sans
+  // espaces, sans préfixe "P", sans zéros de tête (ex. "4984/2005").
+  numero_normalise String  @db.VarChar(50)
+  nom_complet      String  @db.VarChar(255)
+  // Nom sans accents ni ponctuation, en majuscules (recherche par nom).
+  nom_normalise    String  @db.VarChar(255)
+  qualite          String  @db.VarChar(100)
+  photo_chemin     String? @db.VarChar(255)
+
+  date_synchronisation DateTime
+
+  @@index([numero_normalise])
+  @@index([nom_normalise])
+  @@map("onmc_medecin")
+}
+
+// Journal des synchronisations du registre ONMC (back-office).
+model SynchronisationOnmc {
+  synchronisation_onmc_id String @id @default(uuid()) @db.Uuid
+
+  statut                StatutSynchronisationOnmc
+  // "planifiee" (cron) ou utilisateur_id de l'admin qui l'a lancée.
+  declenchee_par        String                    @db.VarChar(64)
+  total_annonce         Int?
+  total_recupere        Int                       @default(0)
+  pages_lues            Int                       @default(0)
+  medecins_inscrits     Int?
+  medecins_non_inscrits Int?
+  erreur                String?                   @db.Text
+
+  demarree_le DateTime  @default(now())
+  terminee_le DateTime?
+
+  @@index([demarree_le])
+  @@map("synchronisation_onmc")
 }

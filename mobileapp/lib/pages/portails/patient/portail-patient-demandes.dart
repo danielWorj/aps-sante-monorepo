@@ -30,6 +30,7 @@ import '../../../controllers/referentiel_controller.dart';
 import '../../../controllers/rendez_vous_controller.dart';
 import '../../../models/offre_rdv_models.dart';
 import '../../../models/referentiel_models.dart';
+import '../../public/Medecinpage.dart' show MedecinPage;
 import '../../../utils/fonds.dart';
 
 String _deuxChiffres(int n) => n.toString().padLeft(2, '0');
@@ -41,7 +42,10 @@ BadgeChipStyle _styleStatut(StatutOffreRdv s) {
     case StatutOffreRdv.attribuee:
       return BadgeChipStyle.green;
     case StatutOffreRdv.annulee:
+    case StatutOffreRdv.refusee:
       return BadgeChipStyle.coral;
+    case StatutOffreRdv.enAttenteMedecin:
+      return BadgeChipStyle.amber;
     case StatutOffreRdv.expiree:
     case StatutOffreRdv.inconnu:
       return BadgeChipStyle.outline;
@@ -555,6 +559,57 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
     }
   }
 
+  /// Demande directe refusée : « Changer de médecin » retire la demande et
+  /// ouvre l'annuaire des médecins.
+  Future<void> _changerDeMedecin() async {
+    setState(() => _enCours = 'changer');
+    try {
+      final repo = ref.read(offreRdvRepositoryProvider);
+      await ref
+          .read(sessionControllerProvider.notifier)
+          .appelAuthentifie((token) => repo.annuler(widget.offre.offreId, token: token));
+      ref.invalidate(mesOffresRdvProvider);
+      if (mounted) {
+        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const MedecinPage()));
+      }
+    } catch (e) {
+      if (mounted) _snack(context, 'Erreur : $e');
+      ref.invalidate(mesOffresRdvProvider);
+    } finally {
+      if (mounted) setState(() => _enCours = null);
+    }
+  }
+
+  /// Demande directe refusée : « Recevoir d'autres candidatures » la propose
+  /// aux autres médecins de la spécialité dans la ville.
+  Future<void> _diffuser() async {
+    setState(() => _enCours = 'diffuser');
+    try {
+      final repo = ref.read(offreRdvRepositoryProvider);
+      final n = await ref
+          .read(sessionControllerProvider.notifier)
+          .appelAuthentifie((token) => repo.diffuser(widget.offre.offreId, token: token));
+      if (mounted) {
+        _snack(
+          context,
+          n > 0
+              ? 'Demande proposée à $n autre(s) médecin(s) : leurs réponses arriveront ici.'
+              : 'Demande proposée aux autres médecins : leurs réponses arriveront ici.',
+        );
+      }
+    } catch (e) {
+      if (mounted) _snack(context, 'Erreur : $e');
+    } finally {
+      if (mounted) setState(() => _enCours = null);
+      ref.invalidate(mesOffresRdvProvider);
+    }
+  }
+
+  String _dateCourte(DateTime d) {
+    final h = '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')} à $h';
+  }
+
   Future<void> _valider(ReponseOffre r) async {
     final m = r.medecin!;
     final ok = await showDialog<bool>(
@@ -596,6 +651,8 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
     final telephone = ref.read(sessionControllerProvider).value?.utilisateur.telephone;
 
     final nbReponses = o.reponses.length;
+    final avecReponses = (o.statut == StatutOffreRdv.ouverte || o.statut == StatutOffreRdv.attribuee) &&
+        !o.estDirecteNonDiffusee;
     return ApsCard(
       margin: const EdgeInsets.only(bottom: 12),
       padding: EdgeInsets.zero,
@@ -615,7 +672,7 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
               children: [
                 Row(
                   children: [
-                    if (o.statut.estEnCours)
+                    if (avecReponses)
                       ApsPill(
                         nbReponses > 1
                             ? '$nbReponses réponses'
@@ -652,9 +709,10 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
                   [
                     o.ville,
                     o.typeRdv.libelle,
+                    if (o.medecinCibleNom != null) 'Demande à ${o.medecinCibleNom}',
                     if (o.motif != null && o.motif!.isNotEmpty) '« ${o.motif} »',
                   ].join(' · '),
-                  maxLines: 2,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: AppTextStyles.fontSans,
@@ -671,12 +729,56 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+          if (o.statut == StatutOffreRdv.enAttenteMedecin) ...[
+            const SizedBox(height: 12),
+            ApsNote.text(
+              o.echeanceReponseMedecin == null
+                  ? 'Il va accepter ou refuser votre demande.'
+                  : "Il a jusqu'au ${_dateCourte(o.echeanceReponseMedecin!)} pour accepter ou refuser.",
+              bold: 'Demande envoyée à ${o.medecinCibleNom ?? 'ce médecin'}.',
+              icon: Icons.hourglass_top_rounded,
+              tone: ApsTone.amber,
+            ),
+          ],
+          if (o.statut == StatutOffreRdv.refusee) ...[
+            const SizedBox(height: 12),
+            ApsNote.text(
+              '${o.motifRefus != null && o.motifRefus!.isNotEmpty ? '« ${o.motifRefus} »\n' : ''}'
+              "Souhaitez-vous changer de médecin, ou recevoir les candidatures d'autres médecins pour la même date ?",
+              bold: o.sansReponse
+                  ? "${o.medecinCibleNom ?? 'Le médecin'} n'a pas répondu à temps."
+                  : '${o.medecinCibleNom ?? 'Le médecin'} ne peut pas vous recevoir à cette heure.',
+              icon: Icons.person_off_outlined,
+              tone: ApsTone.amber,
+            ),
+            const SizedBox(height: 8),
+            ApsButton(
+              label: "Recevoir d'autres candidatures",
+              icon: Icons.campaign_outlined,
+              variant: ApsButtonVariant.violet,
+              small: true,
+              loading: _enCours == 'diffuser',
+              onPressed: _enCours == null ? _diffuser : null,
+            ),
+            const SizedBox(height: 8),
+            ApsButton(
+              label: 'Changer de médecin',
+              icon: Icons.person_search_outlined,
+              variant: ApsButtonVariant.ghost,
+              small: true,
+              loading: _enCours == 'changer',
+              onPressed: _enCours == null ? _changerDeMedecin : null,
+            ),
+          ],
           if (o.statut == StatutOffreRdv.attribuee && rdv != null) ...[
             const SizedBox(height: 12),
             if (rdv.estNonPaye) ...[
               ApsNote.text(
-                'Réglez-le pour le confirmer. Sans paiement dans le délai, '
-                'il est annulé et la demande redevient ouverte.',
+                o.estDirecteNonDiffusee
+                    ? 'Le médecin a accepté : réglez le rendez-vous pour le confirmer. '
+                        'Sans paiement dans le délai, il est annulé.'
+                    : 'Réglez-le pour le confirmer. Sans paiement dans le délai, '
+                        'il est annulé et la demande redevient ouverte.',
                 bold: 'Rendez-vous créé.',
                 icon: Icons.schedule_rounded,
                 tone: ApsTone.amber,
@@ -698,7 +800,7 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
                 icon: Icons.check_circle_outline_rounded,
               ),
           ],
-          if (o.statut.estEnCours) ...[
+          if (avecReponses) ...[
             const SizedBox(height: 12),
             if (o.reponses.isEmpty)
               ApsNote.text(
@@ -719,7 +821,7 @@ class _CarteOffreState extends ConsumerState<_CarteOffre> {
                   ),
             ],
           ],
-          if (o.statut == StatutOffreRdv.ouverte) ...[
+          if (o.statut == StatutOffreRdv.ouverte || o.statut == StatutOffreRdv.enAttenteMedecin) ...[
             const SizedBox(height: 4),
             Align(
               alignment: Alignment.centerRight,

@@ -20,6 +20,8 @@ import { partieDepuisParticipant } from "../services/reglesPresenceReprogrammati
 import { inviterAvisPatient } from "../services/avisMedecin.service.js";
 import { creerNotifications } from "../services/notification.service.js";
 import { signalerAppareils } from "../services/push.service.js";
+import { cloturerVisioCoteMedecin, etatDureeVisio, figerDureeSiCommencee } from "../services/dureeTeleconsultation.service.js";
+import { dureeEcoulee } from "../lib/dureeTeleconsultation.js";
 
 const STATUTS_AUTORISES_VISIO = ["confirme", "en_attente_presence"];
 // Doit rester identique au roomName généré dans obtenirTokenVisio
@@ -121,6 +123,15 @@ export async function obtenirTokenVisio(req, res, next) {
       });
     }
 
+    // Durée maximale écoulée (réglée par pays au back-office) : l'appel est
+    // terminé, on ne rouvre pas la salle.
+    if (dureeEcoulee(await figerDureeSiCommencee(rdv))) {
+      return res.status(409).json({
+        code: "VISIO_DUREE_ECOULEE",
+        message: "La durée prévue pour cette téléconsultation est écoulée : l'appel est terminé.",
+      });
+    }
+
     const participantInfo = estLeMedecin ? rdv.medecin.utilisateur : rdv.patient.utilisateur;
     const roomName = `${PREFIXE_ROOM_RDV}${rdv.rdv_id}`;
 
@@ -170,6 +181,8 @@ export async function obtenirTokenVisio(req, res, next) {
       roomName,
       sujet,
       domain: process.env.JITSI_PUBLIC_DOMAIN || "localhost:8000",
+      // Durée maximale : compte à rebours dès que les deux parties sont là.
+      duree: await etatDureeVisio(rdv, maintenant),
     });
   } catch (err) {
     next(err);
@@ -473,26 +486,10 @@ export async function cloturerVisio(req, res, next) {
     if (!charge) return undefined;
     const { rdv, role } = charge;
 
-    let raison = null;
-    // Signal de fin d'appel pour le patient, posé avant toute règle de paiement.
-    if (role === "medecin" && !rdv.visio_cloturee_le) {
-      await prisma.rendezVous.update({ where: { rdv_id: rdv.rdv_id }, data: { visio_cloturee_le: new Date() } });
-      // L'appel ne doit plus sonner chez le patient s'il n'a pas décroché.
-      if (!appelRepondu(rdv)) arreterSonnerie(rdv.patient.utilisateur_id, rdv.rdv_id);
-    }
-    if (role === "medecin" && !rdv.termine_le && STATUTS_AUTORISES_VISIO.includes(rdv.statut)) {
-      if (rdv.medecin_present_le && rdv.patient_present_le) {
-        try {
-          const fin = await constaterFinConsultation(rdv.rdv_id, { source: "visio" });
-          if (fin.erreur) raison = fin.erreur.code?.toLowerCase() ?? "fin_non_constatee";
-          else if (!fin.deja_constate) inviterAvisPatient(rdv.rdv_id);
-        } catch (err) {
-          if (!(err instanceof ErreurParametreDelai)) throw err;
-          console.error(`[visio] rdv ${rdv.rdv_id} : aucun délai de libération actif pour le pays du médecin — fin NON constatée.`);
-          raison = "parametre_delai_absent";
-        }
-      }
-    }
+    // Sortie du médecin : signal de fin d'appel pour le patient, puis fin de
+    // consultation constatée si les deux parties ont été présentes (même
+    // traitement que la clôture automatique à l'échéance de la durée).
+    const raison = role === "medecin" ? await cloturerVisioCoteMedecin(rdv) : null;
 
     return res.status(200).json(await bilanCloture(rdv.rdv_id, role, raison));
   } catch (err) {
@@ -518,7 +515,25 @@ export async function signalerPresenceVisio(req, res, next) {
       return res.status(200).json({ enregistree: false });
     }
     const { enregistree } = await enregistrerPresence(rdv.rdv_id, role);
-    return res.status(200).json({ enregistree });
+    // La seconde présence démarre le compte à rebours : la réponse porte la durée.
+    const relu = await prisma.rendezVous.findUnique({ where: { rdv_id: rdv.rdv_id } });
+    return res.status(200).json({ enregistree, duree: await etatDureeVisio(relu) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/visio/:id/duree — durée maximale de l'appel et fin prévue
+ * (`fin_prevue_le` null tant que les deux parties ne sont pas présentes).
+ * Les applications l'interrogent pendant l'appel pour afficher le compte à
+ * rebours, alerter 5 min avant la fin, puis couper.
+ */
+export async function obtenirDureeVisio(req, res, next) {
+  try {
+    const charge = await chargerRdvParticipant(req, res);
+    if (!charge) return undefined;
+    return res.status(200).json({ duree: await etatDureeVisio(charge.rdv) });
   } catch (err) {
     next(err);
   }

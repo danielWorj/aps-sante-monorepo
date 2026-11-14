@@ -91,7 +91,7 @@ class _SectionAvisPublicsState extends State<SectionAvisPublics> {
                 const Icon(Icons.shield_outlined, size: 13, color: AppColors.ink3),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: Text('Seuls les patients ayant consulté via APS Santé peuvent laisser un avis, vérifié avant publication.',
+                  child: Text("Seuls les patients ayant consulté via APS Santé peuvent laisser un avis. L'administration peut retirer ceux qui ne respectent pas les règles.",
                       style: AppTextStyles.xs),
                 ),
               ],

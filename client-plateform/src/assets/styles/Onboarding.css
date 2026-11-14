@@ -122,14 +122,15 @@
 }
 
 /* ---------------------------- Écran 1 — logo et description ---------------------------- */
+/* Logo détouré (PNG transparent) : ni fond, ni rayon, ni ombre. */
 .onboarding-logo{
   display:block;
-  width:96px;
-  height:96px;
   object-fit:contain;
+  background:transparent;
   margin:0 auto 1rem;
-  border-radius:var(--radius-lg);
 }
+.onboarding-logo-grand{width:110px; height:110px;}
+.onboarding-logo-petit{width:64px; height:64px; margin-bottom:1.2rem;}
 .onboarding-description{
   margin:.7rem 0 0;
   color:var(--ink-soft, var(--ink-faint));

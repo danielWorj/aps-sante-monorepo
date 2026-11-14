@@ -69,6 +69,14 @@ IconData iconeNotification(TypeNotification type) {
       return Icons.hourglass_top_outlined;
     case TypeNotification.messageFicheRecu:
       return Icons.mail_outline_rounded;
+    case TypeNotification.demandeRdvDirecte:
+      return Icons.event_note_outlined;
+    case TypeNotification.demandeRdvDirecteAcceptee:
+      return Icons.event_available_outlined;
+    case TypeNotification.demandeRdvDirecteRefusee:
+      return Icons.person_off_outlined;
+    case TypeNotification.rdvTeleconsultationRefusee:
+      return Icons.videocam_off_outlined;
     case TypeNotification.inconnu:
       return Icons.notifications_none_outlined;
   }
@@ -81,6 +89,7 @@ ApsTone _teinteNotification(TypeNotification type) {
     case TypeNotification.offreRdvNouvelle:
     case TypeNotification.offreRdvReponse:
     case TypeNotification.offreRdvCandidatureRetenue:
+    case TypeNotification.demandeRdvDirecte:
     case TypeNotification.miseEnRelationRecue:
     case TypeNotification.messageFicheRecu:
       return ApsTone.violet;
@@ -91,6 +100,8 @@ ApsTone _teinteNotification(TypeNotification type) {
       return ApsTone.neutral;
     case TypeNotification.rdvAReprogrammer:
     case TypeNotification.offreRdvExpiree:
+    case TypeNotification.demandeRdvDirecteRefusee:
+    case TypeNotification.rdvTeleconsultationRefusee:
     case TypeNotification.abonnementAssuranceEcheance:
     case TypeNotification.abonnementPresenceEcheance:
       return ApsTone.amber;
@@ -113,7 +124,10 @@ bool _estNotificationDemande(TypeNotification type) =>
     type == TypeNotification.offreRdvReponse ||
     type == TypeNotification.offreRdvExpiree ||
     type == TypeNotification.offreRdvCandidatureRetenue ||
-    type == TypeNotification.offreRdvCandidatureNonRetenue;
+    type == TypeNotification.offreRdvCandidatureNonRetenue ||
+    type == TypeNotification.demandeRdvDirecte ||
+    type == TypeNotification.demandeRdvDirecteAcceptee ||
+    type == TypeNotification.demandeRdvDirecteRefusee;
 
 /// Texte du compteur : « 9+ » au-delà de 9 (comme sur le web).
 String libelleCompteur(int nombre) => nombre > 9 ? '9+' : '$nombre';

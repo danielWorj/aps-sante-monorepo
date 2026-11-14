@@ -404,6 +404,15 @@ class ApiRealEndpoints {
   static const String offresRdv = '${baseUrl}/offres-rdv';
   static const String mesOffresRdv = '${baseUrl}/offres-rdv/mes-offres';
   static const String offresRdvMedecin = '${baseUrl}/offres-rdv/medecin';
+  // Demande directe à un médecin sans créneau libre (accepte / refuse sous
+  // 24 h) ; après refus, le patient la diffuse aux autres médecins.
+  static const String demandeDirecteRdv = '${baseUrl}/offres-rdv/directe';
+  static String accepterDemandeDirecte(String offreId) => '${baseUrl}/offres-rdv/$offreId/accepter';
+  static String refuserDemandeDirecte(String offreId) => '${baseUrl}/offres-rdv/$offreId/refuser';
+  static String diffuserDemandeRdv(String offreId) => '${baseUrl}/offres-rdv/$offreId/diffuser';
+  // Téléconsultation possible seulement après un RDV physique effectué avec ce médecin.
+  static String teleconsultationPossible(String medecinId) =>
+      '${baseUrl}/medecins/$medecinId/teleconsultation-possible';
   static String annulerOffreRdv(String offreId) =>
       '${baseUrl}/offres-rdv/$offreId/annuler';
   static String validerReponseOffreRdv(String offreId, String reponseId) =>

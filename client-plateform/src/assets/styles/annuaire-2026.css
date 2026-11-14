@@ -167,3 +167,6 @@ section.annuaire26-corps{ padding:1.6rem 0 4rem; }
   .express26-etapes{ grid-template-columns:1fr; }
   .express26-btn{ white-space:normal; }
 }
+
+/* Badge Tableau de l'Ordre (ONMC) sous le lieu d'exercice de la carte. */
+.aps-dc-ordre{ margin-top:.4rem; font-size:.74rem; padding:.2rem .6rem; }

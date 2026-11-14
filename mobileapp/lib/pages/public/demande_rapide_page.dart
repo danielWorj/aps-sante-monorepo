@@ -73,7 +73,21 @@ class _DemandeRapidePageState extends ConsumerState<DemandeRapidePage> {
   String? _erreur;
 
   @override
+  void initState() {
+    super.initState();
+    // La détection du pays (compte, téléphone, GPS) peut aboutir après
+    // l'ouverture de l'écran : on se recale dessus tant que l'utilisateur
+    // n'a pas choisi lui-même.
+    PaysUtilisateurService.instance.addListener(_surChangementPays);
+  }
+
+  void _surChangementPays() {
+    if (mounted && _paysId == null) setState(() => _villeId = null);
+  }
+
+  @override
   void dispose() {
+    PaysUtilisateurService.instance.removeListener(_surChangementPays);
     for (final c in [_motif, _prenom, _nom, _email, _telephone, _motDePasse]) {
       c.dispose();
     }
@@ -214,12 +228,21 @@ class _DemandeRapidePageState extends ConsumerState<DemandeRapidePage> {
     final estPatient = utilisateur?.role == RoleUtilisateur.patient;
 
     final specialites = ref.watch(listeSpecialitesControllerProvider).value ?? const [];
-    final List<Pays> pays = ref.watch(listePaysProvider).value ?? const [];
-    // Pays choisi ici, sinon celui de l'utilisateur (détecté ou choisi dans l'application).
-    final paysId = _paysId ??
-        PaysUtilisateurService.instance.paysId ??
-        utilisateur?.paysId ??
-        (pays.isNotEmpty ? pays.first.paysId : null);
+    // Pays ouverts uniquement (un pays inactif ne peut pas recevoir de demande).
+    final List<Pays> pays = [
+      for (final p in ref.watch(listePaysProvider).value ?? const <Pays>[])
+        if (p.statutActivation != StatutActivationPays.inactif) p,
+    ];
+    bool connu(String? id) => id != null && pays.any((p) => p.paysId == id);
+    // Pays choisi ici, sinon celui de l'utilisateur (détecté ou choisi dans
+    // l'application). Jamais le premier pays de la liste au hasard : sans
+    // pays détecté, l'utilisateur le choisit (sauf s'il n'y en a qu'un).
+    final paysId = [
+      _paysId,
+      PaysUtilisateurService.instance.paysId,
+      utilisateur?.paysId,
+      if (pays.length == 1) pays.first.paysId,
+    ].firstWhere(connu, orElse: () => null);
     final List<Ville> villes =
         paysId == null ? const [] : (ref.watch(villesParPaysProvider(paysId)).value ?? const []);
     final villeNom = villes.where((v) => v.villeId == _villeId).map((v) => v.nom).firstOrNull;

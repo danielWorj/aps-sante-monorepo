@@ -9,17 +9,25 @@
 // note…), avec un mot facultatif. Le patient choisit ensuite parmi les
 // médecins qui ont répondu.
 //
+// Onglet « Demandes directes » : un patient a choisi CE médecin alors que son
+// agenda n'a plus de créneau libre, et propose un jour + une heure. Le
+// médecin accepte (le RDV est créé, le patient paie) ou refuse sous 24 h ;
+// sans réponse, la demande est considérée comme refusée.
+//
 // D8 : l'identité du patient n'apparaît jamais ici. Si le patient retient ce
 // médecin, le rendez-vous lui est communiqué une fois PAYÉ (notification
 // « Nouveau rendez-vous confirmé », onglet Rendez-vous).
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import PortailSidebar from "./../layouts/portail-sidebar";
 import { useConfirmation, useToast } from "../../feedback";
 import { useAuth } from "./../../../context/AuthContext";
 import {
   STATUTS_OFFRE,
+  accepterDemandeDirecte,
   dateOffreLisible,
   listerOffresMedecin,
+  refuserDemandeDirecte,
   repondreOffre,
   retirerReponse,
 } from "./../../../services/offreRdvService";
@@ -39,7 +47,11 @@ export default function MedecinDemandes() {
   const { user, status } = useAuth();
   const estMedecin = status === "authenticated" && user?.role === "medecin";
 
-  const [vue, setVue] = useState("ouvertes");
+  // ?vue=directes : lien des notifications « Nouvelle demande de rendez-vous ».
+  const [searchParams] = useSearchParams();
+  const [vue, setVue] = useState(() =>
+    ["directes", "ouvertes", "mes_reponses"].includes(searchParams.get("vue")) ? searchParams.get("vue") : "ouvertes"
+  );
   const [offres, setOffres] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
@@ -135,6 +147,45 @@ export default function MedecinDemandes() {
     }
   };
 
+  const accepter = async (offre) => {
+    const ok = await confirmer({
+      titre: "Accepter la demande",
+      message: `${dateOffreLisible(offre)} — ${TYPE_RDV_LABEL[offre.type_rdv]}.\nLe patient devra payer pour confirmer le rendez-vous.`,
+      labelConfirmer: "Accepter",
+    });
+    if (!ok) return;
+    setActionEnCours(offre.offre_id);
+    try {
+      await accepterDemandeDirecte(offre.offre_id);
+      toast.succes("Demande acceptée : le rendez-vous sera confirmé dès le paiement du patient.");
+    } catch (err) {
+      toast.erreur(err.message || "Acceptation impossible.");
+    } finally {
+      setActionEnCours(null);
+      charger(vue);
+    }
+  };
+
+  const refuser = async (offre) => {
+    const ok = await confirmer({
+      titre: "Refuser la demande",
+      message: "Le patient sera prévenu et pourra choisir un autre médecin.",
+      labelConfirmer: "Refuser",
+      variante: "danger",
+    });
+    if (!ok) return;
+    setActionEnCours(offre.offre_id);
+    try {
+      await refuserDemandeDirecte(offre.offre_id, messages[offre.offre_id]?.trim());
+      toast.succes("Demande refusée : le patient est prévenu.");
+    } catch (err) {
+      toast.erreur(err.message || "Refus impossible.");
+    } finally {
+      setActionEnCours(null);
+      charger(vue);
+    }
+  };
+
   if (!estMedecin) {
     return (
       <div className="container-aps">
@@ -196,7 +247,56 @@ export default function MedecinDemandes() {
           <p className="text-faint small mt-2 mb-0">Le patient a choisi un autre médecin.</p>
         )}
 
-        {peutRepondre && (
+        {vue === "directes" && (
+          <div className="mt-3">
+            {o.echeance_reponse_medecin && (
+              <p className="small mb-2">
+                <i className="fa-solid fa-hourglass-half"></i> À traiter avant le{" "}
+                <strong>
+                  {new Date(o.echeance_reponse_medecin).toLocaleString("fr-FR", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </strong>
+                . Sans réponse, la demande sera considérée comme refusée.
+              </p>
+            )}
+            <label className="form-label small" htmlFor={`motif-${o.offre_id}`}>
+              Motif en cas de refus (facultatif, transmis au patient)
+            </label>
+            <input
+              id={`motif-${o.offre_id}`}
+              className="form-control form-control-sm"
+              maxLength={500}
+              placeholder="Ex. absent ce jour-là"
+              value={messages[o.offre_id] ?? ""}
+              onChange={(e) => setMessages((m) => ({ ...m, [o.offre_id]: e.target.value }))}
+            />
+            <div className="d-flex justify-content-end align-items-center mt-2 gap-2 flex-wrap">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm-aps"
+                disabled={actionEnCours !== null}
+                onClick={() => refuser(o)}
+              >
+                <i className="fa-solid fa-xmark"></i> Refuser
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm-aps"
+                disabled={actionEnCours !== null}
+                onClick={() => accepter(o)}
+              >
+                {actionEnCours === o.offre_id ? "Envoi…" : <><i className="fa-solid fa-check"></i> Accepter</>}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {peutRepondre && vue !== "directes" && (
           <div className="mt-3">
             <label className="form-label small" htmlFor={`msg-${o.offre_id}`}>Un mot au patient (facultatif)</label>
             <input
@@ -266,6 +366,9 @@ export default function MedecinDemandes() {
 
             <div className="info-card">
               <div className="aps-tabs">
+                <button className={vue === "directes" ? "active" : ""} onClick={() => changerVue("directes")}>
+                  Demandes directes
+                </button>
                 <button className={vue === "ouvertes" ? "active" : ""} onClick={() => changerVue("ouvertes")}>
                   Demandes ouvertes
                 </button>
@@ -289,9 +392,11 @@ export default function MedecinDemandes() {
                 <div className="aps-empty-state">
                   <i className="fa-solid fa-inbox"></i>
                   <div>
-                    {vue === "ouvertes"
-                      ? "Aucune demande ouverte pour votre spécialité dans votre ville."
-                      : "Vous n'avez répondu à aucune demande."}
+                    {vue === "directes"
+                      ? "Aucune demande directe en attente. Elles arrivent quand votre agenda n'a plus de créneau libre."
+                      : vue === "ouvertes"
+                        ? "Aucune demande ouverte pour votre spécialité dans votre ville."
+                        : "Vous n'avez répondu à aucune demande."}
                   </div>
                 </div>
               ) : (
