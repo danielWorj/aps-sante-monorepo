@@ -3,16 +3,16 @@
 ```
             ┌──────────── réseau Docker du projet ────────────┐
  server ──► stdout JSON (pino) ──► Alloy ──► Loki ─┐
-   └─ :9464/metrics ◄─┐                            ├─► Grafana ◄── nginx (grafana.azasante.com)
+   └─ :9464/metrics ◄─┐                            ├─► Grafana ◄── nginx (logs.azasante.com)
  node-exporter :9100 ◄┤                            │   127.0.0.1:3002
- cadvisor      :8080 ◄┼── Prometheus (alertes.yml) ┘
+ cadvisor      :8080 ◄┼── Prometheus (alertes.yml) ┘ ◄── nginx + mot de passe (metriques.azasante.com)
  postgres-exp. :9187 ◄┘
             └──────────────────────────────────────────────────┘
 ```
 
 | Service | Rôle | Exposé |
 |---|---|---|
-| `prometheus` | Collecte et stocke les métriques, évalue les règles d'alerte | non |
+| `prometheus` | Collecte et stocke les métriques, évalue les règles d'alerte | `127.0.0.1:9090` |
 | `loki` | Stocke les logs (rétention 30 j par défaut) | non |
 | `alloy` | Lit les logs de tous les conteneurs compose et les pousse dans Loki | non |
 | `grafana` | Tableaux de bord, exploration des logs, alertes | `127.0.0.1:3002` |
@@ -27,7 +27,8 @@
    ```ini
    # ── Observabilité ──
    GRAFANA_ADMIN_PASSWORD=<mot de passe fort>
-   GRAFANA_ROOT_URL=https://grafana.azasante.com   # http://localhost:3002 en local
+   GRAFANA_ROOT_URL=https://logs.azasante.com      # http://localhost:3002 en local
+   PROMETHEUS_EXTERNAL_URL=https://metriques.azasante.com  # http://localhost:9090 en local
    GRAFANA_COOKIE_SECURE=true                      # false en local (http)
    # Facultatif :
    # GRAFANA_ADMIN_USER=admin
@@ -46,11 +47,24 @@
    docker compose -f docker-compose.yaml -f docker-compose.dev.yaml -f docker-compose.observabilite.yaml up --build
    ```
 
-3. Exposer Grafana sur le VPS : le bloc `grafana.azasante.com` est dans
-   `nginx/reverse-proxy.conf`. Créer l'enregistrement DNS, recharger nginx puis
-   `certbot --nginx -d grafana.azasante.com`.
-   Sans DNS, passer par un tunnel SSH : `ssh -L 3002:127.0.0.1:3002 <vps>` puis
-   ouvrir http://localhost:3002.
+3. Exposer Grafana et Prometheus sur le VPS (blocs dans `nginx/reverse-proxy.conf`) :
+   - **logs.azasante.com** → Grafana (`127.0.0.1:3002`) : logs Loki et tableaux de bord,
+     connexion par les comptes Grafana ;
+   - **metriques.azasante.com** → Prometheus (`127.0.0.1:9090`) : Prometheus n'a pas
+     d'authentification, nginx la porte (`auth_basic`).
+
+   ```bash
+   # DNS (Cloudflare) : enregistrements A logs et metriques → IP du VPS, proxy activé
+   apt install -y apache2-utils                       # fournit htpasswd
+   htpasswd -c /etc/nginx/.htpasswd-metriques admin   # mot de passe de metriques.azasante.com
+   # copier les deux blocs dans la conf nginx du VPS, puis :
+   nginx -t && systemctl reload nginx
+   ```
+
+   Comme pour api.azasante.com, le HTTPS est assuré par Cloudflare. Pour chiffrer aussi
+   Cloudflare → VPS : `certbot --nginx -d logs.azasante.com -d metriques.azasante.com`.
+   Sans DNS, passer par un tunnel SSH : `ssh -L 3002:127.0.0.1:3002 -L 9090:127.0.0.1:9090 <vps>`
+   puis ouvrir http://localhost:3002 ou http://localhost:9090.
 
 4. Dans Grafana, dossier **APS Santé** :
    - **APS Santé — API** : trafic, codes, latence p50/p95/p99 par route, erreurs 4xx/5xx,

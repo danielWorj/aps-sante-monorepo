@@ -6,6 +6,8 @@ import '../../../controllers/assurance_controller.dart';
 import '../../../models/assurance_models.dart';
 import '../../../repositories/assurance_repository.dart' show PresenceMinimaleException;
 import '../../../utils/mon_espace_navigation.dart';
+import '../../../utils/marque.dart';
+import '../../../services/galerie_publique_service.dart';
 import '../publicAcceuil.dart';
 import '../Medecinpage.dart';
 import '../Assurancepage.dart';
@@ -71,6 +73,8 @@ class AssuranceDetailPage extends ConsumerStatefulWidget {
 }
 
 class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
+  /// Photos publiques de la fiche (carrousel du haut), chargées une fois.
+  late final Future<List<String>> _photos = photosAssurance(widget.serviceAssuranceId);
   int _navIndex = 2; // 0=Accueil, 1=Médecin, 2=Assurance, 3=À propos
   int _tabIndex = 0; // 0=Siège, 1=Activités, 2=Agences
   final TextEditingController _messageController = TextEditingController();
@@ -139,15 +143,9 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
     return Scaffold(
       backgroundColor: AppColors.paper,
       extendBody: true,
-      appBar: AppBar(
-        backgroundColor: AppColors.paper,
-        elevation: 0,
-        foregroundColor: AppColors.ink,
-        title: const Text('Fiche assurance', style: AppTextStyles.h3),
-      ),
       body: Stack(
         children: [
-          _buildContent(context, detailAsync),
+          SafeArea(bottom: false, child: _buildContent(context, detailAsync)),
           Positioned(
             left: 16,
             right: 16,
@@ -170,11 +168,13 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
       AsyncValue<ServiceAssurance> detailAsync,
       ) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
+      padding: const EdgeInsets.only(bottom: 110),
       children: [
         _buildHero(detailAsync),
-        const SizedBox(height: 6),
-        detailAsync.when(
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: detailAsync.when(
           data: (service) {
             // Le serveur décide (droits), l'app affiche : activités et agences
             // ne sont même pas demandées si la fiche n'y a pas droit (guide
@@ -220,6 +220,7 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
             ),
           ),
         ),
+        ),
       ],
     );
   }
@@ -230,49 +231,66 @@ class _AssuranceDetailPageState extends ConsumerState<AssuranceDetailPage> {
   Widget _buildHero(AsyncValue<ServiceAssurance> detailAsync) {
     return detailAsync.when(
       data: (service) {
-        final couleurs =
-            widget.apercu ?? _apercuDepuis(service);
-        return _InsuranceHero(
-          nom: service.nom,
-          sigle: couleurs.sigle,
-          typeActeur: service.typeActeur.libelle,
-          ville: service.ville?.nom ?? '—',
-          pays: service.pays?.nom ?? '—',
-          agrement: service.agrement ?? '',
-          verifieeAps:
-          service.statutVerification == StatutVerificationAssurance.publie,
-          couleurLogo: couleurs.couleurLogo,
-          fondLogo: couleurs.fondLogo,
-          onMiseEnRelation: () => setState(() => _tabIndex = 0),
-          onAppeler: () => _appeler(service.telephone ?? ''),
+        final couleurs = widget.apercu ?? _apercuDepuis(service);
+        final lieu = '${service.ville?.nom ?? '—'}, ${service.pays?.nom ?? '—'}';
+        final telephone = service.telephone ?? '';
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FutureBuilder<List<String>>(
+              future: _photos,
+              builder: (_, photos) => ApsFicheHero(
+                images: photos.data ?? const [],
+                logoUrl: service.imageUrl,
+                repliTexte: couleurs.sigle,
+                onPartager: () => apsCopierFiche(context, [
+                  service.nom,
+                  service.typeActeur.libelle,
+                  lieu,
+                  if (telephone.isNotEmpty) 'Tél. $telephone',
+                  'Trouvé sur $nomMarque',
+                ]),
+              ),
+            ),
+            ApsFicheEntete(
+              badges: [
+                if (service.statutVerification == StatutVerificationAssurance.publie)
+                  const BadgeChip(label: 'Vérifiée APS', style: BadgeChipStyle.green, icon: Icons.verified_outlined),
+                if ((service.agrement ?? '').isNotEmpty)
+                  BadgeChip(label: service.agrement!, style: BadgeChipStyle.outline, mono: true),
+              ],
+              titre: service.nom,
+              sousTitre: '${service.typeActeur.libelle} · $lieu',
+              description: service.description,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: _ActionsAssurance(
+                miseEnRelation: service.droits.formulaireContact,
+                onMiseEnRelation: () => setState(() => _tabIndex = 0),
+                onAppeler: telephone.isEmpty ? null : () => _appeler(telephone),
+              ),
+            ),
+          ],
         );
       },
       loading: () {
         final apercu = widget.apercu;
-        if (apercu == null) {
-          return const SizedBox(
-            height: 96,
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-        return _InsuranceHero(
-          nom: apercu.nom,
-          sigle: apercu.sigle,
-          typeActeur: '',
-          ville: apercu.ville,
-          pays: apercu.pays,
-          agrement: '',
-          verifieeAps: apercu.verifieeAps,
-          couleurLogo: apercu.couleurLogo,
-          fondLogo: apercu.fondLogo,
-          onMiseEnRelation: () {},
-          onAppeler: () {},
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ApsFicheHero(images: const [], repliTexte: apercu?.sigle, repliIcone: Icons.shield_outlined),
+            if (apercu != null) ApsFicheEntete(titre: apercu.nom, sousTitre: '${apercu.ville}, ${apercu.pays}'),
+          ],
         );
       },
-      error: (_, __) => _ErrorState(
-        message: 'Impossible de charger cette fiche assurance.',
-        onRetry: () => ref.invalidate(
-          serviceAssuranceParIdProvider(widget.serviceAssuranceId),
+      error: (_, _) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: _ErrorState(
+          message: 'Impossible de charger cette fiche assurance.',
+          onRetry: () => ref.invalidate(
+            serviceAssuranceParIdProvider(widget.serviceAssuranceId),
+          ),
         ),
       ),
     );
@@ -1002,152 +1020,62 @@ class _InsKv extends StatelessWidget {
 }
 
 /// En-tête « héros » de la fiche — `.ins-hero`.
-class _InsuranceHero extends StatelessWidget {
-  const _InsuranceHero({
-    required this.nom,
-    required this.sigle,
-    required this.typeActeur,
-    required this.ville,
-    required this.pays,
-    required this.agrement,
-    required this.verifieeAps,
-    required this.couleurLogo,
-    required this.fondLogo,
-    required this.onMiseEnRelation,
-    required this.onAppeler,
-  });
+/// Actions sous le haut de fiche : mise en relation (si l'abonnement le
+/// permet) et appel.
+class _ActionsAssurance extends StatelessWidget {
+  const _ActionsAssurance({required this.miseEnRelation, required this.onMiseEnRelation, this.onAppeler});
 
-  final String nom;
-  final String sigle;
-  final String typeActeur;
-  final String ville;
-  final String pays;
-  final String agrement;
-  final bool verifieeAps;
-  final Color couleurLogo;
-  final Color fondLogo;
+  final bool miseEnRelation;
   final VoidCallback onMiseEnRelation;
-  final VoidCallback onAppeler;
+  final VoidCallback? onAppeler;
+
+  ButtonStyle get _style => ElevatedButton.styleFrom(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      );
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.green50,
-        border: Border.all(color: AppColors.green100),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(color: fondLogo, borderRadius: BorderRadius.circular(10)),
-                alignment: Alignment.center,
-                child: Text(
-                  sigle,
-                  style: TextStyle(
-                    fontFamily: AppTextStyles.fontDisplay,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    color: couleurLogo,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(nom, style: AppTextStyles.cardTitle.copyWith(fontSize: 17)),
-                    const SizedBox(height: 3),
-                    if (typeActeur.isNotEmpty)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '$typeActeur · ',
-                              style: AppTextStyles.cardMeta.copyWith(fontSize: 11.5),
-                              overflow: TextOverflow.visible,
-                            ),
-                          ),
-                        ],
-                      ),
-                    Row(
-                      children: [
-                        const Icon(Icons.place_outlined, size: 12, color: AppColors.inkFaint),
-                        const SizedBox(width: 5),
-                        Expanded(
-                          child: Text(
-                            '$ville, $pays',
-                            style: AppTextStyles.cardMeta.copyWith(fontSize: 11.5),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        if (verifieeAps)
-                          const BadgeChip(
-                            label: 'Vérifiée APS',
-                            style: BadgeChipStyle.green,
-                            icon: Icons.verified_outlined,
-                          ),
-                        if (agrement.isNotEmpty)
-                          BadgeChip(label: agrement, style: BadgeChipStyle.outline, mono: true),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
+    if (!miseEnRelation && onAppeler == null) return const SizedBox.shrink();
+    return Row(
+      children: [
+        Expanded(
+          child: miseEnRelation
+              ? ElevatedButton.icon(
                   onPressed: onMiseEnRelation,
                   icon: const Icon(Icons.forum_outlined, size: 14, color: Colors.white),
                   label: Text('Mise en relation', style: AppTextStyles.buttonLabel.copyWith(fontSize: 13)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 11),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-                  ),
+                  style: _style,
+                )
+              : ElevatedButton.icon(
+                  onPressed: onAppeler,
+                  icon: const Icon(Icons.call_outlined, size: 14, color: Colors.white),
+                  label: Text('Appeler', style: AppTextStyles.buttonLabel.copyWith(fontSize: 13)),
+                  style: _style,
                 ),
+        ),
+        if (miseEnRelation && onAppeler != null) ...[
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: onAppeler,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: AppColors.lineStrong),
+                borderRadius: BorderRadius.circular(10),
               ),
-              const SizedBox(width: 8),
-              InkWell(
-                onTap: onAppeler,
-                borderRadius: BorderRadius.circular(11),
-                child: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: AppColors.lineStrong),
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.call_outlined, size: 16, color: AppColors.inkSoft),
-                ),
-              ),
-            ],
+              alignment: Alignment.center,
+              child: const Icon(Icons.call_outlined, size: 16, color: AppColors.inkSoft),
+            ),
           ),
         ],
-      ),
+      ],
     );
   }
 }

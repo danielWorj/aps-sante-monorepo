@@ -1148,144 +1148,68 @@ class _ProfilMedecin extends StatelessWidget {
     final lieu = [medecin.villeExercice?.nom, medecin.paysExercice?.nom]
         .whereType<String>()
         .join(', ');
-    final haut = MediaQuery.paddingOf(context).top;
+    final telephone = medecin.contactTelephone;
+    final aTelephone = telephone?.isNotEmpty ?? false;
 
-    return Stack(
-      children: [
-        // Bandeau vert profond (230 px) derrière la carte de profil.
-        Container(
-          height: 230 + haut,
-          decoration: const BoxDecoration(gradient: AppColors.gradientForest),
-          child: Align(
-            alignment: Alignment.topRight,
-            child: Container(
-              width: 300,
-              height: 200,
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment.topRight,
-                  radius: 1,
-                  colors: [Color(0x992CC286), Color(0x002CC286)],
-                ),
-              ),
-            ),
+    return SafeArea(
+      bottom: false,
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
+        children: [
+          ApsFicheHero(
+            images: apsImagesUniques([medecin.photoUrl]),
+            repliTexte: apsInitiales(nom),
+            actionDroite: aTelephone
+                ? ApsFicheRond(
+                    icone: Icons.call_outlined,
+                    info: 'Appeler',
+                    onTap: () {
+                      _reputation.signalerEngagement(medecin.medecinId, 'clic_contact', token: token);
+                      launchUrl(Uri.parse('tel:$telephone'));
+                    },
+                  )
+                : null,
+            onPartager: () {
+              _reputation.signalerEngagement(medecin.medecinId, 'partage', token: token);
+              apsCopierFiche(context, [
+                nom,
+                medecin.specialite?.nom,
+                lieu,
+                if (aTelephone) 'Tél. $telephone',
+                'Trouvé sur $nomMarque',
+              ]);
+            },
           ),
-        ),
-        ListView(
-          padding: EdgeInsets.fromLTRB(18, haut + 6, 18, 24),
-          children: [
-            ApsTopBar(
-              glass: true,
-              trailing: (medecin.contactTelephone?.isNotEmpty ?? false)
-                  ? ApsIconButton(
-                      icon: Icons.call_outlined,
-                      glass: true,
-                      tooltip: 'Appeler',
-                      onPressed: () {
-                        _reputation.signalerEngagement(medecin.medecinId, 'clic_contact', token: token);
-                        launchUrl(Uri.parse('tel:${medecin.contactTelephone}'));
-                      },
-                    )
-                  : null,
-            ),
-            const SizedBox(height: 28),
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: AppColors.shadowSoft,
-              ),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Transform.translate(
-                        offset: const Offset(0, -46),
-                        child: ApsAvatar(
-                          name: nom,
-                          photoUrl: medecin.photoUrl,
-                          size: 84,
-                          border: Border.all(color: Colors.white, width: 4),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [
-                            if (medecin.priseRdvEnLigne)
-                              const ApsPill('RDV en ligne', dot: true),
-                            if (medecin.teleconsultationActivee)
-                              const ApsPill('Vidéo',
-                                  tone: ApsTone.sky, icon: Icons.videocam_outlined),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  Transform.translate(
-                    offset: const Offset(0, -30),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(child: Text(nom, style: AppTextStyles.m)),
-                            if (medecin.estPublie) ...[
-                              const SizedBox(width: 5),
-                              const ApsVerified(size: 16),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          [
-                            medecin.specialite?.nom,
-                            if (medecin.numeroOrdre.isNotEmpty)
-                              'Ordre n° ${medecin.numeroOrdre}',
-                          ].whereType<String>().join(' · '),
-                          style: AppTextStyles.small,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Transform.translate(
-                    offset: const Offset(0, -16),
-                    child: IntrinsicHeight(
-                      child: Row(
-                        children: [
-                          medecin.nombreAvis > 0
-                              ? _Stat(
-                                  valeur: '★ ${decimalFr(medecin.noteMoyenne)}',
-                                  libelle: '${medecin.nombreAvis} avis',
-                                )
-                              : _Stat(
-                                  valeur: medecin.estPublie ? 'Vérifié' : '—',
-                                  libelle: 'Ordre',
-                                ),
-                          const VerticalDivider(color: AppColors.line, width: 1),
-                          _Stat(
-                            valeur: medecin.villeExercice?.nom ?? '—',
-                            libelle: 'Ville',
-                          ),
-                          const VerticalDivider(color: AppColors.line, width: 1),
-                          _Stat(
-                            valeur: medecin.teleconsultationActivee
-                                ? 'Cabinet · Vidéo'
-                                : 'Cabinet',
-                            libelle: 'Consultation',
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          ApsFicheEntete(
+            badges: [
+              if (medecin.priseRdvEnLigne) const ApsPill('RDV en ligne', dot: true),
+              if (medecin.teleconsultationActivee)
+                const ApsPill('Vidéo', tone: ApsTone.sky, icon: Icons.videocam_outlined),
+            ],
+            titre: nom,
+            titreSuffixe: medecin.estPublie ? const ApsVerified(size: 16) : null,
+            sousTitre: [
+              medecin.specialite?.nom,
+              if (medecin.numeroOrdre.isNotEmpty) 'Ordre n° ${medecin.numeroOrdre}',
+            ].whereType<String>().join(' · '),
+            prixValeur: medecin.tarifIndicatif > 0 ? '${_MedecinDetailPageState._fcfa(medecin.tarifIndicatif)} F' : null,
+            prixLibelle: 'Tarif indicatif',
+            description: medecin.biographie,
+            complement: medecin.nombreAvis > 0
+                ? Row(children: [
+                    const Icon(Icons.star_rounded, size: 18, color: AppColors.amber500),
+                    const SizedBox(width: 4),
+                    Text(decimalFr(medecin.noteMoyenne), style: AppTextStyles.strong),
+                    const SizedBox(width: 4),
+                    Text('(${medecin.nombreAvis} avis)', style: AppTextStyles.xs),
+                  ])
+                : null,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
             if (lieu.isNotEmpty) ...[
               const SizedBox(height: 14),
               ApsCard(
@@ -1322,39 +1246,11 @@ class _ProfilMedecin extends StatelessWidget {
                 icon: Icons.verified_user_outlined,
               ),
             ],
-            if (medecin.biographie.isNotEmpty) ...[
-              const SizedBox(height: 18),
-              Text('À propos', style: AppTextStyles.strong.copyWith(fontSize: 13.5)),
-              const SizedBox(height: 6),
-              Text(medecin.biographie, style: AppTextStyles.small),
-            ],
             const SizedBox(height: 20),
             SectionAvisPublics(medecinId: medecin.medecinId, nomMedecin: nom, token: token),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _Stat extends StatelessWidget {
-  const _Stat({required this.valeur, required this.libelle});
-  final String valeur;
-  final String libelle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            valeur,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.strong.copyWith(fontSize: 14),
+              ],
+            ),
           ),
-          Text(libelle, style: AppTextStyles.xs),
         ],
       ),
     );

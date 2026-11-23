@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import pharmaPlaceholder from "../assets/img/pharma1.jpg";
 import "./../assets/styles/FicheStructureSante.css";
 import GoogleMapView from "../components/maps/GoogleMapView";
 import HorairesFiche, { StatutOuverture } from "../components/presence/HorairesFiche";
@@ -21,6 +20,9 @@ import {
   envoyerMessagePharmacie,
 } from "../services/pharmacieService";
 import { NOM_MARQUE } from '../lib/marque';
+import FicheHero from "../components/ui/FicheHero";
+import { imagesUniques, partagerFiche } from "../components/ui/ficheHeroOutils";
+import { useToast } from "../components/feedback";
 
 // Fiche pharmacie — page de détail d'une pharmacie, avec ses
 // coordonnées, ses horaires, sa localisation sur une carte, ses photos,
@@ -33,8 +35,6 @@ import { NOM_MARQUE } from '../lib/marque';
 // convention que /structure-sante/:id pour FicheStructureSante) — à
 // ajuster dans le routeur si le chemin réel diffère.
 
-// Photo par défaut si la pharmacie n'a pas (encore) d'image_url exploitable.
-const PHOTO_PAR_DEFAUT = pharmaPlaceholder;
 
 function Tabs({ active, onChange, tabs }) {
   return (
@@ -401,6 +401,7 @@ function FicheIntrouvable() {
 /* ============================ COMPOSANT PRINCIPAL ============================ */
 export default function FichePharmacie() {
   const { id } = useParams();
+  const toast = useToast();
 
   const [pharmacie, setPharmacie] = useState(null);
   const [images, setImages] = useState([]);
@@ -487,7 +488,7 @@ export default function FichePharmacie() {
   return (
     <>
       {/* ============================ FIL D'ARIANE ============================ */}
-      <div className="container-aps" style={{ paddingTop: "1.1rem", fontSize: ".82rem" }}>
+      <div className="container-aps fiche-ariane" style={{ paddingTop: "1.1rem", fontSize: ".82rem" }}>
         <Link to="/" className="text-muted-soft">
           Accueil
         </Link>
@@ -499,73 +500,65 @@ export default function FichePharmacie() {
         <span className="text-faint">{pharmacie.nom}</span>
       </div>
 
-      {/* ============================ EN-TÊTE FICHE (photo + coordonnées) ============================ */}
-      <section className="profile-header" style={{ paddingTop: "1.5rem" }}>
-        <div className="container-aps">
-          <div className="profile-header-inner">
-            <div
-              className="profile-avatar"
-              style={{ display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}
-            >
-              <img
-                src={pharmacie.image_url || PHOTO_PAR_DEFAUT}
-                alt={pharmacie.nom}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-            </div>
-            <div>
-              <h1>{pharmacie.nom}</h1>
-              <div className="practitioner-meta mb-2">
-                <span className={`pharmacy-status ${enGarde ? "is-garde" : "is-open"}`}>
-                  <i className={enGarde ? "fa-solid fa-moon" : "fa-solid fa-circle-check"} />{" "}
-                  {enGarde ? "De garde en ce moment" : "Fiche vérifiée"}
-                </span>
-                <span>&middot;</span>
-                <span>
-                  <i className="fa-solid fa-location-dot" />{" "}
-                  {[pharmacie.ville?.nom, pharmacie.pays?.nom].filter(Boolean).join(", ")}
-                </span>
-                {pharmacie.telephone && (
-                  <>
-                    <span>&middot;</span>
-                    <span>
-                      <i className="fa-solid fa-phone" /> {pharmacie.telephone}
-                    </span>
-                  </>
-                )}
-              </div>
-              <div className="d-flex gap-2 flex-wrap">
-                {pharmacie.statut_verification === "publie" ? (
-                  <span className="chip chip-verifie">
-                    <i className="fa-solid fa-circle-check" /> Pharmacie vérifiée
-                  </span>
-                ) : (
-                  <span className="chip chip-complet">
-                    <i className="fa-solid fa-hourglass-half" /> En cours de vérification
-                  </span>
-                )}
-                <StatutOuverture fiche={pharmacie} />
-              </div>
-            </div>
-            <div className="profile-actions">
-              {pharmacie.droits?.contact_direct && (
-                <a
-                  href="#contact"
-                  className="btn btn-primary btn-lg-aps"
-                  onClick={() => setActiveTab("presentation")}
-                >
-                  <i className="fa-solid fa-envelope" /> Contacter
-                </a>
-              )}
-              {pharmacie.telephone && (
-                <a href={`tel:${pharmacie.telephone}`} className="btn btn-urgence">
-                  <i className="fa-solid fa-phone" />
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* ============================ HAUT DE FICHE (photos + coordonnées) ============================ */}
+      <FicheHero
+        images={imagesUniques(images.map((img) => img.url || img))}
+        logo={pharmacie.image_url}
+        repliIcone="fa-prescription-bottle-medical"
+        retour={{ to: "/pharmacie", libelle: "Pharmacies" }}
+        onPartager={() => partagerFiche(pharmacie.nom, toast)}
+        badges={
+          <>
+            {enGarde && (
+              <span className="chip chip-dispo">
+                <i className="fa-solid fa-moon" /> De garde en ce moment
+              </span>
+            )}
+            {pharmacie.statut_verification === "publie" ? (
+              <span className="chip chip-verifie">
+                <i className="fa-solid fa-circle-check" /> Pharmacie vérifiée
+              </span>
+            ) : (
+              <span className="chip chip-complet">
+                <i className="fa-solid fa-hourglass-half" /> En cours de vérification
+              </span>
+            )}
+            <StatutOuverture fiche={pharmacie} />
+          </>
+        }
+        titre={pharmacie.nom}
+        sousTitre={
+          <>
+            <i className="fa-solid fa-location-dot" />{" "}
+            {[pharmacie.adresse, pharmacie.ville?.nom, pharmacie.pays?.nom].filter(Boolean).join(", ")}
+          </>
+        }
+        description={pharmacie.description_enrichie || pharmacie.description || null}
+        actions={
+          <>
+            {pharmacie.telephone && (
+              <a href={`tel:${pharmacie.telephone}`} className="btn btn-primary btn-lg-aps">
+                <i className="fa-solid fa-phone" /> Appeler
+              </a>
+            )}
+            {pharmacie.geolocalisation && (
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${pharmacie.geolocalisation.latitude},${pharmacie.geolocalisation.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-outline-primary"
+              >
+                <i className="fa-solid fa-route" /> Itinéraire
+              </a>
+            )}
+            {pharmacie.droits?.contact_direct && (
+              <a href="#contact" className="btn btn-ghost" aria-label="Écrire" onClick={() => setActiveTab("presentation")}>
+                <i className="fa-solid fa-envelope" />
+              </a>
+            )}
+          </>
+        }
+      />
 
       {/* ============================ CORPS — ONGLETS ============================ */}
       <section style={{ paddingTop: "1.5rem" }}>

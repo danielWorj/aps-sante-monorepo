@@ -20,6 +20,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useConfigurationConnexion } from '../../hooks/useConfigurationConnexion';
 import ValidationAppareil from './ValidationAppareil';
 import { NOM_MARQUE } from '../../lib/marque';
+import { enregistrerDernierNumero, lireDernierNumero, oublierDernierNumero } from '../../lib/dernierNumero';
 
 const PAYS_PAR_DEFAUT = 'CM';
 const styleErreur = { color: 'var(--urgence-dark)' };
@@ -45,7 +46,17 @@ export default function FormulaireConnexion({
   const { connecter, connecterParPin, ouvrirSession } = useAuth();
   const config = useConfigurationConnexion();
   const [mode, setMode] = useState('pin');
-  const [form, setForm] = useState({ email: '', password: '', remember: true, pays_iso2: PAYS_PAR_DEFAUT, telephone: '', pin: '' });
+  // Préremplissage avec le dernier numéro connecté dans ce navigateur.
+  const [dernierNumero] = useState(lireDernierNumero);
+  const [numeroMemorise, setNumeroMemorise] = useState(Boolean(dernierNumero));
+  const [form, setForm] = useState({
+    email: '',
+    password: '',
+    remember: true,
+    pays_iso2: dernierNumero?.pays_iso2 || PAYS_PAR_DEFAUT,
+    telephone: dernierNumero?.telephone || '',
+    pin: '',
+  });
   const [voirMotDePasse, setVoirMotDePasse] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -75,6 +86,7 @@ export default function FormulaireConnexion({
         const r = await authService.sonderConnexionApplication(demandeApp.demande_id, demandeApp.secret);
         if (!actif) return;
         if (r.access_token) {
+          enregistrerDernierNumero(demandeApp.telephone, demandeApp.pays_iso2);
           ouvrirSession(r);
           rappels.current.onConnecte?.(r);
           return;
@@ -102,7 +114,8 @@ export default function FormulaireConnexion({
       return;
     }
     try {
-      setDemandeApp(await authService.demanderConnexionApplication(form.telephone, form.pays_iso2));
+      const demande = await authService.demanderConnexionApplication(form.telephone, form.pays_iso2);
+      setDemandeApp({ ...demande, telephone: form.telephone, pays_iso2: form.pays_iso2 });
     } catch (err) {
       setErrors({ general: err?.message || 'Demande impossible. Réessayez.' });
     }
@@ -112,6 +125,12 @@ export default function FormulaireConnexion({
     setMode(suivant);
     setErrors({});
     setAidePin(false);
+  };
+
+  const utiliserAutreNumero = () => {
+    oublierDernierNumero();
+    setNumeroMemorise(false);
+    setForm((f) => ({ ...f, telephone: '', pin: '', pays_iso2: PAYS_PAR_DEFAUT }));
   };
 
   const handleChange = (e) => {
@@ -145,6 +164,10 @@ export default function FormulaireConnexion({
       const data = mode === 'pin'
         ? await connecterParPin(form.telephone, form.pays_iso2, form.pin)
         : await connecter(form.email.trim(), form.password);
+
+      // Numéro + PIN acceptés (quelle que soit l'étape suivante) : mémorisé
+      // pour la prochaine connexion.
+      if (mode === 'pin') enregistrerDernierNumero(form.telephone, form.pays_iso2);
 
       if (data?.appareil_a_valider) {
         setValidation(data);
@@ -228,6 +251,14 @@ export default function FormulaireConnexion({
                 />
               </div>
               <ErreurChamp message={errors.telephone} />
+              {numeroMemorise && (
+                <div style={{ textAlign: 'right' }}>
+                  <button type="button" className="btn btn-link p-0" style={{ fontSize: '.78rem', fontWeight: 600 }}
+                    onClick={utiliserAutreNumero} disabled={loading}>
+                    Utiliser un autre numéro
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="search-field">

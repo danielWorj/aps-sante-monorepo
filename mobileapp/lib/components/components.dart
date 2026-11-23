@@ -18,6 +18,7 @@ export 'ui/aps_pagination.dart';
 export 'ui/aps_invitation_pro.dart';
 export 'ui/aps_filtre_pays_ville.dart';
 export 'ui/aps_champ_ville.dart';
+export 'ui/aps_fiche_hero.dart';
 
 // Cards
 export 'cards/badge_chip.dart';

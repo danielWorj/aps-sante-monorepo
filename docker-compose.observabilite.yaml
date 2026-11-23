@@ -9,9 +9,10 @@
 # Variables (.env) : GRAFANA_ADMIN_PASSWORD (obligatoire), GRAFANA_ROOT_URL,
 # GRAFANA_ADMIN_USER, LOKI_RETENTION, PROMETHEUS_RETENTION. Voir observabilite/README.md.
 #
-# Rien n'est exposé sur Internet : seul Grafana est publié, sur la boucle
-# locale (nginx de l'hôte → grafana.azasante.com, ou tunnel SSH). Les autres
-# services ne sont joignables que sur le réseau Docker interne.
+# Rien n'est publié directement sur Internet : Grafana et Prometheus écoutent
+# sur la boucle locale, derrière le nginx de l'hôte (logs.azasante.com →
+# Grafana, metriques.azasante.com → Prometheus avec mot de passe), ou via un
+# tunnel SSH. Loki, Alloy et les exporteurs restent sur le réseau Docker interne.
 
 services:
   server:
@@ -25,9 +26,13 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}"
       - "--web.enable-lifecycle"
+      - "--web.external-url=${PROMETHEUS_EXTERNAL_URL:-http://localhost:9090}"
     volumes:
       - ./observabilite/prometheus:/etc/prometheus:ro
       - prometheus_data:/prometheus
+    # Boucle locale uniquement : nginx (metriques.azasante.com) ou tunnel SSH.
+    ports:
+      - "127.0.0.1:9090:9090"
     restart: unless-stopped
 
   loki:

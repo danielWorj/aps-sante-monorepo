@@ -24,6 +24,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../components/components.dart';
 import '../../services/pays_utilisateur_service.dart';
@@ -33,6 +34,8 @@ import '../../utils/mon_espace_navigation.dart';
 import 'publicAcceuil.dart';
 import 'Assurancepage.dart';
 import '../../utils/marque.dart';
+import 'utils/fiche_etablissement.dart';
+import '../../services/galerie_publique_service.dart';
 
 /// `AsyncValue.valueOrNull` n'existe qu'à partir de riverpod 2.3.0 ; la
 /// version résolue par ce projet (voir l'import direct de
@@ -115,17 +118,63 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
     });
   }
 
+  Future<void> _lancer(Uri uri, String echec) async {
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(echec)));
+    }
+  }
+
   void _appeler(Pharmacie p) {
-    // TODO: url_launcher -> launchUrl(Uri(scheme: 'tel', path: p.telephone))
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('Appel de ${p.nom}…')));
+    final numero = p.telephone.trim();
+    if (numero.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Numéro non disponible pour cette pharmacie.')));
+      return;
+    }
+    _lancer(Uri(scheme: 'tel', path: numero), "Impossible de lancer l'appel.");
   }
 
   void _itineraire(Pharmacie p) {
-    // TODO: url_launcher / maps_launcher vers p.geolocalisation
-    // (latitude/longitude), si renseignée côté fiche.
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('Itinéraire vers ${p.nom}…')));
+    final geo = p.geolocalisation;
+    final requete = geo != null
+        ? '${geo.latitude},${geo.longitude}'
+        : [p.nom, p.ville?.nom, p.pays?.nom].whereType<String>().join(', ');
+    _lancer(
+      Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(requete)}'),
+      "Impossible d'ouvrir l'itinéraire.",
+    );
+  }
+
+  void _ouvrirFiche(Pharmacie p, {required bool deGarde}) {
+    final verifiee = p.statutVerification == StatutVerificationPharmacie.publie;
+    final lieu = [p.ville?.nom, p.pays?.nom].whereType<String>().join(', ');
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => FicheEtablissementPage(
+        titre: p.nom,
+        sousTitre: lieu.isEmpty ? 'Pharmacie' : 'Pharmacie · $lieu',
+        repliIcone: Icons.local_pharmacy_outlined,
+        logoUrl: p.imageUrl,
+        chargerPhotos: () => photosPharmacie(p.pharmacieId),
+        badges: [
+          if (deGarde) const ApsPill('De garde', dot: true),
+          if (verifiee)
+            const ApsPill('Vérifiée', icon: Icons.verified_outlined)
+          else
+            const ApsPill('En cours de vérification', tone: ApsTone.amber),
+        ],
+        lignes: [
+          if (p.telephone.trim().isNotEmpty) (icone: Icons.call_outlined, libelle: 'Téléphone', valeur: p.telephone.trim()),
+          if (lieu.isNotEmpty) (icone: Icons.location_on_outlined, libelle: 'Ville', valeur: lieu),
+          if (p.numeroOrdreTitulaire.isNotEmpty)
+            (icone: Icons.badge_outlined, libelle: "N° d'ordre du titulaire", valeur: p.numeroOrdreTitulaire),
+        ],
+        telephone: p.telephone,
+        latitude: p.geolocalisation?.latitude,
+        longitude: p.geolocalisation?.longitude,
+        adresseRecherche: [p.nom, p.ville?.nom, p.pays?.nom].whereType<String>().join(', '),
+      ),
+    ));
   }
 
   /// Réinitialise les filtres locaux et bascule
@@ -521,6 +570,7 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
                   distanceKm: null,
                   onAppeler: () => _appeler(p),
                   onItineraire: () => _itineraire(p),
+                  onTap: () => _ouvrirFiche(p, deGarde: deGardeIds.contains(p.pharmacieId)),
                 ),
             ],
           ),

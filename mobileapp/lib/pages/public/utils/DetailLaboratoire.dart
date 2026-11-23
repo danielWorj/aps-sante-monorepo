@@ -122,7 +122,23 @@ class _DetailLaboratoirePageState extends ConsumerState<DetailLaboratoirePage> {
       child: ListView(
         padding: EdgeInsets.fromLTRB(0, 0, 0, 24 + MediaQuery.paddingOf(context).bottom),
         children: [
-          _barre(context),
+          ApsFicheHero(
+            images: apsImagesUniques([for (final m in d.medias) if (!m.estVideo) m.url]),
+            logoUrl: l.imageUrl,
+            repliIcone: Icons.biotech_outlined,
+            onPartager: () => _partager(l),
+          ),
+          ApsFicheEntete(
+            badges: [
+              if (l.estPublie) const _Puce(icone: Icons.verified_rounded, texte: 'Vérifié APS'),
+              if (l.agrement.isNotEmpty) _Puce(texte: 'Agrément ${l.agrement}'),
+            ],
+            titre: l.nom,
+            sousTitre: l.lieu.isEmpty ? "Laboratoire d'analyses" : "Laboratoire d'analyses · ${l.lieu}",
+            description: l.description,
+            complement: l.resumeAvis.moyenne != null ? ApsStars(l.resumeAvis.moyenne!, count: l.resumeAvis.nombre) : null,
+          ),
+          const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18),
             child: Column(
@@ -133,8 +149,6 @@ class _DetailLaboratoirePageState extends ConsumerState<DetailLaboratoirePage> {
                     padding: EdgeInsets.only(bottom: 10),
                     child: _Bandeau(texte: "Aperçu de votre fiche : elle n'est pas encore visible du public (vérification en cours)."),
                   ),
-                _EnTete(laboratoire: l),
-                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -153,8 +167,8 @@ class _DetailLaboratoirePageState extends ConsumerState<DetailLaboratoirePage> {
                         onTap: () => _ouvrirLien(Uri(scheme: 'mailto', path: l.email), 'clic_email'),
                       ),
                     ),
-                    const SizedBox(width: 8),
                     if (l.geolocalisation != null) ...[
+                      const SizedBox(width: 8),
                       Expanded(
                         child: _Action(
                           icone: Icons.directions_outlined,
@@ -162,9 +176,7 @@ class _DetailLaboratoirePageState extends ConsumerState<DetailLaboratoirePage> {
                           onTap: () => _ouvrirLien(_itineraire(l.geolocalisation!), 'clic_itineraire'),
                         ),
                       ),
-                      const SizedBox(width: 8),
                     ],
-                    Expanded(child: _Action(icone: Icons.share_outlined, libelle: 'Partager', onTap: () => _partager(l))),
                   ],
                 ),
                 const SizedBox(height: 14),

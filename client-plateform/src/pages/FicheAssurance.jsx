@@ -11,6 +11,9 @@ import GoogleMapView from "../components/maps/GoogleMapView";
 import { listerMediasPublics } from "../services/portailAssuranceService";
 import { obtenirPosition } from "../lib/geolocConsentement";
 import { NOM_MARQUE } from '../lib/marque';
+import FicheHero from "../components/ui/FicheHero";
+import { imagesUniques, partagerFiche } from "../components/ui/ficheHeroOutils";
+import { useToast } from "../components/feedback";
 
 // Fiche assurance — page de détail d'une compagnie d'assurance ou d'un
 // courtier, avec ses activités (catalogue produits), ses agences et
@@ -471,6 +474,7 @@ function GaleriePanel({ medias }) {
 /* ============================ COMPOSANT PRINCIPAL ============================ */
 export default function FicheAssurance() {
   const { id } = useParams();
+  const toast = useToast();
 
   const [insurer, setInsurer] = useState(null);
   const [activites, setActivites] = useState([]);
@@ -561,71 +565,63 @@ export default function FicheAssurance() {
   return (
     <>
       {/* ============================ FIL D'ARIANE ============================ */}
-      <div className="container-aps" style={{ paddingTop: "1.1rem", fontSize: ".82rem" }}>
+      <div className="container-aps fiche-ariane" style={{ paddingTop: "1.1rem", fontSize: ".82rem" }}>
         <Link to="/" className="text-muted-soft">
           Accueil
         </Link>
         <i className="fa-solid fa-chevron-right text-faint mx-1" style={{ fontSize: ".6rem" }} />
-        <Link to="/assurances" className="text-muted-soft">
+        <Link to="/assurance" className="text-muted-soft">
           Assurances
         </Link>
         <i className="fa-solid fa-chevron-right text-faint mx-1" style={{ fontSize: ".6rem" }} />
         <span className="text-faint">{insurer.nom}</span>
       </div>
 
-      {/* ============================ EN-TÊTE FICHE ============================ */}
-      <section className="profile-header" style={{ paddingTop: "1.5rem" }}>
-        <div className="container-aps">
-          <div className="profile-header-inner">
-            <div
-              className="profile-avatar"
-              style={{ display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}
-            >
-              {insurer.image_url ? (
-                <img src={insurer.image_url} alt={insurer.nom} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              ) : (
-                <i className="fa-solid fa-building-shield" style={{ fontSize: "1.8rem" }} />
-              )}
-            </div>
-            <div>
-              <h1>{insurer.nom}</h1>
-              <div className="practitioner-meta mb-2">
-                <span>{LABEL_TYPE_ACTEUR[insurer.type_acteur] || insurer.type_acteur}</span>
-                <span>&middot;</span>
-                <span>
-                  <i className="fa-solid fa-location-dot" /> {insurer.ville?.nom}, {insurer.pays?.nom}
-                </span>
-              </div>
-              <div className="d-flex gap-2 flex-wrap">
-                {insurer.statut_verification === "publie" ? (
-                  <span className="chip chip-verifie">
-                    <i className="fa-solid fa-circle-check" /> Vérifiée {NOM_MARQUE}
-                  </span>
-                ) : (
-                  <span className="chip chip-complet">
-                    <i className="fa-solid fa-hourglass-half" /> En cours de vérification
-                  </span>
-                )}
-                {insurer.agrement && (
-                  <span className="chip chip-complet">Agrément {insurer.agrement}</span>
-                )}
-              </div>
-            </div>
-            <div className="profile-actions">
-              {droits.formulaire_contact && (
-                <a href="#mise-en-relation" className="btn btn-primary btn-lg-aps">
-                  <i className="fa-solid fa-envelope" /> Mise en relation
-                </a>
-              )}
-              {insurer.telephone && (
-                <a href={`tel:${insurer.telephone}`} className="btn btn-ghost">
-                  <i className="fa-solid fa-phone" />
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* ============================ HAUT DE FICHE ============================ */}
+      <FicheHero
+        images={imagesUniques(medias.filter((m) => m.type !== "video").map((m) => m.url))}
+        logo={insurer.image_url}
+        repliIcone="fa-building-shield"
+        retour={{ to: "/assurance", libelle: "Assurances" }}
+        onPartager={() => partagerFiche(insurer.nom, toast)}
+        badges={
+          <>
+            {insurer.statut_verification === "publie" ? (
+              <span className="chip chip-verifie">
+                <i className="fa-solid fa-circle-check" /> Vérifiée {NOM_MARQUE}
+              </span>
+            ) : (
+              <span className="chip chip-complet">
+                <i className="fa-solid fa-hourglass-half" /> En cours de vérification
+              </span>
+            )}
+            {insurer.agrement && <span className="chip chip-complet">Agrément {insurer.agrement}</span>}
+          </>
+        }
+        titre={insurer.nom}
+        sousTitre={
+          <>
+            {LABEL_TYPE_ACTEUR[insurer.type_acteur] || insurer.type_acteur}
+            {" · "}
+            <i className="fa-solid fa-location-dot" /> {[insurer.ville?.nom, insurer.pays?.nom].filter(Boolean).join(", ")}
+          </>
+        }
+        description={insurer.description || null}
+        actions={
+          <>
+            {droits.formulaire_contact && (
+              <a href="#mise-en-relation" className="btn btn-primary btn-lg-aps">
+                <i className="fa-solid fa-envelope" /> Mise en relation
+              </a>
+            )}
+            {insurer.telephone && (
+              <a href={`tel:${insurer.telephone}`} className={droits.formulaire_contact ? "btn btn-ghost" : "btn btn-primary btn-lg-aps"} aria-label="Appeler">
+                <i className="fa-solid fa-phone" />{!droits.formulaire_contact && " Appeler"}
+              </a>
+            )}
+          </>
+        }
+      />
 
       {/* ============================ BANNIÈRE INSTITUTIONNELLE ============================ */}
       <div className="container-aps" style={{ paddingTop: "1.5rem" }}>

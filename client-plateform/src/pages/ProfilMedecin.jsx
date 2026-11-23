@@ -18,6 +18,8 @@ import { signalerEngagement } from '../services/reputationMedecinService';
 import { useToast } from '../components/feedback';
 import { aUnTarif, libelleTarif, montantTarif } from '../utils/tarif';
 import BadgeOrdre from '../components/medecin/BadgeOrdre';
+import FicheHero from '../components/ui/FicheHero';
+import { imagesUniques, initiales } from '../components/ui/ficheHeroOutils';
 // La prise de rendez-vous (créneau, motif, inscription patient,
 // POST /rendez-vous...) ne se fait plus dans une modale sur cette
 // page : elle vit désormais entièrement dans src/pages/RendezVous.jsx,
@@ -245,7 +247,7 @@ export default function ProfilMedecin() {
   return (
     <>
       {/* ============================ FIL D'ARIANE ============================ */}
-      <div className="container-aps" style={{ paddingTop: '1.1rem', fontSize: '.82rem' }}>
+      <div className="container-aps fiche-ariane" style={{ paddingTop: '1.1rem', fontSize: '.82rem' }}>
         <Link to="/" className="text-muted-soft">Accueil</Link>
         <i className="fa-solid fa-chevron-right text-faint mx-1" style={{ fontSize: '.6rem' }} />
         <Link to="/medecin" className="text-muted-soft">Médecins</Link>
@@ -253,65 +255,54 @@ export default function ProfilMedecin() {
         <span className="text-faint">{nomComplet}</span>
       </div>
 
-      {/* ============================ EN-TÊTE FICHE ============================ */}
-      <section className="profile-header" style={{ paddingTop: '1.5rem' }}>
-        <div className="container-aps">
-          <div className="profile-header-inner">
-            <div className="profile-avatar"><img src={medecin.photo_url || PHOTO_PAR_DEFAUT} alt={nomComplet} /></div>
-            <div>
-              <h1>{nomComplet}</h1>
-              <div className="practitioner-meta mb-2">
-                <span>{medecin.specialite?.nom || 'Spécialité non renseignée'}</span>
-                {localisation && (
-                  <>
-                    <span>&middot;</span>
-                    <span><i className="fa-solid fa-location-dot" /> {localisation}</span>
-                  </>
-                )}
-              </div>
-              <div className="d-flex gap-2 flex-wrap">
-                <BadgeOrdre medecin={medecin} avecNumero />
-                {medecin.teleconsultation_activee && (
-                  <span className="chip chip-dispo"><i className="fa-solid fa-circle" /> Téléconsultation disponible</span>
-                )}
-                {aUnTarif(medecin.tarif_indicatif) && (
-                  <span className="chip chip-tarif"><i className="fa-solid fa-money-bill-wave" /> {libelleTarif(medecin.tarif_indicatif)}</span>
-                )}
-              </div>
-              {medecin.nombre_avis > 0 && (
-                <button type="button" className="profil-note" onClick={() => setTab('avis')}>
-                  <Etoiles valeur={Number(medecin.note_moyenne)} taille="sm" />
-                  <strong>{Number(medecin.note_moyenne).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong>
-                  <span>({medecin.nombre_avis} avis)</span>
-                </button>
-              )}
-            </div>
-            <div className="profile-actions">
-              {rdvEnLigne && (
-                <button type="button" className="btn btn-primary btn-lg-aps" onClick={() => allerVersRendezVous('physique')}>
-                  <i className="fa-solid fa-calendar-check" /> Prendre RDV
-                </button>
-              )}
-              {rdvEnLigne && medecin.teleconsultation_activee && (
-                <button type="button" className="btn btn-outline-primary" onClick={() => allerVersRendezVous('teleconsultation')}>
-                  <i className="fa-solid fa-video" /> Téléconsulter
-                </button>
-              )}
-              {telephone && (
-                <a href={`tel:${telephone}`} className="btn btn-ghost" aria-label="Appeler" onClick={() => signalerEngagement(id, 'clic_contact')}>
-                  <i className="fa-solid fa-phone" />
-                </a>
-              )}
-              <button type="button" className="btn btn-ghost" aria-label="Partager la fiche" onClick={partager}>
-                <i className="fa-solid fa-share-nodes" />
+      {/* ============================ HAUT DE FICHE ============================ */}
+      <FicheHero
+        images={imagesUniques(medecin.photo_url)}
+        repliTexte={initiales(nomComplet)}
+        retour={{ to: '/medecin', libelle: 'Médecins' }}
+        onPartager={partager}
+        badges={
+          <>
+            <BadgeOrdre medecin={medecin} avecNumero />
+            {medecin.teleconsultation_activee && (
+              <span className="chip chip-dispo"><i className="fa-solid fa-circle" /> Téléconsultation disponible</span>
+            )}
+          </>
+        }
+        titre={nomComplet}
+        sousTitre={[medecin.specialite?.nom || 'Spécialité non renseignée', localisation].filter(Boolean).join(' · ')}
+        prix={aUnTarif(medecin.tarif_indicatif) ? { valeur: montantTarif(medecin.tarif_indicatif), libelle: 'Tarif indicatif' } : null}
+        description={medecin.biographie || null}
+        complement={medecin.nombre_avis > 0 && (
+          <button type="button" className="profil-note mt-2" onClick={() => setTab('avis')}>
+            <Etoiles valeur={Number(medecin.note_moyenne)} taille="sm" />
+            <strong>{Number(medecin.note_moyenne).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong>
+            <span>({medecin.nombre_avis} avis)</span>
+          </button>
+        )}
+        actions={
+          <>
+            {rdvEnLigne && (
+              <button type="button" className="btn btn-primary btn-lg-aps" onClick={() => allerVersRendezVous('physique')}>
+                <i className="fa-solid fa-calendar-check" /> Prendre RDV
               </button>
-            </div>
-          </div>
-        </div>
-      </section>
+            )}
+            {rdvEnLigne && medecin.teleconsultation_activee && (
+              <button type="button" className="btn btn-outline-primary" onClick={() => allerVersRendezVous('teleconsultation')}>
+                <i className="fa-solid fa-video" /> Téléconsulter
+              </button>
+            )}
+            {telephone && (
+              <a href={`tel:${telephone}`} className="btn btn-ghost" aria-label="Appeler" onClick={() => signalerEngagement(id, 'clic_contact')}>
+                <i className="fa-solid fa-phone" />
+              </a>
+            )}
+          </>
+        }
+      />
 
       {/* ============================ CORPS ============================ */}
-      <section style={{ paddingTop: '2.25rem' }}>
+      <section style={{ paddingTop: '1rem' }}>
         <div className="container-aps">
           <div className="row g-4">
 

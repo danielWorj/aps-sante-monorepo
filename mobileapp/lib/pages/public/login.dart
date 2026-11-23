@@ -31,6 +31,7 @@ import 'changement_mot_de_passe_initial.dart';
 import 'creer_pin_screen.dart';
 import 'pin_oublie_screen.dart';
 import 'validation_appareil_screen.dart';
+import '../../services/dernier_numero_service.dart';
 import '../../utils/marque.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -74,6 +75,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _loading = false;
   String? _errorMessage;
 
+  /// Numéro prérempli depuis la dernière connexion réussie sur l'appareil.
+  bool _numeroMemorise = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _prerempliNumero();
+  }
+
+  Future<void> _prerempliNumero() async {
+    final dernier = await DernierNumeroService.lire();
+    // Ne pas écraser une saisie commencée entre-temps.
+    if (dernier == null || !mounted || _telephoneController.text.isNotEmpty) return;
+    setState(() {
+      _telephoneController.text = dernier.telephone;
+      _paysIso2 = dernier.paysIso2;
+      _numeroMemorise = true;
+    });
+  }
+
+  void _utiliserAutreNumero() {
+    DernierNumeroService.oublier();
+    setState(() {
+      _telephoneController.clear();
+      _pinController.clear();
+      _numeroMemorise = false;
+    });
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -111,6 +141,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               email: _emailController.text.trim(),
               motDePasse: _passwordController.text,
             ));
+
+      // Numéro + PIN acceptés (quelle que soit l'étape suivante) : on le
+      // mémorise pour la prochaine connexion.
+      if (_modePin) {
+        await DernierNumeroService.enregistrer(_telephoneController.text, _paysIso2);
+      }
 
       if (!mounted) return;
 
@@ -291,7 +327,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       validator: (value) =>
                           (value?.trim() ?? '').isEmpty ? 'Merci de saisir votre numéro.' : null,
                     ),
-                    const SizedBox(height: 10),
+                    if (_numeroMemorise)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _loading ? null : _utiliserAutreNumero,
+                          child: const Text('Utiliser un autre numéro'),
+                        ),
+                      )
+                    else
+                      const SizedBox(height: 10),
                     ChampPin(
                       controller: _pinController,
                       label: 'Code PIN (6 chiffres)',

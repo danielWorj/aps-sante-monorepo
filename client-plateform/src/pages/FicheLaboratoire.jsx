@@ -25,6 +25,8 @@ import {
 } from '../services/laboratoireService';
 import '../assets/styles/laboratoire.css';
 import { NOM_MARQUE } from '../lib/marque';
+import FicheHero from '../components/ui/FicheHero';
+import { imagesUniques, partagerFiche } from '../components/ui/ficheHeroOutils';
 
 function distanceKm(a, b) {
   const R = 6371;
@@ -383,6 +385,7 @@ function CarteContact({ labo }) {
 
 export default function FicheLaboratoire() {
   const { id } = useParams();
+  const toast = useToast();
   const [labo, setLabo] = useState(null);
   const [examens, setExamens] = useState({ examens: [], categories: [] });
   const [centres, setCentres] = useState([]);
@@ -442,7 +445,7 @@ export default function FicheLaboratoire() {
 
   return (
     <>
-      <div className="container-aps" style={{ paddingTop: '1.1rem', fontSize: '.82rem' }}>
+      <div className="container-aps fiche-ariane" style={{ paddingTop: '1.1rem', fontSize: '.82rem' }}>
         <Link to="/" className="text-muted-soft">Accueil</Link>
         <i className="fa-solid fa-chevron-right text-faint mx-1" style={{ fontSize: '.6rem' }} />
         <Link to="/laboratoires" className="text-muted-soft">Laboratoires</Link>
@@ -459,43 +462,49 @@ export default function FicheLaboratoire() {
         </div>
       )}
 
-      <section className="profile-header" style={{ paddingTop: '1.5rem' }}>
-        <div className="container-aps">
-          <div className="profile-header-inner">
-            <div className="profile-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-              {labo.image_url
-                ? <img src={labo.image_url} alt={labo.nom} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <i className="fa-solid fa-flask-vial" style={{ fontSize: '1.8rem' }} />}
-            </div>
-            <div>
-              <h1>{labo.nom}</h1>
-              <div className="practitioner-meta mb-2">
-                <span>Laboratoire d&apos;analyses</span>
-                <span>&middot;</span>
-                <span><i className="fa-solid fa-location-dot" /> {[labo.ville?.nom, labo.pays?.nom].filter(Boolean).join(', ')}</span>
-                {labo.resume_avis?.nombre > 0 && (
-                  <>
-                    <span>&middot;</span>
-                    <span><Etoiles valeur={labo.resume_avis.moyenne} taille="sm" /> {labo.resume_avis.moyenne.toLocaleString('fr-FR')} ({labo.resume_avis.nombre})</span>
-                  </>
-                )}
-              </div>
-              <div className="d-flex gap-2 flex-wrap">
-                {labo.statut_verification === 'publie' && <span className="chip chip-verifie"><i className="fa-solid fa-circle-check" /> Vérifié {NOM_MARQUE}</span>}
-                <span className="chip chip-complet">Agrément {labo.agrement}</span>
-              </div>
-            </div>
-            <div className="profile-actions">
-              <a href={`tel:${labo.telephone}`} className="btn btn-primary btn-lg-aps" onClick={() => signalerEngagement(id, 'clic_telephone')}>
-                <i className="fa-solid fa-phone" /> Appeler
+      <FicheHero
+        images={imagesUniques(medias.filter((m) => m.type !== 'video').map((m) => m.url))}
+        logo={labo.image_url}
+        repliIcone="fa-flask-vial"
+        retour={{ to: '/laboratoires', libelle: 'Laboratoires' }}
+        onPartager={() => { signalerEngagement(id, 'partage'); partagerFiche(labo.nom, toast); }}
+        badges={
+          <>
+            {labo.statut_verification === 'publie' && <span className="chip chip-verifie"><i className="fa-solid fa-circle-check" /> Vérifié {NOM_MARQUE}</span>}
+            {labo.agrement && <span className="chip chip-complet">Agrément {labo.agrement}</span>}
+          </>
+        }
+        titre={labo.nom}
+        sousTitre={
+          <>
+            Laboratoire d&apos;analyses · <i className="fa-solid fa-location-dot" /> {[labo.ville?.nom, labo.pays?.nom].filter(Boolean).join(', ')}
+          </>
+        }
+        description={labo.description || null}
+        complement={labo.resume_avis?.nombre > 0 && (
+          <button type="button" className="profil-note mt-2" onClick={() => ouvrir('avis')}>
+            <Etoiles valeur={labo.resume_avis.moyenne} taille="sm" />
+            <strong>{labo.resume_avis.moyenne.toLocaleString('fr-FR')}</strong>
+            <span>({labo.resume_avis.nombre} avis)</span>
+          </button>
+        )}
+        actions={
+          <>
+            <a href={`tel:${labo.telephone}`} className="btn btn-primary btn-lg-aps" onClick={() => signalerEngagement(id, 'clic_telephone')}>
+              <i className="fa-solid fa-phone" /> Appeler
+            </a>
+            <button type="button" className="btn btn-outline-primary" onClick={() => ouvrir('examens')}>
+              <i className="fa-solid fa-vials" /> Examens
+            </button>
+            {labo.geolocalisation && (
+              <a href={itineraire(labo.geolocalisation)} target="_blank" rel="noreferrer" className="btn btn-ghost" aria-label="Itinéraire"
+                onClick={() => signalerEngagement(id, 'clic_itineraire')}>
+                <i className="fa-solid fa-diamond-turn-right" />
               </a>
-              <button type="button" className="btn btn-ghost" onClick={() => ouvrir('examens')}>
-                <i className="fa-solid fa-vials" /> Examens
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
+            )}
+          </>
+        }
+      />
 
       <section style={{ paddingTop: '1.5rem' }}>
         <div className="container-aps">

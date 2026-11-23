@@ -659,7 +659,8 @@ export async function creerMedecin(req, res, next) {
  * par distance croissante ; les médecins sans position en sont exclus.
  * Dans tous les cas, chaque fiche porte `geolocalisation:
  * { latitude, longitude } | null`.
- * Sans proximité : triées de la plus récente à la plus ancienne.
+ * Sans proximité : mieux notées d'abord (note, nombre d'avis), puis de
+ * la plus récente à la plus ancienne.
  */
 export async function listerMedecins(req, res, next) {
   try {
@@ -706,12 +707,22 @@ export async function listerMedecins(req, res, next) {
     if (!specialite_id && specialite) {
       where.specialite = { nom: { contains: specialite, mode: "insensitive" } };
     }
-    if (recherche) {
+    // Recherche par nom : chaque mot saisi doit se retrouver dans le nom
+    // OU le prénom (« paul meke », « meke paul », « Dr Meke » trouvent
+    // tous Paul MEKE). Avant, la phrase entière devait tenir dans un seul
+    // des deux champs, d'où aucun résultat dès qu'on tapait nom + prénom.
+    const motsRecherche = String(recherche || "")
+      .split(/[\s,.;]+/)
+      .map((mot) => mot.trim())
+      .filter((mot) => mot && !/^(dr|docteur|pr|professeur)$/i.test(mot));
+    if (motsRecherche.length) {
       where.utilisateur = {
-        OR: [
-          { nom: { contains: recherche, mode: "insensitive" } },
-          { prenom: { contains: recherche, mode: "insensitive" } },
-        ],
+        AND: motsRecherche.map((mot) => ({
+          OR: [
+            { nom: { contains: mot, mode: "insensitive" } },
+            { prenom: { contains: mot, mode: "insensitive" } },
+          ],
+        })),
       };
     }
     // Public (site, application mobile) : uniquement les médecins activés
@@ -775,7 +786,13 @@ export async function listerMedecins(req, res, next) {
     const medecins = await prisma.medecin.findMany({
       where,
       include,
-      orderBy: { date_creation: "desc" },
+      // Mieux notés d'abord (note puis nombre d'avis), les fiches sans
+      // avis ensuite, de la plus récente à la plus ancienne.
+      orderBy: [
+        { note_moyenne: { sort: "desc", nulls: "last" } },
+        { nombre_avis: "desc" },
+        { date_creation: "desc" },
+      ],
     });
     const medecinsGeo = await avecGeolocalisations(medecins);
 

@@ -11,6 +11,7 @@ import CreationMedecin from './components/medecin/creationMedecin';
 import InscriptionPortail from './pages/inscriptionportail.jsx';
 import PaiementSucces from './pages/PaiementSucces.jsx';
 import PaiementAnnule from './pages/PaiementAnnule.jsx';
+import PageErreur from './pages/PageErreur.jsx';
 
 // ONBOARDING (croquis : Écran 1 → 1.1 → 1.1.1/1.1.2 → 1.1.3)
 import OnboardingAccueil from './pages/onboarding/OnboardingAccueil.jsx';
@@ -124,6 +125,9 @@ export const router = createBrowserRouter([
   {
   // Racine : remet la page en haut à chaque navigation (cf. RacineNavigation).
   element: <RacineNavigation />,
+  // Erreur levée par une page ou un loader : page d'erreur autonome (avec
+  // son propre en-tête, le layout ayant pu planter).
+  errorElement: <PageErreur autonome />,
   children: [
   {
     // ONBOARDING : sans Navbar ni Footer
@@ -245,6 +249,11 @@ export const router = createBrowserRouter([
         element: <RequireAuth roles={ROLES_ESPACE.annonces} />,
         children: [{ path: '/mes-annonces', element: <EspaceAnnonces /> }],
       },
+      // Pages d'erreur : 401 / 403 adressables, et 404 pour toute adresse
+      // inconnue (« * » ne prend que ce qu'aucune autre route ne prend).
+      { path: '/non-autorise', element: <PageErreur code={401} /> },
+      { path: '/acces-refuse', element: <PageErreur code={403} /> },
+      { path: '*', element: <PageErreur code={404} /> },
     ],
   },
   {

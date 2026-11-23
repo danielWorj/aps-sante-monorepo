@@ -43,7 +43,8 @@ class OnboardingProChoixPage extends StatelessWidget {
         actions: const [OnboardingPasser()],
       ),
       body: SafeArea(
-        child: Padding(
+        // Défilable : six choix ne tiennent pas sur tous les écrans.
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -57,44 +58,45 @@ class OnboardingProChoixPage extends StatelessWidget {
                 'Comment souhaitez-vous continuer ?',
                 style: AppTextStyles.l,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               _ProChoiceCard(
                 icon: Icons.login_rounded,
                 title: 'Connexion',
                 subtitle: "J'ai déjà un compte professionnel",
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                ),
+                onTap: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const LoginScreen())),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               _ProChoiceCard(
                 icon: Icons.add_circle_outline_rounded,
                 title: 'Créer ma fiche professionnelle',
                 subtitle: 'Médecin, spécialiste — inscription en 6 étapes',
                 onTap: () => ouvrirDevenirMedecin(context),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               _ProChoiceCard(
                 icon: Icons.local_pharmacy_outlined,
                 title: 'Déclarer ma pharmacie',
                 subtitle: 'Fiche pharmacie — inscription en 5 étapes',
                 onTap: () => ouvrirDeclarerPharmacie(context),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               _ProChoiceCard(
                 icon: Icons.local_hospital_outlined,
                 title: 'Déclarer mon centre de santé',
                 subtitle: 'Clinique, hôpital, dispensaire…',
                 onTap: () => ouvrirDeclarerCentreSante(context),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               _ProChoiceCard(
                 icon: Icons.biotech_outlined,
                 title: 'Inscrire mon laboratoire',
-                subtitle: "Laboratoire d'analyses — examens et centres de prélèvement",
+                subtitle:
+                    "Laboratoire d'analyses — examens et centres de prélèvement",
                 onTap: () => ouvrirDeclarerLaboratoire(context),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               _ProChoiceCard(
                 icon: Icons.shield_outlined,
                 title: 'Déclarer mon assurance',
@@ -131,11 +133,10 @@ class _ProChoiceCard extends StatelessWidget {
         borderRadius: AppRadius.lgRadius,
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             borderRadius: AppRadius.lgRadius,
             boxShadow: AppColors.shadowCard,
-            
           ),
           child: Row(
             children: [
@@ -154,7 +155,10 @@ class _ProChoiceCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: AppTextStyles.strong.copyWith(fontSize: 15)),
+                    Text(
+                      title,
+                      style: AppTextStyles.strong.copyWith(fontSize: 15),
+                    ),
                     const SizedBox(height: 3),
                     Text(subtitle, style: AppTextStyles.body),
                   ],

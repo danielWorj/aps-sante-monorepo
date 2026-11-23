@@ -50,6 +50,8 @@ import 'Medecinpage.dart';
 import 'Assurancepage.dart';
 import '../../repositories/centresante_repository.dart';
 import '../../utils/mon_espace_navigation.dart';
+import 'utils/fiche_etablissement.dart';
+import '../../services/galerie_publique_service.dart';
 
 
 /// Écran « Trouver une structure de santé » — annuaire des hôpitaux,
@@ -473,8 +475,7 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
         verifiee: c.statutVerification == StatutVerificationStructure.publie,
         onAppeler: () => _appeler(c),
         onItineraire: () => _ouvrirItineraire(c),
-        onTap:
-        widget.onStructureTap != null ? () => widget.onStructureTap!(c) : null,
+        onTap: widget.onStructureTap != null ? () => widget.onStructureTap!(c) : () => _ouvrirFiche(c),
       ),
     )
         .toList();
@@ -587,6 +588,38 @@ class _CentreSantePageState extends ConsumerState<CentreSantePage> {
   // ---------------------------------------------------------------------
   // Actions « Appeler » / « Itinéraire »
   // ---------------------------------------------------------------------
+
+  void _ouvrirFiche(CentreSante c) {
+    final verifiee = c.statutVerification == StatutVerificationStructure.publie;
+    final lieu = [c.ville?.nom, c.pays?.nom].whereType<String>().join(', ');
+    final type = c.typeStructure.libelle;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => FicheEtablissementPage(
+        titre: c.nom,
+        sousTitre: lieu.isEmpty ? type : '$type · $lieu',
+        repliIcone: c.typeStructure == TypeStructure.hopital
+            ? Icons.local_hospital_outlined
+            : Icons.medical_services_outlined,
+        logoUrl: c.imageUrl,
+        chargerPhotos: () => photosCentreSante(c.structureId),
+        badges: [
+          ApsPill(type, tone: ApsTone.sky),
+          if (verifiee)
+            const ApsPill('Vérifiée', icon: Icons.verified_outlined)
+          else
+            const ApsPill('En cours de vérification', tone: ApsTone.amber),
+        ],
+        lignes: [
+          if (c.telephone.trim().isNotEmpty) (icone: Icons.call_outlined, libelle: 'Téléphone', valeur: c.telephone.trim()),
+          if (lieu.isNotEmpty) (icone: Icons.location_on_outlined, libelle: 'Ville', valeur: lieu),
+        ],
+        telephone: c.telephone,
+        latitude: c.geolocalisation?.latitude,
+        longitude: c.geolocalisation?.longitude,
+        adresseRecherche: [c.nom, c.ville?.nom, c.pays?.nom].whereType<String>().join(', '),
+      ),
+    ));
+  }
 
   Future<void> _appeler(CentreSante c) async {
     final numero = c.telephone.trim();

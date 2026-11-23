@@ -163,12 +163,14 @@ export default function Home() {
   }, []);
 
   // Aperçu de l'annuaire : médecins du pays de l'utilisateur (tous les pays
-  // s'il n'y en a encore aucun), fiches publiées puis mieux notées d'abord.
+  // s'il n'y en a encore aucun), mieux notés d'abord (note, puis nombre
+  // d'avis), fiches publiées en départage.
   useEffect(() => {
     let annule = false;
     const trier = (liste) => [...(liste || [])].sort((a, b) =>
-      (b.statut_verification === 'publie') - (a.statut_verification === 'publie')
-      || (Number(b.note_moyenne) || 0) - (Number(a.note_moyenne) || 0));
+      (Number(b.note_moyenne) || 0) - (Number(a.note_moyenne) || 0)
+      || (Number(b.nombre_avis) || 0) - (Number(a.nombre_avis) || 0)
+      || (b.statut_verification === 'publie') - (a.statut_verification === 'publie'));
     (async () => {
       try {
         let liste = await listerMedecins(paysId ? { pays_exercice_id: paysId } : {});

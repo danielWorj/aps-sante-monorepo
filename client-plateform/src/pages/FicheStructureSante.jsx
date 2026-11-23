@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import structure1 from "../assets/img/structure1.jpg";
 import "./../assets/styles/FicheStructureSante.css";
 import GoogleMapView from "../components/maps/GoogleMapView";
 import HorairesFiche, { StatutOuverture } from "../components/presence/HorairesFiche";
@@ -22,6 +21,9 @@ import {
   envoyerMessageCentre,
 } from "../services/structureSanteService.js";
 import { NOM_MARQUE } from '../lib/marque';
+import FicheHero from "../components/ui/FicheHero";
+import { imagesUniques, partagerFiche } from "../components/ui/ficheHeroOutils";
+import { useToast } from "../components/feedback";
 
 // Fiche structure de santé — page de détail d'un hôpital, d'une clinique,
 // d'un centre médical, d'un dispensaire ou d'un laboratoire, avec ses
@@ -32,8 +34,6 @@ import { NOM_MARQUE } from '../lib/marque';
 // Contenu entièrement dynamisé depuis l'API ; il est géré par l'agent du
 // centre depuis son espace (/portail/structure).
 
-// Photo par défaut si la structure n'a pas (encore) d'image_url exploitable.
-const PHOTO_PAR_DEFAUT = structure1;
 
 // Habillage visuel (icône + couleur du badge) par type_structure — même
 // mapping local que sur la page annuaire StructureSante.jsx (ces infos
@@ -394,6 +394,7 @@ function FicheIntrouvable() {
 /* ============================ COMPOSANT PRINCIPAL ============================ */
 export default function FicheStructureSante() {
   const { id } = useParams();
+  const toast = useToast();
 
   const [structure, setStructure] = useState(null);
   const [images, setImages] = useState([]);
@@ -487,7 +488,7 @@ export default function FicheStructureSante() {
   return (
     <>
       {/* ============================ FIL D'ARIANE ============================ */}
-      <div className="container-aps" style={{ paddingTop: "1.1rem", fontSize: ".82rem" }}>
+      <div className="container-aps fiche-ariane" style={{ paddingTop: "1.1rem", fontSize: ".82rem" }}>
         <Link to="/" className="text-muted-soft">
           Accueil
         </Link>
@@ -499,77 +500,68 @@ export default function FicheStructureSante() {
         <span className="text-faint">{structure.nom}</span>
       </div>
 
-      {/* ============================ EN-TÊTE FICHE (photo + coordonnées) ============================ */}
-      <section className="profile-header" style={{ paddingTop: "1.5rem" }}>
-        <div className="container-aps">
-          <div className="profile-header-inner">
-            <div
-              className="profile-avatar"
-              style={{ display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}
-            >
-              <img
-                src={structure.image_url || PHOTO_PAR_DEFAUT}
-                alt={structure.nom}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-            </div>
-            <div>
-              <h1>{structure.nom}</h1>
-              <div className="practitioner-meta mb-2">
-                <span className={`structure-type ${meta.cls}`}>
-                  <i className={`fa-solid ${meta.icon}`} /> {libelleType(structure.type_structure)}
-                </span>
-                <span>&middot;</span>
-                <span>
-                  <i className="fa-solid fa-location-dot" />{" "}
-                  {[structure.ville?.nom, structure.pays?.nom].filter(Boolean).join(", ")}
-                </span>
-                {structure.telephone && (
-                  <>
-                    <span>&middot;</span>
-                    <span>
-                      <i className="fa-solid fa-phone" /> {structure.telephone}
-                    </span>
-                  </>
-                )}
-              </div>
-              <div className="d-flex gap-2 flex-wrap">
-                {structure.statut_verification === "publie" ? (
-                  <span className="chip chip-verifie">
-                    <i className="fa-solid fa-circle-check" /> Structure vérifiée
-                  </span>
-                ) : (
-                  <span className="chip chip-complet">
-                    <i className="fa-solid fa-hourglass-half" /> En cours de vérification
-                  </span>
-                )}
-                {structure.urgences_24h && (
-                  <span className="chip chip-verifie">
-                    <i className="fa-solid fa-truck-medical" /> Urgences 24 h/24
-                  </span>
-                )}
-                <StatutOuverture fiche={structure} />
-              </div>
-            </div>
-            <div className="profile-actions">
-              {structure.droits?.contact_direct && (
-                <a
-                  href="#contact"
-                  className="btn btn-primary btn-lg-aps"
-                  onClick={() => setActiveTab("presentation")}
-                >
-                  <i className="fa-solid fa-envelope" /> Contacter
-                </a>
-              )}
-              {structure.telephone && (
-                <a href={`tel:${structure.telephone}`} className="btn btn-ghost">
-                  <i className="fa-solid fa-phone" />
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* ============================ HAUT DE FICHE (photos + coordonnées) ============================ */}
+      <FicheHero
+        images={imagesUniques(images.map((img) => img.url || img))}
+        logo={structure.image_url}
+        repliIcone={meta.icon}
+        retour={{ to: "/structure-sante", libelle: "Structures de santé" }}
+        onPartager={() => partagerFiche(structure.nom, toast)}
+        badges={
+          <>
+            <span className={`structure-type ${meta.cls}`}>
+              <i className={`fa-solid ${meta.icon}`} /> {libelleType(structure.type_structure)}
+            </span>
+            {structure.statut_verification === "publie" ? (
+              <span className="chip chip-verifie">
+                <i className="fa-solid fa-circle-check" /> Structure vérifiée
+              </span>
+            ) : (
+              <span className="chip chip-complet">
+                <i className="fa-solid fa-hourglass-half" /> En cours de vérification
+              </span>
+            )}
+            {structure.urgences_24h && (
+              <span className="chip chip-verifie">
+                <i className="fa-solid fa-truck-medical" /> Urgences 24 h/24
+              </span>
+            )}
+            <StatutOuverture fiche={structure} />
+          </>
+        }
+        titre={structure.nom}
+        sousTitre={
+          <>
+            <i className="fa-solid fa-location-dot" />{" "}
+            {[structure.adresse, structure.ville?.nom, structure.pays?.nom].filter(Boolean).join(", ")}
+          </>
+        }
+        description={structure.description_enrichie || structure.description || null}
+        actions={
+          <>
+            {structure.telephone && (
+              <a href={`tel:${structure.telephone}`} className="btn btn-primary btn-lg-aps">
+                <i className="fa-solid fa-phone" /> Appeler
+              </a>
+            )}
+            {structure.geolocalisation && (
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${structure.geolocalisation.latitude},${structure.geolocalisation.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-outline-primary"
+              >
+                <i className="fa-solid fa-route" /> Itinéraire
+              </a>
+            )}
+            {structure.droits?.contact_direct && (
+              <a href="#contact" className="btn btn-ghost" aria-label="Écrire" onClick={() => setActiveTab("presentation")}>
+                <i className="fa-solid fa-envelope" />
+              </a>
+            )}
+          </>
+        }
+      />
 
       {/* ============================ CORPS — ONGLETS ============================ */}
       <section style={{ paddingTop: "1.5rem" }}>
