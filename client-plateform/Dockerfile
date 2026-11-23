@@ -17,10 +17,11 @@ COPY . .
 # vide est retiré de l'environnement : le .env du dossier sert de repli.
 ARG VITE_API_URL
 ARG VITE_GOOGLE_MAPS_API_KEY
+ARG VITE_STRIPE_PUBLISHABLE_KEY
 # Marque affichée (src/lib/marque.js) : vides -> défauts du code.
 ARG VITE_NOM_MARQUE
 ARG VITE_RAISON_SOCIALE
-RUN for v in VITE_API_URL VITE_GOOGLE_MAPS_API_KEY VITE_NOM_MARQUE VITE_RAISON_SOCIALE; do \
+RUN for v in VITE_API_URL VITE_GOOGLE_MAPS_API_KEY VITE_STRIPE_PUBLISHABLE_KEY VITE_NOM_MARQUE VITE_RAISON_SOCIALE; do \
       eval "val=\${$v}"; [ -n "$val" ] || unset "$v"; \
     done; \
     npm run build

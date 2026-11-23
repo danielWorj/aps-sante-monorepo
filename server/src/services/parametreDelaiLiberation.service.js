@@ -127,3 +127,43 @@ export async function creerParametreDelai({ pays_id, libelle, heures } = {}, cli
   // Un client transactionnel (tx) n'a pas $transaction : on s'y greffe tel quel.
   return typeof client.$transaction === "function" ? client.$transaction(executer) : executer(client);
 }
+/**
+ * Pays où exercent des médecins mais sans délai T actif : aucune fin de
+ * consultation n'y est constatable, donc aucun fonds n'y est jamais libéré.
+ * Utilisé au démarrage pour alerter (voir verifierDelaisLiberation).
+ * @returns {Promise<Array<{ pays_id: string, nom: string, medecins: number }>>}
+ */
+export async function paysSansDelaiLiberation(client = prisma) {
+  const [groupes, actifs] = await Promise.all([
+    client.medecin.groupBy({ by: ["pays_exercice_id"], _count: { _all: true } }),
+    client.parametreDelaiLiberation.findMany({ where: { actif: true }, select: { pays_id: true } }),
+  ]);
+  const couverts = new Set(actifs.map((a) => a.pays_id));
+  const manquants = groupes.filter((g) => g.pays_exercice_id && !couverts.has(g.pays_exercice_id));
+  if (manquants.length === 0) return [];
+  const pays = await client.pays.findMany({
+    where: { pays_id: { in: manquants.map((g) => g.pays_exercice_id) } },
+    select: { pays_id: true, nom: true },
+  });
+  const noms = new Map(pays.map((p) => [p.pays_id, p.nom]));
+  return manquants.map((g) => ({
+    pays_id: g.pays_exercice_id,
+    nom: noms.get(g.pays_exercice_id) ?? g.pays_exercice_id,
+    medecins: g._count._all,
+  }));
+}
+
+/** Journalise les pays sans délai T (n'échoue jamais). */
+export async function verifierDelaisLiberation() {
+  try {
+    const manquants = await paysSansDelaiLiberation();
+    for (const p of manquants) {
+      console.error(
+        `[liberation] Aucun délai de libération (T) actif pour ${p.nom} (${p.medecins} médecin(s)) : ` +
+        `les fins de consultation y sont refusées et les fonds restent en séquestre. À saisir dans le back-office (Délai de libération).`
+      );
+    }
+  } catch (err) {
+    console.warn(`[liberation] Contrôle des délais de libération impossible : ${err.message}`);
+  }
+}

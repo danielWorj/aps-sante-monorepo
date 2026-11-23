@@ -5,18 +5,50 @@
 
 import jwt from "jsonwebtoken";
 
-const BASE_URL = (process.env.CAMPAY_BASE_URL || "https://demo.campay.net/api").replace(/\/$/, "");
+const URL_DEMO = "https://demo.campay.net/api";
+const URL_PRODUCTION = "https://www.campay.net/api";
+const BASE_URL = (process.env.CAMPAY_BASE_URL || URL_DEMO).trim().replace(/\/$/, "");
 
-// Le token est lu à l'appel (et non à l'import) : un CAMPAY_TOKEN absent ne doit
+// Noms acceptés : le .env du projet utilise les libellés du tableau de bord
+// CamPay (CAMPAY_PERMANENT_ACCESS_TOKEN, CAMPAY_APP_WEBHOOK_KEY), le code
+// historique les noms courts. Les deux fonctionnent.
+const lireEnv = (...noms) => {
+  for (const nom of noms) {
+    const v = process.env[nom]?.trim();
+    if (v) return v;
+  }
+  return null;
+};
+const jetonEnv = () => lireEnv("CAMPAY_TOKEN", "CAMPAY_PERMANENT_ACCESS_TOKEN");
+const cleWebhookEnv = () => lireEnv("CAMPAY_WEBHOOK_KEY", "CAMPAY_APP_WEBHOOK_KEY");
+
+// Le token est lu à l'appel (et non à l'import) : un jeton absent ne doit
 // pas empêcher tout le serveur (Stripe compris) de démarrer, seulement les
 // paiements CamPay d'échouer proprement.
 function tokenCampay() {
-  const token = process.env.CAMPAY_TOKEN;
+  const token = jetonEnv();
   if (!token) {
-    console.error("[campay] CAMPAY_TOKEN manquant dans l'environnement.");
+    console.error("[campay] Jeton manquant : définir CAMPAY_TOKEN (ou CAMPAY_PERMANENT_ACCESS_TOKEN).");
     throw new CampayError("Le paiement Mobile Money est momentanément indisponible.", { status: 503 });
   }
   return token;
+}
+
+/**
+ * Contrôle de configuration au démarrage : journalise l'environnement CamPay
+ * utilisé et ce qui manque. N'échoue jamais (le serveur doit démarrer).
+ */
+export function verifierConfigurationCampay() {
+  const demo = BASE_URL === URL_DEMO;
+  console.info(`[campay] API utilisée : ${BASE_URL}${demo ? " (BAC À SABLE — aucun argent réel)" : ""}.`);
+  if (demo && process.env.NODE_ENV === "production") {
+    console.error(
+      `[campay] NODE_ENV=production mais CAMPAY_BASE_URL n'est pas défini : encaissements et retraits passent par le bac à sable. ` +
+      `Définir CAMPAY_BASE_URL=${URL_PRODUCTION}.`
+    );
+  }
+  if (!jetonEnv()) console.error("[campay] Jeton absent (CAMPAY_TOKEN / CAMPAY_PERMANENT_ACCESS_TOKEN) : tout appel CamPay échouera.");
+  if (!cleWebhookEnv()) console.warn("[campay] Clé de webhook absente (CAMPAY_WEBHOOK_KEY / CAMPAY_APP_WEBHOOK_KEY) : signature des callbacks non vérifiable.");
 }
 
 export const DEVISE_CAMPAY = "XAF";
@@ -196,7 +228,7 @@ export function obtenirStatutPaiementGroupe(reference) {
  * À confirmer en recette : voir CAMPAY_VERIFIER_SIGNATURE dans le controller.
  */
 export function signatureCallbackValide(signature) {
-  const cle = process.env.CAMPAY_WEBHOOK_KEY;
+  const cle = cleWebhookEnv();
   if (!cle || !signature) return false;
   try {
     jwt.verify(signature, cle, { algorithms: ["HS256"] });

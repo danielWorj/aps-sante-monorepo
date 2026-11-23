@@ -54,6 +54,8 @@ import whatsappRoutes from "./src/routes/whatsapp.routes.js";
 import smsRoutes from "./src/routes/sms.routes.js";
 import emailRoutes from "./src/routes/email.routes.js";
 import { demarrerScheduler } from "./src/lib/scheduler.js";
+import { verifierConfigurationCampay } from "./src/lib/campayService.js";
+import { verifierDelaisLiberation } from "./src/services/parametreDelaiLiberation.service.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -280,6 +282,9 @@ app.listen(PORT, () => {
   // Phase 4 — après app.listen() : rien ne justifie de bloquer le
   // démarrage HTTP en attendant que le scheduler soit prêt.
   demarrerScheduler();
+  // Contrôles de configuration des décaissements (journalisés, jamais bloquants).
+  verifierConfigurationCampay();
+  verifierDelaisLiberation();
 });
 
 // Métriques Prometheus sur un port interne séparé (jamais exposé via nginx).

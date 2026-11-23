@@ -7,6 +7,8 @@ services:
       args:
         VITE_API_URL: ${VITE_API_URL_PLATEFORM}
         VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY}
+        # Clé publique Stripe : la même que celle renvoyée par le serveur à l'app mobile.
+        VITE_STRIPE_PUBLISHABLE_KEY: ${VITE_STRIPE_PUBLISHABLE_KEY:-}
         # Marque : mêmes variables que le serveur (NOM_MARQUE, RAISON_SOCIALE du .env).
         VITE_NOM_MARQUE: ${NOM_MARQUE:-}
         VITE_RAISON_SOCIALE: ${RAISON_SOCIALE:-}

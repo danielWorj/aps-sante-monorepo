@@ -407,9 +407,10 @@ async function trouverPaymentIntentReutilisable({ rdv, montant, devise }) {
 // que par le webhook `payment_intent.succeeded`, jamais par cette route.
 export async function creerPaymentSheetRdv(req, res, next) {
   try {
-    const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
+    // Même clé publique que le site web (VITE_STRIPE_PUBLISHABLE_KEY du .env racine).
+    const publishableKey = (process.env.VITE_STRIPE_PUBLISHABLE_KEY || process.env.STRIPE_PUBLISHABLE_KEY)?.trim();
     if (!publishableKey) {
-      console.error("[paiement] STRIPE_PUBLISHABLE_KEY manquant : paiement natif indisponible.");
+      console.error("[paiement] VITE_STRIPE_PUBLISHABLE_KEY manquant dans le .env : paiement natif indisponible.");
       return res.status(500).json({ message: "Paiement en ligne momentanément indisponible." });
     }
 
