@@ -1,36 +1,45 @@
 # Intégration continue : tests du serveur, builds des deux clients web,
 # analyse de l'application mobile. Se lance à chaque push et pull request
 # sur main ; chaque job ne tourne que si son dossier a changé.
-name: CI
+name: CI # nom de la workflow
 
+# l'instruction 'on' de declenchement 
+# Ce bloque donne les conditions de déclenchement du workflow. Il peut être déclenché par un push, une pull request ou manuellement via l'interface GitHub.
 on:
   push:
-    branches: [main]
+    branches: [main] # le workflow va se lancer sur un push sur la branche main
   pull_request:
-    branches: [main]
+    branches: [main] # le workflow va se lancer sur une PR vers la branche main
   workflow_dispatch:
-
+# Ce bloc permet d'eviter les conflits de déploiement en s'assurant qu'un seul workflow de CI est en cours d'exécution pour une branche donnée. Si un nouveau workflow est déclenché pour la même branche alors qu'un autre est déjà en cours, le workflow en cours sera annulé.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Permissions accordees a GITHUB unqiuement la lecture dans ce cas
 permissions:
   contents: read
 
+# Ce bloc définit les différents jobs qui seront exécutés dans le workflow. 
+# Chaque job peut avoir ses propres conditions d'exécution, dépendances et étapes.
+# Les jobs tournent en parallele, sauf si un job dépend d'un autre (via l'instruction 'needs').
 jobs:
+  # Ce premier job a pour but de détecter les changements dans les différents dossiers du projet. Il utilise l'action dorny/paths-filter pour filtrer les changements par dossier et définir des sorties (outputs) qui seront utilisées par les autres jobs.
   changements:
     name: Détection des changements
     runs-on: ubuntu-latest
-    outputs:
+    outputs: # Ces sorties sont utilisées par les autres jobs pour déterminer s'ils doivent s'exécuter ou non.
       server: ${{ steps.filtre.outputs.server }}
       plateforme: ${{ steps.filtre.outputs.plateforme }}
       backoffice: ${{ steps.filtre.outputs.backoffice }}
       mobile: ${{ steps.filtre.outputs.mobile }}
-    steps:
+    steps: # Les étapes de ce job sont les suivantes :
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filtre
-        with:
+        with: # ici il s'agit de definir un filtre qui detecte les changements dans les differents dossiers du projet. 
+        # Le filtre est défini par des expressions glob qui correspondent aux chemins des fichiers dans le dépôt.
+        # Si un fichier correspondant à un filtre est modifié, la sortie correspondante sera définie sur true.
           filters: |
             server:
               - 'server/**'
@@ -44,11 +53,13 @@ jobs:
             mobile:
               - 'mobileapp/**'
               - '.github/workflows/ci.yml'
-
+  # Job pour tester le serveur. 
   server:
     name: Serveur — tests
-    needs: changements
-    if: needs.changements.outputs.server == 'true' || github.event_name == 'workflow_dispatch'
+    needs: changements # Ce job dépend du job "changements", ce qui signifie qu'il ne s'exécutera que si le job "changements" a réussi.
+    # L'instruction 'if' permet de conditionner l'exécution du job en fonction des sorties du job "changements" 
+    # ou si le workflow a été déclenché manuellement via l'interface GitHub.
+    if: needs.changements.outputs.server == 'true' || github.event_name == 'workflow_dispatch' 
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -64,10 +75,11 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: server/package-lock.json
-      - run: npm ci
-      - run: npx prisma generate
-      - run: npm test
+      - run: npm ci # Installe les dépendances du projet en utilisant le fichier package-lock.json pour garantir des versions cohérentes.
+      - run: npx prisma generate # Génère le client Prisma à partir du schéma défini dans le projet. Cela permet d'interagir avec la base de données de manière typée.
+      - run: npm test # Exécute les tests définis dans le projet. Si un test échoue, le job échouera également.
 
+  # Job pour tester le client web (plateforme)
   plateforme:
     name: Plateforme web — build
     needs: changements
@@ -83,12 +95,13 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: client-plateform/package-lock.json
-      - run: npm ci
+      - run: npm ci # Installe les dépendances du projet en utilisant le fichier package-lock.json pour garantir des versions cohérentes.
       - name: Lint (informatif)
         run: npm run lint
         continue-on-error: true
       - run: npm run build
-
+  
+  # Job pour tester le client web (back-office)
   backoffice:
     name: Back-office — build
     needs: changements
