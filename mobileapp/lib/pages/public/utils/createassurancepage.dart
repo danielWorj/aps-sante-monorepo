@@ -179,6 +179,9 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
         if (_agentPrenomCtrl.text.trim().isEmpty) {
           return "Le prénom de l'agent est requis.";
         }
+        if (_agentTelCtrl.text.trim().isEmpty) {
+          return "Le téléphone de l'agent est obligatoire : il lui sert à se connecter.";
+        }
         final agentEmail = _agentEmailCtrl.text.trim();
         if (agentEmail.isEmpty) return "Un email pour l'agent est requis.";
         if (!_emailRegExp.hasMatch(agentEmail)) {
@@ -573,7 +576,8 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
           ),
         ),
         ApsFormField(
-          label: "Téléphone de l'agent",
+          label: "Téléphone de l'agent (pour se connecter)",
+          required: true,
           child: ApsTextInput(
             controller: _agentTelCtrl,
             hint: '+237 6 XX XX XX XX',
@@ -674,6 +678,8 @@ class _CreateAssuranceScreenState extends ConsumerState<CreateAssuranceScreen>
             ApsCredentialsCard(
               email: reponse.agent.utilisateur.email,
               motDePasseTemporaire: reponse.agent.motDePasseTemporaire,
+              telephone: reponse.agent.telephoneConnexion,
+              pinProvisoire: reponse.agent.pinProvisoire,
             ),
           const Column(
             children: [

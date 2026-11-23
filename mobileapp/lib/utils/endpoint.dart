@@ -61,6 +61,13 @@ class ApiRealEndpoints {
   // Connexion web validée depuis l'application.
   static const String demandesConnexionWeb = '${baseUrl}/auth/connexion-application/demandes';
   static String repondreDemandeConnexionWeb(String id) => '${baseUrl}/auth/connexion-application/demandes/$id/repondre';
+  static String sonderConnexionApplication(String id) => '${baseUrl}/auth/connexion-application/$id/statut';
+  // Vérification WhatsApp inversée (l'utilisateur envoie le code).
+  static const String statutVerificationInverse = '${baseUrl}/verification-telephone/statut';
+  // Nouvel appareil (token restreint « validation_appareil »).
+  static const String validationAppareilApplication = '${baseUrl}/auth/appareil/application';
+  static const String validationAppareilWhatsapp = '${baseUrl}/auth/appareil/whatsapp';
+  static const String validationAppareil = '${baseUrl}/auth/appareil/valider';
   static const String profilCourant = '${baseUrl}/auth/me';
   static const String comptes = '${baseUrl}/auth/comptes';
   static const String amorcageSuperAdmin =

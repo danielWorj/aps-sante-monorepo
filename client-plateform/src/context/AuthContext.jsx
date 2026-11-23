@@ -117,7 +117,8 @@ export function AuthProvider({ children }) {
   const connecter = useCallback(async (email, mot_de_passe) => {
     const data = await authService.connecter(email, mot_de_passe);
 
-    if (data?.mot_de_passe_a_changer) {
+    // Mot de passe temporaire, ou nouvel appareil à confirmer : pas de session.
+    if (data?.mot_de_passe_a_changer || data?.appareil_a_valider) {
       return data;
     }
 
@@ -136,7 +137,8 @@ export function AuthProvider({ children }) {
    */
   const connecterParPin = useCallback(async (telephone, pays_iso2, pin) => {
     const data = await authService.connecterParPin(telephone, pays_iso2, pin);
-    if (data?.pin_a_changer) return data;
+    // PIN provisoire, ou nouvel appareil à confirmer : pas de session.
+    if (data?.pin_a_changer || data?.appareil_a_valider) return data;
     setAccessToken(data.access_token);
     setUser(data.utilisateur);
     setEspaces(data.espaces ?? []);
@@ -212,12 +214,13 @@ export function AuthProvider({ children }) {
    * réservation publicitaire avec création de compte) : la réponse porte
    * déjà access_token + utilisateur, le refresh token est en cookie.
    */
-  const ouvrirSession = useCallback(({ access_token, utilisateur }) => {
+  const ouvrirSession = useCallback(({ access_token, utilisateur, espaces: espacesSession }) => {
     setAccessToken(access_token);
     setUser(utilisateur);
     setStatus('authenticated');
     setDeconnexionVolontaire(false);
-    authService.listerEspaces().then(setEspaces).catch(() => {});
+    if (Array.isArray(espacesSession)) setEspaces(espacesSession);
+    else authService.listerEspaces().then(setEspaces).catch(() => {});
   }, []);
 
   /**

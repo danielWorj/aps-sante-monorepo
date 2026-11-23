@@ -4,7 +4,9 @@ import '../../assets/styles/creer-medecin.css';
 import { creerMedecin, listerSpecialites, verifierAppartenanceOrdre } from '../../services/medecinService';
 import { listerPays, listerVilles } from '../../services/geoService';
 import ChampVille from '../ui/ChampVille';
-import { connecter } from '../../services/authService';
+import { connecterParPin } from '../../services/authService';
+import VerificationTelephone from '../auth/VerificationTelephone';
+import { useConfigurationConnexion } from '../../hooks/useConfigurationConnexion';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import GoogleMapPicker from '../maps/GoogleMapPicker';
 import { creerMobileMoney, creerCompteBancaire, listerTypesMobileMoney } from '../../services/moyenPaiementService';
@@ -63,6 +65,9 @@ const CreationMedecin = () => {
   const [submitError, setSubmitError] = useState(null);
   const [stepError, setStepError] = useState(null);
   const [compteCree, setCompteCree] = useState(null);
+  // Connexion par numéro + code PIN : preuve du numéro si la vérification est active.
+  const configConnexion = useConfigurationConnexion();
+  const [preuveTelephone, setPreuveTelephone] = useState(null);
 
   // Copie des identifiants (hooks toujours appelés au niveau racine du composant)
   const [copiedField, setCopiedField] = useState(null);
@@ -99,6 +104,8 @@ const CreationMedecin = () => {
     prenom: '',
     email: '',
     telephone: '',
+    pin: '',
+    pin_confirmation: '',
     pays_id: '',
     ville_exercice_id: '',
 
@@ -251,7 +258,11 @@ const CreationMedecin = () => {
         if (!formData.nom.trim()) return "Le nom est obligatoire.";
         if (!formData.prenom.trim()) return "Le prénom est obligatoire.";
         if (!formData.email.trim()) return "L'adresse e-mail est obligatoire.";
+        if (!formData.telephone.trim()) return "Le numéro de téléphone est obligatoire : il vous sert à vous connecter.";
+        if (!/^\d{6}$/.test(formData.pin)) return "Choisissez un code PIN de 6 chiffres.";
+        if (formData.pin !== formData.pin_confirmation) return "Les deux codes PIN ne sont pas identiques.";
         if (!formData.pays_id) return "Le pays est obligatoire.";
+        if (configConnexion?.verification_telephone && !preuveTelephone) return "Confirmez votre numéro de téléphone.";
         if (!formData.ville_exercice_id) return "La ville d'exercice est obligatoire.";
         return null;
       case 2:
@@ -329,7 +340,9 @@ const CreationMedecin = () => {
         nom: formData.nom.trim(),
         prenom: formData.prenom.trim(),
         email: formData.email.trim(),
-        telephone: formData.telephone.trim() || undefined,
+        telephone: formData.telephone.trim(),
+        pin: formData.pin,
+        preuve_telephone: preuveTelephone || undefined,
         pays_id: formData.pays_id,
         specialite_id: formData.specialite_id,
         numero_ordre: formData.numero_ordre.trim(),
@@ -354,11 +367,11 @@ const CreationMedecin = () => {
       // Étape 5 optionnelle : n'est envoyée qu'APRÈS la création du
       // médecin, et seulement si un mode de trésorerie a été choisi.
       // Nécessite une session (medecin propriétaire authentifié) —
-      // obtenue ici via le mot de passe temporaire tout juste généré.
+      // obtenue ici avec le numéro et le code PIN tout juste choisis.
       let erreurTresorerie = null;
       if (formData.tresorerie === 'Mobile Money' || formData.tresorerie === 'Compte bancaire') {
         try {
-          await connecter(utilisateur.email, utilisateur.mot_de_passe_temporaire);
+          await connecterParPin(formData.telephone.trim(), paysSelectionne?.code_iso2 ?? null, formData.pin);
 
           if (formData.tresorerie === 'Mobile Money') {
             await creerMobileMoney({
@@ -382,12 +395,9 @@ const CreationMedecin = () => {
         }
       }
 
-      // utilisateur.mot_de_passe_temporaire n'est renvoyé qu'une seule
-      // fois par le serveur : on ne le restocke nulle part, on
-      // l'affiche seulement le temps de cet écran de confirmation.
+      // Identifiant de connexion : le numéro (le code PIN n'est jamais réaffiché).
       setCompteCree({
-        email: utilisateur.email,
-        motDePasseTemporaire: utilisateur.mot_de_passe_temporaire,
+        telephone: utilisateur.telephone_connexion ? `+${utilisateur.telephone_connexion}` : formData.telephone.trim(),
         erreurTresorerie,
       });
       setIsSubmitted(true);
@@ -468,20 +478,20 @@ if (isSubmitted) {
 
                   <div className="cred-row">
                     <div className="cred-icon">
-                      <i className="fa-solid fa-envelope"></i>
+                      <i className="fa-solid fa-phone"></i>
                     </div>
                     <div className="cred-body">
-                      <span className="cred-label">Identifiant</span>
-                      <span className="cred-value">{compteCree.email}</span>
+                      <span className="cred-label">Numéro de connexion</span>
+                      <span className="cred-value">{compteCree.telephone}</span>
                     </div>
                     <button
                       type="button"
-                      className={`cred-copy ${copiedField === 'email' ? 'copied' : ''}`}
-                      onClick={() => handleCopy('email', compteCree.email)}
-                      title="Copier l'identifiant"
-                      aria-label="Copier l'identifiant"
+                      className={`cred-copy ${copiedField === 'telephone' ? 'copied' : ''}`}
+                      onClick={() => handleCopy('telephone', compteCree.telephone)}
+                      title="Copier le numéro"
+                      aria-label="Copier le numéro"
                     >
-                      <i className={`fa-solid ${copiedField === 'email' ? 'fa-check' : 'fa-clipboard'}`}></i>
+                      <i className={`fa-solid ${copiedField === 'telephone' ? 'fa-check' : 'fa-clipboard'}`}></i>
                     </button>
                   </div>
 
@@ -490,20 +500,9 @@ if (isSubmitted) {
                       <i className="fa-solid fa-key"></i>
                     </div>
                     <div className="cred-body">
-                      <span className="cred-label">Mot de passe temporaire</span>
-                      <span className="cred-value">
-                        <code>{compteCree.motDePasseTemporaire}</code>
-                      </span>
+                      <span className="cred-label">Code PIN</span>
+                      <span className="cred-value">Celui que vous avez choisi (6 chiffres)</span>
                     </div>
-                    <button
-                      type="button"
-                      className={`cred-copy ${copiedField === 'password' ? 'copied' : ''}`}
-                      onClick={() => handleCopy('password', compteCree.motDePasseTemporaire)}
-                      title="Copier le mot de passe"
-                      aria-label="Copier le mot de passe"
-                    >
-                      <i className={`fa-solid ${copiedField === 'password' ? 'fa-check' : 'fa-clipboard'}`}></i>
-                    </button>
                   </div>
                 </div>
               )}
@@ -712,14 +711,21 @@ if (isSubmitted) {
                             />
                           </div>
                           <div className="col-md-6">
-                            <label className="form-label-aps">Téléphone</label>
+                            <label className="form-label-aps">
+                              Téléphone <span className="required-mark">*</span>
+                            </label>
                             <input
                               type="tel"
+                              inputMode="tel"
                               className="form-control"
                               name="telephone"
+                              placeholder="6XX XX XX XX"
                               value={formData.telephone}
-                              onChange={handleChange}
+                              onChange={(e) => { handleChange(e); setPreuveTelephone(null); }}
+                              autoComplete="tel"
+                              required
                             />
+                            <p className="form-hint">Vous vous connecterez avec ce numéro et votre code PIN.</p>
                           </div>
                           <div className="col-md-6">
                             <label className="form-label-aps">
@@ -765,6 +771,53 @@ if (isSubmitted) {
                               disabled={!formData.pays_id}
                             />
                           </div>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">
+                              Code PIN (6 chiffres) <span className="required-mark">*</span>
+                            </label>
+                            <input
+                              type="password"
+                              inputMode="numeric"
+                              autoComplete="new-password"
+                              maxLength={6}
+                              className="form-control"
+                              style={{ letterSpacing: '.4em' }}
+                              name="pin"
+                              value={formData.pin}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, pin: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                              required
+                            />
+                            <p className="form-hint">Évitez 123456, 000000 ou votre date de naissance.</p>
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label-aps">
+                              Confirmez le code PIN <span className="required-mark">*</span>
+                            </label>
+                            <input
+                              type="password"
+                              inputMode="numeric"
+                              autoComplete="new-password"
+                              maxLength={6}
+                              className="form-control"
+                              style={{ letterSpacing: '.4em' }}
+                              name="pin_confirmation"
+                              value={formData.pin_confirmation}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, pin_confirmation: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                              required
+                            />
+                          </div>
+                          {configConnexion?.verification_telephone && (
+                            <div className="col-12">
+                              <VerificationTelephone
+                                telephone={formData.telephone}
+                                pays_iso2={paysSelectionne?.code_iso2}
+                                objet="inscription"
+                                canaux={configConnexion.canaux}
+                                preuve={preuveTelephone}
+                                onPreuve={setPreuveTelephone}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

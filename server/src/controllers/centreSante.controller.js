@@ -32,8 +32,7 @@
 
 import prisma from "../lib/prisma.js";
 import { televerserFichier, supprimerFichier, construireUrl } from "../lib/cloudinaryService.js";
-import crypto from "crypto";
-import bcrypt from "bcrypt"; // même bibliothèque que authentification.controller.js
+import { controlerTelephoneNouveauCompte, ErreurPin, identifiantsNouveauCompte } from "../services/pin.service.js";
 import { creerAccesseurGeospatial, validerCoordonnees } from "../lib/geo.js";
 import { estAdminOuSuperadmin, peutGererFichePresence } from "../lib/acteursPresence.js";
 import {
@@ -48,7 +47,6 @@ import { MESSAGE_CGU_REFUSEES, cguRefusees, enregistrerAcceptationsAuteur } from
 import { normaliserCoordonnees } from "../services/espacePresence.service.js";
 import { estOuvert24h, etatOuverture } from "../lib/horairesFiche.js";
 
-const SALT_ROUNDS = 10; // valeur identique à authentification.controller.js
 
 const STATUTS_VERIFICATION_STRUCTURE = ["non_publie", "en_cours", "publie"];
 const TYPES_STRUCTURE = ["clinique", "hopital", "centre_medical", "dispensaire", "laboratoire"];
@@ -84,15 +82,6 @@ const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * Génère un mot de passe temporaire lisible (12 caractères, sans
  * caractères ambigus 0/O/1/l/I) à communiquer à l'agent.
  */
-function genererMotDePasseTemporaire() {
-  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  const octets = crypto.randomBytes(12);
-  let motDePasse = "";
-  for (let i = 0; i < 12; i++) {
-    motDePasse += alphabet[octets[i] % alphabet.length];
-  }
-  return motDePasse;
-}
 
 async function verifierEmailAgentDisponible(email) {
   const existant = await prisma.utilisateur.findUnique({ where: { email } });
@@ -112,8 +101,8 @@ async function creerCompteAgentPourStructure(tx, { structureId, fonction, nom, p
     );
   }
 
-  const motDePasseTemporaire = genererMotDePasseTemporaire();
-  const motDePasseHash = await bcrypt.hash(motDePasseTemporaire, SALT_ROUNDS);
+  // Connexion par numéro + PIN provisoire (à changer à la 1re connexion).
+  const { data: identifiants, pinProvisoire } = await identifiantsNouveauCompte({ telephone, pays_id: paysId });
 
   const utilisateur = await tx.utilisateur.create({
     data: {
@@ -121,11 +110,10 @@ async function creerCompteAgentPourStructure(tx, { structureId, fonction, nom, p
       prenom,
       email,
       telephone: telephone || null,
-      mot_de_passe_hash: motDePasseHash,
       role_id: roleAgent.role_id,
       pays_id: paysId,
       statut_compte: "actif",
-      mot_de_passe_temporaire: true,
+      ...identifiants,
     },
   });
 
@@ -137,7 +125,7 @@ async function creerCompteAgentPourStructure(tx, { structureId, fonction, nom, p
     },
   });
 
-  return { utilisateur, agent, motDePasseTemporaire };
+  return { utilisateur, agent, pinProvisoire };
 }
 
 /* ===================================================================
@@ -479,8 +467,19 @@ export async function creerCentreSante(req, res, next) {
     const emailAgentDisponible = responsableMoi || await verifierEmailAgentDisponible(agent_email.trim().toLowerCase());
     if (!emailAgentDisponible) {
       return res.status(409).json({
-        message: "Un compte existe déjà avec cet email : impossible de créer le compte agent.",
+        message: "Un compte existe déjà avec cet email ou ce numéro : impossible de créer le compte agent.",
       });
+    }
+
+    // Numéro de connexion de l'agent (numéro + PIN provisoire) : contrôlé
+    // avant tout téléversement.
+    if (!responsableMoi) {
+      try {
+        await controlerTelephoneNouveauCompte({ telephone: agent_telephone, pays_id });
+      } catch (errTel) {
+        if (errTel instanceof ErreurPin) return res.status(errTel.status).json({ message: errTel.message, code: errTel.code });
+        throw errTel;
+      }
     }
 
     const [pays, ville] = await Promise.all([
@@ -541,9 +540,9 @@ export async function creerCentreSante(req, res, next) {
     let structure;
     let agent;
     let utilisateurAgent;
-    let motDePasseTemporaire;
+    let pinProvisoire;
     try {
-      ({ structure, agent, utilisateurAgent, motDePasseTemporaire } = await prisma.$transaction(async (tx) => {
+      ({ structure, agent, utilisateurAgent, pinProvisoire } = await prisma.$transaction(async (tx) => {
         const structureCreee = await tx.structureSante.create({
           data: {
             nom,
@@ -560,7 +559,7 @@ export async function creerCentreSante(req, res, next) {
           include: { pays: true, ville: true },
         });
 
-        const { utilisateur, agent: agentCree, motDePasseTemporaire: mdp } =
+        const { utilisateur, agent: agentCree, pinProvisoire: mdp } =
           responsableMoi
             ? await rattacherCompteConnecte(tx, {
               modele: "agentStructureSante", fk: "structure_id", id: structureCreee.structure_id,
@@ -580,7 +579,7 @@ export async function creerCentreSante(req, res, next) {
           structure: structureCreee,
           agent: agentCree,
           utilisateurAgent: utilisateur,
-          motDePasseTemporaire: mdp,
+          pinProvisoire: mdp,
         };
       }));
     } catch (errTransaction) {
@@ -590,7 +589,7 @@ export async function creerCentreSante(req, res, next) {
       // Utilisateur.email tranche alors ici (code Prisma P2002).
       if (errTransaction.code === "P2002") {
         return res.status(409).json({
-          message: "Un compte existe déjà avec cet email : impossible de créer le compte agent.",
+          message: "Un compte existe déjà avec cet email ou ce numéro : impossible de créer le compte agent.",
         });
       }
       throw errTransaction;
@@ -617,7 +616,10 @@ export async function creerCentreSante(req, res, next) {
         prenom: utilisateurAgent.prenom,
         email: utilisateurAgent.email,
       },
-      mot_de_passe_temporaire: motDePasseTemporaire,
+      // PIN provisoire de l'agent (une seule fois) : il se connecte avec
+      // son numéro et ce code, puis choisit son propre PIN.
+      pin_provisoire: pinProvisoire ?? null,
+      telephone_connexion: utilisateurAgent.telephone_connexion ?? null,
       // Fiche rattachée au compte connecté : nouvel espace, aucun secret.
       rattache_au_compte: responsableMoi,
     };
@@ -636,7 +638,7 @@ export async function creerCentreSante(req, res, next) {
     return res.status(201).json({
       message: responsableMoi
         ? "Centre de santé créé avec succès. Elle est rattachée à votre compte : retrouvez-la dans « Changer d’espace »."
-        : "Centre de santé créé avec succès. Compte agent créé — communiquez-lui le mot de passe temporaire.",
+        : "Centre de santé créé avec succès. Compte agent créé — communiquez-lui son code PIN provisoire.",
       centreSante,
       agent: reponseAgent,
     });

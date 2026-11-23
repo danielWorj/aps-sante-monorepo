@@ -285,6 +285,16 @@ class SessionController extends AsyncNotifier<SessionUtilisateur?> {
     return resultat;
   }
 
+  /// Session obtenue hors du login (nouvel appareil confirmé depuis
+  /// l'application ou par WhatsApp) : elle devient la session courante.
+  Future<void> adopterSession(ConnexionResultat resultat) async {
+    if (!resultat.sessionOuverte) return;
+    await _ouvrirSession(SessionUtilisateur(
+      accessToken: resultat.accessToken!,
+      utilisateur: resultat.utilisateur!,
+    ));
+  }
+
   // POST /api/auth/pin — choisir / changer son numéro de connexion et
   // son code PIN (session ouverte). Met à jour l'utilisateur en session.
   Future<void> definirPin({String? telephone, String? paysIso2, required String pin, String? ancienPin, String? preuveTelephone}) async {

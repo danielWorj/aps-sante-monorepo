@@ -126,13 +126,28 @@ class _VeilleConnexionWebState extends ConsumerState<VeilleConnexionWeb> with Wi
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                const Icon(Icons.computer_rounded, size: 34, color: AppColors.b7),
+                                Icon(
+                                  demande.appareilMobile ? Icons.smartphone_rounded : Icons.computer_rounded,
+                                  size: 34,
+                                  color: AppColors.b7,
+                                ),
                                 const SizedBox(height: 10),
-                                Text('Connexion sur un ordinateur ?', textAlign: TextAlign.center, style: AppTextStyles.l),
+                                Text(
+                                  demande.nouvelAppareil
+                                      ? (demande.appareilMobile ? 'Connexion sur un nouveau téléphone ?' : 'Connexion sur un nouvel ordinateur ?')
+                                      : 'Connexion sur un ordinateur ?',
+                                  textAlign: TextAlign.center,
+                                  style: AppTextStyles.l,
+                                ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  'Quelqu’un demande à se connecter à votre compte sur le site $nomMarque. '
-                                  'Si c’est vous, touchez le code affiché sur l’ordinateur.',
+                                  demande.nouvelAppareil
+                                      ? 'Votre code PIN vient d’être saisi sur un autre '
+                                          '${demande.appareilMobile ? 'téléphone' : 'appareil'}. '
+                                          'Si c’est vous, touchez le code affiché sur cet appareil. '
+                                          'Sinon, refusez et changez votre code PIN.'
+                                      : 'Quelqu’un demande à se connecter à votre compte sur le site $nomMarque. '
+                                          'Si c’est vous, touchez le code affiché sur l’ordinateur.',
                                   textAlign: TextAlign.center,
                                   style: AppTextStyles.small,
                                 ),

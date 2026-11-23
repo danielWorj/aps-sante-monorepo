@@ -13,7 +13,7 @@ import {
   verificationTelephoneActive,
   verifierTelephoneCompte,
 } from "../services/pin.service.js";
-import { consommerPreuveTelephone, whatsappInverseActif } from "../services/verificationTelephone.service.js";
+import { consommerPreuveTelephone, demanderCodeVerification, whatsappInverseActif } from "../services/verificationTelephone.service.js";
 import {
   appareilDeLaRequete,
   autreApplicationConnectee,
@@ -199,6 +199,35 @@ export async function demanderValidationApplicationCtrl(req, res, next) {
     return res.status(201).json({
       message: `Ouvrez l'application ${NOM_MARQUE} sur votre autre téléphone et touchez le code affiché ici.`,
       ...demande,
+    });
+  } catch (err) {
+    return repondreErreurPin(err, res, next);
+  }
+}
+
+/**
+ * POST /api/auth/appareil/whatsapp
+ * Lance la vérification WhatsApp inversée sur le numéro de connexion du
+ * compte (inconnu du client en connexion par email). Réponse : code à
+ * envoyer, lien wa.me, verification_id à sonder via
+ * POST /api/verification-telephone/statut.
+ */
+export async function demanderValidationWhatsappCtrl(req, res, next) {
+  try {
+    const utilisateur = await prisma.utilisateur.findUnique({
+      where: { utilisateur_id: req.validationAppareil.utilisateur_id },
+      select: { telephone_connexion: true },
+    });
+    if (!utilisateur?.telephone_connexion) return res.status(404).json({ message: "Compte introuvable." });
+    const r = await demanderCodeVerification({
+      telephone: `+${utilisateur.telephone_connexion}`,
+      objet: "connexion",
+      canal: "whatsapp_inverse",
+      adresse_ip: req.ip ?? null,
+    });
+    return res.status(200).json({
+      message: "Envoyez ce code depuis votre WhatsApp pour confirmer cet appareil.",
+      ...r,
     });
   } catch (err) {
     return repondreErreurPin(err, res, next);

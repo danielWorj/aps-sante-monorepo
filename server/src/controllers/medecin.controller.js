@@ -55,8 +55,8 @@
 // Specialite elle-même (référentiel à part, lecture publique /
 // écriture admin-superadmin — voir medecin.routes.js).
 
-import crypto from "node:crypto";
-import bcrypt from "bcrypt"; // ajuster vers "bcryptjs" si c'est la lib utilisée ailleurs dans le projet
+import { controlerPin, controlerTelephoneNouveauCompte, ErreurPin, identifiantsNouveauCompte } from "../services/pin.service.js";
+import { faireConfianceAppareilRequete } from "../services/appareilConfiance.service.js";
 import prisma from "../lib/prisma.js";
 import cloudinaryService, { construireUrl } from "../lib/cloudinaryService.js";
 import { verifierMedecinEnArrierePlan } from "../services/onmc.service.js";
@@ -359,14 +359,6 @@ function lireCoordonneesRequete(body) {
   return { latitude: normaliser(body?.latitude), longitude: normaliser(body?.longitude) };
 }
 
-/**
- * Génère un mot de passe temporaire lisible (12 caractères) — même
- * patron attendu que creerPharmacie côté service front
- * (agent.mot_de_passe_temporaire, affiché une seule fois à l'appelant).
- */
-function genererMotDePasseTemporaire() {
-  return crypto.randomBytes(9).toString("base64url"); // 12 caractères
-}
 
 /* ===================================================================
  * Médecins (fiche annuaire)
@@ -377,8 +369,8 @@ function genererMotDePasseTemporaire() {
  * PUBLIQUE — aucune authentification requise (voir medecin.routes.js).
  * N'importe quel visiteur peut soumettre une candidature médecin. Crée
  * EN MÊME TEMPS :
- *   1) le compte utilisateur du médecin (rôle "medecin"), avec un mot
- *      de passe temporaire généré côté serveur ;
+ *   1) le compte utilisateur du médecin (rôle "medecin"), qui se connecte
+ *      par numéro (`telephone`) + code PIN choisi (`pin`), obligatoires ;
  *   2) la fiche medecin liée (utilisateur_id unique), TOUJOURS créée
  *      avec statut_verification="non_publie" (en attente de
  *      vérification) — voir plus bas.
@@ -401,9 +393,8 @@ function genererMotDePasseTemporaire() {
  * permettrait à n'importe qui de se créer directement "publie". Seul
  * un admin/superadmin peut faire passer la fiche à "publie" ensuite,
  * via PUT /medecins/:id (route protégée).
- * Le mot de passe temporaire n'est renvoyé qu'UNE SEULE FOIS dans la
- * réponse (`utilisateur.mot_de_passe_temporaire`) — jamais restocké
- * en clair.
+ * Plus de mot de passe temporaire : la réponse rend le numéro de
+ * connexion (`utilisateur.telephone_connexion`).
  */
 export async function creerMedecin(req, res, next) {
   try {
@@ -424,12 +415,17 @@ export async function creerMedecin(req, res, next) {
       teleconsultation_activee,
       tarif_indicatif,
       biographie,
+      pin,
+      preuve_telephone,
     } = req.body;
 
     const champsManquants = [];
     if (!nom) champsManquants.push("nom");
     if (!prenom) champsManquants.push("prenom");
     if (!email) champsManquants.push("email");
+    // Connexion par numéro + code PIN choisi (plus de mot de passe temporaire).
+    if (!telephone) champsManquants.push("telephone");
+    if (pin === undefined || pin === null || pin === "") champsManquants.push("pin");
     if (!pays_id) champsManquants.push("pays_id");
     if (!specialite_id) champsManquants.push("specialite_id");
     if (!numero_ordre) champsManquants.push("numero_ordre");
@@ -477,6 +473,18 @@ export async function creerMedecin(req, res, next) {
     // sans la re-protéger derrière autoriser("admin", "superadmin").
     const statutVerification = "non_publie";
 
+    // Numéro de connexion libre et PIN acceptable : contrôlés AVANT les
+    // téléversements (le numéro est aussi prouvé si la vérification est active).
+    let identifiants;
+    try {
+      await controlerTelephoneNouveauCompte({ telephone, pays_id });
+      const erreurPin = controlerPin(String(pin), { telephone: String(telephone).replace(/\D/g, "") });
+      if (erreurPin) throw new ErreurPin(erreurPin, 400, "PIN_TROP_FAIBLE");
+    } catch (errId) {
+      if (errId instanceof ErreurPin) return res.status(errId.status).json({ message: errId.message, code: errId.code });
+      throw errId;
+    }
+
     const role = await prisma.role.findUnique({ where: { libelle: LIBELLE_ROLE_MEDECIN } });
     if (!role) {
       return res.status(500).json({
@@ -499,8 +507,19 @@ export async function creerMedecin(req, res, next) {
       photoFile ? cloudinaryService.televerserFichier(photoFile.buffer, "medecins/photos") : Promise.resolve(null),
     ]);
 
-    const motDePasseTemporaire = genererMotDePasseTemporaire();
-    const motDePasseHash = await bcrypt.hash(motDePasseTemporaire, 10);
+    try {
+      identifiants = await identifiantsNouveauCompte({ telephone, pays_id, pin: String(pin), preuve_telephone: preuve_telephone ?? null });
+    } catch (errId) {
+      await Promise.all([
+        cloudinaryService.supprimerFichier(resultatCni.nom),
+        cloudinaryService.supprimerFichier(resultatAttestation.nom),
+        resultatPhoto ? cloudinaryService.supprimerFichier(resultatPhoto.nom) : Promise.resolve(),
+      ]);
+      if (errId instanceof ErreurPin || errId?.name === "ErreurSms") {
+        return res.status(errId.status).json({ message: errId.message, code: errId.code });
+      }
+      throw errId;
+    }
 
     try {
       const { utilisateur, medecin } = await prisma.$transaction(async (tx) => {
@@ -510,11 +529,10 @@ export async function creerMedecin(req, res, next) {
             prenom,
             email,
             telephone: telephone || null,
-            mot_de_passe_hash: motDePasseHash,
             role_id: role.role_id,
             pays_id,
             statut_compte: "actif",
-            mot_de_passe_temporaire: true,
+            ...identifiants.data,
           },
         });
 
@@ -552,6 +570,9 @@ export async function creerMedecin(req, res, next) {
       await enregistrerAcceptationsLegales({
         utilisateurId: utilisateur.utilisateur_id, req, contexte: "inscription_medecin",
       });
+      // Inscription faite sur cet appareil : pas de confirmation demandée
+      // à la première connexion qui suit.
+      await faireConfianceAppareilRequete(req, res, utilisateur.utilisateur_id, "inscription");
 
       // Tableau de l'Ordre (ONMC) : statut_ordre calculé en tâche de fond.
       verifierMedecinEnArrierePlan(medecin.medecin_id);
@@ -586,7 +607,8 @@ export async function creerMedecin(req, res, next) {
           nom: utilisateur.nom,
           prenom: utilisateur.prenom,
           email: utilisateur.email,
-          mot_de_passe_temporaire: motDePasseTemporaire,
+          // Se connecter avec ce numéro et le code PIN choisi.
+          telephone_connexion: utilisateur.telephone_connexion,
         },
       });
     } catch (errTransaction) {

@@ -428,6 +428,15 @@ class ConnexionResultat {
   /// le dernier utilisé en premier. Vide si aucune session.
   final List<EspaceCompte> espaces;
 
+  // ─ Nouvel appareil à confirmer (aucune session) ─
+  final bool appareilAValider;
+  final String? tokenValidationAppareil;
+
+  /// Moyens proposés : « application » (autre téléphone connecté),
+  /// « whatsapp » (l'utilisateur envoie un code).
+  final List<String> methodesValidation;
+  final String? telephoneMasque;
+
   const ConnexionResultat({
     required this.message,
     required this.motDePasseAChanger,
@@ -439,11 +448,15 @@ class ConnexionResultat {
     this.pinAChanger = false,
     this.tokenChangementPin,
     this.espaces = const [],
+    this.appareilAValider = false,
+    this.tokenValidationAppareil,
+    this.methodesValidation = const [],
+    this.telephoneMasque,
   });
 
   factory ConnexionResultat.fromJson(Map<String, dynamic> json) {
     return ConnexionResultat(
-      message: json['message'] as String,
+      message: (json['message'] as String?) ?? '',
       motDePasseAChanger: _lire<bool>(json, 'mot_de_passe_a_changer') ?? false,
       accessToken: _lire<String>(json, 'access_token'),
       utilisateur: json['utilisateur'] is Map<String, dynamic>
@@ -462,11 +475,15 @@ class ConnexionResultat {
       pinAChanger: _lire<bool>(json, 'pin_a_changer') ?? false,
       tokenChangementPin: _lire<String>(json, 'token_changement_pin'),
       espaces: EspaceCompte.listeDepuisJson(json['espaces']),
+      appareilAValider: _lire<bool>(json, 'appareil_a_valider') ?? false,
+      tokenValidationAppareil: _lire<String>(json, 'token_validation_appareil'),
+      methodesValidation: json['methodes'] is List ? [for (final m in json['methodes'] as List) '$m'] : const [],
+      telephoneMasque: _lire<String>(json, 'telephone_masque'),
     );
   }
 
   /// Session immédiatement utilisable (access_token présent).
-  bool get sessionOuverte => !motDePasseAChanger && !pinAChanger && accessToken != null;
+  bool get sessionOuverte => !motDePasseAChanger && !pinAChanger && !appareilAValider && accessToken != null;
 }
 
 /// ─────────────────────────────────────────────────────────────────
@@ -705,14 +722,24 @@ class ErreurAuthentification implements Exception {
 class ConfigurationConnexion {
   /// Vérification du numéro par code (SMS / WhatsApp) active sur le serveur.
   final bool verificationTelephone;
+
+  /// Moyens de prouver le numéro : « whatsapp_inverse » (l'utilisateur
+  /// envoie un code par WhatsApp), « sms », « whatsapp » (code reçu).
   final List<String> canaux;
 
-  const ConfigurationConnexion({this.verificationTelephone = false, this.canaux = const ['sms']});
+  /// « Code PIN oublié » disponible (une preuve du numéro est possible).
+  final bool pinOublie;
 
-  factory ConfigurationConnexion.fromJson(Map<String, dynamic> json) => ConfigurationConnexion(
-    verificationTelephone: _lire<bool>(json, 'verification_telephone') ?? false,
-    canaux: json['canaux'] is List ? [for (final c in json['canaux'] as List) '$c'] : const ['sms'],
-  );
+  const ConfigurationConnexion({this.verificationTelephone = false, this.canaux = const ['sms'], this.pinOublie = false});
+
+  factory ConfigurationConnexion.fromJson(Map<String, dynamic> json) {
+    final verification = _lire<bool>(json, 'verification_telephone') ?? false;
+    return ConfigurationConnexion(
+      verificationTelephone: verification,
+      canaux: json['canaux'] is List ? [for (final c in json['canaux'] as List) '$c'] : const ['sms'],
+      pinOublie: _lire<bool>(json, 'pin_oublie') ?? verification,
+    );
+  }
 }
 
 /// Demande de connexion web à valider dans l'application.
@@ -724,12 +751,82 @@ class DemandeConnexionWeb {
   final String? navigateur;
   final DateTime? expireLe;
 
-  const DemandeConnexionWeb({required this.demandeId, required this.codes, this.navigateur, this.expireLe});
+  /// « nouvel_appareil » : code PIN déjà saisi sur un autre appareil qui
+  /// demande à être confirmé ; « connexion_web » : connexion sans PIN.
+  final String objet;
+  final bool appareilMobile;
+
+  const DemandeConnexionWeb({
+    required this.demandeId,
+    required this.codes,
+    this.navigateur,
+    this.expireLe,
+    this.objet = 'connexion_web',
+    this.appareilMobile = false,
+  });
+
+  bool get nouvelAppareil => objet == 'nouvel_appareil';
 
   factory DemandeConnexionWeb.fromJson(Map<String, dynamic> json) => DemandeConnexionWeb(
+    objet: _lire<String>(json, 'objet') ?? 'connexion_web',
+    appareilMobile: _lire<bool>(json, 'appareil_mobile') ?? false,
     demandeId: json['demande_id'] as String,
     codes: [for (final c in (json['codes'] as List? ?? const [])) '$c'],
     navigateur: _lire<String>(json, 'navigateur'),
     expireLe: json['expire_le'] is String ? DateTime.tryParse(json['expire_le'] as String) : null,
+  );
+}
+
+/// Vérification WhatsApp « inversée » en cours : l'utilisateur envoie
+/// [code] à [numeroWhatsapp] (lien [lienWhatsapp] : message déjà écrit).
+class DemandeWhatsappInverse {
+  final String verificationId;
+  final String code;
+  final String lienWhatsapp;
+  final String numeroWhatsapp;
+  final DateTime? expireLe;
+
+  const DemandeWhatsappInverse({
+    required this.verificationId,
+    required this.code,
+    required this.lienWhatsapp,
+    required this.numeroWhatsapp,
+    this.expireLe,
+  });
+
+  factory DemandeWhatsappInverse.fromJson(Map<String, dynamic> json) => DemandeWhatsappInverse(
+    verificationId: json['verification_id'] as String,
+    code: '${json['code']}',
+    lienWhatsapp: json['lien_whatsapp'] as String,
+    numeroWhatsapp: (json['numero_whatsapp'] as String?) ?? '',
+    expireLe: json['expire_le'] is String ? DateTime.tryParse(json['expire_le'] as String) : null,
+  );
+}
+
+/// Où en est une vérification inversée : « en_attente », « verifie »
+/// (avec [preuve]) ou « expiree ».
+class StatutVerificationInverse {
+  final String statut;
+  final String? preuve;
+
+  const StatutVerificationInverse(this.statut, this.preuve);
+
+  bool get verifie => statut == 'verifie' && preuve != null;
+  bool get expiree => statut == 'expiree';
+}
+
+/// Demande de confirmation envoyée à l'application connectée ailleurs :
+/// l'utilisateur y touche [code].
+class DemandeConfirmationApplication {
+  final String demandeId;
+  final String secret;
+  final String code;
+
+  const DemandeConfirmationApplication({required this.demandeId, required this.secret, required this.code});
+
+  factory DemandeConfirmationApplication.fromJson(Map<String, dynamic> json) => DemandeConfirmationApplication(
+    demandeId: json['demande_id'] as String,
+    secret: json['secret'] as String,
+    code: '${json['code']}',
   );
 }

@@ -67,6 +67,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/authentification_models.dart';
 import '../utils/endpoint.dart';
+import '../utils/identifiant_appareil.dart';
 
 /// Erreur levée quand une requête HTTP échoue (statut hors 2xx) ou
 /// quand un appel est mal formé côté client. Remplace l'ApiException
@@ -118,7 +119,8 @@ class AuthentificationRepository {
   }) {
     // X-Client-App : le serveur accorde à l'application mobile une session
     // longue (6 mois glissants, voir token.utils.js) au lieu de 30 jours.
-    final entetes = <String, String>{'Accept': 'application/json', 'X-Client-App': 'mobile'};
+    // X-Appareil-Id : appareil de confiance (un appareil inconnu doit être confirmé).
+    final entetes = <String, String>{'Accept': 'application/json', 'X-Client-App': 'mobile', ...IdentifiantAppareil.entete};
     if (avecJson) entetes['Content-Type'] = 'application/json';
     if (token != null && token.isNotEmpty) {
       entetes['Authorization'] = 'Bearer $token';
@@ -322,6 +324,55 @@ class AuthentificationRepository {
         'telephone': telephone, if (paysIso2 != null) 'pays_iso2': paysIso2,
         'preuve_telephone': preuve, 'nouveau_pin': nouveauPin,
       });
+    });
+  }
+
+  // POST /verification-telephone/envoyer (canal whatsapp_inverse) : code à
+  // ENVOYER par l'utilisateur sur WhatsApp (rien n'est envoyé par le serveur).
+  Future<DemandeWhatsappInverse> demanderVerificationInverse({required String telephone, String? paysIso2, required String objet}) {
+    return _executer(() async {
+      final json = await _post(ApiRealEndpoints.envoyerCodeTelephone, body: {
+        'telephone': telephone, if (paysIso2 != null) 'pays_iso2': paysIso2, 'objet': objet, 'canal': 'whatsapp_inverse',
+      });
+      return DemandeWhatsappInverse.fromJson(_carte(json));
+    });
+  }
+
+  // POST /verification-telephone/statut — sondage de la vérification inversée.
+  Future<StatutVerificationInverse> statutVerificationInverse(String verificationId) {
+    return _executer(() async {
+      final json = _carte(await _post(ApiRealEndpoints.statutVerificationInverse, body: {'verification_id': verificationId}));
+      return StatutVerificationInverse('${json['statut']}', json['preuve'] as String?);
+    });
+  }
+
+  // ─── Nouvel appareil (token restreint de la réponse « appareil_a_valider ») ───
+
+  // POST /auth/appareil/application — confirmation depuis l'autre téléphone.
+  Future<DemandeConfirmationApplication> demanderValidationApplication(String token) {
+    return _executer(() async => DemandeConfirmationApplication.fromJson(
+        _carte(await _post(ApiRealEndpoints.validationAppareilApplication, token: token))));
+  }
+
+  // POST /auth/appareil/whatsapp — code à envoyer depuis le WhatsApp du compte.
+  Future<DemandeWhatsappInverse> demanderValidationWhatsapp(String token) {
+    return _executer(() async => DemandeWhatsappInverse.fromJson(
+        _carte(await _post(ApiRealEndpoints.validationAppareilWhatsapp, token: token))));
+  }
+
+  // POST /auth/appareil/valider — preuve WhatsApp : session ouverte.
+  Future<ConnexionResultat> validerAppareil(String token, String preuve) {
+    return _executer(() async => ConnexionResultat.fromJson(
+        _carte(await _post(ApiRealEndpoints.validationAppareil, token: token, body: {'preuve_telephone': preuve}))));
+  }
+
+  // POST /auth/connexion-application/:id/statut — sondage : session une
+  // fois confirmée (ConnexionResultat.sessionOuverte), sinon `statut`.
+  Future<(String, ConnexionResultat?)> sonderConnexionApplication(String demandeId, String secret) {
+    return _executer(() async {
+      final json = _carte(await _post(ApiRealEndpoints.sonderConnexionApplication(demandeId), body: {'secret': secret}));
+      if (json['access_token'] is String) return ('approuvee', ConnexionResultat.fromJson(json));
+      return ('${json['statut']}', null);
     });
   }
 

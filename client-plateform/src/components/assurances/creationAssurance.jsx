@@ -225,6 +225,10 @@ const CreationAssurance = () => {
           setStepError('Le prénom de l\'agent est requis.');
           return false;
         }
+        if (!formData.agent_telephone.trim()) {
+          setStepError("Le téléphone de l'agent est obligatoire : il lui sert à se connecter.");
+          return false;
+        }
         if (!formData.agent_email.trim()) {
           setStepError('Un email pour l\'agent est requis.');
           return false;
@@ -317,7 +321,10 @@ const CreationAssurance = () => {
         rattache: Boolean(response.agent?.rattache_au_compte),
         nom_compagnie: response.service_assurance?.nom,
         agent_email: agentEmail,
-        mot_de_passe_temporaire: response.agent?.mot_de_passe_temporaire,
+        pin_provisoire: response.agent?.pin_provisoire,
+        telephone_connexion: response.agent?.telephone_connexion
+          ? `+${response.agent.telephone_connexion}`
+          : formData.agent_telephone.trim(),
       });
 
       setIsSubmitted(true);
@@ -354,16 +361,16 @@ const CreationAssurance = () => {
                 <div className="alert alert-info credentials-box mt-4">
                   <strong>Identifiants de connexion :</strong>
                   <p className="mt-2">
-                    Email de l'agent : <code>{compteCree.agent_email}</code>
+                    Numéro de connexion de l'agent : <code>{compteCree.telephone_connexion}</code>
                   </p>
                   <p>
-                    Mot de passe temporaire :{' '}
-                    <code>{compteCree.mot_de_passe_temporaire}</code>
+                    Code PIN provisoire :{' '}
+                    <code style={{ letterSpacing: '.2em' }}>{compteCree.pin_provisoire}</code>
                   </p>
                   <p className="mt-2 mb-0">
-                    <i className="fa-solid fa-triangle-exclamation" /> Conservez précieusement
-                    ce mot de passe. Vous pouvez le changer lors de votre première
-                    connexion.
+                    <i className="fa-solid fa-triangle-exclamation" /> Ce code ne sera plus affiché :
+                    transmettez-le à l'agent. Il se connectera avec son numéro et ce code, puis
+                    choisira son propre code PIN.
                   </p>
                 </div>
                 )}
@@ -710,7 +717,7 @@ const CreationAssurance = () => {
                             placeholder="Décrivez brièvement votre compagnie, vos services, etc."
                             rows="4"
                           />
-                          <p className="form-hint">Champ optionnel</p>
+                          <p className="form-hint">Il se connectera avec ce numéro et un code PIN provisoire.</p>
                         </div>
 
                         <h3 className="form-subtitle mt-4">Coordonnées GPS (optionnel)</h3>
@@ -838,13 +845,13 @@ const CreationAssurance = () => {
                             required
                           />
                           <p className="form-hint">
-                            Cet email servira de login pour accéder à l'espace agent.
+                            Adresse de contact de l'agent.
                           </p>
                         </div>
 
                         <div className="form-group" hidden={formData.responsable_moi}>
                           <label className="form-label-aps" htmlFor="agent_telephone">
-                            Téléphone de l'agent
+                            Téléphone de l'agent <span className="required-mark">*</span>
                           </label>
                           <input
                             type="tel"

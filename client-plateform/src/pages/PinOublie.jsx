@@ -1,7 +1,9 @@
-// PinOublie.jsx — « Code PIN oublié » (vérification du numéro active).
+// PinOublie.jsx — « Code PIN oublié ».
 //
-// Numéro -> code reçu par SMS/WhatsApp -> nouveau code PIN. Le compte est
-// débloqué. Sans vérification active, on renvoie vers la connexion par email.
+// Numéro -> preuve du numéro (code envoyé PAR l'utilisateur sur WhatsApp,
+// ou code reçu par SMS/WhatsApp) -> nouveau code PIN. Le compte est
+// débloqué et cet appareil devient de confiance. Sans aucun moyen de
+// preuve disponible, on renvoie vers le support / la connexion par email.
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import authService from '../services/authService';
@@ -27,7 +29,7 @@ export default function PinOublie() {
     return () => { annule = true; };
   }, []);
 
-  if (config && !config.verification_telephone) {
+  if (config && !(config.pin_oublie ?? config.verification_telephone)) {
     return (
       <section style={{ padding: '3rem 0' }}>
         <div className="container-aps" style={{ maxWidth: 480 }}>
@@ -52,7 +54,7 @@ export default function PinOublie() {
   const soumettre = async (e) => {
     e.preventDefault();
     setErreur(null);
-    if (!preuve) return setErreur('Vérifiez d’abord votre numéro avec le code reçu.');
+    if (!preuve) return setErreur('Confirmez d’abord votre numéro.');
     if (form.pin.length !== 6) return setErreur('Le code PIN comporte 6 chiffres.');
     if (form.pin !== form.confirmation) return setErreur('Les deux codes PIN ne sont pas identiques.');
     setEnvoi(true);
@@ -75,7 +77,7 @@ export default function PinOublie() {
         <div className="info-card" style={{ padding: '2rem' }}>
           <span className="eyebrow">Connexion</span>
           <h1 style={{ fontSize: '1.45rem', marginTop: '.6rem' }}>Code PIN oublié</h1>
-          <p className="text-muted-soft">Recevez un code sur votre numéro, puis choisissez un nouveau code PIN.</p>
+          <p className="text-muted-soft">Confirmez votre numéro, puis choisissez un nouveau code PIN.</p>
           {erreur && <div className="alert alert-danger" role="alert">{erreur}</div>}
           <form onSubmit={soumettre} noValidate>
             <div className="search-field">

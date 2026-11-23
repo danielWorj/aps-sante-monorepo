@@ -5,13 +5,16 @@
 // « Recevoir le code » puis saisie du code ; en cas de succès, la `preuve`
 // est remontée par onPreuve() et sera consommée par le serveur
 // (inscription, changement de numéro, code PIN oublié).
+// Canal « whatsapp_inverse » : l'utilisateur ENVOIE un code par WhatsApp
+// (EnvoiWhatsappInverse), rien à saisir.
 import { useEffect, useState } from 'react';
 import authService from '../../services/authService';
+import EnvoiWhatsappInverse from './EnvoiWhatsappInverse';
 
-const LIBELLE_CANAL = { sms: 'SMS', whatsapp: 'WhatsApp' };
+const LIBELLE_CANAL = { sms: 'SMS', whatsapp: 'WhatsApp', whatsapp_inverse: 'WhatsApp (j’envoie un code)' };
 
 export default function VerificationTelephone({ telephone, pays_iso2, objet, canaux = ['sms'], preuve, onPreuve }) {
-  const [canal, setCanal] = useState(canaux[0]);
+  const [canal, setCanal] = useState(canaux[0] ?? 'sms');
   // Numéro auquel le code a été envoyé : s'il change, on repart de l'envoi.
   const [envoyePour, setEnvoyePour] = useState(null);
   const etape = envoyePour === `${pays_iso2}|${telephone}` ? 'code' : 'envoi';
@@ -20,6 +23,8 @@ export default function VerificationTelephone({ telephone, pays_iso2, objet, can
   const [erreur, setErreur] = useState(null);
   const [envoi, setEnvoi] = useState(false);
   const [attente, setAttente] = useState(0);
+  // Vérification inversée en cours : { verification_id, code, lien_whatsapp… }
+  const [inverse, setInverse] = useState(null);
 
   useEffect(() => {
     if (attente <= 0) return undefined;
@@ -41,7 +46,8 @@ export default function VerificationTelephone({ telephone, pays_iso2, objet, can
     setEnvoi(true);
     try {
       const r = await authService.envoyerCodeTelephone({ telephone, pays_iso2, objet, canal });
-      setInfo(r.message);
+      setInverse(canal === 'whatsapp_inverse' ? r : null);
+      setInfo(canal === 'whatsapp_inverse' ? null : r.message);
       setCode('');
       setEnvoyePour(`${pays_iso2}|${telephone}`);
       setAttente(r.delai_renvoi_s ?? 60);
@@ -79,9 +85,26 @@ export default function VerificationTelephone({ telephone, pays_iso2, objet, can
             </select>
           )}
           <button type="button" className="btn btn-outline-primary btn-sm-aps" onClick={envoyer} disabled={envoi || attente > 0}>
-            {envoi ? 'Envoi…' : attente > 0 ? `Patientez ${attente} s` : `Recevoir le code par ${LIBELLE_CANAL[canal] ?? canal}`}
+            {envoi
+              ? 'Envoi…'
+              : attente > 0
+                ? `Patientez ${attente} s`
+                : canal === 'whatsapp_inverse'
+                  ? 'Confirmer par WhatsApp'
+                  : `Recevoir le code par ${LIBELLE_CANAL[canal] ?? canal}`}
           </button>
         </div>
+      ) : inverse ? (
+        <>
+          <EnvoiWhatsappInverse
+            demande={inverse}
+            onPreuve={(p) => onPreuve?.(p)}
+            onExpire={() => { setInverse(null); setEnvoyePour(null); }}
+          />
+          <button type="button" className="btn btn-link btn-sm" onClick={envoyer} disabled={envoi || attente > 0}>
+            {attente > 0 ? `Nouveau code (${attente} s)` : 'Nouveau code'}
+          </button>
+        </>
       ) : (
         <>
           {info && <p className="form-hint" style={{ marginTop: 0 }}>{info}</p>}

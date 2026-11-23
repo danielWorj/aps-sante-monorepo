@@ -65,11 +65,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Si votre projet utilise des imports package (ex: package:aps/...),
 // remplacez les lignes ci-dessous par les équivalents package:aps/...
 import '../../../components/components.dart';
-import '../../../components/dialogs/dialogue_copie_identifiants.dart';
+import '../../../controllers/authentification_controller.dart' show configurationConnexionProvider;
 import '../../../controllers/medecin_controller.dart';
 import '../../../models/medecin_models.dart';
 import '../../../models/referentiel_models.dart' show Pays, Ville;
 import 'aps_pays_ville_fields.dart';
+import '../creer_pin_screen.dart' show ChampPin;
+import '../verification_telephone.dart';
 
 /// Container Riverpod de repli, utilisé uniquement si
 /// [CreateMedecinScreen.container] n'est pas fourni — voir la note sur
@@ -130,6 +132,11 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
   final _prenomCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _telCtrl = TextEditingController();
+  // Connexion par numéro + code PIN choisi (plus de mot de passe temporaire).
+  final _pinCtrl = TextEditingController();
+  final _pinConfCtrl = TextEditingController();
+  // Preuve du numéro, si la vérification du numéro est active.
+  String? _preuveTel;
   // Référentiel réel (GET /referentiels/pays, /villes) : le backend
   // attend des UUID pour pays_id / pays_exercice_id / ville_exercice_id.
   // L'ancienne liste statique envoyait des libellés (« Cameroun »,
@@ -202,6 +209,8 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
     _prenomCtrl.dispose();
     _emailCtrl.dispose();
     _telCtrl.dispose();
+    _pinCtrl.dispose();
+    _pinConfCtrl.dispose();
     _numeroOrdreCtrl.dispose();
     _tarifCtrl.dispose();
     _bioCtrl.dispose();
@@ -238,6 +247,15 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
         if (!(_step1FormKey.currentState?.validate() ?? false)) return;
         if (_pays == null || _ville == null) {
           _showError('Merci de sélectionner votre pays et votre ville.');
+          return;
+        }
+        final verification = ProviderScope.containerOf(context, listen: false)
+                .read(configurationConnexionProvider)
+                .value
+                ?.verificationTelephone ??
+            false;
+        if (verification && _preuveTel == null) {
+          _showError('Merci de confirmer votre numéro de téléphone.');
           return;
         }
         break;
@@ -299,7 +317,7 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
       nom: _nomCtrl.text.trim(),
       prenom: _prenomCtrl.text.trim(),
       email: _emailCtrl.text.trim(),
-      telephone: _telCtrl.text.trim().isEmpty ? null : _telCtrl.text.trim(),
+      telephone: _telCtrl.text.trim(),
       paysId: _pays!.paysId,
       specialiteId: specialite.specialiteId,
       numeroOrdre: _numeroOrdreCtrl.text.trim(),
@@ -309,6 +327,8 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
       tarifIndicatif: double.tryParse(_tarifCtrl.text.trim()) ?? 0,
       biographie: _bioCtrl.text.trim(),
       accepteCgu: _acceptCgu,
+      pin: _pinCtrl.text,
+      preuveTelephone: _preuveTel,
     );
 
     await _container.read(creationMedecinControllerProvider.notifier).soumettre(
@@ -329,16 +349,6 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
         if (resultat == null) return;
         setState(() => _resultatCreation = resultat);
         _goToStep(_stepCount - 1);
-        // Par-dessus le récapitulatif : copie obligatoire du mot de passe
-        // temporaire, affiché une seule fois.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          exigerCopieIdentifiants(
-            context,
-            email: resultat.utilisateur.email,
-            motDePasseTemporaire: resultat.utilisateur.motDePasseTemporaire,
-          );
-        });
       },
       error: (erreur, _) => _showError(_messageErreur(erreur)),
       loading: () {},
@@ -568,11 +578,32 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
             ),
           ),
           _AppFormField(
-            label: 'Téléphone',
+            label: 'Téléphone (pour vous connecter)',
+            required: true,
             child: _AppTextInput(
               controller: _telCtrl,
-              hint: '+237 6 XX XX XX XX',
+              hint: '6 XX XX XX XX',
               keyboardType: TextInputType.phone,
+              validator: (v) => (v ?? '').trim().isEmpty ? 'Le numéro de téléphone est obligatoire.' : null,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: ChampPin(
+              controller: _pinCtrl,
+              label: 'Choisissez votre code PIN (6 chiffres)',
+              helper: 'Vous vous connecterez avec votre numéro et ce code.',
+              textInputAction: TextInputAction.next,
+              validator: (v) => (v ?? '').length != 6 ? 'Le code PIN comporte 6 chiffres.' : null,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: ChampPin(
+              controller: _pinConfCtrl,
+              label: 'Confirmez le code PIN',
+              textInputAction: TextInputAction.done,
+              validator: (v) => v != _pinCtrl.text ? 'Les deux codes PIN ne sont pas identiques.' : null,
             ),
           ),
           ApsPaysVilleFields(
@@ -586,6 +617,19 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
             }),
             onVilleChanged: (v) => setState(() => _ville = v),
           ),
+          // Preuve du numéro (si activée sur le serveur).
+          Consumer(builder: (context, ref, _) {
+            final config = ref.watch(configurationConnexionProvider).value;
+            if (config == null || !config.verificationTelephone) return const SizedBox.shrink();
+            return VerificationTelephone(
+              telephone: () => _telCtrl.text,
+              paysIso2: _pays?.codeIso2,
+              objet: 'inscription',
+              canaux: config.canaux,
+              preuve: _preuveTel,
+              onPreuve: (p) => setState(() => _preuveTel = p),
+            );
+          }),
           _StepActions(
             showBack: false,
             onContinue: _onContinuePressed,
@@ -1038,9 +1082,13 @@ class _CreateMedecinScreenState extends State<CreateMedecinScreen> {
                 ),
                 if (utilisateur != null) ...[
                   const SizedBox(height: 9),
-                  _InsKv(label: 'E-mail du compte', value: utilisateur.email, mono: true),
+                  _InsKv(
+                    label: 'Numéro de connexion',
+                    value: utilisateur.telephoneConnexion != null ? '+${utilisateur.telephoneConnexion}' : _telCtrl.text.trim(),
+                    mono: true,
+                  ),
                   const SizedBox(height: 9),
-                  _MotDePasseTemporaireRow(motDePasse: utilisateur.motDePasseTemporaire),
+                  const _InsKv(label: 'Code PIN', value: 'Celui que vous avez choisi'),
                 ],
                 const SizedBox(height: 9),
                 Row(
@@ -2096,58 +2144,6 @@ class _InsKv extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Ligne dédiée au mot de passe temporaire — affiché en clair une seule
-/// fois (voir [UtilisateurCreeMedecin]), avec bouton de copie rapide
-/// pour éviter de le laisser affiché plus longtemps que nécessaire.
-class _MotDePasseTemporaireRow extends StatelessWidget {
-  const _MotDePasseTemporaireRow({required this.motDePasse});
-
-  final String motDePasse;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 9),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text('Mot de passe temporaire',
-              style: TextStyle(
-                fontFamily: AppTextStyles.fontBody,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: AppColors.inkFaint,
-              )),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                motDePasse,
-                style: const TextStyle(
-                  fontFamily: AppTextStyles.fontMono,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.ink,
-                ),
-              ),
-              const SizedBox(width: 6),
-              InkWell(
-                onTap: () {
-                  Clipboard.setData(ClipboardData(text: motDePasse));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Mot de passe copié.')),
-                  );
-                },
-                child: const Icon(Icons.copy_rounded, size: 14, color: AppColors.green700),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }

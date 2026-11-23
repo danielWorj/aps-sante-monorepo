@@ -1,0 +1,92 @@
+# Déploiement continu sur le VPS. Se lance automatiquement quand le workflow
+# CI réussit sur un push dans main, ou à la main depuis l'onglet Actions
+# (bouton « Run workflow »). Il se connecte en SSH, met le dépôt du VPS à jour
+# en avance rapide uniquement, puis reconstruit et relance les conteneurs.
+#
+# Secrets à créer (Settings → Secrets and variables → Actions) :
+#   VPS_HOST         IP ou nom du VPS
+#   VPS_USER         utilisateur SSH (ex. root)
+#   VPS_SSH_KEY      clé privée SSH dédiée au déploiement (contenu complet)
+#   VPS_KNOWN_HOSTS  sortie de `ssh-keyscan -t ed25519 <VPS_HOST>`
+# Variable facultative (onglet Variables) :
+#   VPS_APP_DIR      dossier du dépôt sur le VPS (défaut /root/aps-sante-monorepo)
+name: Déploiement VPS
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      services:
+        description: "Services à reconstruire (séparés par des espaces)"
+        required: true
+        default: "server client-plateform client-backoffice"
+
+concurrency:
+  group: deploiement-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deployer:
+    name: Déployer sur le VPS
+    # Automatique : seulement si le CI a réussi sur un push (pas une PR).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Préparer la clé SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_deploiement
+          chmod 600 ~/.ssh/id_deploiement
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Mettre à jour et relancer
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          APP_DIR: ${{ vars.VPS_APP_DIR || '/root/aps-sante-monorepo' }}
+          SERVICES: ${{ inputs.services || 'server client-plateform client-backoffice' }}
+          # Commit validé par le CI (ou dernier commit de main en manuel).
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          # Les services saisis ne doivent contenir que des noms simples.
+          if ! printf '%s' "$SERVICES" | grep -Eq '^[a-z0-9 _-]+$'; then
+            echo "Liste de services invalide : $SERVICES" >&2
+            exit 1
+          fi
+          ssh -i ~/.ssh/id_deploiement -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            "APP_DIR='$APP_DIR' SERVICES='$SERVICES' SHA='$SHA' bash -s" <<'SCRIPT'
+          set -euo pipefail
+          cd "$APP_DIR"
+          echo "Avant : $(git rev-parse --short HEAD)"
+          git fetch origin main
+          # Avance rapide seulement : s'arrête si le VPS a des commits ou
+          # modifications locales en conflit, au lieu de les écraser.
+          git merge --ff-only "$SHA"
+          echo "Après : $(git rev-parse --short HEAD)"
+          COMPOSE="docker compose -f docker-compose.yaml"
+          if [ -f docker-compose.observabilite.yaml ]; then
+            COMPOSE="$COMPOSE -f docker-compose.observabilite.yaml"
+          fi
+          $COMPOSE build $SERVICES
+          $COMPOSE up -d
+          docker image prune -f
+          $COMPOSE ps
+          SCRIPT
+
+      - name: Nettoyer la clé
+        if: always()
+        run: rm -f ~/.ssh/id_deploiement

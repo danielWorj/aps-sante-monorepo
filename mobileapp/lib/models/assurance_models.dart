@@ -561,6 +561,11 @@ class AgentServiceAssurance {
   /// Absent quand la fiche est rattachée au compte de l'auteur.
   final String? motDePasseTemporaire;
 
+  /// Connexion de l'agent : son numéro + ce code PIN provisoire (affiché
+  /// une seule fois, à changer à la 1re connexion).
+  final String? pinProvisoire;
+  final String? telephoneConnexion;
+
   /// Fiche rattachée au compte connecté (nouvel espace, aucun secret).
   final bool rattacheAuCompte;
 
@@ -569,6 +574,8 @@ class AgentServiceAssurance {
     required this.fonction,
     required this.utilisateur,
     this.motDePasseTemporaire,
+    this.pinProvisoire,
+    this.telephoneConnexion,
     this.rattacheAuCompte = false,
   });
 
@@ -580,6 +587,8 @@ class AgentServiceAssurance {
         json['utilisateur'] as Map<String, dynamic>,
       ),
       motDePasseTemporaire: json['mot_de_passe_temporaire'] as String?,
+      pinProvisoire: json['pin_provisoire'] as String?,
+      telephoneConnexion: json['telephone_connexion'] as String?,
       rattacheAuCompte: json['rattache_au_compte'] == true,
     );
   }

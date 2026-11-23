@@ -365,6 +365,11 @@ class AgentPharmacieCree {
   final UtilisateurAgentResume utilisateur;
   final String? motDePasseTemporaire;
 
+  /// Connexion de l'agent : son numéro + ce code PIN provisoire (affiché
+  /// une seule fois, à changer à la 1re connexion).
+  final String? pinProvisoire;
+  final String? telephoneConnexion;
+
   /// Fiche rattachée au compte connecté (nouvel espace, aucun secret).
   final bool rattacheAuCompte;
 
@@ -373,6 +378,8 @@ class AgentPharmacieCree {
     required this.fonction,
     required this.utilisateur,
     this.motDePasseTemporaire,
+    this.pinProvisoire,
+    this.telephoneConnexion,
     this.rattacheAuCompte = false,
   });
 
@@ -383,6 +390,8 @@ class AgentPharmacieCree {
       utilisateur: UtilisateurAgentResume.fromJson(
           json['utilisateur'] as Map<String, dynamic>),
       motDePasseTemporaire: _lire<String>(json, 'mot_de_passe_temporaire'),
+      pinProvisoire: _lire<String>(json, 'pin_provisoire'),
+      telephoneConnexion: _lire<String>(json, 'telephone_connexion'),
       rattacheAuCompte: json['rattache_au_compte'] == true,
     );
   }

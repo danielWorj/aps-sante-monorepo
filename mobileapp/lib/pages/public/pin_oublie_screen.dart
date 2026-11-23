@@ -1,7 +1,7 @@
 // lib/pages/public/pin_oublie_screen.dart
 //
-// « Code PIN oublié » (vérification du numéro active sur le serveur) :
-// numéro -> code reçu par SMS / WhatsApp -> nouveau code PIN. Le compte est
+// « Code PIN oublié » : numéro prouvé (code envoyé PAR l'utilisateur sur
+// WhatsApp, ou code reçu par SMS / WhatsApp) -> nouveau code PIN. Le compte est
 // débloqué ; l'utilisateur se reconnecte avec son numéro et ce code.
 
 import 'package:flutter/material.dart';

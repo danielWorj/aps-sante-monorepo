@@ -30,6 +30,7 @@ import {
   repondreDemandeConnexionCtrl,
   demanderValidationApplicationCtrl,
   validerAppareilParPreuveCtrl,
+  demanderValidationWhatsappCtrl,
 } from "../controllers/connexionApplication.controller.js";
 import {
   authentifier,
@@ -82,6 +83,7 @@ router.post("/telephone/verifier", authentifier, verifierTelephoneCtrl);
 // Nouvel appareil (token restreint « validation_appareil ») : confirmation
 // depuis l'application connectée ailleurs, ou preuve WhatsApp inversée.
 router.post("/appareil/application", exigerTokenValidationAppareil, demanderValidationApplicationCtrl);
+router.post("/appareil/whatsapp", exigerTokenValidationAppareil, demanderValidationWhatsappCtrl);
 router.post("/appareil/valider", exigerTokenValidationAppareil, validerAppareilParPreuveCtrl);
 
 // Connexion web validée depuis l'application mobile.

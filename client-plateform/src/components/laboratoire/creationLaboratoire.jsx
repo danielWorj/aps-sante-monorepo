@@ -192,7 +192,8 @@ export default function CreationLaboratoire() {
   }
 
   if (resultat) {
-    const mdp = resultat.agent?.mot_de_passe_temporaire;
+    const pinProvisoire = resultat.agent?.pin_provisoire;
+    const numeroAgent = resultat.agent?.telephone_connexion ? `+${resultat.agent.telephone_connexion}` : form.agent_telephone;
     return (
       <section style={{ padding: '3.5rem 0' }}>
         <div className="container-aps">
@@ -206,17 +207,17 @@ export default function CreationLaboratoire() {
             <p className="confirm-subtitle">
               {resultat.message} La fiche sera visible dans l&apos;annuaire après vérification de vos justificatifs par {NOM_MARQUE}.
             </p>
-            {mdp && (
+            {pinProvisoire && (
               <div className="confirm-credentials">
                 <div className="confirm-credentials-title">
                   <i className="fa-solid fa-shield-halved"></i> Identifiants du responsable — à transmettre par un canal sûr
                 </div>
-                {[['email', 'fa-envelope', 'Identifiant', resultat.agent.utilisateur?.email], ['mdp', 'fa-key', 'Mot de passe temporaire', mdp]].map(([cle, icone, libelle, valeur]) => (
+                {[['tel', 'fa-phone', 'Numéro de connexion', numeroAgent], ['pin', 'fa-key', 'Code PIN provisoire', pinProvisoire]].map(([cle, icone, libelle, valeur]) => (
                   <div className="cred-row" key={cle}>
                     <div className="cred-icon"><i className={`fa-solid ${icone}`}></i></div>
                     <div className="cred-body">
                       <span className="cred-label">{libelle}</span>
-                      <span className="cred-value">{cle === 'mdp' ? <code>{valeur}</code> : valeur}</span>
+                      <span className="cred-value">{cle === 'pin' ? <code style={{ letterSpacing: '.2em' }}>{valeur}</code> : valeur}</span>
                     </div>
                     <button type="button" className={`cred-copy ${copie === cle ? 'copied' : ''}`} onClick={() => copier(cle, valeur)} aria-label={`Copier ${libelle.toLowerCase()}`}>
                       <i className={`fa-solid ${copie === cle ? 'fa-check' : 'fa-clipboard'}`}></i>
@@ -224,7 +225,7 @@ export default function CreationLaboratoire() {
                   </div>
                 ))}
                 <p style={{ marginTop: '.75rem', marginBottom: 0, fontSize: '.85rem' }}>
-                  Ce mot de passe ne sera plus jamais affiché. Il devra être changé à la première connexion.
+                  Ce code ne sera plus jamais affiché. Le responsable se connecte avec son numéro et ce code, puis choisit son propre code PIN.
                 </p>
               </div>
             )}
@@ -388,7 +389,7 @@ export default function CreationLaboratoire() {
                               <input id="lb-aemail" type="email" className="form-control" name="agent_email" value={form.agent_email} onChange={maj} />
                             </div>
                             <div className="col-12">
-                              <p className="form-hint mb-0">Un compte est créé pour cette personne ; son mot de passe temporaire s&apos;affichera à la fin.</p>
+                              <p className="form-hint mb-0">Un compte est créé pour cette personne : elle se connectera avec ce numéro et un code PIN provisoire, affiché à la fin.</p>
                             </div>
                           </>
                         )}

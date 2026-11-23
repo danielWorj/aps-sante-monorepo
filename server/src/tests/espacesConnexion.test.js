@@ -145,7 +145,7 @@ test("connexion par l'application : bon code -> session remise une seule fois", 
 
   assert.equal(await connexionApp.repondreDemandeConnexion({ utilisateur_id: "u9", demande_id: d.demande_id, accepter: true, code: d.code }), "approuvee");
   const ok = await connexionApp.sonderConnexionApplication({ demande_id: d.demande_id, secret: d.secret });
-  assert.deepEqual(ok, { statut: "approuvee", utilisateur_id: "u9" });
+  assert.deepEqual(ok, { statut: "approuvee", utilisateur_id: "u9", objet: "connexion_web", appareil_empreinte: null, appareil_mobile: false });
   assert.equal((await connexionApp.sonderConnexionApplication({ demande_id: d.demande_id, secret: d.secret })).statut, "expiree", "usage unique");
 });
 

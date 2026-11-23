@@ -26,7 +26,7 @@ import { useAuth } from '../../context/AuthContext';
 //     nom, type_structure (clinique, hopital, centre_medical, dispensaire,
 //     laboratoire — TYPES_STRUCTURE), pays_id, ville_id, telephone,
 //     fonction, agent_nom, agent_prenom, agent_email
-//   Champs optionnels : adresse, email, agent_telephone, latitude, longitude
+//   Champs optionnels : adresse, email, latitude, longitude (agent_telephone obligatoire pour un agent tiers)
 //     (statut_verification existe côté back mais est ignoré si
 //     l'appelant n'est pas admin/superadmin — on ne l'envoie donc
 //     jamais depuis ce formulaire public)
@@ -44,8 +44,8 @@ import { useAuth } from '../../context/AuthContext';
 // la fiche centre de santé ET le compte de l'agent qui en a la charge
 // (pas forcément la même personne que celle qui remplit le
 // formulaire) : la réponse contient donc
-// { centreSante, agent: { utilisateur, mot_de_passe_temporaire } }.
-// Ce mot de passe temporaire n'est renvoyé qu'une seule fois par le
+// { centreSante, agent: { utilisateur, pin_provisoire, telephone_connexion } }.
+// Ce code PIN provisoire n'est renvoyé qu'une seule fois par le
 // serveur — on ne le stocke nulle part, on l'affiche seulement le
 // temps de l'écran de confirmation (à charge pour la personne de le
 // transmettre à l'agent concerné).
@@ -220,6 +220,7 @@ const CreationCentreSante = () => {
         if (!formData.agent_nom.trim()) return "Le nom de l'agent est obligatoire.";
         if (!formData.agent_prenom.trim()) return "Le prénom de l'agent est obligatoire.";
         if (!formData.agent_email.trim()) return "L'e-mail de l'agent est obligatoire.";
+        if (!formData.agent_telephone.trim()) return "Le téléphone de l'agent est obligatoire : il lui sert à se connecter.";
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.agent_email.trim()))
           return "L'e-mail de l'agent n'est pas valide.";
         return null;
@@ -301,7 +302,8 @@ const CreationCentreSante = () => {
         message: resultat.message,
         centreNom: centreSante?.nom,
         agentEmail: agent?.utilisateur?.email,
-        motDePasseTemporaire: agent?.mot_de_passe_temporaire,
+        pinProvisoire: agent?.pin_provisoire,
+        agentTelephone: agent?.telephone_connexion ? `+${agent.telephone_connexion}` : formData.agent_telephone.trim(),
       });
       setIsSubmitted(true);
     } catch (err) {
@@ -365,50 +367,50 @@ const CreationCentreSante = () => {
 
                     <div className="cred-row">
                       <div className="cred-icon">
-                        <i className="fa-solid fa-envelope"></i>
+                        <i className="fa-solid fa-phone"></i>
                       </div>
                       <div className="cred-body">
-                        <span className="cred-label">Identifiant</span>
-                        <span className="cred-value">{centreCree.agentEmail}</span>
+                        <span className="cred-label">Numéro de connexion</span>
+                        <span className="cred-value">{centreCree.agentTelephone}</span>
                       </div>
                       <button
                         type="button"
-                        className={`cred-copy ${copiedField === 'email' ? 'copied' : ''}`}
-                        onClick={() => handleCopy('email', centreCree.agentEmail)}
-                        title="Copier l'identifiant"
-                        aria-label="Copier l'identifiant"
+                        className={`cred-copy ${copiedField === 'telephone' ? 'copied' : ''}`}
+                        onClick={() => handleCopy('telephone', centreCree.agentTelephone)}
+                        title="Copier le numéro"
+                        aria-label="Copier le numéro"
                       >
-                        <i className={`fa-solid ${copiedField === 'email' ? 'fa-check' : 'fa-clipboard'}`}></i>
+                        <i className={`fa-solid ${copiedField === 'telephone' ? 'fa-check' : 'fa-clipboard'}`}></i>
                       </button>
                     </div>
 
-                    {centreCree.motDePasseTemporaire && (
+                    {centreCree.pinProvisoire && (
                       <div className="cred-row">
                         <div className="cred-icon">
                           <i className="fa-solid fa-key"></i>
                         </div>
                         <div className="cred-body">
-                          <span className="cred-label">Mot de passe temporaire</span>
+                          <span className="cred-label">Code PIN provisoire</span>
                           <span className="cred-value">
-                            <code>{centreCree.motDePasseTemporaire}</code>
+                            <code style={{ letterSpacing: '.2em' }}>{centreCree.pinProvisoire}</code>
                           </span>
                         </div>
                         <button
                           type="button"
-                          className={`cred-copy ${copiedField === 'password' ? 'copied' : ''}`}
-                          onClick={() => handleCopy('password', centreCree.motDePasseTemporaire)}
-                          title="Copier le mot de passe"
-                          aria-label="Copier le mot de passe"
+                          className={`cred-copy ${copiedField === 'pin' ? 'copied' : ''}`}
+                          onClick={() => handleCopy('pin', centreCree.pinProvisoire)}
+                          title="Copier le code PIN"
+                          aria-label="Copier le code PIN"
                         >
-                          <i className={`fa-solid ${copiedField === 'password' ? 'fa-check' : 'fa-clipboard'}`}></i>
+                          <i className={`fa-solid ${copiedField === 'pin' ? 'fa-check' : 'fa-clipboard'}`}></i>
                         </button>
                       </div>
                     )}
 
                     <p style={{ marginTop: '.75rem', marginBottom: 0, fontSize: '.85rem' }}>
-                      Ce mot de passe ne sera plus jamais affiché : transmettez-le dès
-                      maintenant à l'agent responsable par un canal sûr. Il devra le
-                      changer à sa première connexion.
+                      Ce code ne sera plus jamais affiché : transmettez-le dès maintenant à
+                      l'agent responsable. Il se connectera avec son numéro et ce code, puis
+                      choisira son propre code PIN.
                     </p>
                   </div>
                 )}
@@ -716,15 +718,18 @@ const CreationCentreSante = () => {
                           </div>
                           <div className="col-md-6" hidden={formData.responsable_moi}>
                             <label className="form-label-aps">
-                              Téléphone de l'agent
+                              Téléphone de l'agent <span className="required-mark">*</span>
                             </label>
                             <input
                               type="tel"
+                              inputMode="tel"
                               className="form-control"
                               name="agent_telephone"
                               value={formData.agent_telephone}
                               onChange={handleChange}
+                              required={!formData.responsable_moi}
                             />
+                            <p className="form-hint">Il se connectera avec ce numéro et un code PIN provisoire.</p>
                           </div>
                           <div className="col-md-6" hidden={formData.responsable_moi}>
                             <label className="form-label-aps">

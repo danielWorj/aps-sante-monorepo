@@ -1,11 +1,10 @@
 // login.dart
 // Écran de connexion — APSA
 //
-// Deux modes, avec un petit bouton de bascule :
-//   - numéro de téléphone + code PIN (par défaut) : POST /auth/login-pin ;
-//   - email + mot de passe (comptes existants, administrateurs) :
-//     POST /auth/login.
-// Le dernier mode utilisé est retenu sur le téléphone.
+// Connexion par numéro de téléphone + code PIN (POST /auth/login-pin).
+// La connexion par email + mot de passe (anciens comptes) reste possible
+// via un lien discret en bas de l'écran (POST /auth/login) ; on revient
+// toujours au numéro + PIN à la réouverture.
 //
 // Issues possibles (voir ConnexionResultat) :
 //   1. Session complète ouverte : la session est déjà à jour dans
@@ -16,10 +15,12 @@
 //   2. Mot de passe temporaire (`motDePasseAChanger`) : écran de
 //      changement de mot de passe initial.
 //   3. PIN provisoire (`pinAChanger`) : écran de choix du PIN personnel.
+//   4. Nouveau téléphone (`appareilAValider`) : confirmation depuis
+//      l'application connectée ailleurs ou par WhatsApp
+//      ([ValidationAppareilScreen]), puis ouverture de l'espace.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../components/components.dart';
 import '../../controllers/authentification_controller.dart';
 import '../../controllers/referentiel_controller.dart';
@@ -29,9 +30,8 @@ import '../home_router_for_role.dart';
 import 'changement_mot_de_passe_initial.dart';
 import 'creer_pin_screen.dart';
 import 'pin_oublie_screen.dart';
+import 'validation_appareil_screen.dart';
 import '../../utils/marque.dart';
-
-const _cleModeConnexion = 'aps_mode_connexion';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({
@@ -75,14 +75,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _errorMessage;
 
   @override
-  void initState() {
-    super.initState();
-    const FlutterSecureStorage().read(key: _cleModeConnexion).then((mode) {
-      if (mounted && mode == 'email') setState(() => _modePin = false);
-    }).catchError((_) {});
-  }
-
-  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -96,9 +88,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _modePin = !_modePin;
       _errorMessage = null;
     });
-    const FlutterSecureStorage()
-        .write(key: _cleModeConnexion, value: _modePin ? 'pin' : 'email')
-        .catchError((_) {});
   }
 
   Future<void> _handleLogin() async {
@@ -125,7 +114,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       if (!mounted) return;
 
-      if (resultat.pinAChanger) {
+      if (resultat.appareilAValider) {
+        // Nouveau téléphone : confirmation avant toute session.
+        if (resultat.tokenValidationAppareil == null) {
+          setState(() => _errorMessage = 'Une erreur est survenue. Veuillez réessayer.');
+          return;
+        }
+        setState(() => _loading = false);
+        final session = await Navigator.of(context).push<ConnexionResultat>(
+          MaterialPageRoute(builder: (_) => ValidationAppareilScreen(validation: resultat)),
+        );
+        if (!mounted) return;
+        if (session != null && session.sessionOuverte) {
+          await _proposerPinPuisOuvrir(session);
+        } else {
+          _pinController.clear();
+          _passwordController.clear();
+        }
+      } else if (resultat.pinAChanger) {
         // PIN provisoire donné par un administrateur : pas de session.
         final token = resultat.tokenChangementPin;
         if (token == null) {
@@ -296,15 +302,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
-                        onPressed: () => (ref.read(configurationConnexionProvider).value?.verificationTelephone ?? false)
+                        onPressed: () => (ref.read(configurationConnexionProvider).value?.pinOublie ?? false)
                             ? Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PinOublieScreen()))
                             : showDialog<void>(
                           context: context,
                           builder: (d) => AlertDialog(
                             title: const Text('Code PIN oublié'),
                             content: const Text(
-                              'Connectez-vous avec votre email et votre mot de passe (bouton en bas), '
-                              'puis choisissez un nouveau code PIN. Sans email, contactez le support $nomMarque.',
+                              'Contactez le support $nomMarque pour retrouver l’accès à votre compte, '
+                              'ou connectez-vous avec votre e-mail (lien en bas) puis choisissez un nouveau code PIN.',
                             ),
                             actions: [TextButton(onPressed: () => Navigator.of(d).pop(), child: const Text('Compris'))],
                           ),
@@ -375,16 +381,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     onPressed: _handleLogin,
                   ),
                   const SizedBox(height: 6),
-                  // Bascule entre les deux modes de connexion.
-                  TextButton.icon(
-                    onPressed: _loading ? null : _basculerMode,
-                    icon: Icon(_modePin ? Icons.mail_outline_rounded : Icons.phone_iphone_rounded, size: 18),
-                    label: Text(
-                      _modePin
-                          ? 'Se connecter avec mon email et mon mot de passe'
-                          : 'Se connecter avec mon numéro et mon code PIN',
-                    ),
-                  ),
+                  // Connexion par e-mail : lien discret (anciens comptes) ;
+                  // retour au numéro bien visible.
+                  _modePin
+                      ? TextButton(
+                          onPressed: _loading ? null : _basculerMode,
+                          child: Text(
+                            'Se connecter avec un e-mail',
+                            style: AppTextStyles.xs.copyWith(color: AppColors.ink3),
+                          ),
+                        )
+                      : TextButton.icon(
+                          onPressed: _loading ? null : _basculerMode,
+                          icon: const Icon(Icons.phone_iphone_rounded, size: 18),
+                          label: const Text('Se connecter avec mon numéro et mon code PIN'),
+                        ),
 
                   if (widget.onCreateAccount != null) ...[
                     const SizedBox(height: 16),

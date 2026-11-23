@@ -12,6 +12,7 @@ import 'pages/verrou/verrou_application.dart';
 import 'services/pays_utilisateur_service.dart';
 import 'services/push_service.dart';
 import 'utils/api_client.dart';
+import 'utils/identifiant_appareil.dart';
 import 'utils/identifiant_installation.dart';
 import 'utils/marque.dart';
 
@@ -20,6 +21,8 @@ Future<void> main() async {
   // Identifiant d'installation (statistiques de vues des fiches) : lu une
   // fois, avant le premier appel réseau. Ne lève jamais.
   await IdentifiantInstallation.charger();
+  // Identifiant d'appareil (appareils de confiance à la connexion).
+  await IdentifiantAppareil.charger();
   // Notifications push (Firebase) : sans configuration, simplement désactivées.
   await PushService.initialiser();
   runApp(

@@ -218,6 +218,10 @@ export async function inscrire(req, res, next) {
     await enregistrerAcceptationsLegales({
       utilisateurId: utilisateur.utilisateur_id, req, contexte: "inscription_patient",
     });
+    // Compte créé sur cet appareil : pas de confirmation à la 1re connexion.
+    if (utilisateur.telephone_connexion) {
+      await faireConfianceAppareilRequete(req, res, utilisateur.utilisateur_id, "inscription");
+    }
 
     return res.status(201).json({
       message: "Compte créé avec succès.",

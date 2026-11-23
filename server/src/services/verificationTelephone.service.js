@@ -347,7 +347,9 @@ export async function statutVerificationInverse({ verification_id } = {}) {
  * @returns {Promise<object|null>} la ligne validée, ou null
  */
 export async function traiterMessageEntrantVerification({ de, texte } = {}) {
-  const numero = normaliserNumeroInternational(String(de ?? ""));
+  // Meta fournit l'expéditeur au format international SANS « + ».
+  const brut = String(de ?? "").trim();
+  const numero = normaliserNumeroInternational(brut.startsWith("+") ? brut : `+${brut}`);
   if (!numero || typeof texte !== "string") return null;
   const candidats = [...new Set(texte.match(new RegExp(`(?<!\\d)\\d{${LONGUEUR}}(?!\\d)`, "g")) ?? [])];
   if (!candidats.length) return null;

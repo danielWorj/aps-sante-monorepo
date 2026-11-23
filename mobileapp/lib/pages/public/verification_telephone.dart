@@ -4,6 +4,8 @@
 // serveur l'a activée (configurationConnexionProvider). « Recevoir le code »
 // puis saisie : la preuve à usage unique est remontée par [onPreuve] et
 // consommée par le serveur (changement de numéro, code PIN oublié…).
+// Canal « whatsapp_inverse » : l'utilisateur ENVOIE un code par WhatsApp
+// (EnvoiWhatsappInverse), rien à saisir.
 
 import 'dart:async';
 
@@ -14,6 +16,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../components/components.dart';
 import '../../controllers/authentification_controller.dart';
 import '../../models/authentification_models.dart';
+import 'envoi_whatsapp_inverse.dart';
+
+String _libelleCanal(String c) => switch (c) {
+      'whatsapp' => 'WhatsApp',
+      'whatsapp_inverse' => 'WhatsApp (j’envoie un code)',
+      _ => 'SMS',
+    };
 
 class VerificationTelephone extends ConsumerStatefulWidget {
   const VerificationTelephone({
@@ -42,13 +51,15 @@ class VerificationTelephone extends ConsumerStatefulWidget {
 
 class _VerificationTelephoneState extends ConsumerState<VerificationTelephone> {
   final _code = TextEditingController();
-  late String _canal = widget.canaux.first;
+  late String _canal = widget.canaux.isEmpty ? 'sms' : widget.canaux.first;
   String? _envoyePour;
   String? _info;
   String? _erreur;
   bool _envoi = false;
   int _attente = 0;
   Timer? _minuteur;
+  // Vérification inversée en cours.
+  DemandeWhatsappInverse? _inverse;
 
   @override
   void dispose() {
@@ -81,10 +92,23 @@ class _VerificationTelephoneState extends ConsumerState<VerificationTelephone> {
       _erreur = null;
     });
     try {
+      if (_canal == 'whatsapp_inverse') {
+        final demande = await ref.read(authentificationRepositoryProvider).demanderVerificationInverse(
+              telephone: numero, paysIso2: widget.paysIso2, objet: widget.objet,
+            );
+        setState(() {
+          _inverse = demande;
+          _info = null;
+          _envoyePour = '${widget.paysIso2}|$numero';
+        });
+        _demarrerAttente(60);
+        return;
+      }
       final message = await ref.read(authentificationRepositoryProvider).envoyerCodeTelephone(
             telephone: numero, paysIso2: widget.paysIso2, objet: widget.objet, canal: _canal,
           );
       setState(() {
+        _inverse = null;
         _info = message;
         _envoyePour = '${widget.paysIso2}|$numero';
         _code.clear();
@@ -127,7 +151,7 @@ class _VerificationTelephoneState extends ConsumerState<VerificationTelephone> {
       );
     }
     final codeEnvoye = _envoyePour == '${widget.paysIso2}|${widget.telephone().trim()}';
-    final libelle = _canal == 'whatsapp' ? 'WhatsApp' : 'SMS';
+    final libelle = _libelleCanal(_canal);
     return ApsCard(
       flat: true,
       radius: 10,
@@ -141,12 +165,23 @@ class _VerificationTelephoneState extends ConsumerState<VerificationTelephone> {
             Wrap(spacing: 8, children: [
               for (final c in widget.canaux)
                 ChoiceChip(
-                  label: Text(c == 'whatsapp' ? 'WhatsApp' : 'SMS'),
+                  label: Text(_libelleCanal(c)),
                   selected: _canal == c,
                   onSelected: (_) => setState(() => _canal = c),
                 ),
             ]),
-          if (codeEnvoye) ...[
+          if (codeEnvoye && _inverse != null) ...[
+            EnvoiWhatsappInverse(
+              key: ValueKey(_inverse!.verificationId),
+              demande: _inverse!,
+              onPreuve: widget.onPreuve,
+              onExpire: () => setState(() {
+                _inverse = null;
+                _envoyePour = null;
+                _erreur = 'Le délai est dépassé. Recommencez.';
+              }),
+            ),
+          ] else if (codeEnvoye) ...[
             if (_info != null) Text(_info!, style: AppTextStyles.xs),
             const SizedBox(height: 8),
             TextField(
@@ -167,8 +202,10 @@ class _VerificationTelephoneState extends ConsumerState<VerificationTelephone> {
             child: Text(_attente > 0
                 ? 'Renvoyer dans $_attente s'
                 : codeEnvoye
-                    ? 'Renvoyer le code'
-                    : 'Recevoir le code par $libelle'),
+                    ? (_inverse != null ? 'Nouveau code' : 'Renvoyer le code')
+                    : _canal == 'whatsapp_inverse'
+                        ? 'Confirmer par WhatsApp'
+                        : 'Recevoir le code par $libelle'),
           ),
           if (_erreur != null) Text(_erreur!, style: AppTextStyles.small.copyWith(color: AppColors.dangerDark)),
         ],

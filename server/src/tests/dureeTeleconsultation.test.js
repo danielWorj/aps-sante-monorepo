@@ -21,7 +21,7 @@ mock.module("../services/parametreDelaiLiberation.service.js", {
   namedExports: { ErreurParametreDelai: class extends Error {} },
 });
 mock.module("../services/avisMedecin.service.js", { namedExports: { inviterAvisPatient: () => {} } });
-mock.module("../services/push.service.js", { namedExports: { signalerAppareils: () => {} } });
+mock.module("../services/push.service.js", { namedExports: { signalerAppareils: () => {}, planifierPush: () => {} } });
 
 const lib = await import("../lib/dureeTeleconsultation.js");
 const service = await import("../services/dureeTeleconsultation.service.js");

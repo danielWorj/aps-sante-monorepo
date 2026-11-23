@@ -35,6 +35,7 @@ import 'package:http/http.dart' as http;
 import '../models/medecin_models.dart';
 import '../utils/endpoint.dart';
 import '../utils/multipart_utils.dart';
+import '../utils/identifiant_appareil.dart';
 import '../utils/identifiant_installation.dart';
 
 /// Erreur levée quand une requête HTTP échoue (statut hors 2xx) ou
@@ -74,7 +75,8 @@ class MedecinRepository {
 
   Map<String, String> _entetes({String? token, bool avecJson = true}) {
     // Identifiant d'installation : compteur de vues des fiches uniquement.
-    final entetes = <String, String>{...IdentifiantInstallation.entete};
+    // X-Appareil-Id : l'inscription faite sur ce téléphone le rend « de confiance ».
+    final entetes = <String, String>{...IdentifiantInstallation.entete, ...IdentifiantAppareil.entete};
     if (avecJson) entetes['Content-Type'] = 'application/json';
     if (token != null) entetes['Authorization'] = 'Bearer $token';
     return entetes;
@@ -175,6 +177,9 @@ class MedecinRepository {
         String? token,
       }) async {
     final requete = http.MultipartRequest(methode, Uri.parse(url));
+    // Inscription : l'appareil devient « de confiance » (pas de confirmation
+    // demandée à la première connexion qui suit).
+    requete.headers.addAll(IdentifiantAppareil.entete);
     if (token != null) {
       requete.headers['Authorization'] = 'Bearer $token';
     }

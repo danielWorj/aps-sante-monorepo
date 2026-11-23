@@ -1165,19 +1165,25 @@ class ApsSuccessHeader extends StatelessWidget {
   }
 }
 
-/// Bloc « Identifiants de l'agent responsable » de l'écran de succès. Le
-/// mot de passe temporaire n'est renvoyé qu'une seule fois par le serveur :
-/// bouton de copie pour ne pas avoir à le laisser affiché.
+/// Bloc « Identifiants de l'agent responsable » de l'écran de succès.
+/// L'agent se connecte avec son numéro ([telephone]) et un code PIN
+/// provisoire ([pinProvisoire]), renvoyé une seule fois par le serveur :
+/// bouton de copie pour ne pas avoir à le laisser affiché. Ancien format
+/// (email + mot de passe temporaire) conservé en repli.
 class ApsCredentialsCard extends StatelessWidget {
   const ApsCredentialsCard({
     super.key,
-    required this.email,
-    required this.motDePasseTemporaire,
+    this.email,
+    this.motDePasseTemporaire,
+    this.telephone,
+    this.pinProvisoire,
     this.title = "Identifiants de l'agent responsable",
   });
 
-  final String email;
+  final String? email;
   final String? motDePasseTemporaire;
+  final String? telephone;
+  final String? pinProvisoire;
   final String title;
 
   @override
@@ -1217,8 +1223,30 @@ class ApsCredentialsCard extends StatelessWidget {
             padding: EdgeInsets.symmetric(vertical: 10),
             child: ApsDashedDivider(),
           ),
-          _ApsCopyRow(label: 'Identifiant', value: email, copiedLabel: 'Identifiant copié.'),
-          if (motDePasseTemporaire != null &&
+          if (pinProvisoire != null && pinProvisoire!.isNotEmpty) ...[
+            if (telephone != null && telephone!.isNotEmpty)
+              _ApsCopyRow(
+                label: 'Numéro de connexion',
+                value: telephone!.startsWith('+') ? telephone! : '+${telephone!}',
+                copiedLabel: 'Numéro copié.',
+              ),
+            const SizedBox(height: 9),
+            _ApsCopyRow(label: 'Code PIN provisoire', value: pinProvisoire!, copiedLabel: 'Code PIN copié.'),
+            const SizedBox(height: 10),
+            const Text(
+              "Ce code n'est affiché qu'une seule fois. Transmettez-le à l'agent : "
+                  "il se connecte avec son numéro et ce code, puis choisit son propre code PIN.",
+              style: TextStyle(
+                fontFamily: AppTextStyles.fontBody,
+                fontSize: 10.5,
+                color: AppColors.inkFaint,
+                height: 1.5,
+              ),
+            ),
+          ] else if (email != null)
+            _ApsCopyRow(label: 'Identifiant', value: email!, copiedLabel: 'Identifiant copié.'),
+          if ((pinProvisoire == null || pinProvisoire!.isEmpty) &&
+              motDePasseTemporaire != null &&
               motDePasseTemporaire!.isNotEmpty) ...[
             const SizedBox(height: 9),
             _ApsCopyRow(

@@ -392,7 +392,7 @@ class _CreateLaboratoireScreenState extends ConsumerState<CreateLaboratoireScree
             child: ApsBanner(message: 'Ce laboratoire est rattaché à votre compte : retrouvez-le dans « Changer d’espace ».'),
           ),
         if (r != null && !r.rattacheAuCompte && r.agentEmail != null)
-          ApsCredentialsCard(email: r.agentEmail!, motDePasseTemporaire: r.motDePasseTemporaire),
+          ApsCredentialsCard(email: r.agentEmail, motDePasseTemporaire: r.motDePasseTemporaire, telephone: r.telephoneConnexion, pinProvisoire: r.pinProvisoire),
         const ApsSuccessNextItem(
           icon: Icons.schedule_rounded,
           title: 'Vérification par notre équipe',

@@ -327,14 +327,17 @@ class UtilisateurCreeMedecin {
   final String nom;
   final String prenom;
   final String email;
-  final String motDePasseTemporaire;
+
+  /// Numéro de connexion (format international sans « + ») : le médecin
+  /// se connecte avec ce numéro et le code PIN qu'il a choisi.
+  final String? telephoneConnexion;
 
   const UtilisateurCreeMedecin({
     required this.utilisateurId,
     required this.nom,
     required this.prenom,
     required this.email,
-    required this.motDePasseTemporaire,
+    this.telephoneConnexion,
   });
 
   factory UtilisateurCreeMedecin.fromJson(Map<String, dynamic> json) {
@@ -343,7 +346,7 @@ class UtilisateurCreeMedecin {
       nom: json['nom'] as String,
       prenom: json['prenom'] as String,
       email: json['email'] as String,
-      motDePasseTemporaire: json['mot_de_passe_temporaire'] as String,
+      telephoneConnexion: json['telephone_connexion'] as String?,
     );
   }
 
@@ -460,6 +463,12 @@ class CreerMedecinPayload {
   /// Case CGU / confidentialité cochée (le serveur enregistre la version acceptée).
   final bool accepteCgu;
 
+  /// Code PIN choisi (6 chiffres) : connexion par numéro + PIN.
+  final String? pin;
+
+  /// Preuve du numéro (si la vérification du numéro est active).
+  final String? preuveTelephone;
+
   const CreerMedecinPayload({
     required this.nom,
     required this.prenom,
@@ -474,6 +483,8 @@ class CreerMedecinPayload {
     required this.tarifIndicatif,
     required this.biographie,
     this.accepteCgu = false,
+    this.pin,
+    this.preuveTelephone,
   });
 
   /// Champs texte du multipart/form-data (hors fichiers). Les valeurs
@@ -493,6 +504,8 @@ class CreerMedecinPayload {
     'tarif_indicatif': tarifIndicatif,
     'biographie': biographie,
     if (accepteCgu) 'accepte_cgu': true,
+    if (pin != null && pin!.isNotEmpty) 'pin': pin,
+    if (preuveTelephone != null) 'preuve_telephone': preuveTelephone,
   };
 }
 

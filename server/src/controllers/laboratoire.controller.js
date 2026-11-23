@@ -22,8 +22,7 @@
 // Pas d'abonnement laboratoire pour l'instant : tout le contenu d'une fiche
 // publiée est public.
 
-import crypto from "crypto";
-import bcrypt from "bcrypt"; // même bibliothèque que authentification.controller.js
+import { controlerTelephoneNouveauCompte, ErreurPin, identifiantsNouveauCompte } from "../services/pin.service.js";
 import prisma from "../lib/prisma.js";
 import { televerserFichier, supprimerFichier, construireUrl } from "../lib/cloudinaryService.js";
 import { analyserParametresProximite, creerAccesseurGeospatial } from "../lib/geo.js";
@@ -47,7 +46,6 @@ import {
 } from "../services/portailLaboratoire.service.js";
 import { MESSAGE_CGU_REFUSEES, cguRefusees, enregistrerAcceptationsAuteur } from "../services/documentLegal.service.js";
 
-const SALT_ROUNDS = 10;
 const LIBELLE_ROLE_AGENT = "agent_laboratoire";
 const STATUTS_VERIFICATION = ["non_publie", "en_cours", "publie"];
 const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -73,37 +71,30 @@ const chaine = (v) => (typeof v === "string" ? v.trim() : "");
  * Compte de l'agent (même patron que creerCompteAgentPourPharmacie)
  * =================================================================== */
 
-function genererMotDePasseTemporaire() {
-  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  const octets = crypto.randomBytes(12);
-  let motDePasse = "";
-  for (let i = 0; i < 12; i++) motDePasse += alphabet[octets[i] % alphabet.length];
-  return motDePasse;
-}
 
 async function creerCompteAgent(tx, { laboratoireId, fonction, nom, prenom, email, telephone, paysId }) {
   const roleAgent = await tx.role.findUnique({ where: { libelle: LIBELLE_ROLE_AGENT } });
   if (!roleAgent) {
     throw new Error(`Rôle "${LIBELLE_ROLE_AGENT}" introuvable en base (table role) — appliquer la migration du module laboratoire.`);
   }
-  const motDePasseTemporaire = genererMotDePasseTemporaire();
+  // Connexion par numéro + PIN provisoire (à changer à la 1re connexion).
+  const { data: identifiants, pinProvisoire } = await identifiantsNouveauCompte({ telephone, pays_id: paysId });
   const utilisateur = await tx.utilisateur.create({
     data: {
       nom,
       prenom,
       email,
       telephone: telephone || null,
-      mot_de_passe_hash: await bcrypt.hash(motDePasseTemporaire, SALT_ROUNDS),
       role_id: roleAgent.role_id,
       pays_id: paysId,
       statut_compte: "actif",
-      mot_de_passe_temporaire: true,
+      ...identifiants,
     },
   });
   const agent = await tx.agentLaboratoire.create({
     data: { utilisateur_id: utilisateur.utilisateur_id, laboratoire_id: laboratoireId, fonction },
   });
-  return { utilisateur, agent, motDePasseTemporaire };
+  return { utilisateur, agent, pinProvisoire };
 }
 
 /* ===================================================================
@@ -414,6 +405,17 @@ export async function creerLaboratoire(req, res, next) {
       if (!REGEX_EMAIL.test(agent.email)) return res.status(400).json({ message: "agent_email invalide." });
     }
 
+    // Numéro de connexion de l'agent (numéro + PIN provisoire) : contrôlé
+    // avant tout téléversement.
+    if (!responsableMoi) {
+      try {
+        await controlerTelephoneNouveauCompte({ telephone: agent.telephone, pays_id });
+      } catch (errTel) {
+        if (errTel instanceof ErreurPin) return res.status(errTel.status).json({ message: errTel.message, code: errTel.code });
+        throw errTel;
+      }
+    }
+
     const fichierImage = req.files?.image_laboratoire?.[0];
     const fichierCni = req.files?.piece_identite?.[0];
     const fichierAgrement = req.files?.document_agrement?.[0];
@@ -427,7 +429,7 @@ export async function creerLaboratoire(req, res, next) {
     if (erreurLieu) return res.status(400).json({ message: erreurLieu });
 
     if (!responsableMoi && (await prisma.utilisateur.findUnique({ where: { email: agent.email } }))) {
-      return res.status(409).json({ message: "Un compte existe déjà avec cet email : impossible de créer le compte agent." });
+      return res.status(409).json({ message: "Un compte existe déjà avec cet email ou ce numéro : impossible de créer le compte agent." });
     }
 
     const estAdmin = estAdminOuSuperadmin(req.utilisateur);
@@ -478,7 +480,7 @@ export async function creerLaboratoire(req, res, next) {
     } catch (errTransaction) {
       await nettoyerFichiers();
       if (errTransaction.code === "P2002") {
-        return res.status(409).json({ message: "Un compte existe déjà avec cet email : impossible de créer le compte agent." });
+        return res.status(409).json({ message: "Un compte existe déjà avec cet email ou ce numéro : impossible de créer le compte agent." });
       }
       throw errTransaction;
     }
@@ -493,7 +495,7 @@ export async function creerLaboratoire(req, res, next) {
         ? `Laboratoire créé avec succès. Avertissement : ${erreurGeo}`
         : responsableMoi
           ? "Laboratoire créé avec succès. Il est rattaché à votre compte : retrouvez-le dans « Changer d’espace »."
-          : "Laboratoire créé avec succès. Compte agent créé — communiquez-lui le mot de passe temporaire.",
+          : "Laboratoire créé avec succès. Compte agent créé — communiquez-lui son code PIN provisoire.",
       laboratoire: presenterFiche(resultat.labo, { geolocalisation, complete: true }),
       agent: {
         agent_id: resultat.agent.agent_id,
@@ -505,7 +507,10 @@ export async function creerLaboratoire(req, res, next) {
           email: resultat.utilisateur.email,
         },
         // ⚠️ Renvoyé UNE seule fois (même avertissement que pharmacie.controller.js).
-        mot_de_passe_temporaire: resultat.motDePasseTemporaire,
+        // PIN provisoire de l'agent (une seule fois) : il se connecte avec
+        // son numéro et ce code, puis choisit son propre PIN.
+        pin_provisoire: resultat.pinProvisoire ?? null,
+        telephone_connexion: resultat.utilisateur.telephone_connexion ?? null,
         rattache_au_compte: responsableMoi,
       },
     });

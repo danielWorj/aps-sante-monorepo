@@ -436,3 +436,52 @@ export async function verifierTelephoneCompte({ utilisateur_id, preuve_telephone
     include: { role: true },
   });
 }
+
+/* ---------------------- Comptes professionnels créés ---------------------- */
+// Les professionnels se connectent par numéro + PIN (plus de mot de passe
+// temporaire) : médecin inscrit lui-même = PIN choisi ; agent créé par le
+// responsable d'une fiche = PIN provisoire, à changer à la 1re connexion.
+// L'email reste enregistré (contact, activation) ; le mot de passe est
+// aléatoire et inconnu : « Mot de passe oublié » permet d'en choisir un
+// pour la connexion par email, toujours disponible.
+
+/**
+ * Contrôle, AVANT tout téléversement, le numéro qui servira à se connecter.
+ * @returns {Promise<string>} numéro normalisé
+ * @throws {ErreurPin} numéro manquant (400), invalide (400) ou déjà pris (409)
+ */
+export async function controlerTelephoneNouveauCompte({ telephone, pays_id }) {
+  if (!telephone || !String(telephone).trim()) {
+    throw new ErreurPin("Le numéro de téléphone est obligatoire : il sert à se connecter.", 400, "TELEPHONE_REQUIS");
+  }
+  const numero = await normaliserTelephoneConnexion(String(telephone).trim(), { pays_id });
+  await verifierNumeroLibre(numero, null);
+  return numero;
+}
+
+/**
+ * Champs de connexion d'un compte professionnel créé (à fusionner dans
+ * `data` de utilisateur.create).
+ * @returns {Promise<{ data: object, pinProvisoire: string|null }>}
+ */
+export async function identifiantsNouveauCompte({ telephone, pays_id, pin = null, preuve_telephone = null, date_naissance = null }) {
+  const choisi = pin !== undefined && pin !== null && pin !== "";
+  const pinFinal = choisi ? String(pin) : genererPinProvisoire();
+  const donnees = await donneesPinCreation({
+    telephone: String(telephone ?? "").trim(),
+    pays_id,
+    pin: pinFinal,
+    provisoire: !choisi,
+    preuve_telephone,
+    date_naissance,
+  });
+  return {
+    data: {
+      ...donnees,
+      telephone: `+${donnees.telephone_connexion}`,
+      mot_de_passe_hash: await bcrypt.hash(crypto.randomBytes(24).toString("base64url"), SALT_ROUNDS),
+      mot_de_passe_temporaire: false,
+    },
+    pinProvisoire: choisi ? null : pinFinal,
+  };
+}

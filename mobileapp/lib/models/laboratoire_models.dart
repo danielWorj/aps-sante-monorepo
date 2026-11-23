@@ -468,6 +468,9 @@ class LaboratoireCreationResultat {
   final Laboratoire laboratoire;
   final String? agentEmail;
   final String? motDePasseTemporaire;
+  /// Connexion du responsable : son numéro + ce code PIN provisoire.
+  final String? pinProvisoire;
+  final String? telephoneConnexion;
   final bool rattacheAuCompte;
 
   const LaboratoireCreationResultat({
@@ -475,6 +478,8 @@ class LaboratoireCreationResultat {
     required this.laboratoire,
     this.agentEmail,
     this.motDePasseTemporaire,
+    this.pinProvisoire,
+    this.telephoneConnexion,
     required this.rattacheAuCompte,
   });
 
@@ -485,6 +490,8 @@ class LaboratoireCreationResultat {
       laboratoire: Laboratoire.fromJson(_carte(j['laboratoire'])),
       agentEmail: _texte(_carte(agent['utilisateur'])['email']),
       motDePasseTemporaire: _texte(agent['mot_de_passe_temporaire']),
+      pinProvisoire: _texte(agent['pin_provisoire']),
+      telephoneConnexion: _texte(agent['telephone_connexion']),
       rattacheAuCompte: agent['rattache_au_compte'] == true,
     );
   }

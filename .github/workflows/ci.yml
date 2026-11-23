@@ -1,0 +1,129 @@
+# Intégration continue : tests du serveur, builds des deux clients web,
+# analyse de l'application mobile. Se lance à chaque push et pull request
+# sur main ; chaque job ne tourne que si son dossier a changé.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changements:
+    name: Détection des changements
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.filtre.outputs.server }}
+      plateforme: ${{ steps.filtre.outputs.plateforme }}
+      backoffice: ${{ steps.filtre.outputs.backoffice }}
+      mobile: ${{ steps.filtre.outputs.mobile }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filtre
+        with:
+          filters: |
+            server:
+              - 'server/**'
+              - '.github/workflows/ci.yml'
+            plateforme:
+              - 'client-plateform/**'
+              - '.github/workflows/ci.yml'
+            backoffice:
+              - 'client-backoffice/back-office-app/**'
+              - '.github/workflows/ci.yml'
+            mobile:
+              - 'mobileapp/**'
+              - '.github/workflows/ci.yml'
+
+  server:
+    name: Serveur — tests
+    needs: changements
+    if: needs.changements.outputs.server == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    env:
+      # Factice : prisma generate n'ouvre aucune connexion, les tests
+      # simulent la base.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm test
+
+  plateforme:
+    name: Plateforme web — build
+    needs: changements
+    if: needs.changements.outputs.plateforme == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client-plateform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client-plateform/package-lock.json
+      - run: npm ci
+      - name: Lint (informatif)
+        run: npm run lint
+        continue-on-error: true
+      - run: npm run build
+
+  backoffice:
+    name: Back-office — build
+    needs: changements
+    if: needs.changements.outputs.backoffice == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client-backoffice/back-office-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client-backoffice/back-office-app/package-lock.json
+      - run: npm ci
+      - name: Lint (informatif)
+        run: npm run lint
+        continue-on-error: true
+      - run: npm run build
+
+  mobile:
+    name: Mobile — analyse
+    needs: changements
+    if: needs.changements.outputs.mobile == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobileapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # Seules les erreurs bloquent ; avertissements et infos sont affichés.
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings

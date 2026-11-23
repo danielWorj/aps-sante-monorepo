@@ -168,6 +168,9 @@ class _CreatePharmacieScreenState extends ConsumerState<CreatePharmacieScreen>
         if (_agentPrenomCtrl.text.trim().isEmpty) {
           return "Le prénom de l'agent est obligatoire.";
         }
+        if (_agentTelCtrl.text.trim().isEmpty) {
+          return "Le téléphone de l'agent est obligatoire : il lui sert à se connecter.";
+        }
         final agentEmail = _agentEmailCtrl.text.trim();
         if (agentEmail.isEmpty) return "L'e-mail de l'agent est obligatoire.";
         if (!_emailRegExp.hasMatch(agentEmail)) {
@@ -500,7 +503,8 @@ class _CreatePharmacieScreenState extends ConsumerState<CreatePharmacieScreen>
           ),
         ),
         ApsFormField(
-          label: "Téléphone de l'agent",
+          label: "Téléphone de l'agent (pour se connecter)",
+          required: true,
           child: ApsTextInput(
             controller: _agentTelCtrl,
             hint: '+237 6 XX XX XX XX',
@@ -651,6 +655,8 @@ class _CreatePharmacieScreenState extends ConsumerState<CreatePharmacieScreen>
             ApsCredentialsCard(
               email: resultat.agent.utilisateur.email,
               motDePasseTemporaire: resultat.agent.motDePasseTemporaire,
+              telephone: resultat.agent.telephoneConnexion,
+              pinProvisoire: resultat.agent.pinProvisoire,
             ),
           const Column(
             children: [

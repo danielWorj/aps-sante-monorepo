@@ -299,6 +299,33 @@ export async function sonderConnexionApplication(demandeId, secret) {
 }
 
 /**
+ * Vérification WhatsApp inversée : où en est-elle ? (sondage)
+ * Réponse : { statut: 'en_attente' | 'verifie' | 'expiree', preuve? }
+ */
+export async function statutVerificationInverse(verificationId) {
+  return apiFetch('/verification-telephone/statut', { method: 'POST', body: { verification_id: verificationId }, skipAuthRetry: true });
+}
+
+// ─── Nouvel appareil (réponse « appareil_a_valider » de la connexion) ───
+// Le token restreint ne sert qu'à ces trois appels.
+const avecJetonValidation = (token) => ({ skipAuthRetry: true, skipPinRetry: true, authOverride: `Bearer ${token}` });
+
+/** Demande à l'application connectée sur un autre téléphone de confirmer. */
+export async function demanderValidationApplication(token) {
+  return apiFetch('/auth/appareil/application', { method: 'POST', ...avecJetonValidation(token) });
+}
+
+/** Lance la confirmation par WhatsApp inversé (code à envoyer). */
+export async function demanderValidationWhatsapp(token) {
+  return apiFetch('/auth/appareil/whatsapp', { method: 'POST', ...avecJetonValidation(token) });
+}
+
+/** Preuve WhatsApp obtenue : l'appareil est confirmé, la session s'ouvre. */
+export async function validerAppareil(token, preuve) {
+  return apiFetch('/auth/appareil/valider', { method: 'POST', body: { preuve_telephone: preuve }, ...avecJetonValidation(token) });
+}
+
+/**
  * POST /auth/logout
  */
 export async function deconnecter() {
@@ -326,6 +353,10 @@ export default {
   reinitialiserPin,
   demanderConnexionApplication,
   sonderConnexionApplication,
+  statutVerificationInverse,
+  demanderValidationApplication,
+  demanderValidationWhatsapp,
+  validerAppareil,
   rafraichirToken,
   obtenirProfilCourant,
   deconnecter,
