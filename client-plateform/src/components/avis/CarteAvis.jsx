@@ -6,6 +6,7 @@
 import { Etoiles } from './Etoiles';
 import { initialesAuteur } from './auteur';
 import { CRITERES_AVIS } from '../../services/reputationMedecinService';
+import { NOM_MARQUE } from '../../lib/marque';
 
 const dateLongue = (iso) =>
   new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -39,7 +40,7 @@ export default function CarteAvis({ avis, nomMedecin = 'Le médecin', actions, c
           <div className="carte-avis-nom">
             {avis.auteur}
             {avis.patient_verifie && (
-              <span className="chip-verifie-patient" title="A consulté ce médecin via APS Santé">
+              <span className="chip-verifie-patient" title={`A consulté ce médecin via ${NOM_MARQUE}`}>
                 <i className="fa-solid fa-circle-check" /> Patient vérifié
               </span>
             )}
@@ -85,7 +86,7 @@ export default function CarteAvis({ avis, nomMedecin = 'Le médecin', actions, c
 
       {signalement && (
         <div className="carte-avis-signalement">
-          <i className="fa-solid fa-flag" /> Signalé le {dateLongue(signalement.date)} — en cours d&apos;examen par APS Santé.
+          <i className="fa-solid fa-flag" /> Signalé le {dateLongue(signalement.date)} — en cours d&apos;examen par {NOM_MARQUE}.
         </div>
       )}
 

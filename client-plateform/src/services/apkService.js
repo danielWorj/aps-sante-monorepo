@@ -19,6 +19,7 @@
 // vers aucun fichier réellement servi.
 
 import { apiFetch, API_BASE_URL } from '../lib/apiClient';
+import { NOM_MARQUE } from '../lib/marque';
 
 /**
  * GET /apks/active
@@ -106,7 +107,7 @@ export async function telechargerApkAvecProgression(url, onProgress, tailleConnu
   // un repli raisonnable si l'en-tête est absent ou non lisible.
   const entete = reponse.headers.get('Content-Disposition') || '';
   const correspondance = /filename="([^"]+)"/.exec(entete);
-  const nomFichier = correspondance ? correspondance[1] : 'ApSa.apk';
+  const nomFichier = correspondance ? correspondance[1] : `${NOM_MARQUE}.apk`;
 
   const tailleTotale =
     Number(reponse.headers.get('Content-Length')) || Number(tailleConnue) || 0;

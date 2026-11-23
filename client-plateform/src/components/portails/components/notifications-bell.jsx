@@ -32,6 +32,12 @@ const ICONES = {
   rdv_rappel: 'fa-bell',
   // Téléconsultation : le médecin a lancé la visio (patient).
   rdv_visio_demarree: 'fa-video',
+  // Téléconsultation : durée maximale bientôt atteinte, l'appel sera coupé (médecin et patient).
+  rdv_visio_fin_proche: 'fa-hourglass-end',
+  // Demande non confirmée par le médecin dans le délai : créneau libéré (patient).
+  rdv_confirmation_expiree: 'fa-calendar-xmark',
+  // Espace pharmacie / centre de santé : message reçu via la fiche publique.
+  message_fiche_recu: 'fa-envelope',
   // Le médecin a changé le type du RDV (physique <-> téléconsultation) (patient).
   rdv_type_modifie: 'fa-right-left',
   // Demande directe (médecin sans créneau libre) : reçue (médecin), acceptée / refusée (patient).

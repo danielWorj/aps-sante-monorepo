@@ -68,6 +68,10 @@ class ApiEndpoints {
 
   static const String villes = '/referentiels/villes';
   static String uneVille(String id) => '/referentiels/villes/$id';
+  // Source des villes (manuel / Google Maps) — sourceVilles.service.js.
+  static const String sourceVilles = '/referentiels/villes/source';
+  static const String rechercherVilles = '/referentiels/villes/rechercher';
+  static const String importerVille = '/referentiels/villes/importer';
 
   // ─── Rôles (IAM) — nécessite une authentification ────────────────
   static const String roles = '/referentiels/roles';

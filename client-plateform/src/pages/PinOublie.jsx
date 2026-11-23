@@ -8,6 +8,7 @@ import authService from '../services/authService';
 import { listerPays } from '../services/geoService';
 import VerificationTelephone from '../components/auth/VerificationTelephone';
 import { useConfigurationConnexion } from '../hooks/useConfigurationConnexion';
+import { NOM_MARQUE } from '../lib/marque';
 
 const chiffres = (v) => v.replace(/\D/g, '').slice(0, 6);
 
@@ -34,7 +35,7 @@ export default function PinOublie() {
             <h1 style={{ fontSize: '1.4rem' }}>Code PIN oublié</h1>
             <p className="text-muted-soft">
               Connectez-vous avec votre email et votre mot de passe, puis choisissez un nouveau code PIN depuis le menu
-              (« Code PIN »). Sans email, contactez le support APS Santé.
+              (« Code PIN »). Sans email, contactez le support {NOM_MARQUE}.
             </p>
             <Link to="/login" className="btn btn-primary">Retour à la connexion</Link>
           </div>

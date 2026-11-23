@@ -1,6 +1,8 @@
 // Rubriques des portails pharmacie et centre de santé (navbar + sidebar).
 // Les chemins suivent ESPACES_PRESENCE[type].portail (services/espacePresenceService.js).
 
+import { NOM_MARQUE } from '../../../lib/marque';
+
 const commun = (p) => ({
   tableau: { label: 'Tableau de bord', to: p, icon: 'fa-gauge-high' },
   fiche: { label: 'Ma fiche', to: `${p}-fiche`, icon: 'fa-id-card' },
@@ -10,7 +12,7 @@ const commun = (p) => ({
   actualites: { label: 'Actualités', to: `${p}-actualites`, icon: 'fa-newspaper' },
   messages: { label: 'Messages', to: `${p}-messages`, icon: 'fa-envelope', badge: 'messages' },
   abonnement: { label: 'Abonnement', to: `${p}-abonnement`, icon: 'fa-crown' },
-  annonces: { label: 'Annonces ApSa', to: `${p}-annonces`, icon: 'fa-bell', badge: 'annonces' },
+  annonces: { label: `Annonces ${NOM_MARQUE}`, to: `${p}-annonces`, icon: 'fa-bell', badge: 'annonces' },
 });
 
 const P = commun('/portail/pharmacie');

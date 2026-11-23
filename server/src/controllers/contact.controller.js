@@ -5,6 +5,7 @@
 
 import prisma from "../lib/prisma.js";
 import { obtenirNumeroWhatsappActif } from "../services/numeroWhatsapp.service.js";
+import { NOM_MARQUE } from "../lib/marque.js";
 
 export const PROFILS_CONTACT = ["patient", "professionnel", "structure", "pharmacie", "assurance", "annonceur", "autre"];
 export const SUJETS_CONTACT = [
@@ -66,7 +67,7 @@ export async function envoyerMessageContact(req, res, next) {
       select: { message_contact_id: true, date_creation: true },
     });
     return res.status(201).json({
-      message: "Message bien reçu. L'équipe ApSa vous répond sous 48 heures ouvrées.",
+      message: `Message bien reçu. L'équipe ${NOM_MARQUE} vous répond sous 48 heures ouvrées.`,
       reference: cree.message_contact_id.slice(0, 8).toUpperCase(),
     });
   } catch (err) {

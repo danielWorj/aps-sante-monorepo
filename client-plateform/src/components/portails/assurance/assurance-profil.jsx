@@ -13,6 +13,7 @@ import ActivitesAssurance from '../../assurances/gestion/ActivitesAssurance';
 import { obtenirGestionServiceAssurance } from '../../../services/abonnementAssuranceService';
 import { modifierServiceAssurance } from '../../../services/assuranceService';
 import { listerVilles } from '../../../services/geoService';
+import ChampVille from '../../ui/ChampVille';
 import { obtenirPosition } from '../../../lib/geolocConsentement';
 
 function versFormulaire(f) {
@@ -107,12 +108,7 @@ function FormulaireFiche({ fiche, onEnregistre }) {
         </div>
         <div className="col-md-4">
           <label className="form-label" htmlFor="as-ville">Ville du siège</label>
-          <select id="as-ville" className="form-select" value={form.ville_id} onChange={maj('ville_id')}>
-            {!villes.some((v) => v.ville_id === form.ville_id) && fiche.ville && (
-              <option value={fiche.ville_id}>{fiche.ville.nom}</option>
-            )}
-            {villes.map((v) => <option key={v.ville_id} value={v.ville_id}>{v.nom}</option>)}
-          </select>
+          <ChampVille id="as-ville" value={form.ville_id} onChange={maj('ville_id')} paysId={fiche.pays_id} villes={fiche.ville && !villes.some((v) => v.ville_id === fiche.ville_id) ? [{ ville_id: fiche.ville_id, nom: fiche.ville.nom }, ...villes] : villes} onVilleImportee={(v) => setVilles((l) => (l.some((x) => x.ville_id === v.ville_id) ? l : [...l, v]))} />
         </div>
         <div className="col-md-3">
           <label className="form-label" htmlFor="as-lat">Latitude</label>

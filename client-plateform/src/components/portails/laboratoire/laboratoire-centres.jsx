@@ -9,6 +9,7 @@ import { useConfirmation, useToast } from '../../feedback';
 import { LaboratoirePortailPage } from '../layouts/laboratoire.portail-sidebar';
 import GoogleMapPicker from '../../maps/GoogleMapPicker';
 import { listerVilles } from '../../../services/geoService';
+import ChampVille from '../../ui/ChampVille';
 import {
   creerCentre,
   modifierCentre,
@@ -18,7 +19,7 @@ import {
 
 const VIDE = { nom: '', ville_id: '', localisation: '', telephone: '', horaires: '', latitude: '', longitude: '' };
 
-function FormulaireCentre({ initial, villes, onAnnuler, onEnregistrer }) {
+function FormulaireCentre({ initial, villes, paysId, onAnnuler, onEnregistrer }) {
   const [form, setForm] = useState(() => (initial ? {
     nom: initial.nom ?? '', ville_id: initial.ville_id ?? '', localisation: initial.localisation ?? '',
     telephone: initial.telephone ?? '', horaires: initial.horaires ?? '',
@@ -55,10 +56,7 @@ function FormulaireCentre({ initial, villes, onAnnuler, onEnregistrer }) {
         </div>
         <div className="col-md-6">
           <label className="form-label" htmlFor="ce-ville">Ville</label>
-          <select id="ce-ville" className="form-select" value={form.ville_id} onChange={maj('ville_id')}>
-            <option value="">Non précisée</option>
-            {villes.map((v) => <option key={v.ville_id} value={v.ville_id}>{v.nom}</option>)}
-          </select>
+          <ChampVille id="ce-ville" value={form.ville_id} onChange={maj('ville_id')} paysId={paysId} villes={villes} placeholder="Non précisée" />
         </div>
         <div className="col-12">
           <label className="form-label" htmlFor="ce-adr">Adresse</label>
@@ -157,6 +155,7 @@ export default function LaboratoireCentres() {
               key={edition === 'nouveau' ? 'nouveau' : edition.centre_id}
               initial={edition === 'nouveau' ? null : edition}
               villes={villes}
+              paysId={paysId}
               onAnnuler={() => setEdition(null)}
               onEnregistrer={enregistrer}
             />

@@ -18,6 +18,7 @@ import '../../components/components.dart';
 import '../../controllers/mise_a_jour_controller.dart';
 import '../pilote_push.dart' show cleNavigateurApp;
 import 'mise_a_jour_page.dart';
+import '../../utils/marque.dart';
 
 class VeilleMiseAJour extends ConsumerStatefulWidget {
   const VeilleMiseAJour({super.key, required this.child});
@@ -114,7 +115,7 @@ class _FeuilleNouvelleVersion extends StatelessWidget {
             Text('Nouvelle version disponible', textAlign: TextAlign.center, style: AppTextStyles.h3),
             const SizedBox(height: 6),
             Text(
-              'ApSa ${v.nom ?? ''} est disponible (vous avez la version ${etat.installee?.nom ?? '—'}). '
+              '$nomMarque ${v.nom ?? ''} est disponible (vous avez la version ${etat.installee?.nom ?? '—'}). '
               '${etat.phase == PhaseMiseAJour.pret ? 'Elle est déjà téléchargée : il ne reste qu’à l’installer. ' : ''}'
               'La mise à jour ne prend qu’un instant et conserve vos données.',
               textAlign: TextAlign.center,

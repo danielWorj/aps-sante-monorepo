@@ -8,6 +8,7 @@ import './index.css'
 import { router } from './router.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { FeedbackProvider } from './components/feedback'
+import GardePin from './components/auth/GardePin'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -17,6 +18,8 @@ createRoot(document.getElementById('root')).render(
       {/* Toasts + modales de confirmation/saisie : remplacent alert/confirm/prompt. */}
       <FeedbackProvider>
         <RouterProvider router={router} />
+        {/* Code PIN demandé pour les opérations protégées (voir apiClient.js). */}
+        <GardePin />
       </FeedbackProvider>
     </AuthProvider>
   </StrictMode>,

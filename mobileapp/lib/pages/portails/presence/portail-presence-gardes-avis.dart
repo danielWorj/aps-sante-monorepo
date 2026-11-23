@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../components/components.dart';
 import '../../../controllers/espace_presence_controller.dart';
 import 'presence_commun.dart';
+import '../../../utils/marque.dart';
 
 class PortailPresenceGardes extends ConsumerStatefulWidget {
   const PortailPresenceGardes({super.key});
@@ -72,7 +73,7 @@ class _PortailPresenceGardesState extends ConsumerState<PortailPresenceGardes> {
                 ]),
         ),
         const SizedBox(height: 8),
-        Text('Les gardes sont planifiées par ApSa. Une garde manquante ou erronée ? Signalez-le à ApSa.', style: AppTextStyles.cardMeta),
+        Text('Les gardes sont planifiées par $nomMarque. Une garde manquante ou erronée ? Signalez-le à $nomMarque.', style: AppTextStyles.cardMeta),
       ],
     );
   }
@@ -86,7 +87,7 @@ class PortailPresenceAvis extends ConsumerWidget {
     final avis = ref.watch(avisPresenceProvider);
     return PagePresence(
       titre: 'Avis',
-      description: 'Ce que les patients disent de votre pharmacie. Chaque avis est vérifié par ApSa avant publication.',
+      description: 'Ce que les patients disent de votre pharmacie. Chaque avis est vérifié par $nomMarque avant publication.',
       onRafraichir: () => ref.refresh(avisPresenceProvider.future),
       children: [
         avis.when(
@@ -128,7 +129,7 @@ class PortailPresenceAvis extends ConsumerWidget {
                     if (d.enAttente > 0)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
-                        child: Text('${d.enAttente} avis en cours de vérification par ApSa.', style: AppTextStyles.cardMeta),
+                        child: Text('${d.enAttente} avis en cours de vérification par $nomMarque.', style: AppTextStyles.cardMeta),
                       ),
                   ],
                 ),
@@ -151,7 +152,7 @@ class PortailPresenceAvis extends ConsumerWidget {
                     ),
                   ),
               const SizedBox(height: 8),
-              Text('Un avis abusif ou erroné ? Signalez-le à ApSa.', style: AppTextStyles.cardMeta),
+              Text('Un avis abusif ou erroné ? Signalez-le à $nomMarque.', style: AppTextStyles.cardMeta),
             ],
           ),
         ),

@@ -9,6 +9,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { obtenirDocumentLegal } from '../services/documentLegalService';
 import '../assets/styles/info-2026.css';
 import '../assets/styles/legal-2026.css';
+import { NOM_MARQUE } from '../lib/marque';
 
 const DOCUMENTS = {
   cgu: { libelle: "Conditions générales d'utilisation", court: 'CGU', chemin: '/cgu' },
@@ -74,7 +75,7 @@ export default function DocumentLegal({ type }) {
   }, [type, version, cle]);
 
   useEffect(() => {
-    document.title = `${doc.libelle} — ApSa`;
+    document.title = `${doc.libelle} — ${NOM_MARQUE}`;
   }, [doc.libelle]);
 
   const charge = etat.cle === cle;

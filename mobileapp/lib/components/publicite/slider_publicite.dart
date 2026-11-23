@@ -29,6 +29,7 @@ import '../../pages/publicite/mes_publicites_screen.dart';
 import '../../pages/publicite/reserver_publicite_screen.dart';
 import '../style/colors.dart';
 import '../style/text_styles.dart';
+import '../../utils/marque.dart';
 
 class SliderPublicite extends ConsumerStatefulWidget {
   const SliderPublicite({super.key, required this.code, this.intervalle = const Duration(seconds: 6)});
@@ -220,7 +221,7 @@ class _SliderPubliciteState extends ConsumerState<SliderPublicite> with WidgetsB
           if (pubs.isNotEmpty) const SizedBox(height: 10),
           _CarteReserver(
             texte: pubs.isEmpty
-                ? "Cet emplacement est disponible pour les annonceurs partenaires d'ApSa."
+                ? "Cet emplacement est disponible pour les annonceurs partenaires $deMarque."
                 : nombrePlaces > pubs.length
                     ? 'Encore ${nombrePlaces - pubs.length} position(s) libre(s) dans ce carrousel.'
                     : 'Réservez votre position pour les prochaines périodes.',

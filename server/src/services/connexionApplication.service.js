@@ -12,6 +12,11 @@
 //
 // Numéro inconnu, sans PIN ou administrateur : une demande « leurre » est
 // créée quand même (même réponse, pas d'énumération des comptes).
+//
+// Même mécanisme pour valider un NOUVEL APPAREIL (objet « nouvel_appareil ») :
+// le PIN a déjà été vérifié sur l'appareil inconnu, l'application connectée
+// ailleurs confirme ; l'appareil devient appareil de confiance
+// (appareilConfiance.service.js).
 
 import crypto from "node:crypto";
 import prisma from "../lib/prisma.js";
@@ -38,7 +43,7 @@ function codesProposes(bon) {
  * Le navigateur demande une connexion pour un numéro.
  * @returns {Promise<{ demande_id: string, secret: string, code: string, expire_le: Date }>}
  */
-export async function demanderConnexionApplication({ telephone, pays_iso2 = null, user_agent = null, adresse_ip = null }) {
+export async function demanderConnexionApplication({ telephone, pays_iso2 = null, user_agent = null, adresse_ip = null, appareil_empreinte = null, appareil_mobile = false }) {
   const numero = normaliserNumeroInternational(telephone, pays_iso2);
   if (!numero) throw new ErreurPin("Numéro de téléphone invalide.", 400, "TELEPHONE_INVALIDE");
 
@@ -47,13 +52,31 @@ export async function demanderConnexionApplication({ telephone, pays_iso2 = null
     select: { utilisateur_id: true, pin_hash: true, statut_compte: true, role: { select: { libelle: true } } },
   });
   const valide = compte && compte.pin_hash && compte.statut_compte !== "suspendu" && !ROLES_SANS_PIN.has(compte.role?.libelle);
+  return creerDemande({
+    utilisateur_id: valide ? compte.utilisateur_id : null,
+    objet: "connexion_web",
+    user_agent, adresse_ip, appareil_empreinte, appareil_mobile,
+  });
+}
 
+/**
+ * Validation d'un nouvel appareil (identifiants déjà vérifiés sur cet appareil).
+ * @returns {Promise<{ demande_id: string, secret: string, code: string, expire_le: Date }>}
+ */
+export function demanderValidationNouvelAppareil({ utilisateur_id, user_agent = null, adresse_ip = null, appareil_empreinte, appareil_mobile = false }) {
+  return creerDemande({ utilisateur_id, objet: "nouvel_appareil", user_agent, adresse_ip, appareil_empreinte, appareil_mobile });
+}
+
+async function creerDemande({ utilisateur_id, objet, user_agent, adresse_ip, appareil_empreinte, appareil_mobile }) {
   const secret = crypto.randomBytes(32).toString("hex");
   const code = deuxChiffres();
   const expire_le = new Date(Date.now() + DUREE_DEMANDE_S * 1000);
   const demande = await prisma.demandeConnexionWeb.create({
     data: {
-      utilisateur_id: valide ? compte.utilisateur_id : null,
+      utilisateur_id,
+      objet,
+      appareil_empreinte: appareil_empreinte ?? null,
+      appareil_mobile: Boolean(appareil_mobile),
       secret_hache: hacher(secret),
       code_correspondance: code,
       codes_proposes: codesProposes(code),
@@ -68,7 +91,7 @@ export async function demanderConnexionApplication({ telephone, pays_iso2 = null
 /**
  * Sondage du navigateur. Une demande approuvée est CONSOMMÉE ici (passage
  * atomique approuvee -> consommee) : la session n'est remise qu'une fois.
- * @returns {Promise<{ statut: "en_attente"|"refusee"|"expiree"|"approuvee", utilisateur_id?: string }>}
+ * @returns {Promise<{ statut: "en_attente"|"refusee"|"expiree"|"approuvee", utilisateur_id?: string, objet?: string, appareil_empreinte?: string|null, appareil_mobile?: boolean }>}
  */
 export async function sonderConnexionApplication({ demande_id, secret }) {
   const demande = typeof demande_id === "string" && /^[0-9a-f-]{36}$/i.test(demande_id)
@@ -87,7 +110,13 @@ export async function sonderConnexionApplication({ demande_id, secret }) {
     data: { statut: "consommee" },
   });
   if (count !== 1 || !demande.utilisateur_id) return { statut: "expiree" };
-  return { statut: "approuvee", utilisateur_id: demande.utilisateur_id };
+  return {
+    statut: "approuvee",
+    utilisateur_id: demande.utilisateur_id,
+    objet: demande.objet,
+    appareil_empreinte: demande.appareil_empreinte,
+    appareil_mobile: demande.appareil_mobile,
+  };
 }
 
 /** Demandes en attente pour le compte connecté (application mobile). */
@@ -99,6 +128,9 @@ export async function demandesEnAttente(utilisateur_id) {
   });
   return demandes.map((d) => ({
     demande_id: d.demande_connexion_id,
+    // « nouvel_appareil » : code PIN déjà saisi sur un autre téléphone ou ordinateur.
+    objet: d.objet,
+    appareil_mobile: d.appareil_mobile,
     codes: d.codes_proposes.split(","),
     navigateur: d.user_agent,
     adresse_ip: d.adresse_ip,

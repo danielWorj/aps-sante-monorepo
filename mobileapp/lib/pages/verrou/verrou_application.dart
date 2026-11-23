@@ -31,6 +31,7 @@ import 'package:local_auth/local_auth.dart';
 import '../../components/components.dart';
 import '../../controllers/authentification_controller.dart';
 import '../../models/authentification_models.dart';
+import '../../utils/marque.dart';
 
 const _cleBiometrie = 'aps_deverrouillage_biometrique';
 const _cleVerrouillage = 'aps_verrouillage_application';
@@ -196,7 +197,7 @@ class _EcranVerrouState extends ConsumerState<_EcranVerrou> {
   Future<void> _avecBiometrie() async {
     try {
       final ok = await LocalAuthentication().authenticate(
-        localizedReason: 'Déverrouillez APS Santé',
+        localizedReason: 'Déverrouillez $nomMarque',
         persistAcrossBackgrounding: true,
       );
       if (ok && mounted) widget.onDeverrouille();

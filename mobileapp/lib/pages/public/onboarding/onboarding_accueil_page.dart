@@ -7,6 +7,7 @@ import '../../../components/components.dart';
 import '../publicAcceuil.dart';
 import 'onboarding_pro_choix_page.dart';
 import 'onboarding_services_page.dart';
+import '../../../utils/marque.dart';
 
 /// Écran 01 — Accueil au premier lancement (refonte 2026).
 ///
@@ -163,7 +164,7 @@ class _EnTete extends StatelessWidget {
         const ApsLogo(size: 40),
         const SizedBox(width: 10),
         const Text(
-          'APS Santé',
+          nomMarque,
           style: TextStyle(
             fontFamily: AppTextStyles.fontSans,
             color: Colors.white,

@@ -18,6 +18,7 @@ import prisma from "../lib/prisma.js";
 import { estMedecinActive } from "../lib/activationMedecin.js";
 import { horsPerimetre } from "../lib/perimetrePays.js";
 import { construireEmailHtml, envoyerEmail } from "./email.service.js";
+import { NOM_MARQUE } from "../lib/marque.js";
 
 const sansBarreFinale = (url) => String(url || "").replace(/\/+$/, "");
 
@@ -41,12 +42,12 @@ export function contenuEmailActivation({ prenom, nom, email, telephone, speciali
   const contact = process.env.CONTACT_EMAIL || "";
   const nomComplet = `Dr ${[prenom, nom].filter(Boolean).join(" ")}`.trim();
 
-  const sujet = "Votre compte médecin APS Santé est activé";
+  const sujet = `Votre compte médecin ${NOM_MARQUE} est activé`;
   const titre = "Votre compte est activé";
   const salutation = `Bonjour ${nomComplet},`;
   const paragraphes = [
-    "Bonne nouvelle : l'équipe APS Santé a vérifié votre dossier et activé votre compte médecin.",
-    "Votre fiche est désormais visible des patients sur le site et l'application mobile APS Santé. Vous pouvez dès maintenant vous connecter à votre espace médecin.",
+    `Bonne nouvelle : l'équipe ${NOM_MARQUE} a vérifié votre dossier et activé votre compte médecin.`,
+    `Votre fiche est désormais visible des patients sur le site et l'application mobile ${NOM_MARQUE}. Vous pouvez dès maintenant vous connecter à votre espace médecin.`,
   ];
   const details = [
     ["Médecin", nomComplet],
@@ -72,9 +73,9 @@ export function contenuEmailActivation({ prenom, nom, email, telephone, speciali
     details,
     etapes,
     bouton: { libelle: "Accéder à mon espace médecin", url: lienConnexion },
-    secondaire: { titre: "Téléchargez l'application mobile APS Santé", boutons: applications },
+    secondaire: { titre: `Téléchargez l'application mobile ${NOM_MARQUE}`, boutons: applications },
     apresBouton: [aide],
-    pied: "Vous recevez cet e-mail car votre compte médecin vient d'être activé sur APS Santé.",
+    pied: `Vous recevez cet e-mail car votre compte médecin vient d'être activé sur ${NOM_MARQUE}.`,
   });
 
   const texte = [
@@ -89,12 +90,12 @@ export function contenuEmailActivation({ prenom, nom, email, telephone, speciali
     "",
     `Accéder à mon espace médecin : ${lienConnexion}`,
     "",
-    "Téléchargez l'application mobile APS Santé :",
+    `Téléchargez l'application mobile ${NOM_MARQUE} :`,
     ...applications.map((a) => `- ${a.libelle} : ${a.url}`),
     ...(aide ? ["", aide] : []),
     "",
     "Cordialement,",
-    "L'équipe APS Santé",
+    `L'équipe ${NOM_MARQUE}`,
   ].join("\n");
 
   return { sujet, texte, html };

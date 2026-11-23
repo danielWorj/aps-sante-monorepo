@@ -54,6 +54,7 @@ mock.module("../services/verificationTelephone.service.js", {
       base.preuvesConsommees.push({ objet, telephone });
       return telephone.slice(1);
     },
+    whatsappInverseActif: async () => false,
   },
 });
 

@@ -14,6 +14,7 @@ import { listerLaboratoires } from '../services/laboratoireService';
 import { listerVilles } from '../services/geoService';
 import { useGeolocation } from '../hooks/useGeolocation';
 import '../assets/styles/annuaire-2026.css';
+import { NOM_MARQUE } from '../lib/marque';
 
 const RAYONS_KM = [5, 10, 25, 50];
 const RESULTATS_PAR_PAGE = 6;
@@ -68,7 +69,7 @@ function CarteLaboratoire({ labo, positionActuelle, demanderPosition }) {
           <div className="flex-grow-1" style={{ minWidth: 0 }}>
             <div className="aps-dc-nm text-truncate">
               {labo.nom}
-              <i className="fa-solid fa-circle-check verif" title="Vérifié ApSa" />
+              <i className="fa-solid fa-circle-check verif" title={`Vérifié ${NOM_MARQUE}`} />
             </div>
             <div className="aps-dc-sp text-truncate">
               {lieu || 'Localisation non renseignée'}

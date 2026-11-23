@@ -356,3 +356,38 @@ class Role {
   @override
   int get hashCode => roleId.hashCode;
 }
+/// Ville Google Maps pas encore au référentiel (mode « google »).
+class SuggestionVilleGoogle {
+  final String placeId;
+  final String nom;
+  final String description;
+
+  const SuggestionVilleGoogle({required this.placeId, required this.nom, required this.description});
+
+  factory SuggestionVilleGoogle.fromJson(Map<String, dynamic> json) => SuggestionVilleGoogle(
+        placeId: json['place_id'] as String,
+        nom: json['nom'] as String,
+        description: (json['description'] as String?) ?? '',
+      );
+}
+
+/// Résultat de GET /referentiels/villes/rechercher.
+class RechercheVilles {
+  final String source;
+  final List<Ville> villes;
+  final List<SuggestionVilleGoogle> suggestions;
+
+  const RechercheVilles({required this.source, required this.villes, required this.suggestions});
+
+  factory RechercheVilles.fromJson(Map<String, dynamic> json) => RechercheVilles(
+        source: json['source'] == 'google' ? 'google' : 'manuel',
+        villes: ((json['villes'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(Ville.fromJson)
+            .toList(),
+        suggestions: ((json['suggestions'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(SuggestionVilleGoogle.fromJson)
+            .toList(),
+      );
+}

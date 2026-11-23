@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { SaisieEtoiles } from './Etoiles';
 import { COMMENTAIRE_AVIS_MAX, CRITERES_AVIS, deposerAvisMedecin } from '../../services/reputationMedecinService';
+import { NOM_MARQUE } from '../../lib/marque';
 
 /**
  * @param {{ consultation: object, onClose: () => void, onDepose: (resultat: object) => void }} props
@@ -138,7 +139,7 @@ export default function ModaleAvis({ consultation, onClose, onDepose }) {
 
         <div className="d-flex gap-2 justify-content-between align-items-center flex-wrap">
           <span className="text-faint" style={{ fontSize: '.78rem' }}>
-            <i className="fa-solid fa-shield-halved me-1" />Vérifié par APS Santé avant publication.
+            <i className="fa-solid fa-shield-halved me-1" />Vérifié par {NOM_MARQUE} avant publication.
           </span>
           <div className="d-flex gap-2">
             <button type="button" className="btn btn-ghost btn-sm-aps" onClick={onClose} disabled={enCours}>Plus tard</button>

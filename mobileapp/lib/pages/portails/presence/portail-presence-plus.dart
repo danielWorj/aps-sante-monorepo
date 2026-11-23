@@ -19,6 +19,7 @@ import 'portail-presence-gardes-avis.dart';
 import 'portail-presence-photos.dart';
 import 'portail-presence-prestations.dart';
 import 'presence_commun.dart';
+import '../../../utils/marque.dart';
 
 /// Ouvre une rubrique en écran empilé (aussi depuis le tableau de bord).
 void ouvrirRubriquePresence(BuildContext context, TypeEspacePresence type, String rubrique) {
@@ -63,12 +64,12 @@ class PortailPresencePlus extends ConsumerWidget {
             ] else
               ApsMenuItem(icon: Icons.receipt_long_outlined, title: 'Prestations', subtitle: 'Consultations, actes et examens', onTap: () => ouvrir('prestations')),
             ApsMenuItem(icon: Icons.workspace_premium_outlined, title: 'Abonnement', subtitle: 'Ce que le public voit de votre fiche', onTap: () => ouvrir('abonnement')),
-            ApsMenuItem(icon: Icons.campaign_outlined, title: 'Annonces ApSa', subtitle: 'Informations publiées par ApSa', onTap: () => ouvrir('annonces')),
+            ApsMenuItem(icon: Icons.campaign_outlined, title: 'Annonces $nomMarque', subtitle: 'Informations publiées par $nomMarque', onTap: () => ouvrir('annonces')),
             if (fiche != null)
               ApsMenuItem(
                 icon: Icons.open_in_new_rounded,
                 title: fiche.statut == StatutFichePresence.publie ? 'Voir ma fiche publique' : 'Aperçu de ma fiche',
-                subtitle: 'Sur le site ApSa',
+                subtitle: 'Sur le site $nomMarque',
                 onTap: () => ouvrirFichePublique(context, type, fiche.id),
               ),
           ]),

@@ -1,0 +1,85 @@
+# Règles d'alerte : visibles dans Grafana (Alerting → Alert rules, source
+# Prometheus). Pour être notifié (e-mail, WhatsApp…), brancher un
+# Alertmanager ou recréer ces règles en alertes Grafana avec un point de
+# contact — voir observabilite/README.md.
+groups:
+  - name: api
+    rules:
+      - alert: ApiInjoignable
+        expr: up{job="api"} == 0
+        for: 2m
+        labels: { severite: critique }
+        annotations:
+          summary: "L'API ne répond plus aux collectes de métriques depuis 2 min."
+
+      - alert: TauxErreurs5xxEleve
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_count{status_code=~"5.."}[5m]))
+              / sum(rate(http_request_duration_seconds_count[5m]))
+          ) > 0.05
+          and sum(rate(http_request_duration_seconds_count[5m])) > 0.05
+        for: 5m
+        labels: { severite: critique }
+        annotations:
+          summary: "Plus de 5 % de réponses 5xx sur l'API depuis 5 min."
+
+      - alert: LatenceP95Elevee
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{route!="non_trouvee"}[5m]))) > 2
+        for: 10m
+        labels: { severite: avertissement }
+        annotations:
+          summary: "Latence p95 de l'API au-dessus de 2 s depuis 10 min."
+
+      - alert: BoucleEvenementsRalentie
+        expr: nodejs_eventloop_lag_p99_seconds{job="api"} > 0.5
+        for: 5m
+        labels: { severite: avertissement }
+        annotations:
+          summary: "Boucle d'événements Node.js ralentie (p99 > 500 ms)."
+
+      - alert: ApiRedemarrages
+        expr: changes(process_start_time_seconds{job="api"}[15m]) > 2
+        labels: { severite: avertissement }
+        annotations:
+          summary: "L'API a redémarré plus de 2 fois en 15 min."
+
+  - name: infrastructure
+    rules:
+      - alert: PostgresInjoignable
+        expr: pg_up == 0
+        for: 1m
+        labels: { severite: critique }
+        annotations:
+          summary: "PostgreSQL injoignable par l'exporteur."
+
+      - alert: ConnexionsPostgresSaturees
+        expr: sum(pg_stat_activity_count) / max(pg_settings_max_connections) > 0.8
+        for: 5m
+        labels: { severite: avertissement }
+        annotations:
+          summary: "Plus de 80 % des connexions PostgreSQL utilisées."
+
+      - alert: DisqueHotePresquePlein
+        expr: |
+          node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+            / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} < 0.10
+        for: 10m
+        labels: { severite: critique }
+        annotations:
+          summary: "Moins de 10 % d'espace disque libre sur le VPS."
+
+      - alert: MemoireHoteSaturee
+        expr: 1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes > 0.90
+        for: 10m
+        labels: { severite: avertissement }
+        annotations:
+          summary: "Plus de 90 % de la mémoire du VPS utilisée."
+
+      - alert: CpuHoteSature
+        expr: 1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.90
+        for: 15m
+        labels: { severite: avertissement }
+        annotations:
+          summary: "CPU du VPS au-dessus de 90 % depuis 15 min."

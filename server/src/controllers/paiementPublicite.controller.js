@@ -28,6 +28,7 @@ import { construireDevisPublicite, detailCheckoutPublicite } from "../services/f
 import { finaliserPaiementPublicite, MOTIF_PAIEMENT_TARDIF_PUBLICITE } from "../services/finalisationPublicite.service.js";
 import { ErreurPublicite, repondreSiErreurPublicite, versJourIso, lienPortailPublicite } from "../services/publicite.service.js";
 import { repondreSiPaiementExistant, repondreSiBaremeAbsent, marquerTransactionEchouee } from "./paiement.controller.js";
+import { NOM_MARQUE } from "../lib/marque.js";
 
 const FENETRE_ANTI_DOUBLE_CAMPAY_MS = 2 * 60 * 1000;
 const AGREGATEURS = ["stripe", "campay"];
@@ -82,14 +83,14 @@ function exigerPayable(pub, maintenant = new Date()) {
     const raisons = {
       en_moderation: "Votre demande est encore en cours d'examen.",
       payee: "Cette publicité est déjà payée.",
-      expiree: "Le délai de paiement est dépassé : contactez APS Santé pour relancer votre demande.",
+      expiree: `Le délai de paiement est dépassé : contactez ${NOM_MARQUE} pour relancer votre demande.`,
       rejetee: "Cette demande a été rejetée.",
       annulee: "Cette demande a été annulée.",
     };
     throw new ErreurPublicite(409, "PUBLICITE_NON_PAYABLE", raisons[pub.statut] ?? `Statut : ${pub.statut}.`);
   }
   if (pub.date_limite_paiement && pub.date_limite_paiement <= maintenant) {
-    throw new ErreurPublicite(409, "PUBLICITE_NON_PAYABLE", "Le délai de paiement est dépassé : contactez APS Santé pour relancer votre demande.");
+    throw new ErreurPublicite(409, "PUBLICITE_NON_PAYABLE", `Le délai de paiement est dépassé : contactez ${NOM_MARQUE} pour relancer votre demande.`);
   }
   if (!(Number(pub.montant) > 0)) throw new ErreurPublicite(409, "MONTANT_NUL", "Aucun montant à payer pour cette publicité.");
 }
@@ -207,7 +208,7 @@ export async function creerPaiementStripePublicite(req, res, next) {
         metadata: { objet: "publicite" }, // la publicité se lit via la transaction
         libelle: `Publicité - ${ctx.pub.emplacement_publicitaire.libelle}`,
         ...detailCheckoutPublicite(devis),
-        description_facture: `Publicité APS Santé - ${ctx.pub.titre}`.slice(0, 500),
+        description_facture: `Publicité ${NOM_MARQUE} - ${ctx.pub.titre}`.slice(0, 500),
         email_client: ctx.pub.annonceur_email || ctx.payeur.email,
         url_succes: `${base}/paiement/publicite/succes?${retour}`,
         url_annulation: `${base}/paiement/publicite/annule?${retour}`,

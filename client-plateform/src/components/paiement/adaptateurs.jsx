@@ -50,6 +50,7 @@ import {
   annulerPaiementPublicite,
 } from '../../services/publiciteService';
 import { montantDevise } from '../../utils/fonds';
+import { NOM_MARQUE } from '../../lib/marque';
 
 export function adaptateurRdv(rdvId) {
   return {
@@ -122,6 +123,6 @@ export function adaptateurPublicite(publiciteId) {
     annuler: () => annulerPaiementPublicite(publiciteId),
     urlSucces: `/paiement/publicite/succes?publicite_id=${publiciteId}`,
     texteIntro: 'Choisissez votre moyen de paiement. Votre publicité sera programmée dès la réception du règlement.',
-    texteAnnule: "Cette publicité n'est plus payable (délai dépassé ou demande close). Contactez APS Santé.",
+    texteAnnule: `Cette publicité n'est plus payable (délai dépassé ou demande close). Contactez ${NOM_MARQUE}.`,
   };
 }

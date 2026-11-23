@@ -109,6 +109,43 @@ class ReferentielRepository {
     return liste.whereType<Map<String, dynamic>>().map(Ville.fromJson).toList();
   }
 
+  /// Mode des villes appliqué par le serveur : `google` ou `manuel`.
+  /// En cas d'erreur, `manuel` (la liste habituelle).
+  Future<String> obtenirSourceVilles() async {
+    try {
+      final data = await _client.get(ApiEndpoints.sourceVilles);
+      return (data as Map<String, dynamic>)['source'] == 'google' ? 'google' : 'manuel';
+    } catch (_) {
+      return 'manuel';
+    }
+  }
+
+  /// Villes en base + (mode Google) villes Google pas encore en base.
+  Future<RechercheVilles> rechercherVilles({String q = '', String? paysId, String? jetonSession}) async {
+    final data = await _client.get(
+      ApiEndpoints.rechercherVilles,
+      query: {
+        if (q.isNotEmpty) 'q': q,
+        if (paysId != null) 'pays_id': paysId,
+        if (jetonSession != null) 'jeton_session': jetonSession,
+      },
+    );
+    return RechercheVilles.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Importe en base la ville Google choisie et renvoie sa fiche.
+  Future<Ville> importerVilleGoogle({required String placeId, String? paysId, String? jetonSession}) async {
+    final data = await _client.post(
+      ApiEndpoints.importerVille,
+      body: {
+        'place_id': placeId,
+        if (paysId != null) 'pays_id': paysId,
+        if (jetonSession != null) 'jeton_session': jetonSession,
+      },
+    );
+    return Ville.fromJson((data as Map<String, dynamic>)['ville'] as Map<String, dynamic>);
+  }
+
   Future<Ville> obtenirVille(String id) async {
     final data = await _client.get(ApiEndpoints.uneVille(id));
     return Ville.fromJson(

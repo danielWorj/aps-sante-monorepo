@@ -16,6 +16,8 @@
 //   signature    « L'équipe APS Santé »
 //   pied         contact, mention légale, raison de l'envoi
 
+import { NOM_MARQUE, RAISON_SOCIALE } from "./marque.js";
+
 export const LOGO_EMAIL_CID = "logo-aps@apssante";
 
 const COULEURS = {
@@ -159,7 +161,7 @@ export function construireEmailHtml({
     ...apresBouton.filter(Boolean).map(paragraphe),
     signature
       ? `<p style="margin:8px 0 0;font-family:${POLICE};font-size:15px;line-height:24px;color:${COULEURS.texte};">` +
-        `Cordialement,<br><strong style="color:${COULEURS.encre};">L'équipe APS Santé</strong></p>`
+        `Cordialement,<br><strong style="color:${COULEURS.encre};">L'équipe ${echapper(NOM_MARQUE)}</strong></p>`
       : "",
   ].join("");
 
@@ -196,10 +198,10 @@ export function construireEmailHtml({
   <tr><td align="center" style="padding:0 0 18px;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
       <td valign="middle" style="padding-right:12px;">
-        <img src="cid:${LOGO_EMAIL_CID}" width="64" height="64" alt="APS Santé" style="display:block;width:64px;height:64px;border:0;border-radius:12px;">
+        <img src="cid:${LOGO_EMAIL_CID}" width="64" height="64" alt="${echapper(NOM_MARQUE)}" style="display:block;width:64px;height:64px;border:0;border-radius:12px;">
       </td>
       <td valign="middle" style="font-family:${POLICE};">
-        <div style="font-size:20px;line-height:24px;font-weight:800;color:${COULEURS.encre};">APS Santé</div>
+        <div style="font-size:20px;line-height:24px;font-weight:800;color:${COULEURS.encre};">${echapper(NOM_MARQUE)}</div>
         <div style="font-size:12px;line-height:16px;color:${COULEURS.doux};">Santé à portée de tous</div>
       </td>
     </tr></table>
@@ -215,11 +217,11 @@ export function construireEmailHtml({
 
   <!-- Pied -->
   <tr><td align="center" style="padding:22px 24px 6px;font-family:${POLICE};font-size:12px;line-height:19px;color:${COULEURS.doux};">
-    ${echapper(pied ?? "Vous recevez cet e-mail en lien avec votre compte APS Santé.")}
+    ${echapper(pied ?? `Vous recevez cet e-mail en lien avec votre compte ${NOM_MARQUE}.`)}
   </td></tr>
   ${liensPied ? `<tr><td align="center" style="padding:2px 24px;font-family:${POLICE};font-size:12px;line-height:19px;">${liensPied}</td></tr>` : ""}
   <tr><td align="center" style="padding:6px 24px 0;font-family:${POLICE};font-size:11px;line-height:17px;color:#9AA7A1;">
-    © ${annee} APS Santé — AZA Santé Assurances. Merci de ne pas répondre directement à cet e-mail automatique.
+    © ${annee} ${echapper(NOM_MARQUE)} — ${echapper(RAISON_SOCIALE)}. Merci de ne pas répondre directement à cet e-mail automatique.
   </td></tr>
 </table>
 

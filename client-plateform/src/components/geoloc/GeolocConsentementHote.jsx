@@ -10,6 +10,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { enregistrerHoteConsentement } from '../../lib/geolocConsentement';
 import './geoloc-consentement.css';
+import { NOM_MARQUE } from '../../lib/marque';
 
 const AVANTAGES = [
   { icone: 'fa-user-doctor', texte: 'Les médecins disponibles près de chez vous' },
@@ -89,7 +90,7 @@ function Modale({ etat, onRepondre }) {
           {bloquee ? (
             <>
               <p>
-                Votre navigateur bloque la localisation pour ApSa. Pour voir les services de santé
+                Votre navigateur bloque la localisation pour {NOM_MARQUE}. Pour voir les services de santé
                 autour de vous, réactivez-la :
               </p>
               <ol className="geoloc-consentement-etapes">
@@ -101,7 +102,7 @@ function Modale({ etat, onRepondre }) {
           ) : (
             <>
               <p>
-                Pour vous proposer les services de santé les plus proches, ApSa a besoin de votre
+                Pour vous proposer les services de santé les plus proches, {NOM_MARQUE} a besoin de votre
                 position :
               </p>
               <ul className="geoloc-consentement-liste">

@@ -20,6 +20,7 @@ import 'package:flutter_stripe/flutter_stripe.dart'
 import '../repositories/paiement_repository.dart';
 import '../repositories/rendez_vous_repository.dart' show ApiException;
 import '../utils/mobile_money.dart';
+import '../utils/marque.dart';
 
 /// Exécute un appel authentifié en lui fournissant un access token.
 ///
@@ -78,7 +79,7 @@ Future<bool> payerAvecPaymentSheet(
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         paymentIntentClientSecret: cfg.clientSecret,
-        merchantDisplayName: 'APS Santé',
+        merchantDisplayName: nomMarque,
         style: ThemeMode.light,
       ),
     );

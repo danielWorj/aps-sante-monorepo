@@ -4,6 +4,7 @@ import logoApsa from '../assets/img/logoapsa.jpeg';
 import { useAuth } from '../context/AuthContext';
 import { accueilParRole, aUnRole, ROLES_ESPACE } from '../utils/roles';
 import { useAnnoncesNonLues } from './annonces/annoncesVues';
+import { NOM_MARQUE, RAISON_SOCIALE } from '../lib/marque';
 
 // Navigation publique — refonte UI web 2026 (mobile/new-web-ui.html) :
 // marque à gauche, rubriques au centre, lien Urgence toujours visible,
@@ -138,8 +139,8 @@ export default function Navbar() {
           <i className="fa-solid fa-bars" />
         </button>
 
-        <Link to="/home" className="aps-logo" onClick={closeAll} aria-label="ApSa — accueil">
-          <img src={logoApsa} alt="ApSa — AZA Santé Assurances" className="aps-logo-img" />
+        <Link to="/home" className="aps-logo" onClick={closeAll} aria-label={`${NOM_MARQUE} — accueil`}>
+          <img src={logoApsa} alt={`${NOM_MARQUE} — ${RAISON_SOCIALE}`} className="aps-logo-img" />
         </Link>
 
         <nav className="aps-nav-main" aria-label="Navigation principale">
@@ -265,7 +266,7 @@ export default function Navbar() {
         inert={!open ? '' : undefined}
       >
         <div className="portail-tiroir-tete">
-          <img src={logoApsa} alt="ApSa" className="portail-tiroir-logo" />
+          <img src={logoApsa} alt={`${NOM_MARQUE}`} className="portail-tiroir-logo" />
           <button type="button" className="portail-tiroir-fermer" onClick={() => setOpen(false)} aria-label="Fermer le menu">
             <i className="fa-solid fa-xmark" />
           </button>
@@ -291,7 +292,7 @@ export default function Navbar() {
           <div className="portail-tiroir-grp">Services</div>
           {SERVICES.map((sv) => lienTiroir(sv.to, sv.label, sv.icone))}
 
-          <div className="portail-tiroir-grp">ApSa</div>
+          <div className="portail-tiroir-grp">{NOM_MARQUE}</div>
           {lienTiroir('/a-propos', 'À propos', ICONES_TIROIR['/a-propos'])}
           {lienTiroir('/contact', 'Contactez-nous', ICONES_TIROIR['/contact'])}
           <Link to="/urgences" className="aps-nav-tiroir-urgence">

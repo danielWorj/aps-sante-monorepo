@@ -30,6 +30,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import { useAnnoncesNonLues } from "../../annonces/annoncesVues";
 import { LIENS_PORTAIL_MEDECIN } from "./medecin.liens";
+import { NOM_MARQUE } from '../../../lib/marque';
 
 /** "Jean" + "Dupont" → "JD". Retombe sur "?" si aucun nom exploitable. */
 function calculerInitiales(prenom, nom) {
@@ -150,7 +151,7 @@ const PortailSidebar = ({
         <div className="sidebar-card sidebar-dispo">
           <div className="dispo-row">
             <div>
-              <strong>Portefeuille ApSa</strong>
+              <strong>Portefeuille {NOM_MARQUE}</strong>
               <span className="wallet-mini">{solde}</span>
             </div>
             <Link

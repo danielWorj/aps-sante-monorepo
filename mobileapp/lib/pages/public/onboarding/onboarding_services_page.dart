@@ -7,6 +7,7 @@ import '../urgence.dart';
 import 'onboarding_assurance_ville_page.dart';
 import 'onboarding_medecin_ville_page.dart';
 import 'onboarding_passer.dart';
+import '../../../utils/marque.dart';
 
 /// Écran 1.1 — Liste des services de ApSa Santé.
 ///
@@ -42,12 +43,12 @@ class OnboardingServicesPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'APS SANTÉ',
+                nomMarque.toUpperCase(),
                 style: AppTextStyles.over.copyWith(color: AppColors.b6),
               ),
               const SizedBox(height: 8),
               Text(
-                'Liste des services de ApSa Santé',
+                'Liste des services $deMarque',
                 style: AppTextStyles.l,
               ),
               const SizedBox(height: 22),

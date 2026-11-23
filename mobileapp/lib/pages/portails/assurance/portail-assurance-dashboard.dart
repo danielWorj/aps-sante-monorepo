@@ -17,6 +17,7 @@ import '../../../controllers/portail_assurance_controller.dart';
 import '../../../models/portail_assurance_models.dart';
 import '../../../utils/fonds.dart';
 import 'portail_assurance_commun.dart';
+import '../../../utils/marque.dart';
 
 class PortailAssuranceDashboard extends ConsumerStatefulWidget {
   /// Bascule du shell vers un autre onglet (index).
@@ -129,7 +130,7 @@ class _Contenu extends StatelessWidget {
         if (d.statutFiche != 'publie')
           const BandeauPortail(
             icone: Icons.hourglass_top_outlined,
-            texte: "Votre fiche est en cours de vérification par ApSa : elle n'est pas encore visible du public.",
+            texte: "Votre fiche est en cours de vérification par $nomMarque : elle n'est pas encore visible du public.",
           ),
         if (ab.enGrace)
           BandeauPortail(

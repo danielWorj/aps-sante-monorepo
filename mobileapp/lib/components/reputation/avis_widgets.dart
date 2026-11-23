@@ -9,6 +9,7 @@ import '../../models/reputation_medecin_models.dart';
 import '../style/colors.dart';
 import '../style/text_styles.dart';
 import 'reputation_ui.dart';
+import '../../utils/marque.dart';
 
 /// Synthèse : grande note, étoiles, nombre d'avis, recommandation,
 /// répartition 5 → 1 (touchable pour filtrer si [onFiltrerNote]) et
@@ -38,7 +39,7 @@ class ResumeNotesVue extends StatelessWidget {
               children: [
                 Text("Pas encore d'avis", style: AppTextStyles.strong),
                 const SizedBox(height: 2),
-                Text('Les avis sont déposés par des patients après une consultation réalisée via APS Santé.',
+                Text('Les avis sont déposés par des patients après une consultation réalisée via $nomMarque.',
                     style: AppTextStyles.small.copyWith(fontSize: 12)),
               ],
             ),
@@ -317,7 +318,7 @@ class CarteAvisVue extends StatelessWidget {
                   const Icon(Icons.flag_outlined, size: 14, color: AppColors.amber700),
                   const SizedBox(width: 6),
                   Expanded(
-                    child: Text('Signalé — en cours d\'examen par APS Santé',
+                    child: Text('Signalé — en cours d\'examen par $nomMarque',
                         style: AppTextStyles.xs.copyWith(color: AppColors.amber700, fontWeight: FontWeight.w700)),
                   ),
                 ],

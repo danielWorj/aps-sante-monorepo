@@ -47,6 +47,7 @@ import {
   infosStatutRdv,
   libelleLiberationFonds,
 } from "./../../../utils/rdv";
+import { NOM_MARQUE } from '../../../lib/marque';
 
 // Labels + classes d'affichage pour les statuts de rendez-vous.
 // Valeurs alignées sur STATUTS_RDV côté backend
@@ -221,7 +222,7 @@ const PatientProfil = () => {
           <div className="info-card">
             <h3><i className="fa-solid fa-id-card"></i> Identité</h3>
             <p className="text-muted small mb-3">
-              Ces informations ne sont pas modifiables depuis cette page. Contactez le support ApSa pour toute correction.
+              Ces informations ne sont pas modifiables depuis cette page. Contactez le support {NOM_MARQUE} pour toute correction.
             </p>
             <div className="row g-3">
               <div className="col-md-6">

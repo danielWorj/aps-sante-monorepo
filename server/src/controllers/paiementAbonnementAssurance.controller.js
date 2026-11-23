@@ -41,6 +41,7 @@ import { fraisEnvoiAbonnement, detailCheckoutAbonnement, libelleAbonnement } fro
 import { synchroniserStripeAbonnement } from "../services/synchroStripeAbonnement.service.js";
 import { journaliserAudit } from "../lib/audit.js";
 import { repondreSiPaiementExistant, repondreSiBaremeAbsent, marquerTransactionEchouee } from "./paiement.controller.js";
+import { NOM_MARQUE, DE_MARQUE } from "../lib/marque.js";
 
 const FENETRE_ANTI_DOUBLE_CAMPAY_MS = 2 * 60 * 1000;
 
@@ -396,7 +397,7 @@ export async function creerPaiementStripe(req, res, next) {
         metadata: { objet: "abonnement_assurance" }, // l'abonnement se lit via la transaction
         libelle,
         ...detail,
-        description_facture: `Abonnement APS Santé - ${ctx.service.nom}`,
+        description_facture: `Abonnement ${NOM_MARQUE} - ${ctx.service.nom}`,
         email_client: ctx.payeur.email,
         url_succes: `${base}/paiement/abonnement/succes?abonnement_id=${ctx.abo.abonnement_id}`,
         url_annulation: `${base}/paiement/abonnement/annule?abonnement_id=${ctx.abo.abonnement_id}`,
@@ -639,7 +640,7 @@ export async function choisirVirement(req, res, next) {
       devise: ctx.devise,
       instructions:
         process.env.ABONNEMENT_VIREMENT_INSTRUCTIONS ||
-        "Effectuez le virement sur le compte bancaire d'APS Santé communiqué par notre service commercial, " +
+        `Effectuez le virement sur le compte bancaire ${DE_MARQUE} communiqué par notre service commercial, ` +
           "en indiquant la référence ci-dessus. Votre abonnement sera activé dès réception des fonds.",
     });
   } catch (err) {

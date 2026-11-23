@@ -11,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../components/components.dart';
 import '../../../controllers/laboratoire_controller.dart';
-import '../../../controllers/referentiel_controller.dart' show villesParPaysProvider;
+import '../../../controllers/referentiel_controller.dart' show villesParPaysProvider, sourceVillesProvider;
 import '../../../models/laboratoire_models.dart';
 
 export '../assurance/portail_assurance_commun.dart'
@@ -215,6 +215,14 @@ class ChoixVilleLaboratoire extends ConsumerWidget {
             loading: () => const LinearProgressIndicator(minHeight: 2),
             error: (_, _) => TextButton(onPressed: () => ref.invalidate(villesParPaysProvider(id)), child: const Text('Réessayer')),
             data: (villes) {
+              if (ref.watch(sourceVillesProvider).value == 'google') {
+                return ApsChampVilleGoogle(
+                  paysId: id,
+                  villeId: villeId,
+                  villes: villes,
+                  onChanged: (v) => onChanged(v.villeId),
+                );
+              }
               final ids = villes.map((v) => v.villeId).toList();
               return ApsDropdown<String>(
                 value: ids.contains(villeId) ? villeId : null,

@@ -27,6 +27,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../utils/endpoint.dart';
+import '../utils/marque.dart';
 
 /// Numéro de build comparable : en « split-per-abi », Flutter publie
 /// versionCode = abi × 1000 + build (2003 = arm64-v8a, build 3). Même règle
@@ -89,7 +90,7 @@ class VersionPubliee {
     final ios = json['plateforme'] == 'ios';
     return VersionPubliee(
       id: json['id'] as String,
-      libelle: (json['libelle'] as String?) ?? 'ApSa',
+      libelle: (json['libelle'] as String?) ?? nomMarque,
       nom: json['version_name'] as String?,
       build: build is num ? build.toInt() : null,
       versionCode: code is num ? code.toInt() : null,

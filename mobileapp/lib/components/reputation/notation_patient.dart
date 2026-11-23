@@ -15,6 +15,7 @@ import '../style/text_styles.dart';
 import '../ui/aps_ui.dart';
 import 'appel_reputation.dart';
 import 'reputation_ui.dart';
+import '../../utils/marque.dart';
 
 class ConsultationsANoter extends ConsumerWidget {
   const ConsultationsANoter({super.key});
@@ -233,7 +234,7 @@ class _FeuilleNotationState extends ConsumerState<_FeuilleNotation> {
                 children: [
                   const Icon(Icons.shield_outlined, size: 13, color: AppColors.ink3),
                   const SizedBox(width: 5),
-                  Text('Vérifié par APS Santé avant publication.', style: AppTextStyles.xs),
+                  Text('Vérifié par $nomMarque avant publication.', style: AppTextStyles.xs),
                 ],
               ),
             ],

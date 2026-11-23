@@ -21,6 +21,7 @@ import '../../utils/fonds.dart';
 import '../style/colors.dart';
 import '../style/text_styles.dart';
 import '../ui/aps_ui.dart';
+import '../../utils/marque.dart';
 
 /// Icône associée à chaque type de notification (miroir de ICONES côté web).
 IconData iconeNotification(TypeNotification type) {
@@ -57,6 +58,10 @@ IconData iconeNotification(TypeNotification type) {
       return Icons.alarm_rounded;
     case TypeNotification.rdvVisioDemarree:
       return Icons.videocam_rounded;
+    case TypeNotification.rdvVisioFinProche:
+      return Icons.hourglass_bottom_rounded;
+    case TypeNotification.rdvConfirmationExpiree:
+      return Icons.event_busy_outlined;
     case TypeNotification.rdvTypeModifie:
       return Icons.swap_horiz_rounded;
     case TypeNotification.offreRdvCandidatureRetenue:
@@ -99,6 +104,8 @@ ApsTone _teinteNotification(TypeNotification type) {
     case TypeNotification.offreRdvCandidatureNonRetenue:
       return ApsTone.neutral;
     case TypeNotification.rdvAReprogrammer:
+    case TypeNotification.rdvVisioFinProche:
+    case TypeNotification.rdvConfirmationExpiree:
     case TypeNotification.offreRdvExpiree:
     case TypeNotification.demandeRdvDirecteRefusee:
     case TypeNotification.rdvTeleconsultationRefusee:
@@ -351,8 +358,8 @@ class _LigneAnnonces extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     nouvelles > 0
-                        ? "$nouvelles nouvelle${nouvelles > 1 ? 's' : ''} annonce${nouvelles > 1 ? 's' : ''} d'APS Santé"
-                        : "Les informations publiées par APS Santé",
+                        ? "$nouvelles nouvelle${nouvelles > 1 ? 's' : ''} annonce${nouvelles > 1 ? 's' : ''} $deMarque"
+                        : "Les informations publiées par $nomMarque",
                     style: AppTextStyles.small.copyWith(fontSize: 12),
                   ),
                 ],

@@ -15,6 +15,7 @@ import '../../../controllers/espace_presence_controller.dart';
 import '../../../models/espace_presence_models.dart';
 import '../../../repositories/espace_presence_repository.dart' show FichierPresence;
 import 'presence_commun.dart';
+import '../../../utils/marque.dart';
 
 class PortailPresenceFiche extends ConsumerWidget {
   const PortailPresenceFiche({super.key, required this.type});
@@ -59,7 +60,7 @@ Future<bool> _confirmerVerification(BuildContext context, FichePresence f) async
   return confirmerPortail(
     context,
     'Enregistrer les modifications',
-    'Votre fiche repassera en vérification par ApSa. Elle reste visible du public pendant la vérification.',
+    'Votre fiche repassera en vérification par $nomMarque. Elle reste visible du public pendant la vérification.',
     action: 'Enregistrer',
   );
 }
@@ -138,7 +139,7 @@ class _IdentiteState extends ConsumerState<_Identite> {
             image: photo == null ? null : FichierPresence(photo.octets, photo.nom),
           ));
       ref.invalidate(maFichePresenceProvider(f.type));
-      if (mounted) snackPortail(context, 'Fiche enregistrée. Elle repasse en vérification par ApSa.');
+      if (mounted) snackPortail(context, 'Fiche enregistrée. Elle repasse en vérification par $nomMarque.');
     } catch (e) {
       if (mounted) snackPortail(context, messageErreur(e));
     } finally {
@@ -270,7 +271,7 @@ class _PresentationState extends ConsumerState<_Presentation> {
             },
           ));
       ref.invalidate(maFichePresenceProvider(f.type));
-      if (mounted) snackPortail(context, 'Présentation enregistrée. Elle repasse en vérification par ApSa.');
+      if (mounted) snackPortail(context, 'Présentation enregistrée. Elle repasse en vérification par $nomMarque.');
     } catch (e) {
       if (mounted) snackPortail(context, messageErreur(e));
     } finally {
@@ -304,7 +305,7 @@ class _PresentationState extends ConsumerState<_Presentation> {
             lignes: 4,
             indication: _pharmacie ? 'Préparations magistrales, tests rapides, livraison…' : 'Médecins, spécialistes, responsables…',
           ),
-          Text('Restez factuel : aucun message promotionnel. ApSa vérifie chaque modification avant publication.', style: AppTextStyles.cardMeta),
+          Text('Restez factuel : aucun message promotionnel. $nomMarque vérifie chaque modification avant publication.', style: AppTextStyles.cardMeta),
           const SizedBox(height: 10),
           ApsButton(label: 'Enregistrer la présentation', icon: Icons.check_rounded, loading: _envoi, onPressed: _envoi ? null : _enregistrer),
         ],
@@ -331,7 +332,7 @@ class _Equipe extends StatelessWidget {
                 child: Text('${m.nom} · ${m.fonction}${m.moi ? ' (vous)' : ''}', style: AppTextStyles.body),
               ),
             const SizedBox(height: 4),
-            Text('Pour ajouter ou retirer un gestionnaire, contactez ApSa.', style: AppTextStyles.cardMeta),
+            Text('Pour ajouter ou retirer un gestionnaire, contactez $nomMarque.', style: AppTextStyles.cardMeta),
           ],
         ),
       );

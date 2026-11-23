@@ -9,8 +9,10 @@ import { useToast } from "../../feedback";
 import * as medecinService from "../../../services/medecinService";
 import MedecinPortefeuille from "./medecin-portefeuille";
 import { listerPays, listerVilles } from "../../../services/geoService";
+import ChampVille from "../../ui/ChampVille";
 import { useGeolocation } from "../../../hooks/useGeolocation";
 import GoogleMapPicker from "../../maps/GoogleMapPicker";
+import { NOM_MARQUE } from '../../../lib/marque';
 
 // Position du lieu d'exercice : le serveur renvoie
 // `geolocalisation: { latitude, longitude } | null`. Dans le state du
@@ -322,7 +324,7 @@ const MedecinProfil = () => {
               <div>
                 <span className="eyebrow">Espace médecin</span>
                 <h1>Mon profil</h1>
-                <p>Ces informations alimentent votre fiche publique dans l'annuaire ApSa.</p>
+                <p>Ces informations alimentent votre fiche publique dans l'annuaire {NOM_MARQUE}.</p>
                 <div className="chips-row">
                   <span className={`chip ${chipStatut.classe}`}>
                     <i className={`fa-solid ${chipStatut.icone}`}></i> {chipStatut.label}
@@ -453,15 +455,14 @@ const MedecinProfil = () => {
                   </div>
                   <div className="col-md-6">
                     <label className="form-label-aps" htmlFor="p-ville">Ville d'exercice</label>
-                    <select className="form-select" id="p-ville"
+                    <ChampVille id="p-ville"
                       value={profile.ville_exercice_id}
                       onChange={(e) => updateProfile("ville_exercice_id", e.target.value)}
-                      disabled={!profile.pays_exercice_id} required>
-                      <option value="">Sélectionner…</option>
-                      {villesExercice.map((v) => (
-                        <option key={v.ville_id} value={v.ville_id}>{v.nom}</option>
-                      ))}
-                    </select>
+                      paysId={profile.pays_exercice_id}
+                      villes={villesExercice}
+                      onVilleImportee={(v) => setVillesExercice((l) => (l.some((x) => x.ville_id === v.ville_id) ? l : [...l, v]))}
+                      placeholder="Sélectionner…"
+                      disabled={!profile.pays_exercice_id} required />
                   </div>
                 </div>
 
@@ -514,7 +515,7 @@ const MedecinProfil = () => {
               <div className="info-card">
                 <h3><i className="fa-solid fa-shield-halved"></i> Documents justificatifs</h3>
                 <p className="text-muted small">
-                  Ces documents sont vérifiés par l'administration ApSa. Remplacer un fichier déclenchera une nouvelle vérification.
+                  Ces documents sont vérifiés par l'administration {NOM_MARQUE}. Remplacer un fichier déclenchera une nouvelle vérification.
                 </p>
                 <div className="row g-3">
                   <DocumentInput label="Pièce d'identité (CNI)" currentUrl={profile.cni_url} newFile={cniFile} onChange={(f) => setCniFile(f)} />

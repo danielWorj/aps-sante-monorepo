@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import OnboardingLogo from './OnboardingLogo';
+import { NOM_MARQUE } from '../../lib/marque';
 
 /**
  * Écran 1 — Accueil / choix initial du parcours d'onboarding.
@@ -19,7 +20,7 @@ export default function OnboardingAccueil() {
       <div className="container-aps onboarding-container">
         <div className="onboarding-intro">
           <OnboardingLogo taille="grand" />
-          <span className="eyebrow">Bienvenue sur ApSa Santé</span>
+          <span className="eyebrow">Bienvenue sur {NOM_MARQUE}</span>
           <p className="onboarding-description">
             Trouvez en un clic un professionnel (médecin, assurance, pharmacien, ...)
           </p>

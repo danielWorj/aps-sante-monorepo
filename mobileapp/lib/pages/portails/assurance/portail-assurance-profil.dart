@@ -10,12 +10,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../components/stepper/aps_stepper.dart' show apsChoisirFichier, ApsFichier, ApsFichierException;
 import '../../../components/style/colors.dart';
+import '../../../components/ui/aps_champ_ville.dart';
 import '../../../components/ui/aps_select.dart';
 import '../../../components/style/text_styles.dart';
 import '../../../controllers/assurance_controller.dart' show assuranceRepositoryProvider;
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/portail_assurance_controller.dart';
-import '../../../controllers/referentiel_controller.dart' show villesParPaysProvider;
+import '../../../controllers/referentiel_controller.dart' show villesParPaysProvider, sourceVillesProvider;
 import '../../../models/assurance_models.dart';
 import '../../../models/portail_assurance_models.dart';
 import '../../../repositories/assurance_repository.dart';
@@ -217,6 +218,15 @@ class _FormulaireFicheState extends ConsumerState<_FormulaireFiche> {
               loading: () => const LinearProgressIndicator(),
               error: (_, _) => Text('Ville : ${widget.g.villeNom ?? '—'}', style: AppTextStyles.body),
               data: (liste) {
+                if (ref.watch(sourceVillesProvider).value == 'google') {
+                  return ApsChampVilleGoogle(
+                    paysId: widget.g.paysId,
+                    villeId: _villeId,
+                    villes: liste,
+                    decoration: _deco('Ville du siège'),
+                    onChanged: (v) => setState(() => _villeId = v.villeId),
+                  );
+                }
                 final ids = liste.map((v) => v.villeId).toSet();
                 return ApsSelectField<String>(
                   initialValue: ids.contains(_villeId) ? _villeId : null,

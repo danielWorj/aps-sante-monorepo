@@ -94,6 +94,15 @@ class ApsPaysVilleFields extends ConsumerWidget {
                           ref.invalidate(villesParPaysProvider(paysId!)),
                     ),
                     data: (villes) {
+                      // Mode Google Maps : recherche + villes Google importées à la volée.
+                      if (ref.watch(sourceVillesProvider).value == 'google') {
+                        return ApsChampVilleGoogle(
+                          paysId: paysId!,
+                          villeId: villeId,
+                          villes: villes,
+                          onChanged: onVilleChanged,
+                        );
+                      }
                       final ids = villes.map((v) => v.villeId).toList();
                       return ApsDropdown<String>(
                         value: ids.contains(villeId) ? villeId : null,

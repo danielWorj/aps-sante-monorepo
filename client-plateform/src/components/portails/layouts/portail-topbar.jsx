@@ -10,6 +10,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import logoApsa from "../../../assets/img/logoapsa.jpeg";
 import { useAuth } from "../../../context/AuthContext";
 import NotificationsBell from "../components/notifications-bell";
+import { NOM_MARQUE, RAISON_SOCIALE } from '../../../lib/marque';
 
 function initiales(user) {
   const i = `${user?.prenom?.[0] ?? ""}${user?.nom?.[0] ?? ""}`.toUpperCase();
@@ -69,8 +70,8 @@ export default function PortailTopbar({ espace, accueil, liens, badges = {}, che
             {totalBadges > 0 && <span className="portail-topbar-pastille" aria-label={`${totalBadges} nouveauté(s)`} />}
           </button>
 
-          <Link to={accueil} className="aps-logo" aria-label={`ApSa — ${espace}`}>
-            <img src={logoApsa} alt="ApSa — AZA Santé Assurances" className="aps-logo-img" />
+          <Link to={accueil} className="aps-logo" aria-label={`${NOM_MARQUE} — ${espace}`}>
+            <img src={logoApsa} alt={`${NOM_MARQUE} — ${RAISON_SOCIALE}`} className="aps-logo-img" />
           </Link>
           <span className="portail-topbar-espace">{espace}</span>
 
@@ -94,7 +95,7 @@ export default function PortailTopbar({ espace, accueil, liens, badges = {}, che
         inert={!ouvert ? "" : undefined}
       >
         <div className="portail-tiroir-tete">
-          <img src={logoApsa} alt="ApSa" className="portail-tiroir-logo" />
+          <img src={logoApsa} alt={`${NOM_MARQUE}`} className="portail-tiroir-logo" />
           <button type="button" className="portail-tiroir-fermer" onClick={() => setOuvert(false)} aria-label="Fermer le menu">
             <i className="fa-solid fa-xmark" />
           </button>

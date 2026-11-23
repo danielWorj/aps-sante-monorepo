@@ -25,6 +25,7 @@ import ChoixMoyenPaiement from '../paiement/ChoixMoyenPaiement';
 import PaiementMobileMoney from '../paiement/PaiementMobileMoney';
 import { adaptateurAbonnement } from '../paiement/adaptateurs';
 import { montantDevise } from '../../utils/fonds';
+import { NOM_MARQUE } from '../../lib/marque';
 
 const AVANTAGES = LIBELLES_AVANTAGES_ASSURANCE;
 
@@ -257,7 +258,7 @@ export default function SouscriptionAssurance({ serviceAssuranceId, onActive, in
       <div className="banner-institutionnel">
         <i className="fa-solid fa-hourglass-half" />
         <span>
-          Votre fiche « {service.nom} » doit être vérifiée et publiée par ApSa avant de pouvoir souscrire un abonnement.
+          Votre fiche « {service.nom} » doit être vérifiée et publiée par {NOM_MARQUE} avant de pouvoir souscrire un abonnement.
         </span>
       </div>
     );
@@ -342,7 +343,7 @@ export default function SouscriptionAssurance({ serviceAssuranceId, onActive, in
               <span className="choix-paiement-option-icon"><i className="fa-solid fa-building-columns" /></span>
               <span className="choix-paiement-option-body">
                 <strong>Virement bancaire</strong>
-                <small>Activation à réception des fonds par ApSa.</small>
+                <small>Activation à réception des fonds par {NOM_MARQUE}.</small>
               </span>
               <i className="fa-solid fa-chevron-right choix-paiement-option-arrow" />
             </button>

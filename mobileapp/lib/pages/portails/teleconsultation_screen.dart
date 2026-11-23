@@ -42,6 +42,7 @@ import '../../models/authentification_models.dart';
 import '../../models/rendez_vous_models.dart';
 import '../../models/visio_models.dart';
 import '../../repositories/visio_repository.dart' show ApiException;
+import '../../utils/marque.dart';
 
 class TeleconsultationScreen extends ConsumerStatefulWidget {
   const TeleconsultationScreen({super.key, required this.rdv, this.rejoindreDirect = false});
@@ -173,7 +174,7 @@ class _TeleconsultationScreenState
         : widget.rdv.medecin?.utilisateur;
     final sujet = interlocuteur != null
         ? "Téléconsultation avec ${_estMedecin ? '' : 'Dr '}${interlocuteur.prenom} ${interlocuteur.nom}"
-        : 'Téléconsultation APS Santé';
+        : 'Téléconsultation $nomMarque';
 
     final options = JitsiMeetConferenceOptions(
       serverURL: 'https://${session.domain}',
@@ -624,7 +625,7 @@ const _messagesNonTermineeMedecin = {
           'La consultation sera vérifiée automatiquement et votre paiement suivra les règles habituelles.',
   'parametre_delai_absent':
       "La fin de consultation n'a pas pu être enregistrée : le délai de versement n'est pas encore "
-          "paramétré pour votre pays. L'équipe APS Santé a été alertée.",
+          "paramétré pour votre pays. L'équipe $nomMarque a été alertée.",
   'statut_incompatible':
       "Ce rendez-vous n'est plus dans un état permettant de clôturer la consultation.",
 };
@@ -1237,7 +1238,7 @@ class _DeclarerLitigeState extends ConsumerState<_DeclarerLitige> {
         children: [
           Text(
             'Le paiement du médecin sera bloqué$quand jusqu’au traitement du litige par '
-            'APS Santé. Cette action est définitive.',
+            '$nomMarque. Cette action est définitive.',
             style: _style(12.5, FontWeight.w500, AppColors.ink2, hauteur: 1.45),
           ),
           if (_erreur != null) ...[

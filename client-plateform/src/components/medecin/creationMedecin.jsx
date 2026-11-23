@@ -3,6 +3,7 @@ import '../../assets/styles/creer-medecin.css';
 
 import { creerMedecin, listerSpecialites, verifierAppartenanceOrdre } from '../../services/medecinService';
 import { listerPays, listerVilles } from '../../services/geoService';
+import ChampVille from '../ui/ChampVille';
 import { connecter } from '../../services/authService';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import GoogleMapPicker from '../maps/GoogleMapPicker';
@@ -753,23 +754,16 @@ if (isSubmitted) {
                               Ville d'exercice{' '}
                               <span className="required-mark">*</span>
                             </label>
-                            <select
-                              className="form-select"
+                            <ChampVille
                               name="ville_exercice_id"
                               value={formData.ville_exercice_id}
                               onChange={handleChange}
+                              paysId={formData.pays_id}
+                              villes={villes}
+                              onVilleImportee={(v) => setVilles((l) => (l.some((x) => x.ville_id === v.ville_id) ? l : [...l, v]))}
                               required
                               disabled={!formData.pays_id}
-                            >
-                              <option value="">
-                                {formData.pays_id ? 'Sélectionner…' : 'Choisissez d\'abord un pays'}
-                              </option>
-                              {villes.map((v) => (
-                                <option key={v.ville_id} value={v.ville_id}>
-                                  {v.nom}
-                                </option>
-                              ))}
-                            </select>
+                            />
                           </div>
                         </div>
                       </div>

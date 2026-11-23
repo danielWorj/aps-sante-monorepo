@@ -14,9 +14,11 @@ import { Link, useLocation } from 'react-router-dom';
 import '../../assets/styles/creer-medecin.css';
 import { creerLaboratoire } from '../../services/laboratoireService';
 import { listerPays, listerVilles } from '../../services/geoService';
+import ChampVille from '../ui/ChampVille';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import GoogleMapPicker from '../maps/GoogleMapPicker';
 import { useAuth } from '../../context/AuthContext';
+import { NOM_MARQUE } from '../../lib/marque';
 
 const ETAPES = ['Laboratoire', 'Localisation', 'Responsable', 'Justificatifs', 'Confirmation'];
 const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -202,7 +204,7 @@ export default function CreationLaboratoire() {
             </div>
             <h3 className="confirm-title">Laboratoire déclaré</h3>
             <p className="confirm-subtitle">
-              {resultat.message} La fiche sera visible dans l&apos;annuaire après vérification de vos justificatifs par ApSa.
+              {resultat.message} La fiche sera visible dans l&apos;annuaire après vérification de vos justificatifs par {NOM_MARQUE}.
             </p>
             {mdp && (
               <div className="confirm-credentials">
@@ -312,10 +314,7 @@ export default function CreationLaboratoire() {
                         </div>
                         <div className="col-md-6">
                           <label className="form-label-aps" htmlFor="lb-ville">Ville <span className="required-mark">*</span></label>
-                          <select id="lb-ville" className="form-select" name="ville_id" value={form.ville_id} onChange={maj} disabled={!form.pays_id}>
-                            <option value="">{form.pays_id ? 'Sélectionner…' : "Choisissez d'abord un pays"}</option>
-                            {villesDuPays.map((v) => <option key={v.ville_id} value={v.ville_id}>{v.nom}</option>)}
-                          </select>
+                          <ChampVille id="lb-ville" name="ville_id" value={form.ville_id} onChange={maj} paysId={form.pays_id} villes={villesDuPays} onVilleImportee={(v) => setVilles((l) => (l.some((x) => x.ville_id === v.ville_id) ? l : [...l, v]))} disabled={!form.pays_id} />
                         </div>
                         <div className="col-12">
                           <label className="form-label-aps" htmlFor="lb-adr">Adresse <span className="required-mark">*</span></label>

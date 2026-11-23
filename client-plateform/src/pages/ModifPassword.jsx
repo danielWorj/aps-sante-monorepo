@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import med7 from '../assets/img/med7.jpg';
 import { useAuth } from '../context/AuthContext';
 import { accueilParRole } from '../utils/roles';
+import { NOM_MARQUE } from '../lib/marque';
 
 export default function ModifPassword() {
   const navigate = useNavigate();
@@ -176,7 +177,7 @@ export default function ModifPassword() {
                 >
                   <i className="fa-solid fa-staff-snake" />
                 </span>
-                ApSa
+                {NOM_MARQUE}
               </div>
               <span
                 className="eyebrow"

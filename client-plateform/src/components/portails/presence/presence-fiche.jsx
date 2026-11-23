@@ -13,9 +13,11 @@ import { useConfirmation, useToast } from '../../feedback';
 import GoogleMapPicker from '../../maps/GoogleMapPicker';
 import { PresencePortailPage } from '../layouts/presence.portail-sidebar';
 import { listerVilles } from '../../../services/geoService';
+import ChampVille from '../../ui/ChampVille';
 import { modifierPharmacie } from '../../../services/pharmacieService';
 import { TYPES_STRUCTURE, modifierCentreSante } from '../../../services/structureSanteService';
 import { BandeauFicheHorsLigne } from './presenceCommun';
+import { NOM_MARQUE } from '../../../lib/marque';
 
 const CHAMP_IMAGE = { pharmacie: 'image_pharmacie', structure: 'image_structure' };
 
@@ -56,7 +58,7 @@ function FormulaireFiche({ type, fiche, onEnregistre }) {
     if (fiche.en_ligne && fiche.statut_verification === 'publie') {
       const ok = await confirmer({
         titre: 'Enregistrer les modifications',
-        message: 'Votre fiche repassera en vérification par ApSa. Elle reste visible du public pendant la vérification.',
+        message: `Votre fiche repassera en vérification par ${NOM_MARQUE}. Elle reste visible du public pendant la vérification.`,
         labelConfirmer: 'Enregistrer',
       });
       if (!ok) return;
@@ -72,7 +74,7 @@ function FormulaireFiche({ type, fiche, onEnregistre }) {
       }
       setFichiers({});
       setCle((c) => c + 1);
-      toast.succes('Fiche enregistrée. Elle repasse en vérification par ApSa.', { duree: 6000 });
+      toast.succes(`Fiche enregistrée. Elle repasse en vérification par ${NOM_MARQUE}.`, { duree: 6000 });
       onEnregistre();
     } catch (err) {
       setErreur(err?.message || 'Enregistrement impossible.');
@@ -131,10 +133,7 @@ function FormulaireFiche({ type, fiche, onEnregistre }) {
         <div className="row g-3">
           <div className="col-md-4">
             <label className="form-label" htmlFor="pf-ville">Ville</label>
-            <select id="pf-ville" className="form-select" value={form.ville_id} onChange={maj('ville_id')}>
-              {!villes.some((v) => v.ville_id === form.ville_id) && fiche.ville && <option value={fiche.ville_id}>{fiche.ville.nom}</option>}
-              {villes.map((v) => <option key={v.ville_id} value={v.ville_id}>{v.nom}</option>)}
-            </select>
+            <ChampVille id="pf-ville" value={form.ville_id} onChange={maj('ville_id')} paysId={fiche.pays_id} villes={fiche.ville && !villes.some((v) => v.ville_id === fiche.ville_id) ? [{ ville_id: fiche.ville_id, nom: fiche.ville.nom }, ...villes] : villes} onVilleImportee={(v) => setVilles((l) => (l.some((x) => x.ville_id === v.ville_id) ? l : [...l, v]))} />
           </div>
           <div className="col-md-8">
             <label className="form-label" htmlFor="pf-adr">Adresse</label>
@@ -169,7 +168,7 @@ function FormulaireFiche({ type, fiche, onEnregistre }) {
 
       {erreur && <div className="alert alert-danger mb-0">{erreur}</div>}
       <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <span className="minimal-note"><i className="fa-solid fa-shield-halved" /> Toute modification de cette page est vérifiée par ApSa.</span>
+        <span className="minimal-note"><i className="fa-solid fa-shield-halved" /> Toute modification de cette page est vérifiée par {NOM_MARQUE}.</span>
         <button type="submit" className="btn btn-primary btn-sm-aps" disabled={envoi}>{envoi ? 'Enregistrement…' : 'Enregistrer la fiche'}</button>
       </div>
     </form>
@@ -190,7 +189,7 @@ function Equipe({ equipe, type }) {
         ))}
       </ul>
       <p className="minimal-note mb-0">
-        Pour ajouter ou retirer un gestionnaire de {type === 'pharmacie' ? 'cette pharmacie' : 'ce centre'}, contactez ApSa depuis la page Contact.
+        Pour ajouter ou retirer un gestionnaire de {type === 'pharmacie' ? 'cette pharmacie' : 'ce centre'}, contactez {NOM_MARQUE} depuis la page Contact.
       </p>
     </div>
   );

@@ -28,10 +28,29 @@ server/storage
 # -- Deploiement --
 deploiement/
 
-# -- Access --
+# -- Accès, identifiants et secrets (jamais versionnés) --
 access/
-
+**/access/
+ACCESS_*
+**/ACCESS_*
+access_*.txt
+acces*.txt
 KEYS.txt
+**/KEYS.txt
+vps.txt
+**/vps.txt
+**/.env
+**/.env.*
+!**/.env.example
+**/*.bak
+server/keys/*private*
+server/keys_copie/
+*.jks
+*.keystore
+*.p12
+**/key.properties
+**/google-services.json
+**/GoogleService-Info.plist
 
 
 # --- mobileapp (Flutter) ---

@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../components/components.dart';
 import '../../controllers/authentification_controller.dart';
 import '../../models/authentification_models.dart';
+import '../../utils/marque.dart';
 
 class VeilleConnexionWeb extends ConsumerStatefulWidget {
   const VeilleConnexionWeb({super.key, required this.child});
@@ -130,7 +131,7 @@ class _VeilleConnexionWebState extends ConsumerState<VeilleConnexionWeb> with Wi
                                 Text('Connexion sur un ordinateur ?', textAlign: TextAlign.center, style: AppTextStyles.l),
                                 const SizedBox(height: 6),
                                 Text(
-                                  'Quelqu’un demande à se connecter à votre compte sur le site APS Santé. '
+                                  'Quelqu’un demande à se connecter à votre compte sur le site $nomMarque. '
                                   'Si c’est vous, touchez le code affiché sur l’ordinateur.',
                                   textAlign: TextAlign.center,
                                   style: AppTextStyles.small,

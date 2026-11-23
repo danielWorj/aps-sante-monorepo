@@ -316,9 +316,9 @@ router.delete("/avis-medecin/:id", authentifier, supprimerAvisMedecin);
 /* ===================================================================
  * Abonnements médecin
  * =================================================================== */
-// Donnée commerciale interne : jamais publique, authentifier partout,
-// l'autorisation fine (médecin souscripteur vs admin/superadmin) est
-// gérée à l'intérieur de chaque handler.
+// Donnée commerciale interne : jamais publique, authentifier partout.
+// Lecture : médecin souscripteur (filtré dans le handler) ou
+// admin/superadmin. Écriture : admin/superadmin uniquement.
 //
 // v9 : abonnement_medecin n'a plus de medecin_id direct — c'est une
 // offre reliée aux médecins par la table de jointure N-N
@@ -330,9 +330,13 @@ router.delete("/avis-medecin/:id", authentifier, supprimerAvisMedecin);
 
 router.get("/abonnements-medecin", authentifier, listerAbonnementsMedecin);
 router.get("/abonnements-medecin/:id", authentifier, obtenirAbonnementMedecin);
-router.post("/abonnements-medecin", authentifier, creerAbonnementMedecin);
-router.put("/abonnements-medecin/:id", authentifier, modifierAbonnementMedecin);
-router.delete("/abonnements-medecin/:id", authentifier, supprimerAbonnementMedecin);
+// Écritures réservées à admin/superadmin : un médecin pouvait sinon créer
+// son propre abonnement « actif » (montant libre, transaction quelconque)
+// puis en modifier le statut, le montant et les dates. Le médecin garde
+// la lecture de ses abonnements (GET ci-dessus).
+router.post("/abonnements-medecin", authentifier, autoriser("admin", "superadmin"), creerAbonnementMedecin);
+router.put("/abonnements-medecin/:id", authentifier, autoriser("admin", "superadmin"), modifierAbonnementMedecin);
+router.delete("/abonnements-medecin/:id", authentifier, autoriser("admin", "superadmin"), supprimerAbonnementMedecin);
 
 // Composition des souscripteurs d'un abonnement existant (offre
 // groupée) — réservé à admin/superadmin (voir contrôleur).
@@ -352,9 +356,9 @@ router.delete(
 // Lignes d'avantages — routes indépendantes (pas nichées sous /:id
 // pour lecture/suppression, telles que documentées dans les JSDoc du
 // contrôleur).
-router.post("/abonnements-medecin/:id/lignes", authentifier, ajouterLigneAbonnementMedecin);
-router.put("/lignes-abonnement-medecin/:ligneId", authentifier, modifierLigneAbonnementMedecin);
-router.delete("/lignes-abonnement-medecin/:ligneId", authentifier, supprimerLigneAbonnementMedecin);
+router.post("/abonnements-medecin/:id/lignes", authentifier, autoriser("admin", "superadmin"), ajouterLigneAbonnementMedecin);
+router.put("/lignes-abonnement-medecin/:ligneId", authentifier, autoriser("admin", "superadmin"), modifierLigneAbonnementMedecin);
+router.delete("/lignes-abonnement-medecin/:ligneId", authentifier, autoriser("admin", "superadmin"), supprimerLigneAbonnementMedecin);
 
 /* ===================================================================
  * Rendez-vous

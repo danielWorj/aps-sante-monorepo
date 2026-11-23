@@ -11,6 +11,7 @@ import { useState, useRef } from "react";
 import { creerServiceAssurance } from "../../services/assuranceService";
 import CaseAcceptationLegale, { MESSAGE_CGU_REQUISES } from "../legal/CaseAcceptationLegale";
 import { listerPays, listerVilles } from "../../services/geoService";
+import ChampVille from "../ui/ChampVille";
 import GoogleMapPicker from "../maps/GoogleMapPicker";
 import { obtenirPosition } from "../../lib/geolocConsentement";
 
@@ -305,13 +306,17 @@ export default function DeclarerCompagnieModal({ open, onClose, onCreated }) {
                   </div>
                   <div className="col-6">
                     <label className="form-label-aps" htmlFor="da-ville">Ville</label>
-                    {villes.length ? (
-                      <select id="da-ville" className="form-select" value={form.ville_id} onChange={majChamp("ville_id")} required>
-                        <option value="">Choisir…</option>
-                        {villes.map((v) => (
-                          <option key={v.ville_id} value={v.ville_id}>{v.nom}</option>
-                        ))}
-                      </select>
+                    {villes.length || form.pays_id ? (
+                      <ChampVille
+                        id="da-ville"
+                        value={form.ville_id}
+                        onChange={majChamp("ville_id")}
+                        paysId={form.pays_id}
+                        villes={villes}
+                        onVilleImportee={(v) => setVilles((l) => (l.some((x) => x.ville_id === v.ville_id) ? l : [...l, v]))}
+                        placeholder="Choisir…"
+                        required
+                      />
                     ) : (
                       <input
                         id="da-ville"

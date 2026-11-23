@@ -32,6 +32,7 @@ import '../../utils/facture_format.dart';
 import '../../utils/fonds.dart';
 import '../style/colors.dart';
 import '../style/text_styles.dart';
+import '../../utils/marque.dart';
 
 /// Signature du téléchargement, injectable pour les tests (par défaut :
 /// [FacturePdfService.partager]).
@@ -152,7 +153,7 @@ class _FactureRecapitulativeState extends State<FactureRecapitulative> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'APS Santé',
+                          nomMarque,
                           style: AppTextStyles.h3.copyWith(
                             color: Colors.white,
                             fontSize: compact ? 16 : 18,

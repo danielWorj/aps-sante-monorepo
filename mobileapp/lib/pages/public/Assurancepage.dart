@@ -13,6 +13,7 @@ import '../../utils/mon_espace_navigation.dart';
 import './utils/DetailAssurance.dart'; // ⚠️ adapter ce chemin à l'emplacement réel du fichier dans le projet.
 import 'publicAcceuil.dart';
 import 'Medecinpage.dart';
+import '../../utils/marque.dart';
 
 /// Écran public — **Annuaire des assurances** (`5 · Annuaire assurances`
 /// dans la maquette `ui-mobile.html`).
@@ -156,7 +157,7 @@ class _AssurancePageState extends ConsumerState<AssurancePage> {
         ),
         ApsFilterSwitch(
           label: 'Vérifiées APS uniquement',
-          subtitle: 'Fiches vérifiées par APS Santé',
+          subtitle: 'Fiches vérifiées par $nomMarque',
           icon: Icons.verified_outlined,
           value: c.verifiees,
           onChanged: (v) => maj((type: c.type, paysId: c.paysId, villeId: c.villeId, verifiees: v, tri: c.tri)),

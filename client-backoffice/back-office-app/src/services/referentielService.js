@@ -113,6 +113,32 @@ export function supprimerVille(ville_id) {
   return apiFetch(`/referentiels/villes/${ville_id}`, { method: 'DELETE' });
 }
 
+/* ============================== Source des villes (manuel / Google Maps) */
+// Voir server/src/services/sourceVilles.service.js.
+// État : { source_choisie, source_effective, raison_repli, cle_configuree,
+//          dernier_test_le, dernier_test_ok, dernier_message }
+export function obtenirSourceVilles() {
+  return apiFetch('/referentiels/source-villes');
+}
+/** Superadmin uniquement. */
+export function modifierSourceVilles(source) {
+  return apiFetch('/referentiels/source-villes', { method: 'PUT', body: { source } });
+}
+/** Superadmin uniquement : teste la clé Google avec une vraie requête. */
+export function testerSourceVilles() {
+  return apiFetch('/referentiels/source-villes/tester', { method: 'POST' });
+}
+/** { source, villes, suggestions: [{ place_id, nom, description }] } */
+export function rechercherVilles({ q, pays_id }) {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (pays_id) params.set('pays_id', pays_id);
+  return apiFetch(`/referentiels/villes/rechercher?${params.toString()}`);
+}
+export function importerVilleGoogle({ place_id, pays_id }) {
+  return apiFetch('/referentiels/villes/importer', { method: 'POST', body: { place_id, pays_id } });
+}
+
 /* ========================================================== Rôles (IAM) */
 export function listerRoles() {
   return apiFetch('/referentiels/roles').then((d) => d.roles);

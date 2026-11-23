@@ -137,10 +137,9 @@ export async function obtenirAbonnementMedecin(req, res, next) {
 
 /**
  * POST /api/abonnements-medecin
- * Ouvert au médecin concerné (souscription pour lui-même, déduite du
- * token — tout medecin_id/medecin_ids envoyé dans le corps est
- * ignoré) ou à admin/superadmin, qui doit alors fournir explicitement
- * un ou plusieurs médecins à rattacher :
+ * Réservé à admin/superadmin, qui fournit explicitement un ou plusieurs
+ * médecins à rattacher et une transaction réglée (statut « reussie »)
+ * qui ne finance aucun autre abonnement :
  *   - medecin_id   : souscription individuelle
  *   - medecin_ids  : offre groupée (ex. tous les médecins d'un même
  *                    cabinet souscrivent au même abonnement)
@@ -154,24 +153,23 @@ export async function creerAbonnementMedecin(req, res, next) {
   try {
     const { libelle, montant, duree_jours, date_debut, transaction_id } = req.body;
 
+    // Réservé à admin/superadmin (garde autoriser() sur la route ; vérifié
+    // ici aussi par défense en profondeur). Un médecin ne crée jamais son
+    // propre abonnement : il en fixerait librement le montant et la durée.
+    if (!estAdmin(req.utilisateur)) {
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
+    }
+
     let medecinIds;
-    if (estAdmin(req.utilisateur)) {
-      const { medecin_id, medecin_ids } = req.body;
-      if (Array.isArray(medecin_ids) && medecin_ids.length > 0) {
-        medecinIds = [...new Set(medecin_ids)];
-      } else if (medecin_id) {
-        medecinIds = [medecin_id];
-      } else {
-        return res.status(400).json({
-          message: "medecin_id (ou medecin_ids pour une offre groupée) requis pour un admin/superadmin.",
-        });
-      }
+    const { medecin_id, medecin_ids } = req.body;
+    if (Array.isArray(medecin_ids) && medecin_ids.length > 0) {
+      medecinIds = [...new Set(medecin_ids)];
+    } else if (medecin_id) {
+      medecinIds = [medecin_id];
     } else {
-      const medecin = await profilMedecinCourant(req.utilisateur);
-      if (!medecin) {
-        return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
-      }
-      medecinIds = [medecin.medecin_id];
+      return res.status(400).json({
+        message: "medecin_id (ou medecin_ids pour une offre groupée) requis.",
+      });
     }
 
     if (!libelle || montant === undefined || !duree_jours || !date_debut || !transaction_id) {
@@ -201,6 +199,18 @@ export async function creerAbonnementMedecin(req, res, next) {
     });
     if (!transaction) {
       return res.status(400).json({ message: "transaction_id introuvable." });
+    }
+    // L'abonnement naît « actif » : seule une transaction réglée peut le
+    // justifier, et elle ne finance qu'un seul abonnement.
+    if (transaction.statut !== "reussie") {
+      return res.status(400).json({ message: "La transaction indiquée n'est pas réglée." });
+    }
+    const dejaUtilisee = await prisma.abonnementMedecin.findFirst({
+      where: { transaction_id },
+      select: { abonnement_id: true },
+    });
+    if (dejaUtilisee) {
+      return res.status(409).json({ message: "Cette transaction finance déjà un autre abonnement." });
     }
 
     const dateDebut = new Date(date_debut);
@@ -243,8 +253,8 @@ export async function creerAbonnementMedecin(req, res, next) {
 
 /**
  * PUT /api/abonnements-medecin/:id
- * Ouvert à tout médecin souscripteur (rattaché via un forfait) ou à
- * admin/superadmin. duree_jours et/ou date_debut, si fournis,
+ * Réservé à admin/superadmin (un médecin souscripteur ne modifie jamais
+ * le montant, le statut ni les dates de son abonnement). duree_jours et/ou date_debut, si fournis,
  * recalculent automatiquement date_fin. La composition des
  * souscripteurs (ajout/retrait de médecins) ne passe plus par cette
  * route — voir ajouterMedecinAbonnement / retirerMedecinAbonnement.
@@ -259,11 +269,10 @@ export async function modifierAbonnementMedecin(req, res, next) {
       return res.status(404).json({ message: "Abonnement introuvable." });
     }
 
+    // Réservé à admin/superadmin (garde autoriser() sur la route ; vérifié
+    // ici aussi par défense en profondeur).
     if (!estAdmin(req.utilisateur)) {
-      const medecin = await profilMedecinCourant(req.utilisateur);
-      if (!estSouscripteur(medecin?.medecin_id, abonnement)) {
-        return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
-      }
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
     }
 
     const { libelle, montant, duree_jours, date_debut, statut } = req.body;
@@ -319,7 +328,7 @@ export async function modifierAbonnementMedecin(req, res, next) {
 
 /**
  * DELETE /api/abonnements-medecin/:id
- * Ouvert à tout médecin souscripteur ou à admin/superadmin.
+ * Réservé à admin/superadmin.
  */
 export async function supprimerAbonnementMedecin(req, res, next) {
   try {
@@ -331,11 +340,10 @@ export async function supprimerAbonnementMedecin(req, res, next) {
       return res.status(404).json({ message: "Abonnement introuvable." });
     }
 
+    // Réservé à admin/superadmin (garde autoriser() sur la route ; vérifié
+    // ici aussi par défense en profondeur).
     if (!estAdmin(req.utilisateur)) {
-      const medecin = await profilMedecinCourant(req.utilisateur);
-      if (!estSouscripteur(medecin?.medecin_id, abonnement)) {
-        return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
-      }
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
     }
 
     // Supprime aussi les lignes d'avantages et les rattachements
@@ -447,8 +455,7 @@ export async function retirerMedecinAbonnement(req, res, next) {
 
 /**
  * POST /api/abonnements-medecin/:id/lignes
- * Ouvert à tout médecin souscripteur de l'abonnement parent ou à
- * admin/superadmin.
+ * Réservé à admin/superadmin (comme les autres écritures).
  */
 export async function ajouterLigneAbonnementMedecin(req, res, next) {
   try {
@@ -460,11 +467,10 @@ export async function ajouterLigneAbonnementMedecin(req, res, next) {
       return res.status(404).json({ message: "Abonnement introuvable." });
     }
 
+    // Réservé à admin/superadmin (garde autoriser() sur la route ; vérifié
+    // ici aussi par défense en profondeur).
     if (!estAdmin(req.utilisateur)) {
-      const medecin = await profilMedecinCourant(req.utilisateur);
-      if (!estSouscripteur(medecin?.medecin_id, abonnement)) {
-        return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
-      }
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
     }
 
     const { libelle_avantage, description, ordre_affichage } = req.body;
@@ -507,11 +513,10 @@ export async function modifierLigneAbonnementMedecin(req, res, next) {
       return res.status(404).json({ message: "Ligne d'avantage introuvable." });
     }
 
+    // Réservé à admin/superadmin (garde autoriser() sur la route ; vérifié
+    // ici aussi par défense en profondeur).
     if (!estAdmin(req.utilisateur)) {
-      const medecin = await profilMedecinCourant(req.utilisateur);
-      if (!estSouscripteur(medecin?.medecin_id, ligne.abonnement)) {
-        return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
-      }
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
     }
 
     const { libelle_avantage, description, ordre_affichage } = req.body;
@@ -555,11 +560,10 @@ export async function supprimerLigneAbonnementMedecin(req, res, next) {
       return res.status(404).json({ message: "Ligne d'avantage introuvable." });
     }
 
+    // Réservé à admin/superadmin (garde autoriser() sur la route ; vérifié
+    // ici aussi par défense en profondeur).
     if (!estAdmin(req.utilisateur)) {
-      const medecin = await profilMedecinCourant(req.utilisateur);
-      if (!estSouscripteur(medecin?.medecin_id, ligne.abonnement)) {
-        return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
-      }
+      return res.status(403).json({ message: "Accès refusé : privilèges insuffisants." });
     }
 
     await prisma.ligneAbonnementMedecin.delete({ where: { ligne_id: req.params.ligneId } });

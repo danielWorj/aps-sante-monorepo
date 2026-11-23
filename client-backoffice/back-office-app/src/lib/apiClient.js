@@ -25,6 +25,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 let accessToken = null;
 let onUnauthorized = null; // injecté par AuthProvider
 let onTokenRefreshed = null; // injecté par AuthProvider
+let onPinRequis = null; // injecté par GardePin (demande du code PIN)
 
 export function setAccessToken(token) {
   accessToken = token;
@@ -56,24 +57,59 @@ export function setTokenRefreshedHandler(handler) {
 }
 
 /**
+ * Opérations protégées par le code PIN (403 { code: "PIN_REQUIS" }, ex.
+ * moyens de paiement d'un médecin) : `handler` demande le PIN, le confirme
+ * et résout `true` (la requête est alors rejouée une fois) ou `false`
+ * (abandon : l'erreur remonte).
+ */
+export function setPinRequisHandler(handler) {
+  onPinRequis = handler;
+}
+
+/**
+ * Appel de refresh actuellement "en vol", partagé entre tous les
+ * appelants concurrents. Sans cette déduplication, deux appels
+ * simultanés à tenterRefresh() (ex. React.StrictMode qui monte l'app
+ * deux fois en dev, plusieurs requêtes en 401 au même moment, ou le
+ * refresh proactif qui croise un retry) partent chacun avec le MÊME
+ * cookie refresh_token. Le serveur applique une rotation stricte : le
+ * premier appel révoque ce cookie et en émet un nouveau, donc le
+ * second — parti avec l'ancien cookie — est rejeté en 401 ("Refresh
+ * token invalide") alors que la session est valide, ce qui déconnecte
+ * l'administrateur.
+ */
+let refreshEnCours = null;
+
+/**
  * Appelle POST /api/auth/refresh (cookie httpOnly envoyé
  * automatiquement) pour obtenir un nouvel access token.
  * Retourne le nouveau token, ou null si aucune session valide.
+ *
+ * Si un refresh est déjà en cours, on réutilise sa promesse au lieu
+ * d'en déclencher un second : un seul appel réseau part réellement.
  */
 export async function tenterRefresh() {
-  try {
-    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    setAccessToken(data.access_token);
-    onTokenRefreshed?.(data.access_token);
-    return data.access_token;
-  } catch {
-    return null;
-  }
+  if (refreshEnCours) return refreshEnCours;
+
+  refreshEnCours = (async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      setAccessToken(data.access_token);
+      onTokenRefreshed?.(data.access_token);
+      return data.access_token;
+    } catch {
+      return null;
+    } finally {
+      refreshEnCours = null;
+    }
+  })();
+
+  return refreshEnCours;
 }
 
 /**
@@ -83,12 +119,18 @@ export async function tenterRefresh() {
  *  - envoie les cookies (`credentials: 'include'`) ;
  *  - sur 401, tente un refresh puis rejoue la requête une seule fois
  *    (sauf si `skipAuthRetry: true`, utilisé pour login/logout/refresh
- *    eux-mêmes afin d'éviter toute boucle).
+ *    eux-mêmes afin d'éviter toute boucle) ;
+ *  - sur 403 PIN_REQUIS, demande le code PIN (GardePin) puis rejoue la
+ *    requête une seule fois (sauf `skipPinRetry: true`, utilisé par la
+ *    vérification du PIN elle-même).
  *
  * Lève une Error (avec `.status` et `.data`) si la réponse finale n'est
  * pas OK, pour un traitement simple par les appelants (try/catch).
  */
-export async function apiFetch(path, { body, headers, skipAuthRetry = false, ...options } = {}) {
+export async function apiFetch(
+  path,
+  { body, headers, skipAuthRetry = false, skipPinRetry = false, ...options } = {}
+) {
   // Un FormData (upload multipart, ex. création/modification de centre
   // de santé avec fichiers) ne doit JAMAIS être passé à JSON.stringify
   // (il n'a pas de propriétés énumérables : on obtiendrait "{}", donc
@@ -126,6 +168,19 @@ export async function apiFetch(path, { body, headers, skipAuthRetry = false, ...
     data = await res.json();
   } catch {
     // réponse sans corps JSON (ex: 204)
+  }
+
+  // Code PIN exigé : on le demande, puis on rejoue la requête une fois.
+  if (res.status === 403 && data?.code === 'PIN_REQUIS' && !skipPinRetry && onPinRequis) {
+    if (await onPinRequis()) {
+      res = await doFetch(accessToken);
+      data = null;
+      try {
+        data = await res.json();
+      } catch {
+        // réponse sans corps JSON
+      }
+    }
   }
 
   if (!res.ok) {

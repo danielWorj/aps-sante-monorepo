@@ -32,6 +32,7 @@ import '../../models/pharmacie_models.dart';
 import '../../utils/mon_espace_navigation.dart';
 import 'publicAcceuil.dart';
 import 'Assurancepage.dart';
+import '../../utils/marque.dart';
 
 /// `AsyncValue.valueOrNull` n'existe qu'à partir de riverpod 2.3.0 ; la
 /// version résolue par ce projet (voir l'import direct de
@@ -221,7 +222,7 @@ class _PharmaciePageState extends ConsumerState<PharmaciePage> {
         ),
         ApsFilterSwitch(
           label: 'Vérifiées uniquement',
-          subtitle: "Fiches vérifiées à l'Ordre par APS Santé",
+          subtitle: "Fiches vérifiées à l'Ordre par $nomMarque",
           icon: Icons.verified_outlined,
           value: c.verifiees,
           onChanged: (v) => maj((paysId: c.paysId, villeId: c.villeId, deGarde: c.deGarde, verifiees: v, tri: c.tri)),

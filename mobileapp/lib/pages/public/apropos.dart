@@ -13,6 +13,7 @@ import '../../utils/mon_espace_navigation.dart';
 import 'publicAcceuil.dart';
 import 'Medecinpage.dart';
 import 'Assurancepage.dart';
+import '../../utils/marque.dart';
 
 /// ============================================================
 /// PAGE "À PROPOS" — APS Santé
@@ -202,7 +203,7 @@ class _HeroSection extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         const Text(
-          'APS Santé',
+          nomMarque,
           style: TextStyle(
             fontFamily: AppTextStyles.fontDisplay,
             fontSize: 20,
@@ -703,7 +704,7 @@ class _Footer extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'ApSa',
+                nomMarque,
                 style: AppTextStyles.h3.copyWith(fontSize: 16, color: AppColors.primaryDark),
               ),
             ],
@@ -720,7 +721,7 @@ class _Footer extends StatelessWidget {
                     alignment: PlaceholderAlignment.middle,
                     child: Icon(Icons.favorite, size: 11, color: AppColors.danger),
                   ),
-                  TextSpan(text: ' au Cameroun · © 2026 AZA PROXI SANTÉ ASSURANCES (ApSa)'),
+                  TextSpan(text: ' au Cameroun · © 2026 $raisonSociale ($nomMarque)'),
                 ],
               ),
             ),

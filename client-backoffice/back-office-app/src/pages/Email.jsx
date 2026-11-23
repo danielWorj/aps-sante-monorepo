@@ -25,6 +25,7 @@ import {
   verifierSmtp,
 } from '../services/emailService';
 import { dateHeure } from '../utils/fonds';
+import { NOM_MARQUE } from '../lib/marque';
 
 const TAILLE_PAGE = 25;
 
@@ -56,7 +57,7 @@ export default function Email() {
   const [verification, setVerification] = useState(false);
   const [onglet, setOnglet] = useState('envois');
 
-  const [test, setTest] = useState({ destinataire: '', sujet: 'Test e-mail APS Santé', texte: 'Ceci est un e-mail de test.' });
+  const [test, setTest] = useState({ destinataire: '', sujet: `Test e-mail ${NOM_MARQUE}`, texte: 'Ceci est un e-mail de test.' });
   const [resultatTest, setResultatTest] = useState(null);
   const [envoiTest, setEnvoiTest] = useState(false);
 

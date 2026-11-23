@@ -24,6 +24,7 @@ import {
 import { donneesPinCreation, ErreurPin, genererPinProvisoire } from "../services/pin.service.js";
 import { assurerEspaceOuvrable, espaceParDefaut, listerEspaces, trouverEspace } from "../services/espaces.service.js";
 import { ouvrirSessionEspace } from "../services/compte.service.js";
+import { appareilDeLaRequete, controlerAppareil, faireConfianceAppareil, faireConfianceAppareilRequete } from "../services/appareilConfiance.service.js";
 import { MESSAGE_CGU_REFUSEES, cguRefusees, enregistrerAcceptationsLegales } from "../services/documentLegal.service.js";
 
 // Délai laissé au titulaire d'un mot de passe temporaire pour le
@@ -609,6 +610,11 @@ export async function connecter(req, res, next) {
       });
     }
 
+    // Même contrôle d'appareil que la connexion par PIN (sinon l'email
+    // contournerait la confirmation d'un nouvel appareil).
+    const aValider = await controlerAppareil(req, res, utilisateur);
+    if (aValider) return res.status(200).json(aValider);
+
     const { accessToken, espace, espaces } = await ouvrirSessionEspace(req, res, utilisateur);
 
     return res.status(200).json({
@@ -773,11 +779,18 @@ export async function rafraichirToken(req, res, next) {
     }
 
     // Rotation : on révoque l'ancien refresh token et on en émet un nouveau.
+    const mobile = estClientMobile(req);
     const {
       token: nouveauRefreshToken,
       token_hash: nouveauHash,
       date_expiration: nouvelleExpiration,
-    } = genererRefreshToken({ mobile: estClientMobile(req) });
+    } = genererRefreshToken({ mobile });
+    // Appareil de la session : celui de la requête. Une session ouverte
+    // avant les appareils de confiance (sans empreinte) fait confiance à
+    // son appareil ; une session liée à un AUTRE appareil (jeton copié)
+    // ne l'étend pas.
+    const empreinte = appareilDeLaRequete(req, res);
+    const appareilCoherent = !enregistrement.appareil_empreinte || enregistrement.appareil_empreinte === empreinte;
 
     // Espace actif de la session : repris tel quel s'il existe encore,
     // sinon (fiche retirée entre-temps) espace par défaut du compte.
@@ -813,9 +826,20 @@ export async function rafraichirToken(req, res, next) {
           ip_creation: req.ip,
           statut: "actif",
           espace: espace?.cle ?? null,
+          appareil_empreinte: enregistrement.appareil_empreinte ?? empreinte,
+          mobile,
         },
       }),
     ]);
+    if (appareilCoherent) {
+      await faireConfianceAppareil({
+        utilisateur_id: enregistrement.utilisateur_id,
+        empreinte,
+        mobile,
+        libelle: req.headers["user-agent"] ?? null,
+        valide_par: "session_existante",
+      });
+    }
 
     const { token: accessToken } = genererAccessToken({
       ...enregistrement.utilisateur,

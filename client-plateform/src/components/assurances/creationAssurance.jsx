@@ -3,10 +3,12 @@ import '../../assets/styles/creationAssurance.css';
 
 import { creerServiceAssurance } from '../../services/assuranceService';
 import { listerPays, listerVilles } from '../../services/geoService';
+import ChampVille from '../ui/ChampVille';
 import { connecter } from '../../services/authService';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import GoogleMapPicker from '../maps/GoogleMapPicker';
 import { useAuth } from '../../context/AuthContext';
+import { NOM_MARQUE } from '../../lib/marque';
 
 // ───────────────────────────────────────────────────────────────────
 // Ce formulaire suit EXACTEMENT le contrat de POST /services-assurance
@@ -473,7 +475,7 @@ const CreationAssurance = () => {
                     <span className="eyebrow">Inscription</span>
                     <h1>Créer un compte — Compagnie d'assurance ou Courtier</h1>
                     <p className="mt-2">
-                      Rejoignez l'annuaire ApSa en tant que compagnie d'assurance
+                      Rejoignez l'annuaire {NOM_MARQUE} en tant que compagnie d'assurance
                       santé ou courtier. Remplissez le formulaire ci-dessous
                       pour créer votre fiche.
                     </p>
@@ -603,22 +605,18 @@ const CreationAssurance = () => {
                           <label className="form-label-aps" htmlFor="ville_id">
                             Ville <span className="required-mark">*</span>
                           </label>
-                          <select
-                            className="form-select"
+                          <ChampVille
                             id="ville_id"
                             name="ville_id"
                             value={formData.ville_id}
                             onChange={handleChange}
+                            paysId={formData.pays_id}
+                            villes={villes}
+                            onVilleImportee={(v) => setVilles((l) => (l.some((x) => x.ville_id === v.ville_id) ? l : [...l, v]))}
+                            placeholder="Sélectionner une ville…"
                             required
                             disabled={!formData.pays_id}
-                          >
-                            <option value="">Sélectionner une ville…</option>
-                            {villes.map((v) => (
-                              <option key={v.ville_id} value={v.ville_id}>
-                                {v.nom}
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </div>
 
                         {formData.pays_id && formData.ville_id && (

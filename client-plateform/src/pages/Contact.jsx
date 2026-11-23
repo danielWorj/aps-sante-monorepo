@@ -8,6 +8,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { envoyerMessageContact, obtenirCoordonneesContact } from '../services/contactService';
 import '../assets/styles/info-2026.css';
+import { NOM_MARQUE } from '../lib/marque';
 
 const PROFILS = [
   { cle: 'patient', libelle: 'Patient' },
@@ -157,7 +158,7 @@ export default function Contact() {
           <span className="aps-over">Contactez-nous</span>
           <h1 className="aps-h1 info26-titre">Une question ? <span className="info26-accent">Parlons-en.</span></h1>
           <p className="aps-t-s info26-lead">
-            Patients, professionnels, établissements, assureurs ou annonceurs : écrivez-nous, l&apos;équipe ApSa
+            Patients, professionnels, établissements, assureurs ou annonceurs : écrivez-nous, l&apos;équipe {NOM_MARQUE}{' '}
             vous répond sous 48 heures ouvrées.
           </p>
           </div>
@@ -317,7 +318,7 @@ export default function Contact() {
                   </details>
                 ))}
               </div>
-              <Link to="/a-propos" className="aps-lnk mt-3">En savoir plus sur ApSa <i className="fa-solid fa-arrow-right" /></Link>
+              <Link to="/a-propos" className="aps-lnk mt-3">En savoir plus sur {NOM_MARQUE} <i className="fa-solid fa-arrow-right" /></Link>
             </div>
           </aside>
         </div>

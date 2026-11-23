@@ -1,0 +1,66 @@
+// Grafana Alloy : collecte les logs des conteneurs docker compose et les
+// envoie à Loki. Étiquettes : service (nom compose), projet, conteneur,
+// et pour l'API : level et type (« acces » pour le journal HTTP).
+
+discovery.docker "conteneurs" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "15s"
+}
+
+discovery.relabel "conteneurs" {
+  targets = discovery.docker.conteneurs.targets
+
+  // Uniquement les conteneurs lancés par docker compose.
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = ".+"
+    action        = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "projet"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "conteneur"
+  }
+}
+
+loki.source.docker "conteneurs" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.relabel.conteneurs.output
+  forward_to       = [loki.process.niveaux.receiver]
+  refresh_interval = "15s"
+}
+
+loki.process "niveaux" {
+  // Logs JSON de l'API (pino) : le niveau devient une étiquette, le
+  // request_id une métadonnée structurée (filtrable sans exploser la
+  // cardinalité des étiquettes).
+  stage.match {
+    selector = "{service=\"server\"}"
+
+    stage.json {
+      expressions = { level = "level", request_id = "request_id", type = "type" }
+    }
+    stage.labels {
+      values = { level = "", type = "" }
+    }
+    stage.structured_metadata {
+      values = { request_id = "" }
+    }
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

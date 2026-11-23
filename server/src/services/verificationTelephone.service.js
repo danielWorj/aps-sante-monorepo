@@ -24,12 +24,24 @@
 //   VERIFICATION_TENTATIVES_MAX (5)           VERIFICATION_DELAI_RENVOI_S (60)
 //   VERIFICATION_MAX_PAR_NUMERO_JOUR (5)      VERIFICATION_MAX_PAR_IP_HEURE (10)
 //   VERIFICATION_PREUVE_VALIDITE_MIN (30)     WHATSAPP_MODELE_CODE_VERIFICATION (code_verification)
+//   WHATSAPP_INVERSE_ACTIF (false)            vérification inversée proposée
+//
+// Vérification INVERSÉE (canal « whatsapp_inverse », gratuite) : aucun
+// message n'est envoyé ; l'application affiche le code et un bouton qui
+// ouvre WhatsApp avec le message prêt ; l'utilisateur l'ENVOIE à notre
+// numéro. Le webhook Meta (whatsappWebhook.controller.js) reçoit le message :
+// l'expéditeur (numéro WhatsApp) + le code prouvent la possession du numéro.
+// L'appelant sonde statutVerificationInverse() puis utilise la preuve comme
+// pour un code reçu. Le code affiché ne peut PAS être saisi via
+// verifierCodeVerification (sinon il suffirait de le recopier).
 
 import crypto from "node:crypto";
 import prisma from "../lib/prisma.js";
 import { normaliserNumeroInternational } from "../lib/telephone.js";
 import { destinationSmsAutorisee, envoyerSms, ErreurSms } from "./sms.service.js";
 import { envoyerWhatsapp } from "./whatsapp.service.js";
+import { obtenirNumeroWhatsappActif } from "./numeroWhatsapp.service.js";
+import { NOM_MARQUE } from "../lib/marque.js";
 
 export { ErreurSms };
 
@@ -48,7 +60,21 @@ const PREUVE_VALIDITE_MIN = nombre("VERIFICATION_PREUVE_VALIDITE_MIN", 30);
 const CONSERVATION_JOURS = 30;
 
 export const OBJETS_VERIFICATION = ["inscription", "connexion", "reinitialisation_mot_de_passe", "changement_telephone"];
-export const CANAUX_VERIFICATION = ["sms", "whatsapp"];
+export const CANAUX_VERIFICATION = ["sms", "whatsapp", "whatsapp_inverse"];
+
+/**
+ * Vérification inversée disponible : activée (WHATSAPP_INVERSE_ACTIF=true)
+ * et un numéro WhatsApp actif est configuré au back-office.
+ */
+export async function whatsappInverseActif() {
+  if (String(process.env.WHATSAPP_INVERSE_ACTIF ?? "").trim().toLowerCase() !== "true") return false;
+  return Boolean(await obtenirNumeroWhatsappActif().catch(() => null));
+}
+
+/** Message que l'utilisateur envoie à notre numéro. */
+function texteInverse(code) {
+  return `Code ${NOM_MARQUE} : ${code}`;
+}
 
 // Secret éphémère sans configuration : les codes en cours deviennent
 // invalides à chaque redémarrage (l'utilisateur en redemande un), rien de plus.
@@ -85,7 +111,7 @@ function controlerObjet(objet) {
 }
 
 function texteCode(code) {
-  return `${code} est votre code de vérification APS Santé. Il expire dans ${VALIDITE_MIN} min. Ne le communiquez à personne.`;
+  return `${code} est votre code de vérification ${NOM_MARQUE}. Il expire dans ${VALIDITE_MIN} min. Ne le communiquez à personne.`;
 }
 
 /** Envoie le code ; rend { message_sms_id?, envoye } sans jamais lever sur un échec d'envoi. */
@@ -138,9 +164,16 @@ async function envoyerCode({ canal, numero, code }) {
  */
 export async function demanderCodeVerification({ telephone, pays_iso2 = null, objet, canal = "sms", adresse_ip = null } = {}) {
   controlerObjet(objet);
-  if (!CANAUX_VERIFICATION.includes(canal)) throw new ErreurSms("canal invalide (sms ou whatsapp).", 400, "CANAL_INVALIDE");
+  if (!CANAUX_VERIFICATION.includes(canal)) throw new ErreurSms("canal invalide (sms, whatsapp ou whatsapp_inverse).", 400, "CANAL_INVALIDE");
   const numero = normaliser(telephone, pays_iso2);
-  if (!destinationSmsAutorisee(numero)) {
+  const inverse = canal === "whatsapp_inverse";
+  let numeroWhatsapp = null;
+  if (inverse) {
+    numeroWhatsapp = (await whatsappInverseActif()) ? await obtenirNumeroWhatsappActif() : null;
+    if (!numeroWhatsapp) {
+      throw new ErreurSms("La confirmation par WhatsApp n'est pas disponible pour le moment.", 503, "WHATSAPP_INVERSE_INACTIF");
+    }
+  } else if (!destinationSmsAutorisee(numero)) {
     throw new ErreurSms("La vérification n'est pas encore ouverte pour ce pays.", 400, "PAYS_NON_AUTORISE");
   }
 
@@ -178,6 +211,21 @@ export async function demanderCodeVerification({ telephone, pays_iso2 = null, ob
     data: { telephone: numero, objet, canal, code_hache: hacher(numero, objet, code), expire_le, adresse_ip },
   });
 
+  if (inverse) {
+    const texte = texteInverse(code);
+    return {
+      telephone_masque: masquerTelephone(numero),
+      canal,
+      expire_le,
+      delai_renvoi_s: DELAI_RENVOI_S,
+      verification_id: ligne.code_verification_id,
+      code,
+      numero_whatsapp: `+${numeroWhatsapp.numero}`,
+      texte_a_envoyer: texte,
+      lien_whatsapp: `https://wa.me/${numeroWhatsapp.numero}?text=${encodeURIComponent(texte)}`,
+    };
+  }
+
   const envoi = await envoyerCode({ canal, numero, code });
   await prisma.codeVerification.update({
     where: { code_verification_id: ligne.code_verification_id },
@@ -207,8 +255,10 @@ export async function verifierCodeVerification({ telephone, pays_iso2 = null, ob
   const saisi = String(code ?? "").replace(/\D/g, "");
   if (saisi.length !== LONGUEUR) throw new ErreurSms(`Le code comporte ${LONGUEUR} chiffres.`, 400, "CODE_INVALIDE");
 
+  // Un code « inversé » est affiché à l'écran : il ne se saisit pas, il
+  // s'envoie par WhatsApp (sinon le recopier suffirait).
   const ligne = await prisma.codeVerification.findFirst({
-    where: { telephone: numero, objet, verifie_le: null, expire_le: { gt: new Date() } },
+    where: { telephone: numero, objet, canal: { not: "whatsapp_inverse" }, verifie_le: null, expire_le: { gt: new Date() } },
     orderBy: { date_creation: "desc" },
   });
   if (!ligne) throw new ErreurSms("Ce code a expiré. Demandez-en un nouveau.", 400, "CODE_EXPIRE");
@@ -266,6 +316,65 @@ export async function consommerPreuveTelephone({ preuve, objet, telephone = null
   });
   if (count !== 1) throw invalide;
   return ligne.telephone;
+}
+
+/**
+ * Où en est une vérification inversée ? (sondage de l'application)
+ * L'identifiant n'est connu que de celui qui l'a demandée.
+ * @returns {Promise<{ statut: "en_attente"|"verifie"|"expiree", preuve?: string, preuve_expire_le?: Date }>}
+ */
+export async function statutVerificationInverse({ verification_id } = {}) {
+  const ligne = typeof verification_id === "string" && /^[0-9a-f-]{36}$/i.test(verification_id)
+    ? await prisma.codeVerification.findUnique({ where: { code_verification_id: verification_id } })
+    : null;
+  if (!ligne || ligne.canal !== "whatsapp_inverse") {
+    throw new ErreurSms("Vérification introuvable.", 404, "VERIFICATION_INTROUVABLE");
+  }
+  if (ligne.verifie_le) {
+    if (ligne.consomme_le) return { statut: "expiree" };
+    const preuve_expire_le = new Date(ligne.verifie_le.getTime() + PREUVE_VALIDITE_MIN * 60_000);
+    if (preuve_expire_le < new Date()) return { statut: "expiree" };
+    return { statut: "verifie", preuve: ligne.code_verification_id, preuve_expire_le };
+  }
+  if (ligne.expire_le < new Date()) return { statut: "expiree" };
+  return { statut: "en_attente", expire_le: ligne.expire_le };
+}
+
+/**
+ * Message WhatsApp ENTRANT (webhook) : valide la vérification inversée en
+ * attente de cet expéditeur dont le code figure dans le message.
+ * @param {{ de: string, texte: string }} p  `de` = numéro WhatsApp de l'expéditeur
+ * @returns {Promise<object|null>} la ligne validée, ou null
+ */
+export async function traiterMessageEntrantVerification({ de, texte } = {}) {
+  const numero = normaliserNumeroInternational(String(de ?? ""));
+  if (!numero || typeof texte !== "string") return null;
+  const candidats = [...new Set(texte.match(new RegExp(`(?<!\\d)\\d{${LONGUEUR}}(?!\\d)`, "g")) ?? [])];
+  if (!candidats.length) return null;
+
+  const enAttente = await prisma.codeVerification.findMany({
+    where: { telephone: numero, canal: "whatsapp_inverse", verifie_le: null, expire_le: { gt: new Date() } },
+    orderBy: { date_creation: "desc" },
+    take: 5,
+  });
+  for (const ligne of enAttente) {
+    if (ligne.tentatives >= TENTATIVES_MAX) continue;
+    const trouve = candidats.some((c) => egaux(hacher(numero, ligne.objet, c), ligne.code_hache));
+    if (!trouve) continue;
+    const { count } = await prisma.codeVerification.updateMany({
+      where: { code_verification_id: ligne.code_verification_id, verifie_le: null },
+      data: { verifie_le: new Date(), tentatives: { increment: 1 } },
+    });
+    if (count === 1) return ligne;
+  }
+  // Message avec des chiffres mais aucun code valable : essai compté.
+  if (enAttente.length) {
+    await prisma.codeVerification.updateMany({
+      where: { code_verification_id: { in: enAttente.map((l) => l.code_verification_id) } },
+      data: { tentatives: { increment: 1 } },
+    });
+  }
+  return null;
 }
 
 /** Job : supprime les codes de plus de 30 jours. */

@@ -20,6 +20,7 @@ import { finaliserAbonnementAssurance } from "../services/finalisationAbonnement
 import { finaliserAbonnementPresence } from "../services/finalisationAbonnementPresence.service.js";
 import { finaliserPaiementPublicite } from "../services/finalisationPublicite.service.js";
 import { synchroniserCampayPourRdv, derniereTentativeCampay, verifierEtFinaliserTransactionCampay } from "../services/paiementCampay.service.js";
+import { NOM_MARQUE, NOM_MARQUE_ASCII } from "../lib/marque.js";
 
 const DEVISE_PAR_DEFAUT = process.env.STRIPE_DEVISE_PAR_DEFAUT || "xaf";
 
@@ -197,7 +198,7 @@ export function lignesDetailPaiement(ctx) {
  */
 export function descriptionCampay(ctx) {
   const { rdv, decomposition, devise } = ctx;
-  const court = `Consultation APS Sante ${rdv.rdv_id.slice(0, 8)}`;
+  const court = `Consultation ${NOM_MARQUE_ASCII} ${rdv.rdv_id.slice(0, 8)}`;
   // Montant collecté par CamPay = H + CP ; ses propres frais s'y ajoutent au débit.
   const collecte = Number(decomposition.honoraires) + Number(decomposition.commissionPatient);
   const detail =
@@ -295,7 +296,7 @@ export async function creerPaiementRdv(req, res, next) {
         // Une ligne Stripe par composante (consultation / frais / commission
         // APS) ; leur somme est strictement égale à `montant`.
         lignes,
-        description_facture: `Consultation APS Santé — ${nomMedecin(rdv)}`,
+        description_facture: `Consultation ${NOM_MARQUE} — ${nomMedecin(rdv)}`,
         email_client: patient.utilisateur.email,
         url_succes: `${base}/paiement/succes?rdv_id=${rdv.rdv_id}`,
         url_annulation: `${base}/paiement/annule?rdv_id=${rdv.rdv_id}`,
@@ -433,7 +434,7 @@ export async function creerPaymentSheetRdv(req, res, next) {
         transaction_id: transaction.transaction_id,
         rdv_id: rdv.rdv_id,
         email_client: patient.utilisateur.email,
-        description: `Consultation APS Santé — ${nomMedecin(rdv)}`,
+        description: `Consultation ${NOM_MARQUE} — ${nomMedecin(rdv)}`,
         detail: {
           honoraires: ctx.decomposition.honoraires,
           frais_agregateur: ctx.decomposition.fraisEnvoi,

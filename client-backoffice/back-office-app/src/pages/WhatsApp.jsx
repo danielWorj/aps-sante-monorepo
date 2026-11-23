@@ -34,6 +34,7 @@ import {
   verifierNumeroWhatsapp,
 } from '../services/whatsappService';
 import { dateHeure } from '../utils/fonds';
+import { NOM_MARQUE } from '../lib/marque';
 
 const FORM_VIDE = { libelle: '', numero: '', phone_number_id: '', waba_id: '', actif: false };
 const TAILLE_PAGE = 25;
@@ -451,7 +452,7 @@ export default function WhatsApp() {
           Les mots entre accolades (ex. <code>{'{titre}'}</code>) sont remplacés à l’envoi. Sans modèle Meta, le
           message part en texte libre et n’arrive que si le destinataire a écrit dans les dernières 24 h. Pour
           joindre n’importe qui, faites approuver chez Meta un modèle dont le corps contient une seule variable
-          (ex. <code>APS Santé : {'{{1}}'}</code>) et indiquez son nom ici.
+          (ex. <code>{NOM_MARQUE} : {'{{1}}'}</code>) et indiquez son nom ici.
         </p>
         {modeles.length === 0 && <div className="aps-text-muted small">Aucun message configuré.</div>}
         {modeles.map((m) => {
@@ -582,7 +583,7 @@ export default function WhatsApp() {
         <form id="form-numero-whatsapp" onSubmit={soumettre}>
           {erreurForm && <div className="alert alert-danger">{erreurForm}</div>}
           <label className="form-label" htmlFor="wa-libelle">Libellé</label>
-          <input id="wa-libelle" className="form-control mb-3" maxLength={100} placeholder="ex. Numéro principal APS Santé"
+          <input id="wa-libelle" className="form-control mb-3" maxLength={100} placeholder={`ex. Numéro principal ${NOM_MARQUE}`}
             value={form.libelle} onChange={(e) => setForm({ ...form, libelle: e.target.value })} disabled={envoi} />
           <label className="form-label" htmlFor="wa-numero">Numéro (format international)</label>
           <input id="wa-numero" className="form-control mb-3" placeholder="+237 6XX XX XX XX" inputMode="tel"

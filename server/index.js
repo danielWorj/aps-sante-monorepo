@@ -1,5 +1,9 @@
 import express from "express";
 import "dotenv/config";
+// Logs JSON (Loki) : importé avant les autres modules pour que leurs
+// console.* soient déjà redirigés vers le logger structuré.
+import "./src/lib/logger.js";
+import { middlewareObservabilite, demarrerServeurMetriques } from "./src/lib/metriques.js";
 import { poserPerimetrePays, ErreurHorsPerimetre } from "./src/lib/perimetrePays.js";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -29,6 +33,7 @@ import gestionApkRoutes from "./src/routes/gestionapk.routes.js"; // Importer le
 import annonceRoutes from "./src/routes/annonce.routes.js"; // Importer les routes d'annonces
 import paiementWebhookRoutes from "./src/routes/paiementWebhook.routes.js";
 import visioWebhookRoutes from "./src/routes/visioWebhook.routes.js";
+import whatsappWebhookRoutes from "./src/routes/whatsappWebhook.routes.js";
 import paiementRoutes from "./src/routes/paiement.routes.js";
 import paiementCampayRoutes from "./src/routes/paiementCampay.routes.js";
 import googleMapsRoutes from "./src/routes/googleMaps.routes.js";
@@ -57,6 +62,11 @@ const PORT = process.env.PORT || 3000;
 // clients partagent le même compteur des limiteurs de débit (connexion, inscription, Google Maps).
 // nginx pose X-Forwarded-For (voir nginx/reverse-proxy.conf). Passer à 2 si un CDN/LB s'ajoute devant.
 app.set("trust proxy", 1);
+
+// ─── Observabilité : identifiant de requête, métriques, journal d'accès ──
+// En tout premier, pour mesurer aussi les requêtes rejetées plus loin
+// (limiteurs de débit, CORS, webhooks). Voir observabilite/README.md.
+app.use(middlewareObservabilite);
 
 // ─── Sécurité HTTP de base ─────────────────────────────────────
 app.use(helmet());
@@ -101,6 +111,10 @@ app.use("/api/paiement/webhook", paiementWebhookRoutes);
 // corps brut, express.raw() doit donc s'exécuter avant express.json().
 app.use("/api/visio/webhook", visioWebhookRoutes);
 
+// ─── Webhook WhatsApp (messages entrants, vérification inversée) ──
+// Signature Meta calculée sur le corps brut : même raison que ci-dessus.
+app.use("/api/whatsapp/webhook", whatsappWebhookRoutes);
+
 // Limite de taille du body pour éviter les payloads abusifs.
 app.use(express.json({ limit: "100kb" }));
 
@@ -127,6 +141,8 @@ app.use("/api/auth/connexion-application", (req, res, next) =>
   // Le sondage du navigateur (toutes les 2 s) a sa propre limite, plus large.
   req.method === "POST" && req.path === "/" ? limiteurAuth(req, res, next) : next());
 app.use("/api/auth/register", limiteurAuth);
+// Validation d'un nouvel appareil (demande à l'application, preuve WhatsApp).
+app.use("/api/auth/appareil", limiteurAuth);
 app.use("/api/auth/bootstrap-superadmin", limiteurAuth);
 
 // Chaque appel Geocoding/Directions est facturé par Google : limite
@@ -142,6 +158,18 @@ const limiteurGoogleMaps = rateLimit({
 });
 app.use("/api/google-maps", limiteurGoogleMaps);
 
+// Recherche de villes (saisie au fil de la frappe, appels Google Places
+// en mode « google ») : plafond plus large que le géocodage.
+const limiteurRechercheVilles = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Trop de recherches de villes, réessayez plus tard." },
+});
+app.use("/api/referentiels/villes/rechercher", limiteurRechercheVilles);
+app.use("/api/referentiels/villes/importer", limiteurRechercheVilles);
+
 // Chaque code de vérification envoyé est un SMS facturé : limite IP en
 // plus des plafonds par numéro / IP tenus en base (verificationTelephone.service.js).
 const limiteurVerificationTelephone = rateLimit({
@@ -151,7 +179,17 @@ const limiteurVerificationTelephone = rateLimit({
   legacyHeaders: false,
   message: { message: "Trop de tentatives de vérification, réessayez plus tard." },
 });
-app.use("/api/verification-telephone", limiteurVerificationTelephone);
+// Sondage de la vérification WhatsApp inversée (toutes les 3 s) : limite
+// dédiée, plus large (aucun envoi facturé).
+const limiteurSondageVerification = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 400,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Trop de requêtes, réessayez plus tard." },
+});
+app.use("/api/verification-telephone", (req, res, next) =>
+  (req.path === "/statut" ? limiteurSondageVerification : limiteurVerificationTelephone)(req, res, next));
 
 // ─── Route de test ────────────────────────────────────────────
 app.get("/", (_req, res) => {
@@ -232,7 +270,7 @@ app.use((err, _req, res, _next) => {
   if (err?.code === "P2025") {
     return res.status(404).json({ message: "Élément introuvable." });
   }
-  console.error(err);
+  console.error("Erreur non gérée :", err);
   res.status(500).json({ message: "Erreur interne du serveur." });
 });
 
@@ -243,3 +281,6 @@ app.listen(PORT, () => {
   // démarrage HTTP en attendant que le scheduler soit prêt.
   demarrerScheduler();
 });
+
+// Métriques Prometheus sur un port interne séparé (jamais exposé via nginx).
+if (process.env.METRICS_ACTIVES !== "false") demarrerServeurMetriques();

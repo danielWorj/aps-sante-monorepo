@@ -203,11 +203,24 @@ export function genererTokenChangementPin(utilisateur) {
   return genererTokenRestreint(utilisateur, SCOPE_CHANGEMENT_PIN);
 }
 
-function genererTokenRestreint(utilisateur, scope) {
+// ─── Token restreint : validation d'un nouvel appareil ───────────
+// Numéro + PIN (ou email + mot de passe) corrects, mais depuis un appareil
+// inconnu : ce token ne sert qu'à valider l'appareil (depuis l'application
+// déjà connectée, ou par WhatsApp inversé), voir appareilConfiance.service.js.
+// `app` lie le token à l'empreinte de l'appareil demandeur ; `pin` indique
+// que le code PIN vient d'être vérifié (actions sensibles).
+export const SCOPE_VALIDATION_APPAREIL = "validation_appareil";
+
+export function genererTokenValidationAppareil(utilisateur, { empreinte, pinVerifie = false }) {
+  return genererTokenRestreint(utilisateur, SCOPE_VALIDATION_APPAREIL, { app: empreinte, pin: pinVerifie });
+}
+
+function genererTokenRestreint(utilisateur, scope, extra = {}) {
   const jti = crypto.randomUUID();
 
   const token = jwt.sign(
     {
+      ...extra,
       sub: utilisateur.utilisateur_id,
       scope,
       jti,

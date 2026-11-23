@@ -13,6 +13,7 @@ import 'services/pays_utilisateur_service.dart';
 import 'services/push_service.dart';
 import 'utils/api_client.dart';
 import 'utils/identifiant_installation.dart';
+import 'utils/marque.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -77,7 +78,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'APS Santé',
+      title: nomMarque,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       // Clés globales : le pilote des notifications push ouvre la page des

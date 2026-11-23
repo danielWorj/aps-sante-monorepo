@@ -24,6 +24,7 @@ import {
   signalerEngagement,
 } from '../services/laboratoireService';
 import '../assets/styles/laboratoire.css';
+import { NOM_MARQUE } from '../lib/marque';
 
 function distanceKm(a, b) {
   const R = 6371;
@@ -309,7 +310,7 @@ function PanneauAvis({ labo }) {
         </div>
       )}
       <p className="avis-publics-note mt-3">
-        <i className="fa-solid fa-shield-halved" /> Chaque avis est vérifié par ApSa avant publication.
+        <i className="fa-solid fa-shield-halved" /> Chaque avis est vérifié par {NOM_MARQUE} avant publication.
       </p>
     </div>
   );
@@ -453,7 +454,7 @@ export default function FicheLaboratoire() {
         <div className="container-aps" style={{ paddingTop: '1rem' }}>
           <div className="banner-institutionnel">
             <i className="fa-solid fa-eye" />
-            <span>Aperçu de votre fiche : elle n&apos;est pas encore visible du public (vérification par ApSa en cours).</span>
+            <span>Aperçu de votre fiche : elle n&apos;est pas encore visible du public (vérification par {NOM_MARQUE} en cours).</span>
           </div>
         </div>
       )}
@@ -480,7 +481,7 @@ export default function FicheLaboratoire() {
                 )}
               </div>
               <div className="d-flex gap-2 flex-wrap">
-                {labo.statut_verification === 'publie' && <span className="chip chip-verifie"><i className="fa-solid fa-circle-check" /> Vérifié ApSa</span>}
+                {labo.statut_verification === 'publie' && <span className="chip chip-verifie"><i className="fa-solid fa-circle-check" /> Vérifié {NOM_MARQUE}</span>}
                 <span className="chip chip-complet">Agrément {labo.agrement}</span>
               </div>
             </div>

@@ -37,6 +37,7 @@ process.env.FRONTEND_URL = "https://azasante.com";
 process.env.API_PUBLIC_URL = "https://api.azasante.com/";
 process.env.CONTACT_EMAIL = "contact@azasante.com";
 
+const { NOM_MARQUE } = await import("../lib/marque.js");
 const { estMedecinActive, filtreMedecinsActives } = await import("../lib/activationMedecin.js");
 const { listerEspaces, espaceParDefaut, assurerEspaceOuvrable } = await import("../services/espaces.service.js");
 const { contenuEmailActivation, envoyerEmailActivationMedecin, notifierActivationSiNecessaire } = await import(
@@ -120,7 +121,7 @@ test("contenu de l'e-mail : logo, bouton de connexion, liens de l'application, i
     prenom: "Edwin", nom: "Ayuk", email: "e.ayuk@exemple.cm", telephone: "+237690000000",
     specialite: "Cardiologie", ville: "Douala", numeroOrdre: "6979/2014", iosDisponible: true,
   });
-  assert.equal(sujet, "Votre compte médecin APS Santé est activé");
+  assert.equal(sujet, `Votre compte médecin ${NOM_MARQUE} est activé`);
   assert.match(html, /src="cid:logo-aps@apssante"/);
   assert.match(html, /href="https:\/\/azasante\.com\/login"/);
   assert.match(html, /https:\/\/api\.azasante\.com\/api\/apks\/telecharger\/android/);

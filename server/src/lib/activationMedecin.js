@@ -13,8 +13,10 @@
 //     accès pendant la modération, comme ses droits d'abonnement — voir
 //     lib/acteursPresence.js).
 
+import { NOM_MARQUE } from "./marque.js";
+
 export const MESSAGE_COMPTE_NON_ACTIVE =
-  "Votre compte médecin n'est pas encore activé. L'équipe APS Santé vérifie votre dossier : vous recevrez un e-mail dès son activation.";
+  `Votre compte médecin n'est pas encore activé. L'équipe ${NOM_MARQUE} vérifie votre dossier : vous recevrez un e-mail dès son activation.`;
 
 /**
  * @param {{ statut_verification?: string, date_premiere_publication?: Date|null }} medecin

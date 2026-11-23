@@ -7,6 +7,7 @@ import med7 from '../assets/img/med7.jpg';
 import logoApsa from '../assets/img/logoapsa.jpeg';
 import { useAuth } from '../context/AuthContext';
 import { cheminRetour, destinationApresConnexion } from '../utils/apresConnexion';
+import { NOM_MARQUE, RAISON_SOCIALE } from '../lib/marque';
 
 // Connexion par numéro + code PIN (par défaut) ou, via le petit bouton de
 // bascule, par email + mot de passe (comptes existants, administrateurs).
@@ -213,8 +214,8 @@ export default function Login() {
           {/* ============================ FORMULAIRE ============================ */}
           <div className="connexion26-form">
             <div className="connexion26-form-int">
-              <Link to="/home" className="connexion26-logo" aria-label="ApSa — accueil">
-                <img src={logoApsa} alt="ApSa — AZA Santé Assurances" />
+              <Link to="/home" className="connexion26-logo" aria-label={`${NOM_MARQUE} — accueil`}>
+                <img src={logoApsa} alt={`${NOM_MARQUE} — ${RAISON_SOCIALE}`} />
               </Link>
               <h1 className="connexion26-titre">Bon retour parmi nous</h1>
               <p className="aps-t-s connexion26-sous-titre">
@@ -246,7 +247,7 @@ export default function Login() {
                 <div className="info-card text-center" style={{ padding: '1.4rem', marginBottom: '1.2rem' }} role="status">
                   <i className="fa-solid fa-mobile-screen" style={{ fontSize: '1.6rem', color: 'var(--primary)' }} />
                   <p style={{ margin: '.6rem 0 .3rem', fontWeight: 600 }}>
-                    Ouvrez l’application APS Santé sur votre téléphone et choisissez ce code :
+                    Ouvrez l’application {NOM_MARQUE} sur votre téléphone et choisissez ce code :
                   </p>
                   <div style={{ fontSize: '2.4rem', fontWeight: 800, letterSpacing: '.15em' }}>{demandeApp.code}</div>
                   <p className="text-muted-soft" style={{ fontSize: '.82rem' }}>
@@ -319,7 +320,7 @@ export default function Login() {
                       {aidePin && (
                         <p className="form-hint">
                           Connectez-vous avec votre email et votre mot de passe (bouton ci-dessous), puis choisissez un
-                          nouveau code PIN. Sans email, contactez le support APS Santé.
+                          nouveau code PIN. Sans email, contactez le support {NOM_MARQUE}.
                         </p>
                       )}
                     </div>

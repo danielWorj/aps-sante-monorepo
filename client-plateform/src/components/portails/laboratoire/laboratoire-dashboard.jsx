@@ -11,6 +11,7 @@ import { LaboratoirePortailPage } from '../layouts/laboratoire.portail-sidebar';
 import BarresQuotidiennes from '../assurance/BarresQuotidiennes';
 import { Etoiles } from '../../avis/Etoiles';
 import { obtenirTableauDeBord } from '../../../services/laboratoireService';
+import { DE_MARQUE, NOM_MARQUE } from '../../../lib/marque';
 
 const PERIODES = [7, 30, 90];
 const nombre = (n) => (n ?? 0).toLocaleString('fr-FR');
@@ -85,7 +86,7 @@ function Contenu({ d }) {
       {fiche.statut_verification !== 'publie' && (
         <div className="banner-institutionnel mb-3">
           <i className="fa-solid fa-hourglass-half" />
-          <span>Votre fiche est en cours de vérification par ApSa : elle n&apos;est pas encore visible du public.</span>
+          <span>Votre fiche est en cours de vérification par {NOM_MARQUE} : elle n&apos;est pas encore visible du public.</span>
         </div>
       )}
 
@@ -122,7 +123,7 @@ function Contenu({ d }) {
                 <tr><td>Depuis le début</td><td>{nombre(vues.totaux.depuis_le_debut.vues)}</td><td>{nombre(vues.totaux.depuis_le_debut.visiteurs)}</td></tr>
               </tbody>
             </table>
-            <p className="minimal-note mt-2 mb-0">Vos propres consultations, celles d&apos;ApSa et des robots ne sont pas comptées.</p>
+            <p className="minimal-note mt-2 mb-0">Vos propres consultations, celles {DE_MARQUE} et des robots ne sont pas comptées.</p>
           </div>
 
           <div className="info-card">
@@ -147,7 +148,7 @@ function Contenu({ d }) {
             <h3><i className="fa-solid fa-star-half-stroke" /> Avis</h3>
             {avis.en_attente > 0 && (
               <p className="minimal-note">
-                <i className="fa-solid fa-hourglass-half" /> {avis.en_attente} avis en cours de vérification par ApSa.
+                <i className="fa-solid fa-hourglass-half" /> {avis.en_attente} avis en cours de vérification par {NOM_MARQUE}.
               </p>
             )}
             {avis.nombre === 0 ? (

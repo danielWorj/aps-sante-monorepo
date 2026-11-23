@@ -18,6 +18,7 @@ import { CarteCreneaux, Entonnoir, Sparkline, Variation } from './graphiques/Pet
 import { plageLisible } from './graphiques/periodes';
 import { Etoiles } from '../../avis/Etoiles';
 import { TYPES_ENGAGEMENT, obtenirTableauDeBordMedecin } from '../../../services/reputationMedecinService';
+import { DE_MARQUE } from '../../../lib/marque';
 
 const isoJour = (d) => d.toISOString().slice(0, 10);
 const decaler = (d, jours) => { const r = new Date(d); r.setUTCDate(r.getUTCDate() + jours); return r; };
@@ -438,7 +439,7 @@ function Contenu({ d }) {
             </tbody>
           </table>
           {audience.disponible && (
-            <p className="minimal-note mt-2 mb-0">Vos propres consultations de la fiche, celles d&apos;APS Santé et des robots ne sont pas comptées.</p>
+            <p className="minimal-note mt-2 mb-0">Vos propres consultations de la fiche, celles {DE_MARQUE} et des robots ne sont pas comptées.</p>
           )}
         </section>
       </div>

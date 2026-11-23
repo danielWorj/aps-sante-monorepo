@@ -13,6 +13,7 @@ import '../../../components/style/text_styles.dart';
 import '../../../controllers/laboratoire_controller.dart';
 import '../../../models/laboratoire_models.dart';
 import 'portail_laboratoire_commun.dart';
+import '../../../utils/marque.dart';
 
 class PortailLaboratoireDashboard extends ConsumerStatefulWidget {
   const PortailLaboratoireDashboard({super.key, required this.onOuvrirOnglet});
@@ -89,7 +90,7 @@ class _Contenu extends StatelessWidget {
         if (d.statut != StatutVerificationLaboratoire.publie)
           const BandeauPortail(
             icone: Icons.hourglass_top_outlined,
-            texte: "Votre fiche est en cours de vérification par APS Santé : elle n'est pas encore visible du public.",
+            texte: "Votre fiche est en cours de vérification par $nomMarque : elle n'est pas encore visible du public.",
           ),
         GridView.count(
           crossAxisCount: 2,
@@ -158,7 +159,7 @@ class _Contenu extends StatelessWidget {
               if (d.avisEnAttente > 0)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Text('${d.avisEnAttente} avis en cours de vérification par APS Santé.', style: AppTextStyles.cardMeta),
+                  child: Text('${d.avisEnAttente} avis en cours de vérification par $nomMarque.', style: AppTextStyles.cardMeta),
                 ),
               if (d.derniersAvis.isEmpty)
                 const VidePortail(icone: Icons.star_outline_rounded, texte: "Aucun avis publié pour l'instant.")

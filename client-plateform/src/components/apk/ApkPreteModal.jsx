@@ -10,6 +10,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './apk-prete-modal.css';
+import { NOM_MARQUE } from '../../lib/marque';
 
 const FOCUSABLES = 'button:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -64,7 +65,7 @@ function Contenu({ apk }) {
     ? [
         <>Touchez <strong>Ouvrir</strong> dans la barre du navigateur, ou la notification <strong>{nomFichier}</strong>.</>,
         <>Si Android le demande, autorisez votre navigateur à <strong>installer des applications inconnues</strong>, puis revenez en arrière.</>,
-        <>Touchez <strong>Installer</strong> : ApSa apparaît dans vos applications.</>,
+        <>Touchez <strong>Installer</strong> : {NOM_MARQUE} apparaît dans vos applications.</>,
       ]
     : [
         <>Le fichier <strong>{nomFichier}</strong> est enregistré dans vos téléchargements.</>,
@@ -87,7 +88,7 @@ function Contenu({ apk }) {
             <span className="apk-prete-icone" aria-hidden="true"><i className="fa-solid fa-check" /></span>
             <h2 id={`${ids}-titre`} className="aps-dialog-titre apk-prete-titre">Téléchargement terminé</h2>
             <p className="aps-dialog-message">
-              L&apos;application ApSa est prête à être installée sur votre téléphone.
+              L&apos;application {NOM_MARQUE} est prête à être installée sur votre téléphone.
             </p>
             <div className="apk-prete-fichier">
               <i className="fa-brands fa-android" aria-hidden="true" />
@@ -108,7 +109,7 @@ function Contenu({ apk }) {
           <>
             <span className="apk-prete-icone" aria-hidden="true"><i className="fa-solid fa-mobile-screen-button" /></span>
             <h2 id={`${ids}-titre`} className="aps-dialog-titre apk-prete-titre">
-              {android ? 'Plus qu’une étape' : 'Installez ApSa sur votre téléphone'}
+              {android ? 'Plus qu’une étape' : `Installez ${NOM_MARQUE} sur votre téléphone`}
             </h2>
             <ol className="apk-prete-etapes">
               {etapesGuide.map((texte, i) => <li key={i}>{texte}</li>)}
@@ -151,7 +152,7 @@ function InfoIos({ apk }) {
   }, []);
 
   const partager = async () => {
-    const donnees = { title: 'ApSa', text: 'Téléchargez l’application ApSa sur Android :', url: lienSite };
+    const donnees = { title: `${NOM_MARQUE}`, text: `Téléchargez l’application ${NOM_MARQUE} sur Android :`, url: lienSite };
     try {
       if (navigator.share) { await navigator.share(donnees); return; }
       await navigator.clipboard.writeText(lienSite);
@@ -173,7 +174,7 @@ function InfoIos({ apk }) {
         <span className="apk-prete-icone" aria-hidden="true"><i className="fa-brands fa-apple" /></span>
         <h2 id={`${ids}-titre`} className="aps-dialog-titre apk-prete-titre">Bientôt sur iPhone</h2>
         <p className="aps-dialog-message">
-          L&apos;application ApSa est pour l&apos;instant disponible uniquement sur <strong>Android</strong> :
+          L&apos;application {NOM_MARQUE} est pour l&apos;instant disponible uniquement sur <strong>Android</strong> :
           un fichier APK ne peut pas s&apos;installer sur iPhone ou iPad.
         </p>
         <ol className="apk-prete-etapes">

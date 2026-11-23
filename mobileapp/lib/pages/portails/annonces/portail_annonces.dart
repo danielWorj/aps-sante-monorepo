@@ -14,6 +14,7 @@ import '../../../components/components.dart';
 import '../../../components/reputation/reputation_ui.dart' show jourMoisAnnee;
 import '../../../controllers/annonce_controller.dart';
 import '../../../models/annonce_models.dart';
+import '../../../utils/marque.dart';
 
 /// Ouvre la page des annonces par-dessus l'écran courant.
 void ouvrirAnnonces(BuildContext context) {
@@ -82,7 +83,7 @@ class _PortailAnnoncesState extends ConsumerState<PortailAnnonces> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(18, 0, 18, 32),
             children: [
-              const ApsTopBar(title: 'Annonces', overline: 'APS Santé'),
+              const ApsTopBar(title: 'Annonces', overline: nomMarque),
               ApsSegmented<bool>(
                 compact: true,
                 value: _toutes,
@@ -107,7 +108,7 @@ class _PortailAnnoncesState extends ConsumerState<PortailAnnonces> {
                   tone: ApsTone.neutral,
                   title: 'Aucune annonce',
                   message: _toutes
-                      ? 'Les annonces publiées par APS Santé apparaîtront ici.'
+                      ? 'Les annonces publiées par $nomMarque apparaîtront ici.'
                       : 'Aucune annonce en cours pour le moment.',
                 )
               else

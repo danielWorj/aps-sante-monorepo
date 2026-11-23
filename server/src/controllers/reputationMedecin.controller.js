@@ -22,6 +22,7 @@ import {
 } from "../services/avisMedecin.service.js";
 import { resoudrePeriode, tableauDeBordMedecin } from "../services/tableauDeBordMedecin.service.js";
 import { TYPES_ENGAGEMENT_MEDECIN, enregistrerEngagementMedecin } from "../services/engagementMedecin.service.js";
+import { NOM_MARQUE } from "../lib/marque.js";
 
 const estAdmin = (u) => u?.role === "admin" || u?.role === "superadmin";
 
@@ -230,7 +231,7 @@ export async function signalerAvis(req, res, next) {
       where: { avis_id: avis.avis_id },
       data: { signale_le: new Date(), motif_signalement: motif },
     });
-    return res.status(200).json({ message: "Avis signalé : l'équipe APS Santé va l'examiner." });
+    return res.status(200).json({ message: `Avis signalé : l'équipe ${NOM_MARQUE} va l'examiner.` });
   } catch (err) {
     next(err);
   }

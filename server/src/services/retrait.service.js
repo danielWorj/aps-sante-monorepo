@@ -24,6 +24,7 @@ import {
   obtenirTitulaireNumero, retirerFonds,
 } from "../lib/campayService.js";
 import { creerMouvement, soldePortefeuille } from "./portefeuille.service.js";
+import { NOM_MARQUE_ASCII } from "../lib/marque.js";
 
 // ─── Paramétrage (variables d'environnement, valeurs par défaut prudentes) ────────────────────
 const entierEnv = (nom, defaut) => {
@@ -296,7 +297,7 @@ export async function executerRetrait(demande_retrait_id, { admin_utilisateur_id
     const rep = await retirerFonds({
       montant,
       numero: demande.numero,
-      description: `Retrait honoraires APS Sante ${demande_retrait_id.slice(0, 8)}`,
+      description: `Retrait honoraires ${NOM_MARQUE_ASCII} ${demande_retrait_id.slice(0, 8)}`,
       external_reference: demande_retrait_id,
     });
     reference = typeof rep?.reference === "string" && rep.reference ? rep.reference : null;

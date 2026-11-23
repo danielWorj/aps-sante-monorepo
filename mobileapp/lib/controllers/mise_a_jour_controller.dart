@@ -20,6 +20,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/mise_a_jour_service.dart';
+import '../utils/marque.dart';
 
 enum PhaseMiseAJour {
   /// Appareil non Android : pas de mise à jour hors store.
@@ -139,11 +140,11 @@ class EtatMiseAJour {
 const _messagesRefus = {
   'illisible': 'Le fichier téléchargé est incomplet ou endommagé. Relancez le téléchargement.',
   'paquet': 'Ce fichier n’est pas une mise à jour de cette application : il ne peut pas la remplacer. '
-      'Contactez le support APS Santé.',
+      'Contactez le support $nomMarque.',
   'version': 'Cette version ne peut pas remplacer celle installée : son numéro de version Android est '
       'inférieur ou égal. Une version corrigée sera publiée prochainement.',
   'signature': 'Cette version n’est pas signée avec la même clé que l’application installée : Android refuse '
-      'de la remplacer. Désinstallez ApSa puis installez la nouvelle version depuis le site APS Santé.',
+      'de la remplacer. Désinstallez $nomMarque puis installez la nouvelle version depuis le site $nomMarque.',
 };
 
 final miseAJourServiceProvider = Provider<MiseAJourService>((ref) => MiseAJourService());

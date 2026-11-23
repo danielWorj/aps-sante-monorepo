@@ -15,7 +15,8 @@ import {
   RELANCE_FENETRE_H,
   RELANCE_MAX_TENTATIVES,
 } from "../services/sms.service.js";
-import { demanderCodeVerification, verifierCodeVerification } from "../services/verificationTelephone.service.js";
+import { demanderCodeVerification, statutVerificationInverse, verifierCodeVerification } from "../services/verificationTelephone.service.js";
+import { traiterMessageEntrant } from "./whatsappWebhook.controller.js";
 
 const STATUTS_MESSAGE = ["en_attente", "envoye", "delivre", "echec", "simule"];
 const TAILLE_PAGE_MAX = 100;
@@ -145,6 +146,29 @@ export async function verifierCodeVerificationCtrl(req, res, next) {
     const { telephone, pays_iso2, objet, code } = req.body ?? {};
     const r = await verifierCodeVerification({ telephone, pays_iso2, objet, code });
     return res.status(200).json({ message: "Numéro vérifié.", ...r });
+  } catch (err) {
+    return repondreErreur(err, res, next);
+  }
+}
+
+/** POST /api/verification-telephone/statut   body: { verification_id } (WhatsApp inversé) */
+export async function statutVerificationInverseCtrl(req, res, next) {
+  try {
+    return res.status(200).json(await statutVerificationInverse({ verification_id: req.body?.verification_id }));
+  } catch (err) {
+    return repondreErreur(err, res, next);
+  }
+}
+
+/**
+ * POST /api/verification-telephone/simuler-whatsapp   body: { de, texte }
+ * HORS PRODUCTION uniquement (route non montée sinon) : simule le message
+ * que l'utilisateur envoie à notre numéro WhatsApp.
+ */
+export async function simulerMessageWhatsappCtrl(req, res, next) {
+  try {
+    const valide = await traiterMessageEntrant({ de: req.body?.de, texte: req.body?.texte });
+    return res.status(200).json({ valide });
   } catch (err) {
     return repondreErreur(err, res, next);
   }

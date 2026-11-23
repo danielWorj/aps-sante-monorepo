@@ -20,6 +20,7 @@ import {
   listerGardesPharmacie,
   envoyerMessagePharmacie,
 } from "../services/pharmacieService";
+import { NOM_MARQUE } from '../lib/marque';
 
 // Fiche pharmacie — page de détail d'une pharmacie, avec ses
 // coordonnées, ses horaires, sa localisation sur une carte, ses photos,
@@ -173,7 +174,7 @@ function ContactForm({ pharmacie }) {
       </form>
       <p className="minimal-note mt-2 mb-0">
         <i className="fa-solid fa-circle-info" /> Le message est adressé directement
-        à {pharmacie.nom}. ApSa ne gère ni commande ni délivrance de médicaments.
+        à {pharmacie.nom}. {NOM_MARQUE} ne gère ni commande ni délivrance de médicaments.
       </p>
     </div>
   );
@@ -264,7 +265,7 @@ function PresentationPanel({ pharmacie }) {
                 <i className="fa-solid fa-envelope" /> Contact
               </h3>
               <p className="minimal-note mb-0">
-                Cette pharmacie ne reçoit pas de messages via ApSa pour le moment. Rendez-vous sur place aux heures d&apos;ouverture.
+                Cette pharmacie ne reçoit pas de messages via {NOM_MARQUE} pour le moment. Rendez-vous sur place aux heures d&apos;ouverture.
               </p>
             </div>
           )}

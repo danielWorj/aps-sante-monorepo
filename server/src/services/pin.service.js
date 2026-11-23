@@ -20,7 +20,7 @@ import crypto from "node:crypto";
 import prisma from "../lib/prisma.js";
 import { normaliserNumeroInternational } from "../lib/telephone.js";
 import { SALT_ROUNDS } from "./compte.service.js";
-import { consommerPreuveTelephone } from "./verificationTelephone.service.js";
+import { consommerPreuveTelephone, whatsappInverseActif } from "./verificationTelephone.service.js";
 
 /* ------------------- Vérification du numéro par code ------------------- */
 // Activée par VERIFICATION_TELEPHONE_ACTIVE=true dès qu'un canal d'envoi
@@ -31,10 +31,27 @@ export function verificationTelephoneActive() {
   return String(process.env.VERIFICATION_TELEPHONE_ACTIVE ?? "").trim().toLowerCase() === "true";
 }
 
-/** Canaux proposés pour recevoir le code (VERIFICATION_CANAUX, défaut « sms »). */
-export function canauxVerification() {
+/** Canaux d'ENVOI de code configurés (VERIFICATION_CANAUX, défaut « sms »). */
+function canauxEnvoi() {
   const canaux = String(process.env.VERIFICATION_CANAUX ?? "sms").split(",").map((c) => c.trim()).filter((c) => ["sms", "whatsapp"].includes(c));
   return canaux.length ? canaux : ["sms"];
+}
+
+/**
+ * Canaux proposés pour prouver le numéro : WhatsApp inversé en premier
+ * (gratuit) s'il est disponible, puis les canaux d'envoi si la
+ * vérification par code envoyé est active.
+ */
+export async function canauxVerification() {
+  const canaux = [];
+  if (await whatsappInverseActif()) canaux.push("whatsapp_inverse");
+  if (verificationTelephoneActive()) canaux.push(...canauxEnvoi());
+  return canaux;
+}
+
+/** « Code PIN oublié » possible : une preuve de numéro peut être obtenue. */
+export async function reinitialisationPinDisponible() {
+  return verificationTelephoneActive() || (await whatsappInverseActif());
 }
 
 /** Consomme la preuve de numéro exigée quand la vérification est active. */
@@ -190,7 +207,7 @@ async function controlerPinDe(utilisateur, pin, messageErreur) {
   if (utilisateur.pin_bloque_jusqu_au && utilisateur.pin_bloque_jusqu_au > maintenant) {
     const minutes = Math.ceil((utilisateur.pin_bloque_jusqu_au - maintenant) / 60_000);
     throw new ErreurPin(
-      `Trop d'essais. Réessayez dans ${minutes} min, ou connectez-vous avec votre email et votre mot de passe.`,
+      `Trop d'essais. Réessayez dans ${minutes} min, ou touchez « Code PIN oublié ? ».`,
       429,
       "PIN_BLOQUE",
       { minutes_restantes: minutes }
@@ -216,7 +233,7 @@ async function controlerPinDe(utilisateur, pin, messageErreur) {
         },
       });
       throw new ErreurPin(
-        `Trop d'essais. Réessayez dans ${minutes} min, ou connectez-vous avec votre email et votre mot de passe.`,
+        `Trop d'essais. Réessayez dans ${minutes} min, ou touchez « Code PIN oublié ? ».`,
         429,
         "PIN_BLOQUE",
         { minutes_restantes: minutes }
@@ -376,8 +393,8 @@ export async function donneesPinCreation({ telephone, pays_id, pin, provisoire =
  * @returns {Promise<object>} l'utilisateur mis à jour (avec `role`)
  */
 export async function reinitialiserPin({ telephone, pays_iso2 = null, preuve_telephone, nouveau_pin }) {
-  if (!verificationTelephoneActive()) {
-    throw new ErreurPin("La réinitialisation par code n'est pas encore disponible : connectez-vous avec votre email.", 503, "VERIFICATION_INACTIVE");
+  if (!(await reinitialisationPinDisponible())) {
+    throw new ErreurPin("La réinitialisation du code PIN n'est pas encore disponible : contactez le support ou connectez-vous avec votre email.", 503, "VERIFICATION_INACTIVE");
   }
   const numero = normaliserNumeroInternational(telephone, pays_iso2);
   if (!numero) throw new ErreurPin("Numéro de téléphone invalide.", 400, "TELEPHONE_INVALIDE");

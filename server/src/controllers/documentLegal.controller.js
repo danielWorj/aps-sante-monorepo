@@ -18,6 +18,7 @@ import {
   TYPES_DOCUMENT_LEGAL,
   obtenirVersionEnVigueur,
 } from "../services/documentLegal.service.js";
+import { DE_MARQUE } from "../lib/marque.js";
 
 const PAR_PAGE = 25;
 const LONGUEUR_TEXTE_MIN = 200;
@@ -37,7 +38,7 @@ const PLANS_DE_DEPART = {
     "Article 4 – Services proposés",
     "Article 5 – Rendez-vous, téléconsultation et paiement",
     "Article 6 – Obligations de l'utilisateur",
-    "Article 7 – Rôle et responsabilité d'ApSa",
+    `Article 7 – Rôle et responsabilité ${DE_MARQUE}`,
     "Article 8 – Professionnels et établissements référencés",
     "Article 9 – Avis et contenus publiés",
     "Article 10 – Données personnelles",

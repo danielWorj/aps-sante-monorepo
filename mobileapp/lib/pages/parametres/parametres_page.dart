@@ -14,6 +14,7 @@ import '../../controllers/authentification_controller.dart';
 import '../../controllers/mise_a_jour_controller.dart';
 import '../espaces/carte_connexion_compte.dart' show LigneMisesAJour, LigneVerrouillageApplication;
 import '../public/apropos.dart';
+import '../../utils/marque.dart';
 
 void ouvrirParametres(BuildContext context) {
   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ParametresPage()));
@@ -33,7 +34,7 @@ class ParametresPage extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 0, 18, 32),
           children: [
-            const ApsTopBar(title: 'Paramètres', overline: 'APS Santé'),
+            const ApsTopBar(title: 'Paramètres', overline: nomMarque),
             const _Section(
               titre: 'Application',
               lignes: [LigneMisesAJour()],
@@ -44,7 +45,7 @@ class ParametresPage extends ConsumerWidget {
               lignes: [
                 ApsMenuItem(
                   icon: Icons.info_outline_rounded,
-                  title: 'À propos d’ApSa',
+                  title: 'À propos $deMarque',
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AProposPage())),
                 ),
                 ApsMenuItem(
@@ -77,7 +78,7 @@ class ParametresPage extends ConsumerWidget {
             ],
             const SizedBox(height: 24),
             Text(
-              installee == null ? 'ApSa' : 'ApSa ${installee.nom} · build ${installee.build}',
+              installee == null ? nomMarque : '$nomMarque ${installee.nom} · build ${installee.build}',
               textAlign: TextAlign.center,
               style: AppTextStyles.xs,
             ),

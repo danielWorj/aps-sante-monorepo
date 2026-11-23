@@ -16,6 +16,7 @@ import '../assets/styles/home-2026.css';
 import { usePays } from '../context/PaysContext';
 import ChoixPays from '../components/geoloc/ChoixPays';
 import { aUnTarif, libelleTarif } from '../utils/tarif';
+import { NOM_MARQUE } from '../lib/marque';
 
 // Accueil public — refonte UI web 2026 (mobile/new-web-ui.html, écran 01) :
 // bloc d'accroche sur fond vert très clair avec barre de recherche, services,
@@ -484,7 +485,7 @@ export default function Home() {
           <div className="home26-app">
             <div>
               <span className="aps-over">Application mobile</span>
-              <h2 className="aps-h2 mt-2">ApSa dans votre poche, où que vous soyez</h2>
+              <h2 className="aps-h2 mt-2">{NOM_MARQUE} dans votre poche, où que vous soyez</h2>
               <p className="aps-t-s mt-3" style={{ maxWidth: 480 }}>
                 Trouvez un professionnel, prenez rendez-vous et accédez aux numéros d&apos;urgence
                 directement depuis votre téléphone.
@@ -550,7 +551,7 @@ export default function Home() {
               <div className="app-phone">
                 <div className="app-phone-notch" />
                 <div className="app-phone-screen">
-                  <img src={mobileApp} alt="Aperçu de l'application ApSa" />
+                  <img src={mobileApp} alt={`Aperçu de l'application ${NOM_MARQUE}`} />
                 </div>
               </div>
               <div className="app-badge-float app-badge-security">
@@ -570,7 +571,7 @@ export default function Home() {
           <div className="home26-pro">
             <div>
               <span className="aps-over" style={{ color: 'var(--primary-tint-strong)' }}>Professionnels de santé</span>
-              <h2 className="aps-h2 mt-2" style={{ color: '#fff' }}>Rejoignez ApSa et remplissez votre agenda.</h2>
+              <h2 className="aps-h2 mt-2" style={{ color: '#fff' }}>Rejoignez {NOM_MARQUE} et remplissez votre agenda.</h2>
               <p className="home26-pro-txt">
                 Médecins, pharmacies, cliniques et assureurs : un profil vérifié, un agenda en ligne
                 et des paiements sécurisés.

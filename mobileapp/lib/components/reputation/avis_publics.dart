@@ -16,6 +16,7 @@ import '../ui/aps_filter_sheet.dart';
 import '../ui/aps_ui.dart';
 import 'avis_widgets.dart';
 import 'reputation_ui.dart';
+import '../../utils/marque.dart';
 
 final _repo = ReputationMedecinRepository();
 
@@ -91,7 +92,7 @@ class _SectionAvisPublicsState extends State<SectionAvisPublics> {
                 const Icon(Icons.shield_outlined, size: 13, color: AppColors.ink3),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: Text("Seuls les patients ayant consulté via APS Santé peuvent laisser un avis. L'administration peut retirer ceux qui ne respectent pas les règles.",
+                  child: Text("Seuls les patients ayant consulté via $nomMarque peuvent laisser un avis. L'administration peut retirer ceux qui ne respectent pas les règles.",
                       style: AppTextStyles.xs),
                 ),
               ],

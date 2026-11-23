@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import ResumeNotes from './ResumeNotes';
 import CarteAvis from './CarteAvis';
 import { listerAvisPublics } from '../../services/reputationMedecinService';
+import { NOM_MARQUE } from '../../lib/marque';
 
 const TRIS = [
   { cle: 'recent', libelle: 'Plus récents' },
@@ -85,7 +86,7 @@ export default function AvisPublicsMedecin({ medecinId, nomMedecin }) {
       )}
 
       <p className="avis-publics-note">
-        <i className="fa-solid fa-shield-halved" /> Seuls les patients ayant consulté ce médecin via APS Santé peuvent laisser un avis.
+        <i className="fa-solid fa-shield-halved" /> Seuls les patients ayant consulté ce médecin via {NOM_MARQUE} peuvent laisser un avis.
         Les avis sont publiés directement ; l&apos;administration peut retirer ceux qui ne respectent pas les règles.
       </p>
     </div>

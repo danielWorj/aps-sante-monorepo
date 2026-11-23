@@ -14,6 +14,7 @@ import { useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import { envoyerSmsTest, listerMessagesSms, obtenirConfigurationSms, renvoyerMessageSms } from '../services/smsService';
 import { dateHeure } from '../utils/fonds';
+import { NOM_MARQUE } from '../lib/marque';
 
 const TAILLE_PAGE = 25;
 
@@ -35,7 +36,7 @@ export default function Sms() {
   const [chargement, setChargement] = useState(true);
   const [occupeId, setOccupeId] = useState(null);
 
-  const [test, setTest] = useState({ destinataire: '', texte: 'Test SMS APS Santé.' });
+  const [test, setTest] = useState({ destinataire: '', texte: `Test SMS ${NOM_MARQUE}.` });
   const [resultatTest, setResultatTest] = useState(null);
   const [envoiTest, setEnvoiTest] = useState(false);
 

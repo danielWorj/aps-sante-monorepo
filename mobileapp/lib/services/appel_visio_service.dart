@@ -39,6 +39,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../models/visio_models.dart';
 import 'push_service.dart';
+import '../utils/marque.dart';
 
 class AppelVisioService {
   AppelVisioService._();
@@ -125,7 +126,7 @@ class AppelVisioService {
   static CallKitParams _parametres(AppelVisioEntrant appel) => CallKitParams(
         id: appel.rdvId,
         nameCaller: appel.nomMedecin,
-        appName: 'APS Santé',
+        appName: nomMarque,
         avatar: appel.photoMedecin,
         handle: appel.specialite ?? 'Téléconsultation',
         type: 1, // appel vidéo

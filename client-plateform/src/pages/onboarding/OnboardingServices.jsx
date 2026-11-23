@@ -1,6 +1,7 @@
 import ServiceCard from './ServiceCard';
 import OnboardingSkip from './OnboardingSkip';
 import OnboardingLogo from './OnboardingLogo';
+import { DE_MARQUE, NOM_MARQUE } from '../../lib/marque';
 
 /**
  * Écran 1.1 — Liste des services de ApSa Santé.
@@ -22,9 +23,9 @@ export default function OnboardingServices() {
     <section className="onboarding-shell onboarding-shell-top">
       <div className="container-aps onboarding-container-lg">
         <OnboardingLogo />
-        <span className="eyebrow">ApSa Santé</span>
+        <span className="eyebrow">{NOM_MARQUE}</span>
         <h1 style={{ fontSize: '1.6rem', marginTop: '.5rem', marginBottom: '1.6rem' }}>
-          Liste des services de ApSa Santé
+          Liste des services {DE_MARQUE}
         </h1>
 
         <div className="cat-grid onboarding-service-list">

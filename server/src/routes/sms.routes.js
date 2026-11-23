@@ -16,6 +16,8 @@ import {
   statutSmsTwilioCtrl,
   demanderCodeVerificationCtrl,
   verifierCodeVerificationCtrl,
+  statutVerificationInverseCtrl,
+  simulerMessageWhatsappCtrl,
 } from "../controllers/sms.controller.js";
 import { authentifier } from "../middlewares/auth.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
@@ -33,5 +35,11 @@ router.post("/sms/webhook/statut", express.urlencoded({ extended: false, limit: 
 
 router.post("/verification-telephone/envoyer", demanderCodeVerificationCtrl);
 router.post("/verification-telephone/verifier", verifierCodeVerificationCtrl);
+// Vérification WhatsApp inversée : sondage par celui qui l'a demandée.
+router.post("/verification-telephone/statut", statutVerificationInverseCtrl);
+// Hors production : simule le message WhatsApp entrant (tests sans Meta).
+if (process.env.NODE_ENV !== "production") {
+  router.post("/verification-telephone/simuler-whatsapp", simulerMessageWhatsappCtrl);
+}
 
 export default router;

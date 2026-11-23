@@ -264,3 +264,8 @@ final villesParPaysProvider =
 FutureProvider.family<List<Ville>, String>((ref, paysId) {
   return ref.watch(referentielRepositoryProvider).listerVilles(paysId: paysId);
 });
+/// Mode des villes appliqué par le serveur (`google` / `manuel`). Relu à
+/// chaque ouverture d'écran de saisie : la clé peut être régularisée entre-temps.
+final sourceVillesProvider = FutureProvider.autoDispose<String>((ref) {
+  return ref.watch(referentielRepositoryProvider).obtenirSourceVilles();
+});

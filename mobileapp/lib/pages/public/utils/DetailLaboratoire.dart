@@ -16,6 +16,7 @@ import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/laboratoire_controller.dart';
 import '../../../models/laboratoire_models.dart';
 import '../../../utils/mon_espace_navigation.dart';
+import '../../../utils/marque.dart';
 
 class DetailLaboratoirePage extends ConsumerStatefulWidget {
   const DetailLaboratoirePage({super.key, required this.laboratoireId, this.apercu});
@@ -52,7 +53,7 @@ class _DetailLaboratoirePageState extends ConsumerState<DetailLaboratoirePage> {
 
   Future<void> _partager(Laboratoire l) async {
     _signaler('partage');
-    final texte = [l.nom, if (l.localisation.isNotEmpty) l.localisation, l.lieu, 'Tél. ${l.telephone}', 'Trouvé sur APS Santé']
+    final texte = [l.nom, if (l.localisation.isNotEmpty) l.localisation, l.lieu, 'Tél. ${l.telephone}', 'Trouvé sur $nomMarque']
         .where((s) => s.isNotEmpty)
         .join('\n');
     await Clipboard.setData(ClipboardData(text: texte));
@@ -704,7 +705,7 @@ class _PanneauAvisState extends ConsumerState<_PanneauAvis> {
             ),
           ),
         const SizedBox(height: 4),
-        Text('Chaque avis est vérifié par APS Santé avant publication.', style: AppTextStyles.xs),
+        Text('Chaque avis est vérifié par $nomMarque avant publication.', style: AppTextStyles.xs),
       ],
     );
   }
@@ -789,7 +790,7 @@ class _FeuilleAvisState extends ConsumerState<_FeuilleAvis> {
           const SizedBox(height: 8),
           ApsButton(label: _envoi ? 'Envoi…' : 'Publier mon avis', icon: Icons.send_rounded, onPressed: _envoi ? null : _envoyer),
           const SizedBox(height: 6),
-          Text('Votre avis sera visible après vérification par APS Santé.', style: AppTextStyles.xs),
+          Text('Votre avis sera visible après vérification par $nomMarque.', style: AppTextStyles.xs),
         ],
       ),
     );

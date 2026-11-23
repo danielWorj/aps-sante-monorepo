@@ -1236,6 +1236,11 @@ enum TypeNotification {
   rdvRappel('rdv_rappel'),
   // Téléconsultation : le médecin a lancé la visio (patient).
   rdvVisioDemarree('rdv_visio_demarree'),
+  // Téléconsultation : durée maximale bientôt atteinte, l'appel sera coupé
+  // automatiquement (médecin et patient ; fin_prevue_le dans donnees).
+  rdvVisioFinProche('rdv_visio_fin_proche'),
+  // Patient : demande non confirmée par le médecin dans le délai, créneau libéré.
+  rdvConfirmationExpiree('rdv_confirmation_expiree'),
   // Patient : le médecin a changé le type du RDV (physique <-> téléconsultation).
   rdvTypeModifie('rdv_type_modifie'),
   // RDV aléatoire : candidature du MÉDECIN retenue / non retenue.

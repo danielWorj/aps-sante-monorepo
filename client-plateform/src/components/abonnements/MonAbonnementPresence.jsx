@@ -14,6 +14,7 @@ import { FactureChargee } from '../paiement/FactureRecapitulative';
 import { adaptateurAbonnementPresence } from '../paiement/adaptateurs';
 import { montantDevise } from '../../utils/fonds';
 import SouscriptionPresence from './SouscriptionPresence';
+import { NOM_MARQUE } from '../../lib/marque';
 
 const LIBELLE_STATUT = {
   actif: 'Actif',
@@ -114,13 +115,13 @@ export default function MonAbonnementPresence({ type, donnees, onRecharger }) {
         {/* en_ligne : publiée, ou déjà publiée et en re-modération (droits conservés). */}
         {!(fiche.en_ligne ?? fiche.statut_verification === 'publie') && (
           <p className="minimal-note mt-2 mb-0">
-            <i className="fa-solid fa-hourglass-half" /> Votre fiche est en cours de vérification par ApSa : les informations
+            <i className="fa-solid fa-hourglass-half" /> Votre fiche est en cours de vérification par {NOM_MARQUE} : les informations
             enrichies apparaîtront au public après validation.
           </p>
         )}
         {fiche.en_ligne && fiche.statut_verification !== 'publie' && (
           <p className="minimal-note mt-2 mb-0">
-            <i className="fa-solid fa-hourglass-half" /> Vos dernières modifications sont en cours de vérification par ApSa.
+            <i className="fa-solid fa-hourglass-half" /> Vos dernières modifications sont en cours de vérification par {NOM_MARQUE}.
             Votre fiche reste en ligne et garde les avantages de votre abonnement.
           </p>
         )}

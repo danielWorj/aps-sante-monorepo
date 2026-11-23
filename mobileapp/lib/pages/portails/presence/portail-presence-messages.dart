@@ -13,6 +13,7 @@ import '../../../components/components.dart';
 import '../../../controllers/espace_presence_controller.dart';
 import '../../../models/espace_presence_models.dart';
 import 'presence_commun.dart';
+import '../../../utils/marque.dart';
 
 class PortailPresenceMessages extends ConsumerStatefulWidget {
   const PortailPresenceMessages({super.key, required this.type});
@@ -161,7 +162,7 @@ class _FeuilleMessage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(m.expediteur, style: AppTextStyles.h3),
-            Text('${dateHeurePresence(m.date)}${m.compteAps ? ' · compte ApSa' : ''}', style: AppTextStyles.cardMeta),
+            Text('${dateHeurePresence(m.date)}${m.compteAps ? ' · compte $nomMarque' : ''}', style: AppTextStyles.cardMeta),
             const SizedBox(height: 12),
             SelectableText(m.contenu, style: AppTextStyles.body),
             const SizedBox(height: 12),

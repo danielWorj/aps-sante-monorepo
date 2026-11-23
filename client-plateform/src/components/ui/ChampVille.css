@@ -1,0 +1,17 @@
+/* ChampVille.css — compléments de ApsSelect.css pour la recherche de villes. */
+.champ-ville-panneau{ width:100%; max-width:none; min-width:260px; }
+.champ-ville-section{
+  margin:6px 4px 4px; padding-top:8px; border-top:1px solid var(--line);
+  font-size:.72rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+  color:var(--ink-faint);
+}
+.champ-ville-libelle{ display:flex; flex-direction:column; min-width:0; }
+.champ-ville-libelle small{
+  font-size:.78rem; font-weight:400; color:var(--ink-faint);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.champ-ville-erreur{
+  margin:0 0 6px; padding:.5rem .7rem; border-radius:8px;
+  font-size:.85rem; color:#b42318; background:#fef3f2;
+}
+.champ-ville .aps-select-recherche .fa-spinner{ color:var(--primary); }

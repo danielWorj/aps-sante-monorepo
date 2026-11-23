@@ -17,6 +17,7 @@ import { deposerAvisMedecin, COMMENTAIRE_AVIS_MAX } from "../../services/reputat
 import { contesterRendezVous } from "../../services/fondsService";
 import { SaisieEtoiles } from "../avis/Etoiles";
 import "../../assets/styles/teleconsultation.css";
+import { NOM_MARQUE } from '../../lib/marque';
 
 // Le médecin clôt en quittant : le patient relit le bilan pendant ~20 s.
 const ESSAIS_ATTENTE = 8;
@@ -26,7 +27,7 @@ const MESSAGES_NON_TERMINEE_MEDECIN = {
   presences_incompletes:
     "La présence des deux participants n'a pas pu être confirmée par la visio. La consultation sera vérifiée automatiquement et votre paiement suivra les règles habituelles.",
   parametre_delai_absent:
-    "La fin de consultation n'a pas pu être enregistrée : le délai de versement n'est pas encore paramétré pour votre pays. L'équipe APS Santé a été alertée.",
+    `La fin de consultation n'a pas pu être enregistrée : le délai de versement n'est pas encore paramétré pour votre pays. L'équipe ${NOM_MARQUE} a été alertée.`,
   statut_incompatible: "Ce rendez-vous n'est plus dans un état permettant de clôturer la consultation.",
 };
 
@@ -365,7 +366,7 @@ function DeclarerLitige({ rdvId, dateLiberation }) {
         <div role="alertdialog" aria-label="Confirmer le litige">
           <p>
             Le paiement du médecin sera bloqué{dateLiberation ? <> (versement prévu le {formaterDateHeure(dateLiberation)})</> : null}{" "}
-            jusqu&apos;au traitement du litige par APS Santé. Cette action est définitive.
+            jusqu&apos;au traitement du litige par {NOM_MARQUE}. Cette action est définitive.
           </p>
           {erreur && <div className="tcc-erreur" role="alert">{erreur}</div>}
           <div className="tcc-actions is-gauche">

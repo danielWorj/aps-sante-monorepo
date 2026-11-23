@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import './../assets/style/Referentiel.css';
 import * as referentielService from '../services/referentielService';
+import SourceVillesCard from '../components/SourceVillesCard';
+import ImportVillesGoogle from '../components/ImportVillesGoogle';
 // Sidebar et Navbar sont déjà rendus par App.jsx (route layout) et
 // admin.css est déjà importé globalement dans main.jsx : on ne les
 // réimporte pas ici pour éviter la double mise en page.
@@ -157,6 +159,9 @@ export default function Referentiel() {
   const [pendingDeleteVille, setPendingDeleteVille] = useState(null);
   const [villeDeleteSaving, setVilleDeleteSaving] = useState(false);
   const [villeDeleteError, setVilleDeleteError] = useState(null);
+  // Source des villes (manuel / Google Maps) : lue par SourceVillesCard.
+  const [googleVillesActif, setGoogleVillesActif] = useState(false);
+  const surEtatSourceVilles = useCallback((etat) => setGoogleVillesActif(etat?.source_effective === 'google'), []);
 
   // ---------------------------------------------------------------------
   // KPI
@@ -528,6 +533,8 @@ export default function Referentiel() {
             devise et une langue par défaut lui sont associées.
           </div>
         </div>
+
+        <SourceVillesCard onChange={surEtatSourceVilles} />
 
         {erreurChargement && (
           <div className="aps-notice is-danger mb-4">
@@ -1058,6 +1065,10 @@ export default function Referentiel() {
           </button>
         }
       >
+        {googleVillesActif && villesPays && !villeForm.ville_id && (
+          <ImportVillesGoogle pays={villesPays} onImportee={() => chargerVilles(villesPays.pays_id)} />
+        )}
+
         {/* Card d'ajout / modification d'une ville */}
         <div className="aps-card p-3 mb-3">
           <h6 className="mb-3">{villeForm.ville_id ? 'Modifier la ville' : 'Ajouter une ville'}</h6>
@@ -1184,6 +1195,11 @@ export default function Referentiel() {
                   <tr key={v.ville_id}>
                     <td>
                       <span className="cell-title">{v.nom}</span>
+                      {v.google_place_id && (
+                        <span className="aps-text-muted ms-2" title="Ville importée depuis Google Maps" style={{ fontSize: '.8rem' }}>
+                          <i className="fa-solid fa-map-location-dot"></i>
+                        </span>
+                      )}
                     </td>
                     <td>{v.code_postal || <span className="aps-text-muted">—</span>}</td>
                     <td className="text-end">

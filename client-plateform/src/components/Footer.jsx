@@ -4,6 +4,7 @@ import '../assets/styles/footer-2026.css';
 import { useTelechargementApk } from '../hooks/useTelechargementApk';
 import { useToast } from './feedback';
 import ApkPreteModal from './apk/ApkPreteModal';
+import { NOM_MARQUE, RAISON_SOCIALE } from '../lib/marque';
 
 // Pied de page public — refonte UI web 2026 (mobile/new-web-ui.html).
 // Le bouton « Télécharger l'APK » télécharge directement l'APK active
@@ -23,11 +24,11 @@ export default function Footer() {
       <div className="container-aps">
         <div className="aps-footer-grid">
           <div className="aps-footer-marque">
-            <Link to="/home" className="aps-footer-logo" aria-label="ApSa — accueil">
-              <img src={logoApsa} alt="ApSa — AZA Santé Assurances" />
+            <Link to="/home" className="aps-footer-logo" aria-label={`${NOM_MARQUE} — accueil`}>
+              <img src={logoApsa} alt={`${NOM_MARQUE} — ${RAISON_SOCIALE}`} />
             </Link>
             <p className="aps-footer-pitch">
-              AZA PROXI SANTÉ ASSURANCES relie patients, médecins, pharmacies, structures de santé
+              {RAISON_SOCIALE} relie patients, médecins, pharmacies, structures de santé
               et assureurs, avec un paiement sécurisé à chaque étape.
             </p>
             <div className="social-row">
@@ -68,7 +69,7 @@ export default function Footer() {
           </div>
 
           <div>
-            <h5>ApSa</h5>
+            <h5>{NOM_MARQUE}</h5>
             <ul className="footer-links">
               <li><Link to="/a-propos">À propos</Link></li>
               <li><Link to="/contact">Contactez-nous</Link></li>
@@ -117,7 +118,7 @@ export default function Footer() {
         </div>
 
         <div className="footer-bottom">
-          <span>© 2026 AZA PROXI SANTÉ ASSURANCES (ApSa). Tous droits réservés.</span>
+          <span>© 2026 {RAISON_SOCIALE} ({NOM_MARQUE}). Tous droits réservés.</span>
           <div className="footer-lang">
             <i className="fa-solid fa-earth-africa" />
             <select aria-label="Choisir le pays" defaultValue="Cameroun">

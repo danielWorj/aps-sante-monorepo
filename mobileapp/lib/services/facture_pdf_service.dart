@@ -30,6 +30,7 @@ import 'package:printing/printing.dart';
 import '../repositories/paiement_repository.dart';
 import '../utils/facture_format.dart';
 import '../utils/fonds.dart';
+import '../utils/marque.dart';
 
 // Palette du design system (miroir de AppColors, sans dépendre de Flutter).
 const PdfColor _vert = PdfColor.fromInt(0xFF1E8A63);
@@ -58,10 +59,10 @@ class FacturePdfService {
       title: texteSurPdf(
         facture.numero != null
             ? 'Facture ${facture.numero}'
-            : 'Facture APS Santé',
+            : 'Facture $nomMarque',
       ),
-      author: 'APS Santé',
-      creator: 'APS Santé',
+      author: nomMarque,
+      creator: nomMarque,
     );
 
     doc.addPage(
@@ -143,7 +144,7 @@ class FacturePdfService {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        texteSurPdf('APS Santé'),
+                        texteSurPdf(nomMarque),
                         style: pw.TextStyle(
                           color: PdfColors.white,
                           fontSize: 20,
@@ -297,7 +298,7 @@ class FacturePdfService {
             f.estDevis
                 ? 'Aperçu non contractuel : la facture définitive est émise '
                       'après confirmation du paiement.'
-                : 'Document généré par l\'application APS Santé.',
+                : 'Document généré par l\'application $nomMarque.',
           ),
           textAlign: pw.TextAlign.center,
           style: const pw.TextStyle(color: _encreDouce, fontSize: 8.5),

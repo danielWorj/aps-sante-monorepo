@@ -21,6 +21,7 @@ import '../../../repositories/rendez_vous_repository.dart' show ApiException;
 import '../../../repositories/retrait_repository.dart';
 import '../../../utils/fonds.dart' as fonds;
 import '../../espaces/confirmation_pin.dart';
+import '../../../utils/marque.dart';
 
 String _fcfa(int n) {
   final s = n.abs().toString();
@@ -264,7 +265,7 @@ class _Contenu extends StatelessWidget {
 
     String? indice;
     if (p.numeros.isEmpty) {
-      indice = 'Aucun numéro Mobile Money configuré : contactez l\'administration ApSa.';
+      indice = 'Aucun numéro Mobile Money configuré : contactez l\'administration $nomMarque.';
     } else if (p.aUnRetraitActif) {
       indice = 'Une demande est déjà en cours de traitement.';
     } else if (p.solde < p.montantMin) {

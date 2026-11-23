@@ -10,6 +10,7 @@ import { PAGES_PUBLICITE } from '../services/publiciteService';
 import "../assets/styles/annuaire-2026.css";
 import { listerServicesAssurance } from "../services/assuranceService";
 import { useGeolocation } from "../hooks/useGeolocation";
+import { NOM_MARQUE } from '../lib/marque';
 
 // Rayons proposés pour le filtre "Autour de moi" (voir
 // server/src/lib/geo.js : rayon par défaut 10 km si non précisé).
@@ -88,7 +89,7 @@ function InsurerCard({ insurer, positionActuelle, demanderPosition }) {
           <div className="flex-grow-1" style={{ minWidth: 0 }}>
             <div className="aps-dc-nm text-truncate">
               {insurer.nom}
-              {estVerifie && <i className="fa-solid fa-circle-check verif" title="Vérifiée ApSa" />}
+              {estVerifie && <i className="fa-solid fa-circle-check verif" title={`Vérifiée ${NOM_MARQUE}`} />}
             </div>
             <div className="aps-dc-sp text-truncate">
               {lieu || "Localisation non renseignée"}
@@ -242,7 +243,7 @@ export default function Assurance() {
             )}
           </div>
           <p className="aps-t-s mt-2 mb-0" style={{ maxWidth: 720 }}>
-            ApSa ne porte aucun service professionnel d&apos;assurance : ni comparateur, ni souscription
+            {NOM_MARQUE} ne porte aucun service professionnel d&apos;assurance : ni comparateur, ni souscription
             en ligne, ni gestion de sinistre. La mise en relation se fait directement avec l&apos;assureur.
           </p>
           <form className="aps-sbar annuaire26-sbar" onSubmit={handleSubmit}>

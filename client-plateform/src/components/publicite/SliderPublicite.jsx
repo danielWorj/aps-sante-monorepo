@@ -23,6 +23,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { obtenirSliderPage, signalerEvenementPublicite } from '../../services/publiciteService';
 import './SliderPublicite.css';
+import { DE_MARQUE } from '../../lib/marque';
 
 const telLien = (t) => `tel:${String(t).replace(/[^\d+]/g, '')}`;
 const waLien = (t) => `https://wa.me/${String(t).replace(/\D/g, '')}`;
@@ -182,7 +183,7 @@ export default function SliderPublicite({ code, variante = 'carte', intervalle =
         <i className="fa-solid fa-bullhorn" />
         <p>
           {nb === 0
-            ? "Cet emplacement est disponible pour les annonceurs partenaires d'ApSa."
+            ? `Cet emplacement est disponible pour les annonceurs partenaires ${DE_MARQUE}.`
             : placesLibres > 0
               ? `Encore ${placesLibres} position(s) libre(s) dans ce carrousel.`
               : 'Réservez votre position pour les prochaines périodes.'}

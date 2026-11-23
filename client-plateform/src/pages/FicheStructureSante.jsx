@@ -21,6 +21,7 @@ import {
   listerActualitesCentre,
   envoyerMessageCentre,
 } from "../services/structureSanteService.js";
+import { NOM_MARQUE } from '../lib/marque';
 
 // Fiche structure de santé — page de détail d'un hôpital, d'une clinique,
 // d'un centre médical, d'un dispensaire ou d'un laboratoire, avec ses
@@ -189,7 +190,7 @@ function ContactForm({ structure }) {
       </form>
       <p className="minimal-note mt-2 mb-0">
         <i className="fa-solid fa-circle-info" /> Le message est adressé directement
-        à {structure.nom}. ApSa ne gère ni rendez-vous ni dossier médical.
+        à {structure.nom}. {NOM_MARQUE} ne gère ni rendez-vous ni dossier médical.
       </p>
     </div>
   );
@@ -280,7 +281,7 @@ function PresentationPanel({ structure }) {
                 <i className="fa-solid fa-envelope" /> Contact
               </h3>
               <p className="minimal-note mb-0">
-                Cet établissement ne reçoit pas de messages via ApSa pour le moment.
+                Cet établissement ne reçoit pas de messages via {NOM_MARQUE} pour le moment.
               </p>
             </div>
           )}

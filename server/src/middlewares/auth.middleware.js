@@ -5,7 +5,9 @@ import {
   verifierAccessToken,
   SCOPE_CHANGEMENT_MOT_DE_PASSE,
   SCOPE_CHANGEMENT_PIN,
+  SCOPE_VALIDATION_APPAREIL,
 } from "../utils/token.utils.js";
+import { appareilDeLaRequete } from "../services/appareilConfiance.service.js";
 
 /**
  * Vérifie la présence et la validité de l'access token JWT (header
@@ -183,6 +185,51 @@ export async function exigerTokenChangementPin(req, res, next) {
     }
 
     req.utilisateurTemp = { utilisateur_id: payload.sub, jti: payload.jti, exp: payload.exp };
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Validation d'un nouvel appareil : n'accepte QUE le token restreint de
+ * scope SCOPE_VALIDATION_APPAREIL (réponse « appareil_a_valider » de la
+ * connexion), et seulement depuis l'appareil qui l'a obtenu.
+ */
+export async function exigerTokenValidationAppareil(req, res, next) {
+  try {
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "Jeton de validation manquant." });
+    }
+    let payload;
+    try {
+      payload = verifierAccessToken(header.slice("Bearer ".length));
+    } catch (err) {
+      return res.status(401).json({
+        code: "VALIDATION_EXPIREE",
+        message: err instanceof jwt.TokenExpiredError
+          ? "Le délai pour confirmer cet appareil a expiré. Reconnectez-vous."
+          : "Jeton invalide.",
+      });
+    }
+    if (payload.scope !== SCOPE_VALIDATION_APPAREIL) {
+      return res.status(403).json({ message: "Ce token ne permet pas d'effectuer cette action." });
+    }
+    if (!payload.app || payload.app !== appareilDeLaRequete(req)) {
+      return res.status(403).json({ code: "APPAREIL_DIFFERENT", message: "Confirmez la connexion depuis l'appareil où vous l'avez commencée." });
+    }
+    const revoque = await prisma.jetonRevoque.findUnique({ where: { jti: payload.jti } });
+    if (revoque) {
+      return res.status(401).json({ code: "VALIDATION_EXPIREE", message: "Cet appareil est déjà confirmé. Reconnectez-vous." });
+    }
+    req.validationAppareil = {
+      utilisateur_id: payload.sub,
+      jti: payload.jti,
+      exp: payload.exp,
+      empreinte: payload.app,
+      pinVerifie: payload.pin === true,
+    };
     next();
   } catch (err) {
     next(err);

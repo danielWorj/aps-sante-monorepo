@@ -16,6 +16,7 @@ import '../../../controllers/espace_presence_controller.dart';
 import '../../../models/espace_presence_models.dart';
 import '../../../utils/endpoint.dart';
 import '../../espaces/carte_connexion_compte.dart' show BoutonChangerEspace;
+import '../../../utils/marque.dart';
 
 export '../assurance/portail_assurance_commun.dart'
     show EnTetePortail, CartePortail, BandeauPortail, ChargementPortail, ErreurPortail, VidePortail,
@@ -150,8 +151,8 @@ class BandeauFicheHorsLigne extends StatelessWidget {
           Expanded(
             child: Text(
               statut == StatutFichePresence.nonPublie
-                  ? "Votre fiche n'est pas publiée : elle n'est pas visible du public. Contactez ApSa pour en connaître la raison."
-                  : 'Votre fiche est en cours de vérification par ApSa : elle sera visible du public après validation.',
+                  ? "Votre fiche n'est pas publiée : elle n'est pas visible du public. Contactez $nomMarque pour en connaître la raison."
+                  : 'Votre fiche est en cours de vérification par $nomMarque : elle sera visible du public après validation.',
               style: AppTextStyles.cardMeta,
             ),
           ),

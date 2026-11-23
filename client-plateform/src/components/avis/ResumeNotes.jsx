@@ -4,6 +4,7 @@
 // (resumeNotes, services/avisMedecin.service.js).
 import { Etoiles } from './Etoiles';
 import { CRITERES_AVIS } from '../../services/reputationMedecinService';
+import { NOM_MARQUE } from '../../lib/marque';
 
 const fr1 = (n) => (n === null || n === undefined ? '—' : n.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
 
@@ -21,7 +22,7 @@ export default function ResumeNotes({ resume, filtreNote = null, onFiltrerNote }
         <div className="resume-vide-icone"><i className="fa-regular fa-star" /></div>
         <div>
           <strong>Pas encore d&apos;avis</strong>
-          <p className="mb-0">Les avis sont déposés par des patients après une consultation réalisée via APS Santé.</p>
+          <p className="mb-0">Les avis sont déposés par des patients après une consultation réalisée via {NOM_MARQUE}.</p>
         </div>
       </div>
     );

@@ -1,0 +1,131 @@
+# Surcouche OBSERVABILITÉ : Prometheus (métriques), Loki (logs),
+# Grafana Alloy (collecte des logs Docker), Grafana (visualisation),
+# exporteurs hôte / conteneurs / PostgreSQL.
+#
+# Ne remplace pas docker-compose.yaml : elle s'ajoute par-dessus.
+#   Prod : docker compose -f docker-compose.yaml -f docker-compose.observabilite.yaml up -d
+#   Dev  : docker compose -f docker-compose.yaml -f docker-compose.dev.yaml -f docker-compose.observabilite.yaml up --build
+#
+# Variables (.env) : GRAFANA_ADMIN_PASSWORD (obligatoire), GRAFANA_ROOT_URL,
+# GRAFANA_ADMIN_USER, LOKI_RETENTION, PROMETHEUS_RETENTION. Voir observabilite/README.md.
+#
+# Rien n'est exposé sur Internet : seul Grafana est publié, sur la boucle
+# locale (nginx de l'hôte → grafana.azasante.com, ou tunnel SSH). Les autres
+# services ne sont joignables que sur le réseau Docker interne.
+
+services:
+  server:
+    environment:
+      METRICS_PORT: "9464"
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./observabilite/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.5.3
+    command:
+      - "-config.file=/etc/loki/loki.yml"
+      - "-config.expand-env=true"
+    environment:
+      LOKI_RETENTION: ${LOKI_RETENTION:-720h}
+    volumes:
+      - ./observabilite/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.10.0
+    command:
+      - "run"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "--storage.path=/var/lib/alloy/data"
+      - "/etc/alloy/config.alloy"
+    volumes:
+      - ./observabilite/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # Lecture seule : Alloy liste les conteneurs et lit leurs logs.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Renseigner GRAFANA_ADMIN_PASSWORD dans .env}
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3002}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_SECURITY_COOKIE_SECURE: ${GRAFANA_COOKIE_SECURE:-false}
+    volumes:
+      - ./observabilite/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observabilite/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    # 3000 est déjà pris par l'API sur l'hôte.
+    ports:
+      - "127.0.0.1:3002:3000"
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+  # Métriques de l'hôte (CPU, mémoire, disque, réseau).
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    command:
+      - "--path.rootfs=/host"
+    pid: host
+    volumes:
+      # Sans « rslave » : refusé par Docker Desktop, et pas indispensable
+      # sur le VPS (seuls les points de montage créés après le démarrage
+      # ne seraient pas vus).
+      - /:/host:ro
+    restart: unless-stopped
+
+  # Métriques par conteneur (CPU, mémoire, réseau de chaque service).
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    command:
+      - "--docker_only=true"
+      - "--housekeeping_interval=30s"
+      - "--store_container_labels=false"
+      - "--whitelisted_container_labels=com.docker.compose.service,com.docker.compose.project"
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+
+  # Métriques PostgreSQL (connexions, transactions, taille, verrous…).
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.17.1
+    environment:
+      DATA_SOURCE_URI: "db:5432/${POSTGRES_DB}?sslmode=disable"
+      DATA_SOURCE_USER: ${POSTGRES_EXPORTER_USER:-${POSTGRES_USER}}
+      DATA_SOURCE_PASS: ${POSTGRES_EXPORTER_PASSWORD:-${POSTGRES_PASSWORD}}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  loki_data:
+  alloy_data:
+  grafana_data:

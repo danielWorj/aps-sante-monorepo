@@ -26,6 +26,7 @@ import '../../../components/ui/aps_ui.dart';
 import '../../../controllers/authentification_controller.dart';
 import '../../../controllers/reputation_medecin_controller.dart';
 import '../../../models/reputation_medecin_models.dart';
+import '../../../utils/marque.dart';
 
 /// Vue affichée par l'onglet (0 = statistiques, 1 = avis). Le shell la
 /// positionne avant d'ouvrir l'onglet (ex. notification « nouvel avis »).
@@ -503,7 +504,7 @@ class _ContenuStatistiquesState extends State<_ContenuStatistiques> {
           ),
         ),
         if (aud.disponible)
-          Text('Vos propres consultations de la fiche, celles d\'APS Santé et des robots ne sont pas comptées.',
+          Text('Vos propres consultations de la fiche, celles $deMarque et des robots ne sont pas comptées.',
               textAlign: TextAlign.center, style: AppTextStyles.xs),
       ],
     );
@@ -864,7 +865,7 @@ class VueAvisMedecinState extends ConsumerState<VueAvisMedecin> {
       builder: (_) => const _FeuilleTexte(
         titre: 'Signaler cet avis',
         label: 'Motif du signalement',
-        aide: 'Propos injurieux, personne inconnue, informations médicales… L\'avis reste en ligne pendant l\'examen par APS Santé.',
+        aide: 'Propos injurieux, personne inconnue, informations médicales… L\'avis reste en ligne pendant l\'examen par $nomMarque.',
         maxLength: 500,
         boutonLibelle: 'Signaler',
         minimum: 10,
@@ -926,7 +927,7 @@ class VueAvisMedecinState extends ConsumerState<VueAvisMedecin> {
             if (page.enAttenteModeration > 0)
               _Alerte(
                 icone: Icons.hourglass_top_rounded,
-                texte: '${page.enAttenteModeration} nouvel${page.enAttenteModeration > 1 ? 's' : ''} avis en cours de vérification par APS Santé',
+                texte: '${page.enAttenteModeration} nouvel${page.enAttenteModeration > 1 ? 's' : ''} avis en cours de vérification par $nomMarque',
                 info: true,
               ),
             const SizedBox(height: 6),

@@ -7,6 +7,7 @@
 // cookie httpOnly), exactement comme un login réussi.
 import prisma from "../lib/prisma.js";
 import { assurerEspaceOuvrable, espaceParDefaut, listerEspaces } from "./espaces.service.js";
+import { appareilDeLaRequete, faireConfianceAppareil, validationAppareilActive } from "./appareilConfiance.service.js";
 import {
   genererAccessToken,
   estClientMobile,
@@ -89,7 +90,13 @@ export async function ouvrirSessionEspace(req, res, utilisateur, { espace, pinVe
     espace: actif?.cle ?? null,
     pin_le: pinVerifie ? Math.floor(Date.now() / 1000) : null,
   });
-  const { token: refreshToken, token_hash, date_expiration } = genererRefreshToken({ mobile: estClientMobile(req) });
+  const mobile = estClientMobile(req);
+  const { token: refreshToken, token_hash, date_expiration } = genererRefreshToken({ mobile });
+  // Toute ouverture de session passe par un contrôle d'appareil en amont
+  // (controlerAppareil) ou suit une validation : l'appareil est (re)noté
+  // de confiance. Validation coupée : les appareils sont tout de même
+  // enregistrés, pour ne pas tout redemander le jour de son activation.
+  const appareil_empreinte = appareilDeLaRequete(req, res);
 
   await prisma.refreshToken.create({
     data: {
@@ -100,7 +107,16 @@ export async function ouvrirSessionEspace(req, res, utilisateur, { espace, pinVe
       ip_creation: req.ip,
       statut: "actif",
       espace: actif?.cle ?? null,
+      appareil_empreinte,
+      mobile,
     },
+  });
+  await faireConfianceAppareil({
+    utilisateur_id: utilisateur.utilisateur_id,
+    empreinte: appareil_empreinte,
+    mobile,
+    libelle: req.headers["user-agent"] ?? null,
+    valide_par: validationAppareilActive() ? "connexion" : "session_existante",
   });
 
   res.cookie(NOM_COOKIE_REFRESH_TOKEN, refreshToken, optionsCookieRefreshToken(date_expiration));

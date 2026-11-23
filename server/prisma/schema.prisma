@@ -467,6 +467,13 @@ model Ville {
   nom         String  @db.VarChar(150)
   code_postal String? @db.VarChar(20)
 
+  // Ville importée depuis Google Maps (Places API) : identifiant Google
+  // et coordonnées du centre-ville. Vides pour les villes saisies à la
+  // main — voir services/sourceVilles.service.js.
+  google_place_id String? @unique @db.VarChar(300)
+  latitude        Float?
+  longitude       Float?
+
   pays Pays @relation(fields: [pays_id], references: [pays_id])
 
   medecins_exercice Medecin[]
@@ -570,6 +577,7 @@ model Utilisateur {
   messages_email         MessageEmail[]
   // Connexions web à valider depuis l'application mobile.
   demandes_connexion_web DemandeConnexionWeb[]
+  appareils_confiance    AppareilConfiance[]
 
   medecin                Medecin?
   patient                Patient?
@@ -783,6 +791,11 @@ model RefreshToken {
   // Espace actif de la session (« patient », « pharmacie:<id> »…),
   // repris à chaque renouvellement du jeton d'accès.
   espace          String?            @db.VarChar(80)
+  // Appareil de la session (empreinte SHA-256 de son identifiant) et type
+  // de client : sert à savoir si un AUTRE appareil (application mobile)
+  // est connecté pour valider un nouvel appareil.
+  appareil_empreinte String?         @db.VarChar(64)
+  mobile             Boolean         @default(false)
 
   utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id])
 
@@ -3620,6 +3633,9 @@ enum ObjetCodeVerification {
 enum CanalCodeVerification {
   sms
   whatsapp
+  // Vérification inversée : l'utilisateur ENVOIE le code à notre numéro
+  // WhatsApp (message entrant gratuit) ; le webhook Meta le valide.
+  whatsapp_inverse
 }
 
 // Code à usage unique envoyé pour prouver la possession d'un numéro.
@@ -3680,6 +3696,12 @@ model DemandeConnexionWeb {
   adresse_ip          String?                   @db.VarChar(45)
   expire_le           DateTime
   date_decision       DateTime?
+  // « connexion_web » : connexion sans PIN depuis un navigateur ;
+  // « nouvel_appareil » : PIN déjà vérifié, l'appareil demandeur (empreinte)
+  // devient appareil de confiance une fois la demande approuvée.
+  objet               String                    @default("connexion_web") @db.VarChar(20)
+  appareil_empreinte  String?                   @db.VarChar(64)
+  appareil_mobile     Boolean                   @default(false)
 
   date_creation DateTime @default(now())
 
@@ -3688,6 +3710,31 @@ model DemandeConnexionWeb {
   @@index([utilisateur_id, statut, expire_le])
   @@index([date_creation])
   @@map("demande_connexion_web")
+}
+
+// Appareil de confiance : appareil (navigateur ou application) sur lequel
+// le titulaire du compte a déjà prouvé qu'il est bien lui (inscription,
+// validation depuis un autre appareil connecté, WhatsApp inversé, session
+// déjà ouverte au déploiement). Une connexion par numéro + PIN depuis un
+// appareil inconnu exige cette validation (appareilConfiance.service.js).
+model AppareilConfiance {
+  appareil_confiance_id String @id @default(uuid()) @db.Uuid
+
+  utilisateur_id       String   @db.Uuid
+  // SHA-256 de l'identifiant aléatoire de l'appareil (jamais en clair).
+  empreinte            String   @db.VarChar(64)
+  mobile               Boolean  @default(false)
+  libelle              String?  @db.VarChar(255)
+  // inscription | application | whatsapp | session_existante | pin_reinitialise
+  valide_par           String   @db.VarChar(30)
+  derniere_utilisation DateTime @default(now())
+
+  date_creation DateTime @default(now())
+
+  utilisateur Utilisateur @relation(fields: [utilisateur_id], references: [utilisateur_id], onDelete: Cascade)
+
+  @@unique([utilisateur_id, empreinte])
+  @@map("appareil_confiance")
 }
 
 // -----------------------------------------------------------------
@@ -4181,4 +4228,28 @@ model SynchronisationOnmc {
 
   @@index([demarree_le])
   @@map("synchronisation_onmc")
+}
+
+// -----------------------------------------------------------------
+// Source des villes du référentiel (ligne unique, id = 1).
+// « google » : les formulaires proposent aussi les villes Google Maps
+// (Places API), importées en base à la sélection. Si la clé ou l'API
+// ne répond pas, le serveur repasse de lui-même au mode manuel.
+// « manuel » : uniquement les villes saisies au back-office.
+// -----------------------------------------------------------------
+enum SourceVilles {
+  manuel
+  google
+}
+
+model ConfigSourceVilles {
+  id               Int          @id @default(1)
+  source           SourceVilles @default(manuel)
+  // Dernier test de la clé Google (bouton du back-office ou panne détectée).
+  dernier_test_le  DateTime?
+  dernier_test_ok  Boolean?
+  dernier_message  String?      @db.VarChar(500)
+  date_mise_a_jour DateTime     @updatedAt
+
+  @@map("config_source_villes")
 }

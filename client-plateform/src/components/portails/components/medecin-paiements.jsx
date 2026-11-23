@@ -26,6 +26,7 @@ import {
   supprimerMobileMoney,
 } from '../../../services/moyenPaiementService';
 import '../../../assets/styles/moyens-paiement.css';
+import { NOM_MARQUE } from '../../../lib/marque';
 
 const FORMULAIRE_VIDE = { id: '', type_mobile_money_id: '', numero: '', titulaire: '', actif: false };
 
@@ -233,7 +234,7 @@ export default function MedecinPaiements() {
             <div>
               <span className="eyebrow">Espace médecin</span>
               <h1>Moyens de paiement</h1>
-              <p>Indiquez où ApSa doit vous verser vos honoraires : Mobile Money ou carte bancaire.</p>
+              <p>Indiquez où {NOM_MARQUE} doit vous verser vos honoraires : Mobile Money ou carte bancaire.</p>
             </div>
             <Link to="/portail/medecin-profil" className="btn btn-outline-primary btn-sm-aps">
               <i className="fa-solid fa-wallet" /> Mon portefeuille
@@ -275,7 +276,7 @@ export default function MedecinPaiements() {
                 {operateurs.length === 0 && (
                   <div className="note-box mb-3">
                     <i className="fa-solid fa-circle-info" />
-                    <span>Aucun opérateur Mobile Money n&apos;est encore configuré. Contactez l&apos;administration ApSa.</span>
+                    <span>Aucun opérateur Mobile Money n&apos;est encore configuré. Contactez l&apos;administration {NOM_MARQUE}.</span>
                   </div>
                 )}
 
@@ -408,7 +409,7 @@ export default function MedecinPaiements() {
                     <h3><i className="fa-regular fa-credit-card" /> Carte bancaire</h3>
                     <p className="mp-aide">
                       Recevez vos paiements par carte grâce à Stripe. Vos informations de carte sont saisies sur la page
-                      sécurisée de Stripe : ApSa n&apos;y a jamais accès.
+                      sécurisée de Stripe : {NOM_MARQUE} n&apos;y a jamais accès.
                     </p>
                   </div>
                   {statut && (
@@ -427,7 +428,7 @@ export default function MedecinPaiements() {
                     <ol className="mp-etapes">
                       <li>Cliquez sur « Ajouter ma carte bancaire » : vous êtes redirigé vers Stripe.</li>
                       <li>Renseignez votre identité et la carte (ou le compte) qui recevra vos paiements.</li>
-                      <li>De retour sur ApSa, votre moyen de paiement apparaît ici une fois validé par Stripe.</li>
+                      <li>De retour sur {NOM_MARQUE}, votre moyen de paiement apparaît ici une fois validé par Stripe.</li>
                     </ol>
                     <button
                       type="button"

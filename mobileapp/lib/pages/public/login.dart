@@ -29,6 +29,7 @@ import '../home_router_for_role.dart';
 import 'changement_mot_de_passe_initial.dart';
 import 'creer_pin_screen.dart';
 import 'pin_oublie_screen.dart';
+import '../../utils/marque.dart';
 
 const _cleModeConnexion = 'aps_mode_connexion';
 
@@ -303,7 +304,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             title: const Text('Code PIN oublié'),
                             content: const Text(
                               'Connectez-vous avec votre email et votre mot de passe (bouton en bas), '
-                              'puis choisissez un nouveau code PIN. Sans email, contactez le support APS Santé.',
+                              'puis choisissez un nouveau code PIN. Sans email, contactez le support $nomMarque.',
                             ),
                             actions: [TextButton(onPressed: () => Navigator.of(d).pop(), child: const Text('Compris'))],
                           ),

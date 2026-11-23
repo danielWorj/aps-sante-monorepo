@@ -20,6 +20,7 @@ import {
   signalerAvis,
   supprimerReponseAvis,
 } from '../../../services/reputationMedecinService';
+import { NOM_MARQUE } from '../../../lib/marque';
 
 const FILTRES_REPONSE = [
   { cle: '', libelle: 'Tous' },
@@ -164,7 +165,7 @@ export default function MedecinAvis() {
                     {donnees.en_attente_moderation > 0 && (
                       <div className="ea-alerte is-info">
                         <i className="fa-solid fa-hourglass-half" />
-                        <span><strong>{donnees.en_attente_moderation}</strong> nouvel{donnees.en_attente_moderation > 1 ? 's' : ''} avis en cours de vérification par APS Santé</span>
+                        <span><strong>{donnees.en_attente_moderation}</strong> nouvel{donnees.en_attente_moderation > 1 ? 's' : ''} avis en cours de vérification par {NOM_MARQUE}</span>
                       </div>
                     )}
                   </div>

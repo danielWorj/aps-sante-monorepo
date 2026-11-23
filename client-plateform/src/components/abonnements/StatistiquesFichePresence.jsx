@@ -12,6 +12,7 @@
 // personnes distinctes.
 import { useEffect, useState } from 'react';
 import { obtenirStatistiquesPresence } from '../../services/abonnementPresenceService';
+import { DE_MARQUE } from '../../lib/marque';
 
 const nombre = (n) => Number(n ?? 0).toLocaleString('fr-FR');
 const jourCourt = (iso) =>
@@ -66,7 +67,7 @@ export default function StatistiquesFichePresence({ type, acteurId }) {
           )}
           <p className="minimal-note mt-2 mb-0">
             Une vue = un affichage de votre fiche détaillée (site ou application). Vos propres consultations, celles
-            d&apos;ApSa et des robots ne sont pas comptées ; un même visiteur n&apos;est recompté qu&apos;après 30 minutes.
+            {' '}{DE_MARQUE} et des robots ne sont pas comptées ; un même visiteur n&apos;est recompté qu&apos;après 30 minutes.
             « Visiteurs / jour » additionne les visiteurs différents de chaque jour : une personne revenue deux jours
             différents y compte deux fois.
           </p>

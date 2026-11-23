@@ -11,6 +11,7 @@ import { PresencePortailPage } from '../layouts/presence.portail-sidebar';
 import { changerStatutMessage, listerMessagesGestion } from '../../../services/espacePresenceService';
 import { BandeauMasque, EtatChargement } from './presenceCommun';
 import { dateHeure, useRessource } from './presenceOutils';
+import { NOM_MARQUE } from '../../../lib/marque';
 
 const ONGLETS = [
   { cle: '', label: 'Boîte de réception' },
@@ -34,7 +35,7 @@ function Message({ m, nomFiche, onStatut }) {
           <span className="text-truncate">
             {m.statut === 'non_lu' && <i className="fa-solid fa-circle text-primary me-2" style={{ fontSize: '.5rem' }} />}
             {m.nom || m.email}
-            {m.compte_aps && <span className="chip chip-complet ms-2" title="Envoyé depuis un compte ApSa connecté">Compte ApSa</span>}
+            {m.compte_aps && <span className="chip chip-complet ms-2" title={`Envoyé depuis un compte ${NOM_MARQUE} connecté`}>Compte {NOM_MARQUE}</span>}
           </span>
           <span className="text-faint small flex-shrink-0">{dateHeure(m.date_creation)}</span>
         </div>

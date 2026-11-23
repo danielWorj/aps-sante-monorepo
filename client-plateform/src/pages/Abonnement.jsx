@@ -24,6 +24,7 @@ import { obtenirMonActeur } from "../services/abonnementPresenceService";
 import SouscriptionPresence from "../components/abonnements/SouscriptionPresence";
 import CatalogueAbonnements from "../components/abonnements/CatalogueAbonnements";
 import ConnexionModale from "../components/auth/ConnexionModale";
+import { NOM_MARQUE } from '../lib/marque';
 
 const TYPE_ASSURANCE = "assurance";
 // Type de la vitrine -> type d'acteur des abonnements de présence.
@@ -159,10 +160,10 @@ export default function Abonnement() {
         <div className="container-aps">
           <span className="eyebrow">Tarification &amp; abonnements</span>
           <h1 style={{ fontSize: "1.9rem", marginTop: ".5rem" }}>
-            Les abonnements de la plateforme ApSa
+            Les abonnements de la plateforme {NOM_MARQUE}
           </h1>
           <p className="mt-2" style={{ maxWidth: "680px" }}>
-            ApSa repose sur un annuaire gratuit et exhaustif, complété par des
+            {NOM_MARQUE} repose sur un annuaire gratuit et exhaustif, complété par des
             abonnements forfaitaires de présence qui enrichissent la fiche de
             chaque acteur (photos, contact direct, fiche détaillée). Le
             palier de base reste gratuit en permanence, quel que soit le
@@ -229,7 +230,7 @@ export default function Abonnement() {
                 <Link to={selected === TYPE_ASSURANCE ? "/assurances/creation" : CREATION_PRESENCE[typePresence]}>
                   Référencez-la
                 </Link>{" "}
-                : dès sa validation par ApSa, vous pourrez activer votre abonnement depuis cette page.
+                : dès sa validation par {NOM_MARQUE}, vous pourrez activer votre abonnement depuis cette page.
               </span>
             </div>
           )}
@@ -298,7 +299,7 @@ export default function Abonnement() {
               Une visibilité claire, jamais au détriment de la confiance
             </h2>
             <p>
-              Chez ApSa, mettre en valeur votre fiche ne se fait jamais au
+              Chez {NOM_MARQUE}, mettre en valeur votre fiche ne se fait jamais au
               détriment de l'objectivité de l'annuaire ni de la confiance
               des patients.
             </p>
@@ -311,7 +312,7 @@ export default function Abonnement() {
                 <h3>Une fiche plus riche et plus visible</h3>
                 <p>
                   Photos, description détaillée, contact direct : votre
-                  abonnement enrichit votre présence sur ApSa, y compris pour
+                  abonnement enrichit votre présence sur {NOM_MARQUE}, y compris pour
                   les professions soumises à des règles strictes en matière
                   de communication. Il n'influence jamais votre classement
                   dans les résultats.

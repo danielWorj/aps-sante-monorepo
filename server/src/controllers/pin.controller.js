@@ -10,6 +10,7 @@ import { ouvrirSessionEspace, serialiserUtilisateur } from "../services/compte.s
 import { definirPin, ErreurPin, remplacerPinProvisoire, verifierNumeroEtPin, verifierPinCompte } from "../services/pin.service.js";
 import { ErreurEspace, listerEspaces, memoriserEspace, trouverEspace } from "../services/espaces.service.js";
 import { pinRecent } from "../middlewares/pin.middleware.js";
+import { controlerAppareil } from "../services/appareilConfiance.service.js";
 
 export function repondreErreurPin(err, res, next) {
   if (err instanceof ErreurPin || err instanceof ErreurEspace || err?.name === "ErreurSms") {
@@ -56,6 +57,11 @@ export async function connecterParPinCtrl(req, res, next) {
       });
     }
 
+    // Appareil inconnu : confirmation (application connectée ailleurs, ou
+    // WhatsApp inversé) avant d'ouvrir la session.
+    const aValider = await controlerAppareil(req, res, utilisateur, { pinVerifie: true });
+    if (aValider) return res.status(200).json(aValider);
+
     return reponseSession(req, res, utilisateur, "Connexion réussie.", { pinVerifie: true });
   } catch (err) {
     return repondreErreurPin(err, res, next);
@@ -64,7 +70,9 @@ export async function connecterParPinCtrl(req, res, next) {
 
 /**
  * POST /api/auth/changer-pin-initial   body: { nouveau_pin }
- * Protégée par exigerTokenChangementPin. Ouvre directement la session.
+ * Protégée par exigerTokenChangementPin. Ouvre directement la session : le
+ * PIN provisoire (à usage unique) a été remis par un administrateur ou par
+ * le responsable de la fiche, l'appareil devient de confiance.
  */
 export async function changerPinInitialCtrl(req, res, next) {
   try {

@@ -13,6 +13,7 @@ import BarresQuotidiennes from './BarresQuotidiennes';
 import { BandeauGrace } from '../../assurances/gestion/AbonnementAssurance';
 import { dernierJour, formatDate } from '../../assurances/gestion/datesAbonnement';
 import { STATUTS_DEMANDE, obtenirTableauDeBord } from '../../../services/portailAssuranceService';
+import { DE_MARQUE, NOM_MARQUE } from '../../../lib/marque';
 
 const PERIODES = [7, 30, 90];
 const nombre = (n) => (n ?? 0).toLocaleString('fr-FR');
@@ -120,7 +121,7 @@ function Contenu({ d, jours }) {
         <div className="banner-institutionnel mb-3">
           <i className="fa-solid fa-hourglass-half" />
           <span>
-            Votre fiche est en cours de vérification par ApSa : elle n&apos;est pas visible du public pour le moment.
+            Votre fiche est en cours de vérification par {NOM_MARQUE} : elle n&apos;est pas visible du public pour le moment.
           </span>
         </div>
       )}
@@ -173,7 +174,7 @@ function Contenu({ d, jours }) {
               </tbody>
             </table>
             <p className="minimal-note mt-2 mb-0">
-              Vos propres consultations, celles d&apos;ApSa et des robots ne sont pas comptées.
+              Vos propres consultations, celles {DE_MARQUE} et des robots ne sont pas comptées.
             </p>
           </div>
 

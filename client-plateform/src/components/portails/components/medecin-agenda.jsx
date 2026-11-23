@@ -46,6 +46,7 @@ import {
   retablirJourAgenda,
   JOURS_SEMAINE_AGENDA,
 } from "../../../services/medecinService";
+import { NOM_MARQUE } from '../../../lib/marque';
 
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const JOURS_OUVRES = ["lundi", "mardi", "mercredi", "jeudi", "vendredi"];
@@ -702,7 +703,7 @@ const MedecinAgenda = () => {
                 </h3>
                 <ul>
                   <li>Seuls les créneaux libres sont visibles des patients ; un créneau demandé disparaît aussitôt.</li>
-                  <li>Sans paiement dans le délai fixé par ApSa, la demande est annulée et le créneau redevient libre.</li>
+                  <li>Sans paiement dans le délai fixé par {NOM_MARQUE}, la demande est annulée et le créneau redevient libre.</li>
                   <li>Un créneau déjà réservé n'est jamais fermé : annulez d'abord le rendez-vous si nécessaire.</li>
                 </ul>
               </section>

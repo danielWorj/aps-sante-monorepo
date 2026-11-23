@@ -22,6 +22,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { obtenirAppelEntrant, refuserAppelVisio } from "../../services/visioService";
 import "../../assets/styles/appel-entrant.css";
+import { NOM_MARQUE } from '../../lib/marque';
 
 const INTERVALLE_MS = 8_000;
 const DUREE_SONNERIE_MS = 45_000;
@@ -185,7 +186,7 @@ export default function AppelVisioEntrant() {
   return (
     <div className="ae-appel" role="alertdialog" aria-live="assertive" aria-label={`Appel vidéo entrant de ${nom}`}>
       <div className="ae-entete">
-        <i className="fa-solid fa-lock" aria-hidden="true" /> APS Santé · Téléconsultation
+        <i className="fa-solid fa-lock" aria-hidden="true" /> {NOM_MARQUE} · Téléconsultation
       </div>
       <div className="ae-corps">
         <div className="ae-avatar">

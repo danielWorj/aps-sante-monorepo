@@ -79,3 +79,35 @@ export function modifierVille(villeId, data) {
 export function supprimerVille(villeId) {
   return apiFetch(`/referentiels/villes/${villeId}`, { method: "DELETE" });
 }
+// ─── Source des villes (manuel / Google Maps) ────────────────
+// Voir server/src/services/sourceVilles.service.js. En mode « google »,
+// la recherche renvoie aussi des villes Google pas encore en base, à
+// importer avec importerVilleGoogle avant d'utiliser leur ville_id.
+
+/** @returns {Promise<{ source: 'manuel' | 'google' }>} */
+export function obtenirSourceVilles() {
+  return apiFetch('/referentiels/villes/source');
+}
+
+/**
+ * @returns {Promise<{
+ *   source: 'manuel' | 'google',
+ *   villes: { ville_id: string, nom: string, pays_id: string }[],
+ *   suggestions: { place_id: string, nom: string, description: string }[]
+ * }>}
+ */
+export function rechercherVilles({ q = '', paysId = '', jetonSession = '' } = {}) {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (paysId) params.set('pays_id', paysId);
+  if (jetonSession) params.set('jeton_session', jetonSession);
+  return apiFetch(`/referentiels/villes/rechercher?${params.toString()}`);
+}
+
+/** @returns {Promise<{ ville: { ville_id: string, nom: string, pays_id: string }, creee: boolean }>} */
+export function importerVilleGoogle({ placeId, paysId = '', jetonSession = '' }) {
+  return apiFetch('/referentiels/villes/importer', {
+    method: 'POST',
+    body: { place_id: placeId, pays_id: paysId || undefined, jeton_session: jetonSession || undefined },
+  });
+}

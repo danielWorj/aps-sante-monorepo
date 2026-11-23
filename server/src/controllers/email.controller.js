@@ -17,6 +17,7 @@ import {
   RELANCE_MAX_TENTATIVES,
 } from "../services/email.service.js";
 import prisma from "../lib/prisma.js";
+import { NOM_MARQUE } from "../lib/marque.js";
 
 const STATUTS_MESSAGE = ["en_attente", "envoye", "echec"];
 const TAILLE_PAGE_MAX = 100;
@@ -57,7 +58,7 @@ export async function verifierSmtpCtrl(_req, res, next) {
 export async function envoyerEmailTestCtrl(req, res, next) {
   try {
     const { destinataire, texte } = req.body ?? {};
-    const sujet = String(req.body?.sujet || "Test e-mail APS Santé");
+    const sujet = String(req.body?.sujet || `Test e-mail ${NOM_MARQUE}`);
     const r = await envoyerEmail({
       destinataire, sujet, texte,
       html: construireEmailHtml({ titre: sujet, paragraphes: [String(texte ?? "")], pied: "E-mail de test envoyé depuis le back-office." }),

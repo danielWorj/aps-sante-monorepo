@@ -12,6 +12,7 @@ import { PresencePortailPage } from '../layouts/presence.portail-sidebar';
 import { modifierPharmacie } from '../../../services/pharmacieService';
 import { modifierCentreSante } from '../../../services/structureSanteService';
 import { BandeauMasque } from './presenceCommun';
+import { NOM_MARQUE } from '../../../lib/marque';
 
 const CHAMPS = {
   pharmacie: [
@@ -41,7 +42,7 @@ export default function PresencePresentation() {
     try {
       if (type === 'pharmacie') await modifierPharmacie(fiche.acteur_id, valeurs);
       else await modifierCentreSante(fiche.acteur_id, valeurs);
-      toast.succes('Présentation enregistrée. Votre fiche repasse en vérification par ApSa.', { duree: 6000 });
+      toast.succes(`Présentation enregistrée. Votre fiche repasse en vérification par ${NOM_MARQUE}.`, { duree: 6000 });
       rechargerFiche();
     } catch (err) {
       setErreur(err?.message || 'Enregistrement impossible.');
@@ -59,7 +60,7 @@ export default function PresencePresentation() {
         <div className="info-card">
           <h3><i className="fa-solid fa-align-left" /> Contenus enrichis</h3>
           <p className="minimal-note">
-            Restez factuel : aucun message promotionnel (prix barrés, « meilleur de la ville »…). ApSa vérifie chaque modification
+            Restez factuel : aucun message promotionnel (prix barrés, « meilleur de la ville »…). {NOM_MARQUE} vérifie chaque modification
             avant publication ; votre fiche reste en ligne pendant la vérification.
           </p>
           {champs.map(([cle, libelle, aide, droit]) => (

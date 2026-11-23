@@ -23,6 +23,7 @@ import '../../../models/laboratoire_models.dart';
 import '../../../models/referentiel_models.dart' show Pays, Ville;
 import '../../../repositories/laboratoire_repository.dart' show FichierLaboratoire;
 import 'aps_pays_ville_fields.dart';
+import '../../../utils/marque.dart';
 
 class CreateLaboratoireScreen extends ConsumerStatefulWidget {
   const CreateLaboratoireScreen({super.key});
@@ -217,7 +218,7 @@ class _CreateLaboratoireScreenState extends ConsumerState<CreateLaboratoireScree
 
   Widget _etape1(bool connecte) => ApsStepBody(
         title: 'Votre laboratoire',
-        description: "Référencez votre laboratoire dans l'annuaire APS Santé.",
+        description: "Référencez votre laboratoire dans l'annuaire $nomMarque.",
         showBack: false,
         error: currentStep == 0 ? _stepError : null,
         onContinue: _continuer,
@@ -369,7 +370,7 @@ class _CreateLaboratoireScreenState extends ConsumerState<CreateLaboratoireScree
           ),
           const SizedBox(height: 14),
           if (!connecte) const ApsBanner(message: 'Vous devez être connecté(e) pour envoyer cette demande.', error: true),
-          const ApsBanner(message: "La fiche sera visible dans l'annuaire après vérification par APS Santé."),
+          const ApsBanner(message: "La fiche sera visible dans l'annuaire après vérification par $nomMarque."),
         ],
       );
 

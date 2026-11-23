@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import photoEquipe from '../assets/img/med5.jpg';
 import photoParcours from '../assets/img/structure4.jpg';
 import '../assets/styles/info-2026.css';
+import { DE_MARQUE, NOM_MARQUE, RAISON_SOCIALE } from '../lib/marque';
 
 const CE_QUE_NOUS_NE_SOMMES_PAS = [
   {
@@ -56,7 +57,7 @@ const ENGAGEMENTS = [
   {
     icone: 'fa-receipt',
     titre: 'Des frais transparents',
-    texte: "Avant de payer, vous voyez le détail : honoraires, frais de service ApSa, taxes et frais de paiement.",
+    texte: `Avant de payer, vous voyez le détail : honoraires, frais de service ${NOM_MARQUE}, taxes et frais de paiement.`,
   },
   {
     icone: 'fa-hand-holding-heart',
@@ -97,12 +98,12 @@ export default function APropos() {
               <i className="fa-solid fa-chevron-right" />
               <span>À propos</span>
             </nav>
-            <span className="aps-over">À propos d&apos;ApSa</span>
+            <span className="aps-over">À propos {DE_MARQUE}</span>
             <h1 className="aps-h1 info26-titre">
               Votre santé, vos assurances, <span className="info26-accent">un seul carnet d&apos;adresses</span>.
             </h1>
             <p className="aps-t-s info26-lead">
-              ApSa (AZA Proxi Santé Assurances) rassemble en un même endroit les médecins, pharmacies, structures de
+              {NOM_MARQUE} ({RAISON_SOCIALE}) rassemble en un même endroit les médecins, pharmacies, structures de
               santé, services d&apos;urgence et assureurs. Notre mission : réduire le temps entre un besoin de soin
               et l&apos;accès au soin, avec un paiement sécurisé à chaque étape.
             </p>
@@ -147,7 +148,7 @@ export default function APropos() {
               <span className="aps-over">Notre rôle</span>
               <h2 className="aps-h2 mt-2">Un annuaire de référence et un lieu de mise en relation.</h2>
               <p className="aps-t-s mt-3">
-                ApSa ne remplace ni votre médecin, ni votre pharmacien, ni votre assureur. Nous vous aidons à les
+                {NOM_MARQUE} ne remplace ni votre médecin, ni votre pharmacien, ni votre assureur. Nous vous aidons à les
                 trouver, à les joindre, à prendre rendez-vous et à payer en toute sécurité — puis nous nous effaçons.
               </p>
             </div>
@@ -171,7 +172,7 @@ export default function APropos() {
         <div className="container-aps">
           <div className="aps-sec-head">
             <div>
-              <span className="aps-over">Ce que vous trouvez sur ApSa</span>
+              <span className="aps-over">Ce que vous trouvez sur {NOM_MARQUE}</span>
               <h2 className="aps-h2 mt-2">Tout le parcours de soin, au même endroit.</h2>
             </div>
             <p className="aps-t-s">Du premier renseignement à la consultation, chaque service est pensé pour le mobile et les connexions modestes.</p>
@@ -243,7 +244,7 @@ export default function APropos() {
         <div className="container-aps">
           <div className="aps-sec-head">
             <div>
-              <span className="aps-over">Rejoindre ApSa</span>
+              <span className="aps-over">Rejoindre {NOM_MARQUE}</span>
               <h2 className="aps-h2 mt-2">Une plateforme, quatre façons d&apos;y participer.</h2>
             </div>
           </div>

@@ -10,8 +10,9 @@ import PatientPortailSidebar from '../layouts/patient.portail-sidebar';
 import { AssurancePortailPage } from '../layouts/assurance.portail-sidebar';
 import { LaboratoirePortailPage } from '../layouts/laboratoire.portail-sidebar';
 import { PresencePortailPage } from '../layouts/presence.portail-sidebar';
+import { NOM_MARQUE } from '../../../lib/marque';
 
-const INTRO = 'Les informations publiées par APS Santé à destination de ses utilisateurs.';
+const INTRO = `Les informations publiées par ${NOM_MARQUE} à destination de ses utilisateurs.`;
 
 function Entete({ espace }) {
   return (
@@ -76,7 +77,7 @@ export function LaboratoireAnnonces() {
 
 export function PresenceAnnonces() {
   return (
-    <PresencePortailPage titre="Annonces ApSa" description={INTRO}>
+    <PresencePortailPage titre={`Annonces ${NOM_MARQUE}`} description={INTRO}>
       <ListeAnnonces />
     </PresencePortailPage>
   );

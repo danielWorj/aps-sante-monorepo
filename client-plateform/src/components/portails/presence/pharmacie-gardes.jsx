@@ -10,6 +10,7 @@ import { PresencePortailPage } from '../layouts/presence.portail-sidebar';
 import { listerGardesGestion } from '../../../services/espacePresenceService';
 import { EtatChargement } from './presenceCommun';
 import { useRessource } from './presenceOutils';
+import { NOM_MARQUE } from '../../../lib/marque';
 
 const moment = (iso) =>
   new Date(iso).toLocaleString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -58,8 +59,8 @@ export default function PharmacieGardes() {
             </table>
           )}
           <p className="minimal-note mt-3 mb-0">
-            <i className="fa-solid fa-circle-info" /> Les gardes sont planifiées par ApSa d&apos;après le calendrier officiel de votre pays.
-            Une garde manquante ou erronée ? <Link to="/contact">Signalez-le à ApSa</Link>.
+            <i className="fa-solid fa-circle-info" /> Les gardes sont planifiées par {NOM_MARQUE} d&apos;après le calendrier officiel de votre pays.
+            Une garde manquante ou erronée ? <Link to="/contact">Signalez-le à {NOM_MARQUE}</Link>.
           </p>
         </div>
       </EtatChargement>

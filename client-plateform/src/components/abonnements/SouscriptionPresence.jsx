@@ -25,6 +25,7 @@ import ChoixMoyenPaiement from '../paiement/ChoixMoyenPaiement';
 import PaiementMobileMoney from '../paiement/PaiementMobileMoney';
 import { adaptateurAbonnementPresence } from '../paiement/adaptateurs';
 import { montantDevise } from '../../utils/fonds';
+import { NOM_MARQUE } from '../../lib/marque';
 
 const formatDate = (iso) =>
   iso ? new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' }) : '';
@@ -240,7 +241,7 @@ export default function SouscriptionPresence({ type, acteurId, onActive, intenti
       <div className="banner-institutionnel">
         <i className="fa-solid fa-hourglass-half" />
         <span>
-          Votre fiche « {fiche.nom} » doit être vérifiée et publiée par ApSa avant de pouvoir souscrire un abonnement.
+          Votre fiche « {fiche.nom} » doit être vérifiée et publiée par {NOM_MARQUE} avant de pouvoir souscrire un abonnement.
         </span>
       </div>
     );
@@ -344,7 +345,7 @@ export default function SouscriptionPresence({ type, acteurId, onActive, intenti
               <span className="choix-paiement-option-icon"><i className="fa-solid fa-building-columns" /></span>
               <span className="choix-paiement-option-body">
                 <strong>Virement bancaire</strong>
-                <small>Activation à réception des fonds par ApSa.</small>
+                <small>Activation à réception des fonds par {NOM_MARQUE}.</small>
               </span>
               <i className="fa-solid fa-chevron-right choix-paiement-option-arrow" />
             </button>

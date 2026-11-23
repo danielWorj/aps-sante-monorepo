@@ -21,6 +21,7 @@ import { JitsiMeeting } from "@jitsi/react-sdk";
 import { apiFetch } from "../../lib/apiClient";
 import { signalerPresenceVisio } from "../../services/visioService";
 import { estErreurRdvNonPaye } from "../../utils/rdv";
+import { NOM_MARQUE } from '../../lib/marque';
 
 // onApi(externalApi) : API Jitsi, pour raccrocher / terminer pour tous depuis
 // l'habillage (fin de consultation). onParticipantLeft : l'autre participant
@@ -92,8 +93,8 @@ function ConsultationRoom({ rdvId, onCallEnded, onReady, onApi, onParticipantLef
           // Titre lisible (« Téléconsultation avec Dr … ») au lieu du nom
           // technique de la salle (rdv-<uuid>) ; localSubject vaut pour
           // chacun, subject n'est appliqué que par le modérateur.
-          subject: visioData.sujet || "Téléconsultation APS Santé",
-          localSubject: visioData.sujet || "Téléconsultation APS Santé",
+          subject: visioData.sujet || `Téléconsultation ${NOM_MARQUE}`,
+          localSubject: visioData.sujet || `Téléconsultation ${NOM_MARQUE}`,
         }}
         interfaceConfigOverwrite={{
           TOOLBAR_BUTTONS: ["microphone", "camera", "hangup", "chat", "tileview"],

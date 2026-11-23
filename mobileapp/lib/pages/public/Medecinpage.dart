@@ -27,6 +27,7 @@ import './utils/Rendezvous.dart';
 import '../../components/reputation/avis_publics.dart';
 import '../../components/reputation/reputation_ui.dart' show decimalFr;
 import '../../repositories/reputation_medecin_repository.dart';
+import '../../utils/marque.dart';
 
 /// Engagements des visiteurs sur la fiche (statistiques du médecin) :
 /// envoyés sans attendre, jamais bloquants.
@@ -727,7 +728,7 @@ class _MedecinPageState extends State<MedecinPage> {
           ),
         ApsFilterSwitch(
           label: 'Vérifiés uniquement',
-          subtitle: 'Profils vérifiés par APS Santé',
+          subtitle: 'Profils vérifiés par $nomMarque',
           icon: Icons.verified_outlined,
           value: c.verifie,
           onChanged: (v) => maj(_avec(c, verifie: v)),

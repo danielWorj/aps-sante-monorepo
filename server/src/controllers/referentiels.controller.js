@@ -10,6 +10,14 @@
 import { getNearestCity } from "offline-geocode-city";
 import prisma from "../lib/prisma.js";
 import { estFuseauValide, FUSEAU_PAR_DEFAUT } from "../lib/fuseauHoraire.js";
+import {
+  etatSource,
+  changerSource,
+  testerGoogle,
+  rechercherVilles as rechercherVillesSource,
+  importerVilleGoogle,
+  ErreurSourceVilles,
+} from "../services/sourceVilles.service.js";
 
 const MESSAGE_FUSEAU_INVALIDE =
   "fuseau_horaire invalide : identifiant IANA attendu (ex. Africa/Douala, Africa/Abidjan, Europe/Paris).";
@@ -568,6 +576,96 @@ export async function supprimerVille(req, res, next) {
 
     await prisma.ville.delete({ where: { ville_id: req.params.id } });
     return res.status(200).json({ message: "Ville supprimée." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/* ===================================================================
+ * Source des villes (manuel / Google Maps) — services/sourceVilles.service.js
+ * =================================================================== */
+
+function transmettreErreurSource(err, res, next) {
+  if (err instanceof ErreurSourceVilles) {
+    return res.status(err.status).json({ message: err.message });
+  }
+  return next(err);
+}
+
+/**
+ * GET /api/referentiels/villes/source
+ * Public : mode réellement appliqué, pour que le formulaire choisisse
+ * entre la liste simple (manuel) et la recherche Google.
+ */
+export async function obtenirSourceVillesPublique(_req, res, next) {
+  try {
+    const etat = await etatSource();
+    return res.status(200).json({ source: etat.source_effective });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/referentiels/villes/rechercher?q=...&pays_id=...&jeton_session=...
+ * Public. Villes en base + (mode Google) suggestions Google pas encore en base.
+ */
+export async function rechercherVilles(req, res, next) {
+  try {
+    const { q, pays_id, jeton_session } = req.query;
+    const resultat = await rechercherVillesSource({
+      q: q ? String(q) : "",
+      pays_id: pays_id ? String(pays_id) : null,
+      jeton_session: jeton_session ? String(jeton_session).slice(0, 100) : null,
+    });
+    return res.status(200).json(resultat);
+  } catch (err) {
+    transmettreErreurSource(err, res, next);
+  }
+}
+
+/**
+ * POST /api/referentiels/villes/importer  { place_id, pays_id?, jeton_session? }
+ * Public (formulaires d'inscription) : importe en base la ville Google
+ * choisie et renvoie sa fiche (ville_id à utiliser dans le formulaire).
+ */
+export async function importerVille(req, res, next) {
+  try {
+    const { place_id, pays_id, jeton_session } = req.body || {};
+    const { ville, creee } = await importerVilleGoogle({
+      place_id: place_id ? String(place_id) : "",
+      pays_id: pays_id ? String(pays_id) : null,
+      jeton_session: jeton_session ? String(jeton_session).slice(0, 100) : null,
+    });
+    return res.status(creee ? 201 : 200).json({ ville, creee });
+  } catch (err) {
+    transmettreErreurSource(err, res, next);
+  }
+}
+
+/** GET /api/referentiels/source-villes — back-office : état détaillé. */
+export async function obtenirConfigSourceVilles(_req, res, next) {
+  try {
+    return res.status(200).json(await etatSource());
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** PUT /api/referentiels/source-villes { source } — superadmin. */
+export async function modifierConfigSourceVilles(req, res, next) {
+  try {
+    const etat = await changerSource(req.body?.source);
+    return res.status(200).json({ message: "Source des villes mise à jour.", ...etat });
+  } catch (err) {
+    transmettreErreurSource(err, res, next);
+  }
+}
+
+/** POST /api/referentiels/source-villes/tester — superadmin : teste la clé Google. */
+export async function testerConfigSourceVilles(_req, res, next) {
+  try {
+    return res.status(200).json(await testerGoogle());
   } catch (err) {
     next(err);
   }

@@ -10,6 +10,7 @@ import { PresencePortailPage } from '../layouts/presence.portail-sidebar';
 import { listerAvisGestion } from '../../../services/espacePresenceService';
 import { EtatChargement } from './presenceCommun';
 import { dateCourte, useRessource } from './presenceOutils';
+import { NOM_MARQUE } from '../../../lib/marque';
 
 export default function PharmacieAvis() {
   const { acteurId } = useOutletContext();
@@ -37,7 +38,7 @@ export default function PharmacieAvis() {
                   ))}
                 </div>
                 {d.en_attente > 0 && (
-                  <p className="minimal-note mt-3 mb-0"><i className="fa-solid fa-hourglass-half" /> {d.en_attente} avis en cours de vérification par ApSa.</p>
+                  <p className="minimal-note mt-3 mb-0"><i className="fa-solid fa-hourglass-half" /> {d.en_attente} avis en cours de vérification par {NOM_MARQUE}.</p>
                 )}
               </div>
             </div>
@@ -57,7 +58,7 @@ export default function PharmacieAvis() {
                   </div>
                 ))}
                 <p className="minimal-note mt-3 mb-0">
-                  Chaque avis est vérifié par ApSa avant publication. Un avis abusif ou erroné ? <Link to="/contact">Signalez-le à ApSa</Link>.
+                  Chaque avis est vérifié par {NOM_MARQUE} avant publication. Un avis abusif ou erroné ? <Link to="/contact">Signalez-le à {NOM_MARQUE}</Link>.
                 </p>
               </div>
             </div>

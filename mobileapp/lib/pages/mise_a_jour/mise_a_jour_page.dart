@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../components/components.dart';
 import '../../controllers/mise_a_jour_controller.dart';
+import '../../utils/marque.dart';
 
 void ouvrirMisesAJour(BuildContext context) {
   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MiseAJourPage()));
@@ -53,12 +54,12 @@ class MiseAJourPage extends ConsumerWidget {
               children: [
                 ApsTopBar(
                   title: obligatoire ? 'Mise à jour obligatoire' : 'Mises à jour',
-                  overline: 'APS Santé',
+                  overline: nomMarque,
                   showBack: !obligatoire,
                 ),
                 if (obligatoire) ...[
                   ApsNote.text(
-                    'Cette version d’ApSa n’est plus prise en charge. Installez la nouvelle version pour continuer '
+                    'Cette version $deMarque n’est plus prise en charge. Installez la nouvelle version pour continuer '
                     'à utiliser l’application.',
                     bold: 'Mise à jour requise.',
                     icon: Icons.lock_clock_outlined,
@@ -117,7 +118,7 @@ class _CarteVersionInstallee extends StatelessWidget {
               children: [
                 Text('Version installée', style: AppTextStyles.xs),
                 const SizedBox(height: 2),
-                Text(v == null ? '…' : 'ApSa ${v.nom}', style: AppTextStyles.strong.copyWith(fontSize: 15)),
+                Text(v == null ? '…' : '$nomMarque ${v.nom}', style: AppTextStyles.strong.copyWith(fontSize: 15)),
               ],
             ),
           ),
@@ -143,7 +144,7 @@ class _CarteStatut extends StatelessWidget {
             icone: Icons.store_outlined,
             ton: ApsTone.neutral,
             titre: 'Mises à jour par le store',
-            texte: 'Sur cet appareil, ApSa se met à jour depuis le store de votre téléphone.',
+            texte: 'Sur cet appareil, $nomMarque se met à jour depuis le store de votre téléphone.',
           ),
         );
       case PhaseMiseAJour.verification:
@@ -184,7 +185,7 @@ class _CarteStatut extends StatelessWidget {
             children: [
               const _Entete(
                 icone: Icons.check_circle_outline_rounded,
-                titre: 'ApSa est à jour',
+                titre: '$nomMarque est à jour',
                 texte: 'Vous utilisez la dernière version de l’application.',
               ),
               const SizedBox(height: 14),
@@ -233,7 +234,7 @@ class _CarteNouvelleVersion extends StatelessWidget {
                   children: [
                     const ApsPill('Nouvelle version', dot: true),
                     const SizedBox(height: 4),
-                    Text('ApSa ${v.nom ?? ''}'.trim(), style: AppTextStyles.strong.copyWith(fontSize: 16)),
+                    Text('$nomMarque ${v.nom ?? ''}'.trim(), style: AppTextStyles.strong.copyWith(fontSize: 16)),
                   ],
                 ),
               ),
@@ -286,7 +287,7 @@ class _CarteNouvelleVersion extends StatelessWidget {
         return [
           if (etat.autorisationDemandee) ...[
             ApsNote.text(
-              'Activez « Autoriser depuis cette source » pour APS Santé, puis revenez : l’installation reprendra.',
+              'Activez « Autoriser depuis cette source » pour $nomMarque, puis revenez : l’installation reprendra.',
               bold: 'Une autorisation est nécessaire.',
               icon: Icons.admin_panel_settings_outlined,
               tone: ApsTone.amber,

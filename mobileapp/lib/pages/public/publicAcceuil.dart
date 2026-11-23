@@ -21,6 +21,7 @@ import 'Laboratoirepage.dart';
 import 'Centresantepage.dart';
 import 'Assurancepage.dart';
 import 'urgence.dart';
+import '../../utils/marque.dart';
 
 /// Écran d'accueil public de l'application APS Santé.
 ///
@@ -631,7 +632,7 @@ class _HomeHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(0, 6, 0, 14),
       child: Row(
         children: [
-          ApsAvatar(name: nom == 'Mr/Mme' ? 'ApSa' : nom, size: 40, round: true, variant: 2),
+          ApsAvatar(name: nom == 'Mr/Mme' ? nomMarque : nom, size: 40, round: true, variant: 2),
           const SizedBox(width: 10),
           Expanded(
             child: Column(

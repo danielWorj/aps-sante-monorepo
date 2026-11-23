@@ -1,8 +1,43 @@
+import java.io.FileInputStream
+import java.util.Base64
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// ─── Signature release ────────────────────────────────────────────────
+// Les mises à jour de l'application (écran « Mises à jour ») exigent que
+// chaque APK soit signée avec la MÊME clé : Android refuse sinon de
+// l'installer par-dessus. La clé debug change d'une machine à l'autre, elle
+// ne doit donc jamais signer une release.
+// android/key.properties (jamais versionné, voir android/.gitignore) :
+//   storePassword=…  keyPassword=…  keyAlias=…  storeFile=<chemin du .jks>
+val fichierCleSignature = rootProject.file("key.properties")
+val proprietesCleSignature = Properties().apply {
+    if (fichierCleSignature.exists()) FileInputStream(fichierCleSignature).use { load(it) }
+}
+val signatureReleaseConfiguree = fichierCleSignature.exists()
+
+// ─── Marque ───────────────────────────────────────────────────────────
+// Nom affiché sous l'icône = NOM_MARQUE passé par --dart-define (même
+// variable que lib/utils/marque.dart). Flutter transmet les --dart-define à
+// Gradle dans la propriété « dart-defines » : liste séparée par des
+// virgules de « CLE=valeur » encodés en base64.
+val dartDefines: Map<String, String> = (project.findProperty("dart-defines") as String?)
+    ?.split(",")
+    ?.mapNotNull { encode ->
+        runCatching { String(Base64.getDecoder().decode(encode), Charsets.UTF_8) }.getOrNull()
+    }
+    ?.mapNotNull { paire ->
+        val i = paire.indexOf('=')
+        if (i > 0) paire.substring(0, i) to paire.substring(i + 1) else null
+    }
+    ?.toMap()
+    ?: emptyMap()
+val nomMarque: String = dartDefines["NOM_MARQUE"]?.trim()?.takeIf { it.isNotEmpty() } ?: "ApSa"
 
 android {
     namespace = "com.apssante.app"
@@ -24,6 +59,8 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // android:label="${nomMarque}" (AndroidManifest.xml)
+        manifestPlaceholders["nomMarque"] = nomMarque
     }
 
     // Le lint "vital" de release analyse aussi les plugins : celui de stripe_android
@@ -32,11 +69,25 @@ android {
         checkReleaseBuilds = false
     }
 
+    signingConfigs {
+        if (signatureReleaseConfiguree) {
+            create("release") {
+                keyAlias = proprietesCleSignature.getProperty("keyAlias")
+                keyPassword = proprietesCleSignature.getProperty("keyPassword")
+                storeFile = file(proprietesCleSignature.getProperty("storeFile"))
+                storePassword = proprietesCleSignature.getProperty("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Sans key.properties, pas de signature : la vérification
+            // ci-dessous fait échouer le build plutôt que de produire une
+            // APK signée avec la clé debug.
+            if (signatureReleaseConfiguree) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -55,4 +106,16 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// Refus explicite d'un build release sans clé (les builds debug/profile ne
+// sont pas concernés).
+gradle.taskGraph.whenReady {
+    val buildRelease = allTasks.any { it.project == project && it.name.contains("Release") }
+    if (buildRelease && !signatureReleaseConfiguree) {
+        throw GradleException(
+            "Signature release absente : créez mobileapp/android/key.properties " +
+                "(storePassword, keyPassword, keyAlias, storeFile) avant de construire une release."
+        )
+    }
 }

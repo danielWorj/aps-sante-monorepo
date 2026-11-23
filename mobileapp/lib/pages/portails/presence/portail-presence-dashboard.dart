@@ -14,6 +14,7 @@ import '../../../controllers/espace_presence_controller.dart';
 import '../../../models/espace_presence_models.dart';
 import 'portail-presence-plus.dart' show ouvrirRubriquePresence;
 import 'presence_commun.dart';
+import '../../../utils/marque.dart';
 
 const _libellesAbonnement = {
   'actif': 'Abonnement actif',
@@ -372,7 +373,7 @@ class _CarteAvis extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (d.avisEnAttente > 0) Text('${d.avisEnAttente} avis en cours de vérification par ApSa.', style: AppTextStyles.cardMeta),
+            if (d.avisEnAttente > 0) Text('${d.avisEnAttente} avis en cours de vérification par $nomMarque.', style: AppTextStyles.cardMeta),
             if (d.derniersAvis.isEmpty)
               const Text('Aucun avis publié pour l\'instant.', style: AppTextStyles.cardMeta)
             else

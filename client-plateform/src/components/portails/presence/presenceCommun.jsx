@@ -4,6 +4,7 @@
 // Outils non composants : presenceOutils.js.
 import { Link } from 'react-router-dom';
 import { ESPACES_PRESENCE } from '../../../services/espacePresenceService';
+import { NOM_MARQUE } from '../../../lib/marque';
 
 /** Spinner / erreur avec « Réessayer », sinon les enfants. */
 export function EtatChargement({ donnees, erreur, recharger, children }) {
@@ -44,8 +45,8 @@ export function BandeauFicheHorsLigne({ fiche }) {
       <i className="fa-solid fa-hourglass-half" />
       <span>
         {fiche.statut_verification === 'non_publie'
-          ? "Votre fiche n'est pas publiée : elle n'est pas visible du public. Contactez ApSa pour en connaître la raison."
-          : "Votre fiche est en cours de vérification par ApSa : elle sera visible du public après validation."}
+          ? `Votre fiche n'est pas publiée : elle n'est pas visible du public. Contactez ${NOM_MARQUE} pour en connaître la raison.`
+          : `Votre fiche est en cours de vérification par ${NOM_MARQUE} : elle sera visible du public après validation.`}
       </span>
     </div>
   );

@@ -28,11 +28,14 @@ import {
   sonderConnexionApplicationCtrl,
   demandesConnexionCtrl,
   repondreDemandeConnexionCtrl,
+  demanderValidationApplicationCtrl,
+  validerAppareilParPreuveCtrl,
 } from "../controllers/connexionApplication.controller.js";
 import {
   authentifier,
   exigerTokenChangementMotDePasse,
   exigerTokenChangementPin,
+  exigerTokenValidationAppareil,
 } from "../middlewares/auth.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
 
@@ -75,6 +78,11 @@ router.get("/configuration-connexion", configurationConnexionCtrl);
 // code PIN oublié (public, limité en débit) et numéro d'un compte existant.
 router.post("/pin/reinitialiser", reinitialiserPinCtrl);
 router.post("/telephone/verifier", authentifier, verifierTelephoneCtrl);
+
+// Nouvel appareil (token restreint « validation_appareil ») : confirmation
+// depuis l'application connectée ailleurs, ou preuve WhatsApp inversée.
+router.post("/appareil/application", exigerTokenValidationAppareil, demanderValidationApplicationCtrl);
+router.post("/appareil/valider", exigerTokenValidationAppareil, validerAppareilParPreuveCtrl);
 
 // Connexion web validée depuis l'application mobile.
 router.post("/connexion-application", demanderConnexionApplicationCtrl);

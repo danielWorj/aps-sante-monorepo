@@ -12,6 +12,7 @@ import { PresencePortailPage } from '../layouts/presence.portail-sidebar';
 import { ESPACES_PRESENCE, libelleOuverture, obtenirTableauDeBordPresence } from '../../../services/espacePresenceService';
 import { BandeauFicheHorsLigne, EtatChargement } from './presenceCommun';
 import { dateCourte, dateHeure, useRessource } from './presenceOutils';
+import { DE_MARQUE, NOM_MARQUE } from '../../../lib/marque';
 
 const PERIODES = [7, 30, 90];
 const nombre = (n) => (n ?? 0).toLocaleString('fr-FR');
@@ -170,7 +171,7 @@ function Contenu({ d, type }) {
                   </tbody>
                 </table>
                 {!vues.detaillees && <p className="minimal-note mt-2 mb-0">Le détail jour par jour est inclus avec les statistiques détaillées.</p>}
-                <p className="minimal-note mt-2 mb-0">Vos propres consultations, celles d&apos;ApSa et des robots ne sont pas comptées.</p>
+                <p className="minimal-note mt-2 mb-0">Vos propres consultations, celles {DE_MARQUE} et des robots ne sont pas comptées.</p>
               </>
             )}
           </div>
@@ -261,7 +262,7 @@ function CarteGardes({ gardes }) {
           ))}
         </ul>
       )}
-      <p className="minimal-note mb-0">Les gardes sont fixées par l&apos;autorité de votre pays et publiées par ApSa. <Link to="/portail/pharmacie-gardes">Calendrier complet</Link></p>
+      <p className="minimal-note mb-0">Les gardes sont fixées par l&apos;autorité de votre pays et publiées par {NOM_MARQUE}. <Link to="/portail/pharmacie-gardes">Calendrier complet</Link></p>
     </div>
   );
 }
@@ -270,7 +271,7 @@ function CarteAvis({ avis }) {
   return (
     <div className="info-card">
       <h3><i className="fa-solid fa-star-half-stroke" /> Avis</h3>
-      {avis.en_attente > 0 && <p className="minimal-note"><i className="fa-solid fa-hourglass-half" /> {avis.en_attente} avis en cours de vérification par ApSa.</p>}
+      {avis.en_attente > 0 && <p className="minimal-note"><i className="fa-solid fa-hourglass-half" /> {avis.en_attente} avis en cours de vérification par {NOM_MARQUE}.</p>}
       {avis.nombre === 0 ? (
         <div className="aps-empty-state"><i className="fa-regular fa-star"></i><div>Aucun avis publié pour l&apos;instant.</div></div>
       ) : (

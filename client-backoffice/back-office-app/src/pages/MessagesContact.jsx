@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useToast } from '../components/feedback';
 import './../assets/style/Referentiel.css';
 import { listerMessagesContact, modifierMessageContact } from '../services/contactService';
+import { NOM_MARQUE } from '../lib/marque';
 
 const STATUTS = [
   { cle: 'nouveau', libelle: 'Nouveaux', badge: 'is-info' },
@@ -164,7 +165,7 @@ export default function MessagesContact() {
                   <h5 className="mb-1">{selection.nom}</h5>
                   <div className="aps-text-muted" style={{ fontSize: 13 }}>
                     {PROFILS[selection.profil] || selection.profil} · {dateHeure(selection.date_creation)}
-                    {selection.utilisateur_id && <> · <span className="aps-badge is-neutral">Compte ApSa</span></>}
+                    {selection.utilisateur_id && <> · <span className="aps-badge is-neutral">Compte {NOM_MARQUE}</span></>}
                   </div>
                 </div>
                 <button className="btn-close" aria-label="Fermer" onClick={() => setSelection(null)}></button>
@@ -181,7 +182,7 @@ export default function MessagesContact() {
               <div className="d-flex flex-wrap gap-2 mt-3">
                 {selection.email && (
                   <a className="btn btn-sm btn-outline-primary"
-                    href={`mailto:${selection.email}?subject=${encodeURIComponent(`ApSa — ${SUJETS[selection.sujet] || 'Votre message'}`)}`}>
+                    href={`mailto:${selection.email}?subject=${encodeURIComponent(`${NOM_MARQUE} — ${SUJETS[selection.sujet] || 'Votre message'}`)}`}>
                     <i className="fa-regular fa-envelope me-1"></i>{selection.email}
                   </a>
                 )}

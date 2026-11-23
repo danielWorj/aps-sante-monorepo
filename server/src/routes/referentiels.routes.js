@@ -40,7 +40,13 @@ import {
   creerRole,
   modifierRole,
   supprimerRole,
-  detecterPaysParPosition
+  detecterPaysParPosition,
+  obtenirSourceVillesPublique,
+  rechercherVilles,
+  importerVille,
+  obtenirConfigSourceVilles,
+  modifierConfigSourceVilles,
+  testerConfigSourceVilles,
 } from "../controllers/referentiels.controller.js";
 import { authentifier } from "../middlewares/auth.middleware.js";
 import { autoriser } from "../middlewares/autorisation.middleware.js";
@@ -71,10 +77,19 @@ router.delete("/pays/:id", authentifier, autoriser("superadmin"), supprimerPays)
 
 // ─── Villes ───────────────────────────────────────────────────
 router.get("/villes", listerVilles);
+// Recherche manuel / Google Maps (avant /villes/:id). Rate-limit dans index.js.
+router.get("/villes/source", obtenirSourceVillesPublique);
+router.get("/villes/rechercher", rechercherVilles);
+router.post("/villes/importer", importerVille);
 router.get("/villes/:id", obtenirVille);
 router.post("/villes", authentifier, autoriser("admin", "superadmin"), creerVille);
 router.put("/villes/:id", authentifier, autoriser("admin", "superadmin"), modifierVille);
 router.delete("/villes/:id", authentifier, autoriser("superadmin"), supprimerVille);
+
+// ─── Source des villes (back-office) ─────────────────────────
+router.get("/source-villes", authentifier, autoriser("admin", "superadmin"), obtenirConfigSourceVilles);
+router.put("/source-villes", authentifier, autoriser("superadmin"), modifierConfigSourceVilles);
+router.post("/source-villes/tester", authentifier, autoriser("superadmin"), testerConfigSourceVilles);
 
 // ─── Rôles (IAM) ──────────────────────────────────────────────
 router.get("/roles", authentifier, listerRoles);

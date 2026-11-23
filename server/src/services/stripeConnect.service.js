@@ -18,6 +18,7 @@
 
 import prisma from "../lib/prisma.js";
 import { stripe } from "../lib/stripeService.js";
+import { NOM_MARQUE, DE_MARQUE } from "../lib/marque.js";
 
 export class StripeConnectError extends Error {
   constructor(message, status = 400) {
@@ -35,7 +36,7 @@ function traduireErreurStripe(err, contexte) {
   console.error(`[stripe-connect] ${contexte} :`, err?.message);
   if (err?.type === "StripeInvalidRequestError" && /connect/i.test(err?.message || "")) {
     return new StripeConnectError(
-      "Stripe Connect n'est pas activé sur le compte Stripe d'ApSa. Contactez l'administration.",
+      `Stripe Connect n'est pas activé sur le compte Stripe ${DE_MARQUE}. Contactez l'administration.`,
       503
     );
   }
@@ -110,7 +111,7 @@ export async function creerLienInscription(medecin) {
         ...(accord ? { tos_acceptance: { service_agreement: accord } } : {}),
         business_profile: {
           mcc: "8011", // médecins
-          product_description: "Consultations médicales réservées via ApSa",
+          product_description: `Consultations médicales réservées via ${NOM_MARQUE}`,
         },
         metadata: { medecin_id: medecin.medecin_id },
       });

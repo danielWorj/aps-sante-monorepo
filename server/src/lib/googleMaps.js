@@ -267,3 +267,104 @@ export async function calculerItineraire({
     etapes,
   };
 }
+
+/* ===================================================================
+ * Places API (New) — villes du référentiel
+ * ===================================================================
+ * Utilisé par services/sourceVilles.service.js pour proposer des villes
+ * qui ne sont pas encore en base. « Places API (New) » doit être activée
+ * sur le projet Google Cloud de GOOGLE_MAPS_API_KEY : tant qu'elle ne
+ * l'est pas, ces appels lèvent une GoogleMapsError et le référentiel
+ * repasse automatiquement en mode manuel.
+ */
+
+const PLACES_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete";
+const PLACES_DETAILS_URL = "https://places.googleapis.com/v1/places";
+
+/** Lève une GoogleMapsError lisible si Places API a répondu en erreur. */
+async function lireReponsePlaces(reponse, contexte) {
+  const donnees = await reponse.json().catch(() => ({}));
+  if (!reponse.ok) {
+    throw new GoogleMapsError(
+      "Recherche de villes Google indisponible.",
+      `${contexte} HTTP ${reponse.status}${donnees?.error?.message ? ` (${donnees.error.message})` : ""}`
+    );
+  }
+  return donnees;
+}
+
+/**
+ * Suggestions de villes pour un texte saisi.
+ * @param {string} texte
+ * @param {object} [options]
+ * @param {string} [options.codePays] ISO 3166-1 alpha-2 : limite aux villes de ce pays
+ * @param {string} [options.jetonSession] regroupe frappes + détails en une session facturée
+ * @returns {Promise<Array<{ placeId: string, nom: string, description: string }>>}
+ */
+export async function autocompleterVilles(texte, options = {}) {
+  if (typeof texte !== "string" || !texte.trim()) return [];
+
+  const corps = {
+    input: texte.trim(),
+    includedPrimaryTypes: ["(cities)"],
+    languageCode: "fr",
+  };
+  if (options.codePays) corps.includedRegionCodes = [options.codePays.toLowerCase()];
+  if (options.jetonSession) corps.sessionToken = options.jetonSession;
+
+  const reponse = await fetchGoogle(PLACES_AUTOCOMPLETE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Goog-Api-Key": cleApi() },
+    body: JSON.stringify(corps),
+  });
+  const donnees = await lireReponsePlaces(reponse, "Places autocomplete");
+
+  return (donnees.suggestions || [])
+    .map((s) => s.placePrediction)
+    .filter((p) => p?.placeId)
+    .map((p) => ({
+      placeId: p.placeId,
+      nom: p.structuredFormat?.mainText?.text || p.text?.text || "",
+      description: p.text?.text || p.structuredFormat?.mainText?.text || "",
+    }))
+    .filter((p) => p.nom);
+}
+
+/**
+ * Détails d'une ville Google (nom, pays, coordonnées, code postal).
+ * @param {string} placeId
+ * @param {object} [options]
+ * @param {string} [options.jetonSession]
+ * @returns {Promise<{
+ *   placeId: string, nom: string, codePays: string | null,
+ *   latitude: number | null, longitude: number | null, codePostal: string | null
+ * } | null>} `null` si le lieu n'existe pas.
+ */
+export async function detaillerVille(placeId, options = {}) {
+  if (typeof placeId !== "string" || !/^[A-Za-z0-9_-]{10,300}$/.test(placeId)) {
+    throw new Error("detaillerVille : placeId invalide.");
+  }
+
+  const params = new URLSearchParams({ languageCode: "fr" });
+  if (options.jetonSession) params.set("sessionToken", options.jetonSession);
+
+  const reponse = await fetchGoogle(`${PLACES_DETAILS_URL}/${placeId}?${params.toString()}`, {
+    headers: {
+      "X-Goog-Api-Key": cleApi(),
+      "X-Goog-FieldMask": "id,displayName,location,addressComponents",
+    },
+  });
+  if (reponse.status === 404) return null;
+  const donnees = await lireReponsePlaces(reponse, "Places details");
+
+  const composant = (type) => (donnees.addressComponents || []).find((c) => (c.types || []).includes(type));
+
+  return {
+    placeId: donnees.id || placeId,
+    nom: donnees.displayName?.text || composant("locality")?.longText || "",
+    codePays: composant("country")?.shortText?.toUpperCase() || null,
+    latitude: donnees.location?.latitude ?? null,
+    longitude: donnees.location?.longitude ?? null,
+    codePostal: composant("postal_code")?.longText || null,
+  };
+}
